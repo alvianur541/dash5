@@ -1,0 +1,5 @@
+{
+  "name": "Dash⁵ - Heavy Equipment Assistant",
+  "description": "Professional troubleshooting assistant for heavy equipment (Hitachi ZX series). Features AI-powered diagnostics, OCR for fault codes, and technical manual search.",
+  "requestFramePermissions": ["camera"]
+}
