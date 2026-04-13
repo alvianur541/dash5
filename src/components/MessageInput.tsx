@@ -32,7 +32,7 @@ export function MessageInput({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 180)}px`;
+    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
   }, [input]);
 
   const handleSend = () => {
@@ -57,7 +57,7 @@ export function MessageInput({
   const canSend = (input.trim().length > 0 || attachments.length > 0) && !disabled;
 
   return (
-    <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-3 pt-1 md:px-4 md:pb-5 md:pt-2 transition-colors duration-400">
+    <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-1 transition-colors duration-400">
       <div className="max-w-3xl mx-auto space-y-2">
 
         {/* Attachment Previews */}
@@ -109,11 +109,11 @@ export function MessageInput({
             placeholder={`Tanyakan tentang unit ${selectedModel}...`}
             rows={1}
             disabled={disabled}
-            className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-3 pb-1 md:pt-4 md:pb-2 leading-relaxed max-h-[120px] md:max-h-[180px] overflow-y-auto scrollbar-hide"
+            className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-2.5 pb-0.5 leading-relaxed max-h-[120px] overflow-y-auto scrollbar-hide"
           />
 
           {/* Bottom Bar */}
-          <div className="flex items-center justify-between px-3 pb-2 pt-1 gap-2">
+          <div className="flex items-center justify-between px-3 pb-1.5 pt-0.5 gap-2">
             {/* Left: Attach */}
             <button
               onClick={() => fileInputRef.current?.click()}
