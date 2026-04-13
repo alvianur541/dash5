@@ -27,6 +27,14 @@ const SUGGESTION_CHIPS = [
 ];
 
 
+function formatTime(timestamp: number) {
+  return new Date(timestamp).toLocaleTimeString('id-ID', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  });
+}
+
 function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
@@ -140,25 +148,32 @@ export function ChatWindow({
                 {message.role === 'user' ? (
                   /* ── User Message ── */
                   <div className="flex justify-end">
-                    <div className="max-w-[80%] px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-sm text-[var(--text-primary)] leading-relaxed shadow-sm">
-                      {message.content}
-                      {message.attachments && message.attachments.length > 0 && (
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {message.attachments.map((url, i) => (
-                            <img
-                              key={i}
-                              src={url}
-                              alt="Attachment"
-                              className="max-w-[260px] max-h-[320px] object-contain rounded-lg border border-[var(--border-main)]"
-                            />
-                          ))}
-                        </div>
+                    <div className="max-w-[80%] space-y-1">
+                      <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-sm text-[var(--text-primary)] leading-relaxed shadow-sm">
+                        {message.content}
+                        {message.attachments && message.attachments.length > 0 && (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            {message.attachments.map((url, i) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt="Attachment"
+                                className="max-w-[260px] max-h-[320px] object-contain rounded-lg border border-[var(--border-main)]"
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                      {message.timestamp && (
+                        <p className="text-[10px] text-[var(--text-muted)] text-right pr-1">
+                          {formatTime(message.timestamp)}
+                        </p>
                       )}
                     </div>
                   </div>
                 ) : (
                   /* ── Assistant Message ── */
-                  <div className="flex gap-3 group">
+                  <div className="flex gap-3">
                     {/* Avatar */}
                     <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
                       <Wrench className="w-3.5 h-3.5 text-white" />
@@ -170,8 +185,8 @@ export function ChatWindow({
                         <ReactMarkdown>{message.content}</ReactMarkdown>
                       </div>
 
-                      {/* Action Buttons */}
-                      <div className="flex items-center gap-1 pt-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                      {/* Action Buttons + Timestamp — always visible */}
+                      <div className="flex items-center gap-1 pt-1">
                         <CopyButton text={message.content} />
                         <button
                           onClick={() => handleFeedback(message.id, 'up')}
@@ -203,6 +218,11 @@ export function ChatWindow({
                         >
                           <RotateCcw size={14} />
                         </button>
+                        {message.timestamp && (
+                          <span className="ml-auto text-[10px] text-[var(--text-muted)] pr-1">
+                            {formatTime(message.timestamp)}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
