@@ -4,14 +4,10 @@ import App from './App.tsx';
 import { AuthProvider } from './components/AuthProvider';
 import './index.css';
 
-// Register service worker for offline support & asset caching
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {
-      // SW registration is a progressive enhancement — silent fail is fine
-    });
-  });
-}
+// PWA: auto-register service worker yang di-generate vite-plugin-pwa
+// Service worker ini berisi daftar semua asset untuk precache (offline support)
+import { registerSW } from 'virtual:pwa-register';
+registerSW({ immediate: true });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
