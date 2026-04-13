@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useEffect } from 'react';
-import { ArrowUp, Paperclip, X } from 'lucide-react';
+import { ArrowUp, Paperclip, X, Mic, MicOff, Loader2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -16,16 +16,57 @@ interface MessageInputProps {
   onSelectModel: (model: UnitModel) => void;
 }
 
+type RecordingState = 'idle' | 'recording' | 'transcribing';
+
+// ── Gemini transcription ──────────────────────────────────────────────────────
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function transcribeWithGemini(base64Audio: string, mimeType: string): Promise<string> {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw new Error('GEMINI_API_KEY tidak ditemukan');
+
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: base64Audio } },
+            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
+          ],
+        }],
+      }),
+    }
+  );
+
+  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+}
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export function MessageInput({
   onSendMessage,
   disabled,
   selectedModel,
-  onSelectModel,
 }: MessageInputProps) {
   const [input, setInput] = useState('');
   const [attachments, setAttachments] = useState<File[]>([]);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [recordingState, setRecordingState] = useState<RecordingState>('idle');
+  const [transcribeError, setTranscribeError] = useState<string | null>(null);
+
+  const fileInputRef      = useRef<HTMLInputElement>(null);
+  const textareaRef       = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef  = useRef<MediaRecorder | null>(null);
+  const chunksRef         = useRef<Blob[]>([]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -54,7 +95,62 @@ export function MessageInput({
     setAttachments(prev => prev.filter((_, i) => i !== index));
   };
 
+  // ── Voice recording ─────────────────────────────────────────────────────────
+  const startRecording = async () => {
+    setTranscribeError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      mediaRecorderRef.current = recorder;
+      chunksRef.current = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) chunksRef.current.push(e.data);
+      };
+
+      recorder.onstop = async () => {
+        stream.getTracks().forEach(t => t.stop());
+        setRecordingState('transcribing');
+
+        const mimeType = recorder.mimeType || 'audio/webm';
+        const blob = new Blob(chunksRef.current, { type: mimeType });
+
+        try {
+          const base64 = await blobToBase64(blob);
+          const text = await transcribeWithGemini(base64, mimeType);
+          if (text) {
+            setInput(prev => prev ? `${prev} ${text}` : text);
+            // Focus textarea setelah transcribe
+            setTimeout(() => textareaRef.current?.focus(), 50);
+          }
+        } catch (err: any) {
+          setTranscribeError('Gagal transkripsi. Coba lagi.');
+          setTimeout(() => setTranscribeError(null), 3000);
+        } finally {
+          setRecordingState('idle');
+        }
+      };
+
+      recorder.start();
+      setRecordingState('recording');
+    } catch {
+      setTranscribeError('Akses mikrofon ditolak.');
+      setTimeout(() => setTranscribeError(null), 3000);
+    }
+  };
+
+  const stopRecording = () => {
+    mediaRecorderRef.current?.stop();
+  };
+
+  const toggleRecording = () => {
+    if (recordingState === 'idle') startRecording();
+    else if (recordingState === 'recording') stopRecording();
+  };
+
   const canSend = (input.trim().length > 0 || attachments.length > 0) && !disabled;
+  const isRecording = recordingState === 'recording';
+  const isTranscribing = recordingState === 'transcribing';
 
   return (
     <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-1 transition-colors duration-400">
@@ -91,10 +187,43 @@ export function MessageInput({
         {/* Input Box */}
         <div className={cn(
           "relative rounded-2xl border bg-[var(--bg-card)] transition-all duration-200",
-          disabled
+          isRecording
+            ? "border-red-500/40 shadow-lg shadow-red-500/5"
+            : disabled
             ? "border-[var(--border-main)] opacity-60"
             : "border-[var(--border-main)] focus-within:border-white/15 focus-within:shadow-lg"
         )}>
+
+          {/* Recording indicator bar */}
+          <AnimatePresence>
+            {isRecording && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2 px-4 pt-2.5 pb-1"
+              >
+                <motion.div
+                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                  transition={{ duration: 1, repeat: Infinity }}
+                  className="w-2 h-2 rounded-full bg-red-500 shrink-0"
+                />
+                <span className="text-[11px] text-red-400 font-medium">Merekam... ketuk mic untuk berhenti</span>
+              </motion.div>
+            )}
+            {isTranscribing && (
+              <motion.div
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex items-center gap-2 px-4 pt-2.5 pb-1"
+              >
+                <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
+                <span className="text-[11px] text-[var(--accent-main)] font-medium">Mentranskrip suara...</span>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
           {/* Textarea */}
           <textarea
             ref={textareaRef}
@@ -106,15 +235,19 @@ export function MessageInput({
                 handleSend();
               }
             }}
-            placeholder={`Tanyakan tentang unit ${selectedModel}...`}
+            placeholder={
+              isRecording ? '' :
+              isTranscribing ? '' :
+              `Tanyakan tentang unit ${selectedModel}...`
+            }
             rows={1}
-            disabled={disabled}
+            disabled={disabled || isTranscribing}
             className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-2.5 pb-0.5 leading-relaxed max-h-[120px] overflow-y-auto scrollbar-hide"
           />
 
           {/* Bottom Bar */}
-          <div className="flex items-center justify-between px-3 pb-1.5 pt-0.5 gap-2">
-            {/* Left: Attach */}
+          <div className="flex items-center px-3 pb-1.5 pt-0.5 gap-1">
+            {/* Attach */}
             <button
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
@@ -132,7 +265,30 @@ export function MessageInput({
               className="hidden"
             />
 
-            {/* Right: Send Button */}
+            {/* Mic / Voice input */}
+            <button
+              onClick={toggleRecording}
+              disabled={disabled || isTranscribing}
+              className={cn(
+                "p-2 rounded-xl transition-all disabled:opacity-40",
+                isRecording
+                  ? "text-red-400 hover:bg-red-500/10"
+                  : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5"
+              )}
+              title={isRecording ? 'Stop recording' : 'Voice input (Gemini STT)'}
+            >
+              {isTranscribing
+                ? <Loader2 size={17} className="animate-spin" />
+                : isRecording
+                ? <MicOff size={17} />
+                : <Mic size={17} />
+              }
+            </button>
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Send */}
             <button
               onClick={handleSend}
               disabled={!canSend}
@@ -148,10 +304,24 @@ export function MessageInput({
           </div>
         </div>
 
-        {/* Disclaimer */}
-        <p className="text-center text-[10px] text-[var(--text-muted)] font-medium">
-          Dash⁵ dapat membuat kesalahan. Selalu verifikasi kembali sebelum melakukan perbaikan di unit.
-        </p>
+        {/* Error / Disclaimer */}
+        <AnimatePresence>
+          {transcribeError ? (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="text-center text-[11px] text-red-400 font-medium"
+            >
+              {transcribeError}
+            </motion.p>
+          ) : (
+            <p className="text-center text-[10px] text-[var(--text-muted)] font-medium">
+              Dash⁵ dapat membuat kesalahan. Selalu verifikasi kembali sebelum melakukan perbaikan di unit.
+            </p>
+          )}
+        </AnimatePresence>
+
       </div>
     </div>
   );
