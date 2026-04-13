@@ -15,6 +15,7 @@ interface ChatWindowProps {
   selectedModel: UnitModel;
   onSelectModel: (model: UnitModel) => void;
   onSendMessage: (content: string) => void;
+  onRetry: (assistantMessageId: string) => void;
   userName?: string;
 }
 
@@ -49,9 +50,15 @@ export function ChatWindow({
   isTyping,
   selectedModel,
   onSendMessage,
+  onRetry,
   userName,
 }: ChatWindowProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
+
+  const handleFeedback = (id: string, type: 'up' | 'down') => {
+    setFeedback(prev => ({ ...prev, [id]: prev[id] === type ? null : type }));
+  };
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -76,7 +83,7 @@ export function ChatWindow({
             transition={{ duration: 0.3 }}
             className="flex flex-col items-center justify-center min-h-full py-16 px-4"
           >
-            <div className="w-full max-w-xl space-y-8">
+            <div className="w-full max-w-xl md:max-w-2xl space-y-8">
 
               {/* Greeting */}
               <div className="text-center space-y-4">
@@ -86,8 +93,8 @@ export function ChatWindow({
                   </div>
                 </div>
                 <h1
-                  className="text-[var(--text-primary)] tracking-tight leading-snug"
-                  style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.5rem, 4vw, 2.4rem)', fontWeight: 400 }}
+                  className="text-[var(--text-primary)] tracking-tight leading-snug md:whitespace-nowrap"
+                  style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(1.4rem, 3vw, 1.8rem)', fontWeight: 400 }}
                 >
                   Hai {userName || 'Operator'}, ada yang bisa Dash⁵ bantu?
                 </h1>
@@ -164,15 +171,36 @@ export function ChatWindow({
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex items-center gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex items-center gap-1 pt-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <CopyButton text={message.content} />
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                          <ThumbsUp size={14} />
+                        <button
+                          onClick={() => handleFeedback(message.id, 'up')}
+                          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                          title="Respons bagus"
+                        >
+                          <ThumbsUp
+                            size={14}
+                            className={feedback[message.id] === 'up' ? 'text-green-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
+                            style={feedback[message.id] === 'up' ? { fill: 'currentColor' } : {}}
+                          />
                         </button>
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
-                          <ThumbsDown size={14} />
+                        <button
+                          onClick={() => handleFeedback(message.id, 'down')}
+                          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                          title="Respons kurang tepat"
+                        >
+                          <ThumbsDown
+                            size={14}
+                            className={feedback[message.id] === 'down' ? 'text-red-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
+                            style={feedback[message.id] === 'down' ? { fill: 'currentColor' } : {}}
+                          />
                         </button>
-                        <button className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors">
+                        <button
+                          onClick={() => !isTyping && onRetry(message.id)}
+                          disabled={isTyping}
+                          className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          title="Ulangi jawaban"
+                        >
                           <RotateCcw size={14} />
                         </button>
                       </div>

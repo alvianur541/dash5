@@ -8,15 +8,15 @@
 }
 
 :root {
-  /* Claude-Identical Dark Mode (Default) */
+  /* Dark Mode */
   --bg-app: #212121;
   --bg-sidebar: #171717;
   --bg-header: rgba(33, 33, 33, 0.8);
   --bg-card: #2F2F2F;
   --bg-card-hover: #383838;
   --bg-input: #2F2F2F;
-  --accent-main: #B45309;
-  --accent-glow: rgba(180, 83, 9, 0.15);
+  --accent-main: #E87100;
+  --accent-glow: rgba(232, 113, 0, 0.18);
   --text-primary: #ECECEC;
   --text-secondary: #9B9B9B;
   --text-muted: #666666;
@@ -28,15 +28,15 @@
 }
 
 .light-theme {
-  /* Claude-Identical Light Mode (Warm-White) */
+  /* Light Mode */
   --bg-app: #F9F8F6;
   --bg-sidebar: #F1EFE9;
   --bg-header: rgba(249, 248, 246, 0.8);
   --bg-card: #FFFFFF;
   --bg-card-hover: #F3F2EE;
   --bg-input: #FFFFFF;
-  --accent-main: #B45309;
-  --accent-glow: rgba(180, 83, 9, 0.1);
+  --accent-main: #E87100;
+  --accent-glow: rgba(232, 113, 0, 0.15);
   --text-primary: #1A1A1A;
   --text-secondary: #4A4A4A;
   --text-muted: #8A8A8A;

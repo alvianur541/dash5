@@ -10,7 +10,7 @@ import { MessageInput } from './components/MessageInput';
 import { UnitModel, Message, SessionMeta, ChatSession } from './types';
 import { generateResponse } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, fetchUserSessionList, fetchSessionData } from './services/supabase';
-import { AlertCircle, LogIn, Loader2, PanelLeft, Wrench } from 'lucide-react';
+import { AlertCircle, LogIn, Loader2, PanelLeft, Wrench, Sun, Moon } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
@@ -250,6 +250,52 @@ export default function App() {
     }
   }, [user, selectedModel, messages]);
 
+  const handleRetry = useCallback(async (assistantMessageId: string) => {
+    if (!user) return;
+    const idx = messages.findIndex(m => m.id === assistantMessageId);
+    if (idx < 1) return;
+    const userMsg = messages[idx - 1];
+    if (userMsg?.role !== 'user') return;
+
+    const historyBefore = messages.slice(0, idx - 1);
+    setMessages(historyBefore);
+    setIsTyping(true);
+    setError(null);
+
+    try {
+      const response = await generateResponse(
+        selectedModel,
+        user.displayName || 'Operator',
+        historyBefore,
+        userMsg.content,
+        undefined
+      );
+      const newUserMsg: Message = { ...userMsg, id: Date.now().toString(), timestamp: Date.now() };
+      const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response, timestamp: Date.now() };
+      const newMessages = [...historyBefore, newUserMsg, assistantMsg];
+      setMessages(newMessages);
+
+      const sessionId = sessionIdRef.current;
+      if (sessionId) {
+        const messagesForStorage = newMessages.map(m =>
+          m.attachments && m.attachments.length > 0 ? { ...m, attachments: [] } : m
+        );
+        const rawTitle = userMsg.content.trim() || '[Gambar]';
+        const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
+        saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
+        const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
+        setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
+        saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
+      }
+    } catch (err: any) {
+      console.error('Retry error:', err.message);
+      setError('Gagal mengulang respons. Coba lagi.');
+      setMessages([...historyBefore, userMsg]);
+    } finally {
+      setIsTyping(false);
+    }
+  }, [user, selectedModel, messages]);
+
   // ── Loading ──
   if (authLoading) {
     return (
@@ -260,7 +306,7 @@ export default function App() {
   }
 
   // ── Login ──
-  if (!user) return <LoginPage />;
+  if (!user) return <LoginPage theme={theme} onThemeToggle={handleThemeToggle} />;
 
   // ── Main App ──
   return (
@@ -338,6 +384,7 @@ export default function App() {
           selectedModel={selectedModel}
           onSelectModel={handleSelectModel}
           onSendMessage={handleSendMessage}
+          onRetry={handleRetry}
           userName={user?.displayName || 'Operator'}
         />
 
@@ -354,11 +401,13 @@ export default function App() {
 }
 
 // ─── Login Page ───────────────────────────────────────────────────────────────
-function LoginPage() {
+function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeToggle: () => void }) {
   const { login, authError } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const isDark = theme === 'dark';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -368,7 +417,24 @@ function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen w-screen flex flex-col items-center justify-center bg-[#111111] px-4">
+    <div className={cn(
+      "min-h-screen w-screen flex flex-col items-center justify-center px-4 transition-colors duration-400",
+      isDark ? "bg-[#111111]" : "bg-[#F5F4F1]"
+    )}>
+
+      {/* ── Theme Toggle ── */}
+      <button
+        onClick={onThemeToggle}
+        className={cn(
+          "absolute top-5 right-5 p-2.5 rounded-xl transition-all",
+          isDark
+            ? "bg-white/5 hover:bg-white/10 text-[#888] hover:text-white"
+            : "bg-black/5 hover:bg-black/10 text-[#888] hover:text-[#111]"
+        )}
+        title={isDark ? 'Light mode' : 'Dark mode'}
+      >
+        {isDark ? <Sun size={16} /> : <Moon size={16} />}
+      </button>
 
       <motion.div
         initial={{ opacity: 0, y: 24 }}
@@ -378,19 +444,27 @@ function LoginPage() {
       >
         {/* ── Brand ── */}
         <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 bg-[var(--accent-main)] rounded-2xl flex items-center justify-center shadow-xl shadow-[var(--accent-main)]/20">
+          <div className="w-16 h-16 bg-[var(--accent-main)] rounded-2xl flex items-center justify-center shadow-xl shadow-[var(--accent-main)]/25">
             <Wrench className="w-8 h-8 text-white" />
           </div>
           <div className="text-center space-y-1">
-            <h1 className="text-[28px] font-bold text-white tracking-tight">Dash⁵</h1>
-            <p className="text-[13px] text-[#737373]">Heavy Equipment Diagnostic Assistant</p>
+            <h1 className={cn(
+              "text-[28px] font-bold tracking-tight",
+              isDark ? "text-white" : "text-[#111]"
+            )}>Dash⁵</h1>
+            <p className={cn("text-[13px]", isDark ? "text-[#737373]" : "text-[#888]")}>
+              Heavy Equipment Diagnostic Assistant
+            </p>
           </div>
         </div>
 
         {/* ── Form ── */}
         <form onSubmit={handleSubmit} className="w-full space-y-3">
           <div className="space-y-1.5">
-            <label htmlFor="username" className="block text-[13px] font-medium text-[#a3a3a3]">
+            <label htmlFor="username" className={cn(
+              "block text-[13px] font-medium",
+              isDark ? "text-[#a3a3a3]" : "text-[#555]"
+            )}>
               Username
             </label>
             <input
@@ -402,12 +476,21 @@ function LoginPage() {
               required
               autoComplete="username"
               autoFocus
-              className="w-full px-4 py-3 rounded-xl bg-[#1c1c1c] border border-[#333] text-[14px] text-white placeholder-[#525252] outline-none focus:border-[#666] focus:ring-2 focus:ring-[var(--accent-main)]/20 transition-all"
+              className={cn(
+                "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
+                "focus:ring-2 focus:ring-[var(--accent-main)]/20",
+                isDark
+                  ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#666]"
+                  : "bg-white border border-[#ddd] text-[#111] placeholder-[#aaa] focus:border-[#aaa] shadow-sm"
+              )}
             />
           </div>
 
           <div className="space-y-1.5">
-            <label htmlFor="password" className="block text-[13px] font-medium text-[#a3a3a3]">
+            <label htmlFor="password" className={cn(
+              "block text-[13px] font-medium",
+              isDark ? "text-[#a3a3a3]" : "text-[#555]"
+            )}>
               Password
             </label>
             <input
@@ -418,7 +501,13 @@ function LoginPage() {
               placeholder="••••••••"
               required
               autoComplete="current-password"
-              className="w-full px-4 py-3 rounded-xl bg-[#1c1c1c] border border-[#333] text-[14px] text-white placeholder-[#525252] outline-none focus:border-[#666] focus:ring-2 focus:ring-[var(--accent-main)]/20 transition-all"
+              className={cn(
+                "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
+                "focus:ring-2 focus:ring-[var(--accent-main)]/20",
+                isDark
+                  ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#666]"
+                  : "bg-white border border-[#ddd] text-[#111] placeholder-[#aaa] focus:border-[#aaa] shadow-sm"
+              )}
             />
           </div>
 
@@ -439,7 +528,7 @@ function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full h-11 mt-1 bg-[var(--accent-main)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px] shadow-lg shadow-[var(--accent-main)]/25"
+            className="w-full h-11 mt-1 bg-[var(--accent-main)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px] shadow-lg shadow-[var(--accent-main)]/30"
           >
             {loading
               ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -450,7 +539,10 @@ function LoginPage() {
       </motion.div>
 
       {/* ── Footer ── */}
-      <p className="absolute bottom-6 text-[11px] text-[#444]">
+      <p className={cn(
+        "absolute bottom-6 text-[11px]",
+        isDark ? "text-[#444]" : "text-[#bbb]"
+      )}>
         Dash⁵ · Heavy Equipment AI · v2.0
       </p>
     </div>

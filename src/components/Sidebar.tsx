@@ -171,7 +171,7 @@ export function Sidebar({
                             return (
                               <button
                                 key={model}
-                                onClick={() => { onSelectModel(model); if (isMobile) onToggle(); }}
+                                onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
                                 className={cn(
                                   "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-left",
                                   isActive
@@ -255,7 +255,7 @@ export function Sidebar({
                               </button>
 
                               <AnimatePresence>
-                                {hoveredSession === session.id && (
+                                {(isMobile || hoveredSession === session.id) && (
                                   <motion.button
                                     initial={{ opacity: 0, scale: 0.8 }}
                                     animate={{ opacity: 1, scale: 1 }}
