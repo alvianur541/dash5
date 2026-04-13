@@ -1,0 +1,10 @@
+{
+  "name": "dash5-proxy",
+  "version": "1.0.0",
+  "description": "API key proxy for Dash5 — keeps secrets server-side",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  }
+}
