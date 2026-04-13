@@ -44,7 +44,11 @@ self.addEventListener('fetch', event => {
         const cached = await cache.match(request);
         if (cached) return cached;
         const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
+        // Clone synchronously before any async work or returning the response
+        if (response.ok) {
+          const clone = response.clone();
+          cache.put(request, clone).catch(() => {});
+        }
         return response;
       })
     );
@@ -55,8 +59,10 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(request)
       .then(response => {
+        // Clone synchronously here — before caches.open (async) consumes response
         if (response.ok) {
-          caches.open(PAGE_CACHE).then(cache => cache.put(request, response.clone()));
+          const clone = response.clone();
+          caches.open(PAGE_CACHE).then(cache => cache.put(request, clone));
         }
         return response;
       })
