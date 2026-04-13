@@ -4,26 +4,18 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { GoogleGenAI } from "@google/genai";
 import { Message, UnitModel } from '../types';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const geminiKey       = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
 
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
 
-// Embeddings via proxy — GEMINI_API_KEY stays server-side, never in browser bundle
-async function getEmbedding(query: string): Promise<number[]> {
-  const res = await fetch('/api/embed', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) throw new Error('Embedding proxy error');
-  const data = await res.json();
-  return data.values ?? [];
-}
+const genAI = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface SearchResult {
   content: string;
@@ -122,13 +114,17 @@ export async function deleteChatSession(id: string): Promise<void> {
 
 // ── RAG: Search technical manual ───────────────────────────────────────────
 export async function searchTechnicalManual(query: string, model: string): Promise<string> {
-  if (!supabase) {
-    console.warn('Supabase client not initialized. Check VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.');
+  if (!supabase || !genAI) {
+    console.warn('Supabase or Gemini client not initialized. Check your environment variables.');
     return '';
   }
 
   try {
-    const embedding = await getEmbedding(query);
+    const embeddingResult = await (genAI as any).models.embedContent({
+      model: "gemini-embedding-001",
+      contents: query
+    });
+    const embedding = embeddingResult.embeddings[0].values;
 
     const { data, error } = await supabase.rpc('match_documents', {
       query_embedding: embedding,
