@@ -9,6 +9,7 @@ import { m, AnimatePresence } from 'motion/react';
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, Wrench } from 'lucide-react';
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
+import rehypeSanitize from 'rehype-sanitize';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -106,7 +107,7 @@ const MessageItem = memo(function MessageItem({
           <div className="flex-1 min-w-0 space-y-2">
             <div className="markdown-body text-[15px] text-[var(--text-primary)]">
               <Suspense fallback={<span className="text-[var(--text-muted)] text-sm">...</span>}>
-                <ReactMarkdown>{message.content}</ReactMarkdown>
+                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{message.content}</ReactMarkdown>
               </Suspense>
             </div>
             <div className="flex items-center gap-1 pt-1">

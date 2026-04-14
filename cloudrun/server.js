@@ -10,9 +10,11 @@ const { GoogleAuth } = require('google-auth-library');
 const app = express();
 app.use(express.json({ limit: '20mb' }));
 
-const PROJECT_ID   = process.env.GOOGLE_CLOUD_PROJECT;
-const LOCATION     = process.env.VERTEX_LOCATION || 'us-central1';
+const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
+const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const COHERE_API_KEY = process.env.COHERE_API_KEY;
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
 app.use((req, res, next) => {
@@ -43,7 +45,12 @@ app.post('/v1/chat', async (req, res) => {
     return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   }
 
-  const { model = 'gemini-2.0-flash-001', ...body } = req.body;
+  const { model = 'gemini-2.0-flash-001', enableGoogleSearch = false, ...body } = req.body;
+
+  // Inject Google Search Grounding tool jika RAG tidak menemukan hasil
+  if (enableGoogleSearch) {
+    body.tools = [...(body.tools || []), { googleSearch: {} }];
+  }
 
   const vertexUrl =
     `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
@@ -73,6 +80,85 @@ app.post('/v1/chat', async (req, res) => {
     res.json(data);
   } catch (err) {
     console.error('Proxy error:', err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Proxy: POST /v1/transcribe ────────────────────────────────────────────────
+// Body: { audio: base64string, mimeType: string }
+// Returns: { text: string }
+app.post('/v1/transcribe', async (req, res) => {
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  }
+  const { audio, mimeType } = req.body;
+  if (!audio || !mimeType) {
+    return res.status(400).json({ error: 'audio and mimeType are required' });
+  }
+
+  try {
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { inline_data: { mime_type: mimeType, data: audio } },
+              { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
+            ],
+          }],
+        }),
+      }
+    );
+    if (!upstream.ok) {
+      const err = await upstream.json();
+      return res.status(upstream.status).json(err);
+    }
+    const data = await upstream.json();
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+    res.json({ text });
+  } catch (err) {
+    console.error('Transcribe error:', err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// ── Proxy: POST /v1/rerank ────────────────────────────────────────────────────
+// Body: { query: string, documents: string[], topN: number }
+// Returns: raw Cohere rerank response
+app.post('/v1/rerank', async (req, res) => {
+  if (!COHERE_API_KEY) {
+    return res.status(500).json({ error: 'COHERE_API_KEY not configured' });
+  }
+  const { query, documents, topN = 3 } = req.body;
+  if (!query || !documents) {
+    return res.status(400).json({ error: 'query and documents are required' });
+  }
+
+  try {
+    const upstream = await fetch('https://api.cohere.com/v2/rerank', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${COHERE_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: 'rerank-v4.0-pro',
+        query,
+        documents,
+        top_n: topN,
+      }),
+    });
+    if (!upstream.ok) {
+      const err = await upstream.json();
+      return res.status(upstream.status).json(err);
+    }
+    const data = await upstream.json();
+    res.json(data);
+  } catch (err) {
+    console.error('Rerank error:', err);
     res.status(500).json({ error: String(err) });
   }
 });

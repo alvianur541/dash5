@@ -73,11 +73,11 @@ function fileToInlineData(file: File): Promise<InlineDataPart> {
   });
 }
 
-async function callProxy(body: VRequest): Promise<VResponse> {
+async function callProxy(body: VRequest, enableGoogleSearch = false): Promise<VResponse> {
   const res = await fetch(`${PROXY_URL}/v1/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: MODEL, ...body }),
+    body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
   });
   if (!res.ok) {
     const err = await res.text();
@@ -158,7 +158,7 @@ export async function generateResponse(
           faultCodes.map(async code => {
             try {
               const result = await searchTechnicalManual(code, model);
-              return result ? `[Fault Code: ${code}]\n${result}` : null;
+              return result.hasResults ? `[Fault Code: ${code}]\n${result.content}` : null;
             } catch { return null; }
           })
         );
@@ -206,17 +206,19 @@ export async function generateResponse(
 
     // Execute each function and collect results
     const responseParts: FunctionRespPart[] = [];
+    let ragFound = false;
     for (const fc of fnCalls) {
       if (fc.functionCall.name === 'searchTechnicalManual') {
         const query = fc.functionCall.args['query'] as string;
         const result = await searchTechnicalManual(query, model);
+        if (result.hasResults) ragFound = true;
         responseParts.push({
           functionResponse: {
             name: 'searchTechnicalManual',
             response: {
-              content: result ||
-                'No relevant data found in the technical manual database. ' +
-                'Proceed to answer using expert internal knowledge.',
+              content: result.hasResults
+                ? result.content
+                : 'No relevant data found in the technical manual database.',
             },
           },
         });
@@ -226,12 +228,12 @@ export async function generateResponse(
     // Append tool results turn
     contents.push({ role: 'user', parts: responseParts });
 
-    // Final call
+    // Final call — aktifkan Google Search hanya jika RAG tidak menemukan data
     const finalRes = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
       generationConfig: { maxOutputTokens: 4096 },
-    });
+    }, !ragFound);
 
     const finalText = getText(finalRes.candidates[0]?.content?.parts ?? []);
     return finalText || 'Sistem telah memproses data, namun AI gagal mengembalikan format yang sesuai.';

@@ -100,10 +100,7 @@ export function Sidebar({
               <div className="w-9 h-9 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 shadow-lg shadow-[var(--accent-main)]/20">
                 <Wrench className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
               </div>
-              <div>
-                <span className="text-[17px] font-bold text-[var(--text-primary)] tracking-tight leading-none">Dash⁵</span>
-                <p className="text-[10px] text-[var(--text-muted)] font-medium tracking-wider uppercase leading-tight mt-0.5">Diagnostic Assistant</p>
-              </div>
+              <span className="text-[17px] font-bold text-[var(--text-primary)] tracking-tight">Dash⁵</span>
             </div>
             <button
               onClick={onToggle}
@@ -115,13 +112,13 @@ export function Sidebar({
           </div>
 
           {/* ── New Chat ── */}
-          <div className="px-3 mb-2 shrink-0">
+          <div className="px-3 mb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--accent-main)]/10 hover:bg-[var(--accent-main)]/15 border border-[var(--accent-main)]/20 text-[var(--accent-main)] transition-all group"
+              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-[var(--text-primary)] transition-all group"
             >
-              <Plus size={17} />
-              <span className="text-[13px] font-semibold">Chat baru</span>
+              <Plus size={17} className="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors" />
+              <span className="text-[13px] font-medium">New chat</span>
             </button>
           </div>
 

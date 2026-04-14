@@ -41,41 +41,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setAuthError(null);
     await new Promise(r => setTimeout(r, 400));
 
-    if (supabase) {
-      // Authenticate against Supabase app_users table
-      const { data, error } = await supabase
-        .from('app_users')
-        .select('id, username, display_name, role')
-        .eq('username', username)
-        .eq('password', password)
-        .single();
-
-      if (error || !data) {
-        setAuthError('Username atau password salah.');
-        return;
-      }
-
-      setUser({
-        uid: data.id,
-        displayName: data.display_name,
-        role: data.role,
-        email: null,
-      });
-    } else {
-      // Fallback: env-based credentials
-      const envUser = import.meta.env.VITE_APP_USERNAME || 'admin';
-      const envPass = import.meta.env.VITE_APP_PASSWORD || 'dash2024';
-      if (username === envUser && password === envPass) {
-        setUser({
-          uid: `local_${username}`,
-          displayName: username,
-          role: 'Field Technician',
-          email: null,
-        });
-      } else {
-        setAuthError('Username atau password salah.');
-      }
+    if (!supabase) {
+      setAuthError('Layanan autentikasi tidak tersedia.');
+      return;
     }
+
+    // Authenticate against Supabase app_users table
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('id, username, display_name, role')
+      .eq('username', username)
+      .eq('password', password)
+      .single();
+
+    if (error || !data) {
+      setAuthError('Username atau password salah.');
+      return;
+    }
+
+    setUser({
+      uid: data.id,
+      displayName: data.display_name,
+      role: data.role,
+      email: null,
+    });
   };
 
   const logout = () => setUser(null);

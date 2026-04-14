@@ -55,10 +55,7 @@ export default defineConfig(({ mode }) => {
       }),
     ],
 
-    define: {
-      'process.env.ANTHROPIC_API_KEY': JSON.stringify(env.ANTHROPIC_API_KEY),
-      'process.env.GEMINI_API_KEY':    JSON.stringify(env.GEMINI_API_KEY),
-    },
+    define: {},
 
     resolve: {
       alias: {

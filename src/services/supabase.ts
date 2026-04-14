@@ -120,22 +120,23 @@ function isFaultCode(query: string): boolean {
   return /^[A-Z]{0,2}:?\d{2,6}(-\d{1,4})?$/i.test(query.trim());
 }
 
-// ── Cohere reranker (with 5s timeout) ─────────────────────────────────────
+// ── Cohere reranker via proxy (with 5s timeout) ───────────────────────────
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<string[]> {
-  const key = import.meta.env.VITE_COHERE_API_KEY as string | undefined;
-  if (!key || docs.length === 0) return docs.slice(0, topN);
+  if (docs.length === 0) return docs.slice(0, topN);
+  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL;
+  if (!proxyUrl) return docs.slice(0, topN);
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const res = await fetch('https://api.cohere.com/v1/rerank', {
+    const res = await fetch(`${proxyUrl}/v1/rerank`, {
       method: 'POST',
       signal: controller.signal,
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-      body: JSON.stringify({ model: 'rerank-v4.0-pro', query, documents: docs, top_n: topN }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ query, documents: docs, topN }),
     });
-    if (!res.ok) throw new Error(`Cohere ${res.status}`);
+    if (!res.ok) throw new Error(`Rerank proxy ${res.status}`);
     const data = await res.json();
     return (data.results as Array<{ index: number }>).map(r => docs[r.index]);
   } catch (err) {
@@ -159,10 +160,15 @@ async function getEmbedding(query: string): Promise<number[]> {
 }
 
 // ── RAG: Search technical manual ───────────────────────────────────────────
-export async function searchTechnicalManual(query: string, model: string): Promise<string> {
+export interface RAGResult {
+  content: string;
+  hasResults: boolean;
+}
+
+export async function searchTechnicalManual(query: string, model: string): Promise<RAGResult> {
   if (!supabase || !genAI) {
     console.warn('Supabase or Gemini client not initialized.');
-    return '';
+    return { content: '', hasResults: false };
   }
 
   try {
@@ -207,14 +213,15 @@ export async function searchTechnicalManual(query: string, model: string): Promi
       if (!seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); }
     }
 
-    if (allDocs.length === 0) return 'No relevant technical data found for this model.';
+    if (allDocs.length === 0) return { content: '', hasResults: false };
 
     // ── 5. Cohere rerank → top 3 ──────────────────────────────────────────
     const top3 = await rerankWithCohere(query, allDocs, 3);
-    return top3.map((content, i) => `[Rank ${i + 1}] ${content}`).join('\n\n---\n\n');
+    const content = top3.map((c, i) => `[Rank ${i + 1}] ${c}`).join('\n\n---\n\n');
+    return { content, hasResults: true };
 
   } catch (err) {
     console.error('Supabase service error:', err);
-    return 'Error accessing technical database.';
+    return { content: '', hasResults: false };
   }
 }

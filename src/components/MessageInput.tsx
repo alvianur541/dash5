@@ -18,7 +18,7 @@ interface MessageInputProps {
 
 type RecordingState = 'idle' | 'recording' | 'transcribing';
 
-// ── Gemini transcription ──────────────────────────────────────────────────────
+// ── Transcription via proxy ───────────────────────────────────────────────────
 function blobToBase64(blob: Blob): Promise<string> {
   return new Promise(resolve => {
     const reader = new FileReader();
@@ -27,29 +27,19 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-async function transcribeWithGemini(base64Audio: string, mimeType: string): Promise<string> {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) throw new Error('GEMINI_API_KEY tidak ditemukan');
+async function transcribeWithProxy(base64Audio: string, mimeType: string): Promise<string> {
+  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL;
+  if (!proxyUrl) throw new Error('Proxy URL tidak ditemukan');
 
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{
-          parts: [
-            { inline_data: { mime_type: mimeType, data: base64Audio } },
-            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
-          ],
-        }],
-      }),
-    }
-  );
+  const res = await fetch(`${proxyUrl}/v1/transcribe`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ audio: base64Audio, mimeType }),
+  });
 
-  if (!res.ok) throw new Error(`Gemini error ${res.status}`);
+  if (!res.ok) throw new Error(`Transcribe error ${res.status}`);
   const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text?.trim() ?? '';
+  return data.text ?? '';
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
@@ -73,7 +63,8 @@ export function MessageInput({
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 120)}px`;
+    const maxH = window.innerWidth < 768 ? 80 : 120;
+    el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [input]);
 
   const handleSend = () => {
@@ -86,11 +77,32 @@ export function MessageInput({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      const MAX = 5 * 1024 * 1024; // 5MB
-      const valid = Array.from(e.target.files).filter(f => f.size <= MAX);
-      if (valid.length < e.target.files.length)
-        setTranscribeError('File terlalu besar (maks 5MB). File lain tetap ditambahkan.');
-      setAttachments(prev => [...prev, ...valid]);
+      const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
+      const MAX_FILES = 5;
+      let errorMsg: string | null = null;
+
+      const valid = Array.from(e.target.files).filter(f => {
+        if (!ALLOWED_TYPES.includes(f.type)) {
+          errorMsg = 'Hanya file gambar (JPG, PNG, WebP, GIF) yang diizinkan.';
+          return false;
+        }
+        if (f.size > MAX_SIZE) {
+          errorMsg = 'File terlalu besar (maks 5MB).';
+          return false;
+        }
+        return true;
+      });
+
+      const remaining = MAX_FILES - attachments.length;
+      const toAdd = valid.slice(0, remaining);
+      if (valid.length > remaining) errorMsg = `Maksimal ${MAX_FILES} file lampiran.`;
+
+      if (errorMsg) {
+        setTranscribeError(errorMsg);
+        setTimeout(() => setTranscribeError(null), 3000);
+      }
+      if (toAdd.length > 0) setAttachments(prev => [...prev, ...toAdd]);
       e.target.value = '';
     }
   };
@@ -121,7 +133,7 @@ export function MessageInput({
 
         try {
           const base64 = await blobToBase64(blob);
-          const text = await transcribeWithGemini(base64, mimeType);
+          const text = await transcribeWithProxy(base64, mimeType);
           if (text) {
             setInput(prev => prev ? `${prev} ${text}` : text);
             // Focus textarea setelah transcribe
@@ -157,7 +169,7 @@ export function MessageInput({
   const isTranscribing = recordingState === 'transcribing';
 
   return (
-    <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-1 transition-colors duration-400">
+    <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-2 transition-colors duration-400">
       <div className="max-w-3xl mx-auto space-y-2">
 
         {/* Attachment Previews */}
@@ -246,7 +258,7 @@ export function MessageInput({
             }
             rows={1}
             disabled={disabled || isTranscribing}
-            className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-2.5 pb-0.5 leading-relaxed max-h-[120px] overflow-y-auto scrollbar-hide"
+            className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-2 pb-0.5 leading-relaxed max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide"
           />
 
           {/* Bottom Bar */}
