@@ -125,6 +125,38 @@ app.post('/v1/transcribe', async (req, res) => {
   }
 });
 
+// ── Proxy: POST /v1/embed ─────────────────────────────────────────────────────
+// Body: { query: string }
+// Returns: { values: number[] }
+app.post('/v1/embed', async (req, res) => {
+  if (!GEMINI_API_KEY) {
+    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  }
+  const { query } = req.body;
+  if (!query) {
+    return res.status(400).json({ error: 'query is required' });
+  }
+  try {
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/gemini-embedding-001',
+          content: { parts: [{ text: query }] },
+        }),
+      }
+    );
+    const data = await upstream.json();
+    if (!upstream.ok) return res.status(upstream.status).json(data);
+    res.json({ values: data?.embedding?.values ?? [] });
+  } catch (err) {
+    console.error('Embed error:', err);
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 // ── Proxy: POST /v1/rerank ────────────────────────────────────────────────────
 // Body: { query: string, documents: string[], topN: number }
 // Returns: raw Cohere rerank response
