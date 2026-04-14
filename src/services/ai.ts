@@ -25,7 +25,7 @@ interface VRequest {
   contents: VContent[];
   systemInstruction?: { parts: TextPart[] };
   tools?: Array<{ functionDeclarations: FunctionDecl[] }>;
-  generationConfig?: { maxOutputTokens?: number; temperature?: number };
+  generationConfig?: { maxOutputTokens?: number; temperature?: number; thinkingConfig?: { thinkingBudget: number } };
 }
 
 interface FunctionDecl {
@@ -88,7 +88,7 @@ async function callProxy(body: VRequest, enableGoogleSearch = false): Promise<VR
 
 function getText(parts: Part[]): string {
   return parts
-    .filter((p): p is TextPart => 'text' in p)
+    .filter((p): p is TextPart => 'text' in p && !('thought' in p))
     .map(p => p.text)
     .join('');
 }
@@ -197,7 +197,7 @@ export async function generateResponse(
     contents,
     systemInstruction: { parts: [{ text: systemInstruction }] },
     ...(preSearchEmpty ? {} : { tools: [{ functionDeclarations: [searchDecl] }] }),
-    generationConfig: { maxOutputTokens: 4096 },
+    generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
   }, preSearchEmpty);
 
   const firstCandidate = firstRes.candidates[0];
@@ -238,7 +238,7 @@ export async function generateResponse(
     const finalRes = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 4096 },
+      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingBudget: 0 } },
     }, !ragFound);
 
     const finalText = getText(finalRes.candidates[0]?.content?.parts ?? []);
