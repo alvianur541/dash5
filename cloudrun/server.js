@@ -51,8 +51,9 @@ app.post('/v1/chat', async (req, res) => {
 
   // ── Route: Gemini 3 → Vertex AI Express (API key) ─────────────────────────
   if (model.startsWith('gemini-3') && VERTEX_API_KEY) {
+    const projectId = PROJECT_ID || 'vertex-490600';
     const url =
-      `https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}` +
+      `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}` +
       `/locations/global/publishers/google/models/${model}:generateContent` +
       `?key=${VERTEX_API_KEY}`;
     try {
