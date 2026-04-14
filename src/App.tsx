@@ -295,7 +295,7 @@ export default function App() {
   // ── Loading ──
   if (authLoading) {
     return (
-      <div className="h-screen w-screen flex items-center justify-center bg-[var(--bg-app)]">
+      <div className="h-dvh w-screen flex items-center justify-center bg-[var(--bg-app)]">
         <Loader2 className="w-10 h-10 text-[var(--accent-main)] animate-spin" />
       </div>
     );
@@ -307,7 +307,7 @@ export default function App() {
   // ── Main App ──
   return (
     <div className={cn(
-      "flex h-screen overflow-hidden transition-colors duration-400",
+      "flex h-dvh overflow-hidden transition-colors duration-400",
       "bg-[var(--bg-app)] text-[var(--text-primary)]"
     )}>
       <Sidebar
@@ -378,7 +378,6 @@ export default function App() {
           messages={messages}
           isTyping={isTyping}
           selectedModel={selectedModel}
-          onSelectModel={handleSelectModel}
           onSendMessage={handleSendMessage}
           onRetry={handleRetry}
           userName={user?.displayName || 'Operator'}
@@ -388,7 +387,6 @@ export default function App() {
           onSendMessage={handleSendMessage}
           disabled={isTyping}
           selectedModel={selectedModel}
-          onSelectModel={handleSelectModel}
         />
 
       </main>
@@ -439,73 +437,51 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
         className="w-full max-w-[360px] flex flex-col items-center gap-8"
       >
         {/* ── Brand ── */}
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-16 h-16 bg-[var(--accent-main)] rounded-2xl flex items-center justify-center shadow-xl shadow-[var(--accent-main)]/25">
-            <Wrench className="w-8 h-8 text-white" />
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-14 h-14 bg-[var(--accent-main)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--accent-main)]/20">
+            <Wrench className="w-7 h-7 text-white" />
           </div>
-          <div className="text-center space-y-1">
-            <h1 className={cn(
-              "text-[28px] font-bold tracking-tight",
-              isDark ? "text-white" : "text-[#111]"
-            )}>Dash⁵</h1>
-            <p className={cn("text-[13px]", isDark ? "text-[#737373]" : "text-[#888]")}>
-              Heavy Equipment Diagnostic Assistant
-            </p>
-          </div>
+          <h1 className={cn(
+            "text-[26px] font-bold tracking-tight",
+            isDark ? "text-white" : "text-[#111]"
+          )}>Dash⁵</h1>
         </div>
 
         {/* ── Form ── */}
-        <form onSubmit={handleSubmit} className="w-full space-y-3">
-          <div className="space-y-1.5">
-            <label htmlFor="username" className={cn(
-              "block text-[13px] font-medium",
-              isDark ? "text-[#a3a3a3]" : "text-[#555]"
-            )}>
-              Username
-            </label>
-            <input
-              id="username"
-              type="text"
-              value={username}
-              onChange={e => setUsername(e.target.value)}
-              placeholder="Masukkan username"
-              required
-              autoComplete="username"
-              autoFocus
-              className={cn(
-                "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
-                "focus:ring-2 focus:ring-[var(--accent-main)]/20",
-                isDark
-                  ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#666]"
-                  : "bg-white border border-[#ddd] text-[#111] placeholder-[#aaa] focus:border-[#aaa] shadow-sm"
-              )}
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <label htmlFor="password" className={cn(
-              "block text-[13px] font-medium",
-              isDark ? "text-[#a3a3a3]" : "text-[#555]"
-            )}>
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              autoComplete="current-password"
-              className={cn(
-                "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
-                "focus:ring-2 focus:ring-[var(--accent-main)]/20",
-                isDark
-                  ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#666]"
-                  : "bg-white border border-[#ddd] text-[#111] placeholder-[#aaa] focus:border-[#aaa] shadow-sm"
-              )}
-            />
-          </div>
+        <form onSubmit={handleSubmit} className="w-full space-y-2.5">
+          <input
+            id="username"
+            type="text"
+            value={username}
+            onChange={e => setUsername(e.target.value)}
+            placeholder="Username"
+            required
+            autoComplete="username"
+            autoFocus
+            className={cn(
+              "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
+              "focus:ring-2 focus:ring-[var(--accent-main)]/20",
+              isDark
+                ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#555]"
+                : "bg-white border border-[#e5e5e5] text-[#111] placeholder-[#bbb] focus:border-[#bbb] shadow-sm"
+            )}
+          />
+          <input
+            id="password"
+            type="password"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            placeholder="Password"
+            required
+            autoComplete="current-password"
+            className={cn(
+              "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
+              "focus:ring-2 focus:ring-[var(--accent-main)]/20",
+              isDark
+                ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#555]"
+                : "bg-white border border-[#e5e5e5] text-[#111] placeholder-[#bbb] focus:border-[#bbb] shadow-sm"
+            )}
+          />
 
           <AnimatePresence>
             {authError && (
@@ -537,7 +513,7 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
       {/* ── Footer ── */}
       <p className={cn(
         "absolute bottom-6 text-[11px]",
-        isDark ? "text-[#444]" : "text-[#bbb]"
+        isDark ? "text-[#333]" : "text-[#ccc]"
       )}>
         Dash⁵ · AI Agent v2.0
       </p>

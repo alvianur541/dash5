@@ -12,7 +12,7 @@
     <meta name="apple-mobile-web-app-title" content="Dash⁵" />
 
     <!-- SEO / Social -->
-    <meta name="description" content="Heavy Equipment Diagnostic Assistant — powered by AI" />
+    <meta name="description" content="Dash⁵ — AI Diagnostic Assistant" />
 
     <!-- Fonts: preconnect first, then non-blocking load -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -22,7 +22,14 @@
       rel="stylesheet"
     />
 
-    <title>Dash⁵ | Heavy Equipment Diagnostic Assistant</title>
+    <title>Dash⁵</title>
+    <!-- Theme init: apply before React renders to prevent flash -->
+    <script>
+      (function() {
+        var t = localStorage.getItem('dash-theme') || 'dark';
+        document.documentElement.classList.add(t + '-theme');
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

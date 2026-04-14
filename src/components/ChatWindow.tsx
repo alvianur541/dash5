@@ -15,7 +15,6 @@ interface ChatWindowProps {
   messages: Message[];
   isTyping: boolean;
   selectedModel: UnitModel;
-  onSelectModel: (model: UnitModel) => void;
   onSendMessage: (content: string) => void;
   onRetry: (assistantMessageId: string) => void;
   userName?: string;
@@ -76,8 +75,8 @@ const MessageItem = memo(function MessageItem({
     >
       {message.role === 'user' ? (
         <div className="flex justify-end">
-          <div className="max-w-[80%] space-y-1">
-            <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-[15px] text-[var(--text-primary)] leading-relaxed shadow-sm">
+          <div className="group max-w-[80%] space-y-1">
+            <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-sm text-[var(--text-primary)] leading-relaxed shadow-sm">
               {message.content}
               {message.attachments && message.attachments.length > 0 && (
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -93,14 +92,14 @@ const MessageItem = memo(function MessageItem({
               )}
             </div>
             {message.timestamp && (
-              <p className="text-[10px] text-[var(--text-muted)] text-right pr-1">
+              <p className="text-[8px] text-[var(--text-muted)] text-right pr-1 opacity-50 md:hidden">
                 {formatTime(message.timestamp)}
               </p>
             )}
           </div>
         </div>
       ) : (
-        <div className="flex gap-3">
+        <div className="group flex gap-3">
           <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
             <Wrench className="w-3.5 h-3.5 text-white" />
           </div>
@@ -143,7 +142,7 @@ const MessageItem = memo(function MessageItem({
                 <RotateCcw size={14} />
               </button>
               {message.timestamp && (
-                <span className="ml-auto text-[10px] text-[var(--text-muted)] pr-1">
+                <span className="ml-auto text-[8px] text-[var(--text-muted)] pr-1 opacity-50 md:hidden">
                   {formatTime(message.timestamp)}
                 </span>
               )}

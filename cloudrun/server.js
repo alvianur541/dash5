@@ -14,6 +14,7 @@ const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+const VERTEX_API_KEY = process.env.VERTEX_API_KEY;   // Vertex AI Express key untuk Gemini 3
 const COHERE_API_KEY = process.env.COHERE_API_KEY;
 
 // ── CORS ─────────────────────────────────────────────────────────────────────
@@ -39,17 +40,42 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Proxy: POST /v1/chat ──────────────────────────────────────────────────────
 // Body: { model, contents, systemInstruction?, tools?, generationConfig? }
-// Returns: raw Vertex AI generateContent response
+// Gemini 3 → Vertex AI Express (API key), Gemini 2.x → Vertex AI (OAuth)
 app.post('/v1/chat', async (req, res) => {
-  if (!PROJECT_ID) {
-    return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
-  }
-
-  const { model = 'gemini-2.0-flash-001', enableGoogleSearch = false, ...body } = req.body;
+  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
 
   // Inject Google Search Grounding tool jika RAG tidak menemukan hasil
   if (enableGoogleSearch) {
     body.tools = [...(body.tools || []), { googleSearch: {} }];
+  }
+
+  // ── Route: Gemini 3 → Vertex AI Express (API key) ─────────────────────────
+  if (model.startsWith('gemini-3') && VERTEX_API_KEY) {
+    const url =
+      `https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}` +
+      `/locations/global/publishers/google/models/${model}:generateContent` +
+      `?key=${VERTEX_API_KEY}`;
+    try {
+      const upstream = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const data = await upstream.json();
+      if (!upstream.ok) {
+        console.error('Vertex AI Express error:', JSON.stringify(data));
+        return res.status(upstream.status).json(data);
+      }
+      return res.json(data);
+    } catch (err) {
+      console.error('Vertex AI Express proxy error:', err);
+      return res.status(500).json({ error: String(err) });
+    }
+  }
+
+  // ── Route: Gemini 2.x → Vertex AI (OAuth) ────────────────────────────────
+  if (!PROJECT_ID) {
+    return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   }
 
   const vertexUrl =

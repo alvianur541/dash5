@@ -4,18 +4,15 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
-import { GoogleGenAI } from "@google/genai";
 import { Message, UnitModel } from '../types';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const geminiKey       = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.GEMINI_API_KEY;
+const proxyUrl        = import.meta.env.VITE_VERTEX_PROXY_URL as string;
 
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey)
   : null;
-
-const genAI = geminiKey ? new GoogleGenAI({ apiKey: geminiKey }) : null;
 
 export interface SearchResult {
   content: string;
@@ -123,8 +120,7 @@ function isFaultCode(query: string): boolean {
 // ── Cohere reranker via proxy (with 5s timeout) ───────────────────────────
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<string[]> {
   if (docs.length === 0) return docs.slice(0, topN);
-  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL;
-  if (!proxyUrl) return docs.slice(0, topN);
+  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL ?? '';
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 5000);
@@ -147,14 +143,16 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
   }
 }
 
-// ── Cached embedding fetch ─────────────────────────────────────────────────
+// ── Cached embedding fetch (via proxy) ────────────────────────────────────
 async function getEmbedding(query: string): Promise<number[]> {
   if (embeddingCache.has(query)) return embeddingCache.get(query)!;
-  const result = await (genAI as any).models.embedContent({
-    model: 'gemini-embedding-001',
-    contents: query,
+  const res = await fetch(`${proxyUrl}/v1/embed`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ query }),
   });
-  const values = result.embeddings[0].values as number[];
+  const data = await res.json();
+  const values = data.values as number[];
   embeddingCache.set(query, values);
   return values;
 }
@@ -166,8 +164,8 @@ export interface RAGResult {
 }
 
 export async function searchTechnicalManual(query: string, model: string): Promise<RAGResult> {
-  if (!supabase || !genAI) {
-    console.warn('Supabase or Gemini client not initialized.');
+  if (!supabase) {
+    console.warn('Supabase not initialized.');
     return { content: '', hasResults: false };
   }
 

@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useLayoutEffect } from 'react';
 import { ArrowUp, Paperclip, X, Mic, MicOff, Loader2 } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
@@ -13,7 +13,6 @@ interface MessageInputProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
   disabled?: boolean;
   selectedModel: UnitModel;
-  onSelectModel: (model: UnitModel) => void;
 }
 
 type RecordingState = 'idle' | 'recording' | 'transcribing';
@@ -28,8 +27,7 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 async function transcribeWithProxy(base64Audio: string, mimeType: string): Promise<string> {
-  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL;
-  if (!proxyUrl) throw new Error('Proxy URL tidak ditemukan');
+  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL ?? '';
 
   const res = await fetch(`${proxyUrl}/v1/transcribe`, {
     method: 'POST',
@@ -58,8 +56,8 @@ export function MessageInput({
   const mediaRecorderRef  = useRef<MediaRecorder | null>(null);
   const chunksRef         = useRef<Blob[]>([]);
 
-  // Auto-resize textarea
-  useEffect(() => {
+  // Auto-resize textarea — useLayoutEffect prevents height flash on initial render
+  useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
     el.style.height = 'auto';
@@ -135,9 +133,12 @@ export function MessageInput({
           const base64 = await blobToBase64(blob);
           const text = await transcribeWithProxy(base64, mimeType);
           if (text) {
-            setInput(prev => prev ? `${prev} ${text}` : text);
-            // Focus textarea setelah transcribe
-            setTimeout(() => textareaRef.current?.focus(), 50);
+            const currentInput = textareaRef.current?.value?.trim() || '';
+            const combined = currentInput ? `${currentInput} ${text}` : text;
+            setInput('');
+            setAttachments([]);
+            if (textareaRef.current) textareaRef.current.style.height = 'auto';
+            onSendMessage(combined);
           }
         } catch (err: any) {
           setTranscribeError('Gagal transkripsi. Coba lagi.');
@@ -210,32 +211,30 @@ export function MessageInput({
             : "border-[var(--border-main)] focus-within:border-white/15 focus-within:shadow-lg"
         )}>
 
-          {/* Recording indicator bar */}
+          {/* Recording / transcribing status — absolute overlay, tidak menambah tinggi box */}
           <AnimatePresence>
-            {isRecording && (
+            {(isRecording || isTranscribing) && (
               <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
-                className="flex items-center gap-2 px-4 pt-2.5 pb-1"
+                className="absolute top-0 left-0 right-0 flex items-center gap-2 px-4 pt-2.5 pointer-events-none"
               >
-                <m.div
-                  animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
-                  transition={{ duration: 1, repeat: Infinity }}
-                  className="w-2 h-2 rounded-full bg-red-500 shrink-0"
-                />
-                <span className="text-[11px] text-red-400 font-medium">Merekam... ketuk mic untuk berhenti</span>
-              </m.div>
-            )}
-            {isTranscribing && (
-              <m.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="flex items-center gap-2 px-4 pt-2.5 pb-1"
-              >
-                <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
-                <span className="text-[11px] text-[var(--accent-main)] font-medium">Mentranskrip suara...</span>
+                {isRecording ? (
+                  <>
+                    <m.div
+                      animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
+                      transition={{ duration: 1, repeat: Infinity }}
+                      className="w-2 h-2 rounded-full bg-red-500 shrink-0"
+                    />
+                    <span className="text-[11px] text-red-400 font-medium">Merekam... ketuk mic untuk berhenti</span>
+                  </>
+                ) : (
+                  <>
+                    <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
+                    <span className="text-[11px] text-[var(--accent-main)] font-medium">Mentranskrip suara...</span>
+                  </>
+                )}
               </m.div>
             )}
           </AnimatePresence>
@@ -333,7 +332,7 @@ export function MessageInput({
             </m.p>
           ) : (
             <p className="text-center text-[10px] text-[var(--text-muted)] font-medium">
-              Dash⁵ dapat membuat kesalahan. Selalu verifikasi kembali sebelum melakukan perbaikan di unit.
+              Dash⁵ bisa keliru, selalu periksa kembali jawaban
             </p>
           )}
         </AnimatePresence>

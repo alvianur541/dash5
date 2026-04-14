@@ -9,7 +9,7 @@ import { searchTechnicalManual } from './supabase';
 
 // ── Config ────────────────────────────────────────────────────────────────────
 const PROXY_URL  = import.meta.env.VITE_VERTEX_PROXY_URL as string;   // Cloud Run URL
-const MODEL      = import.meta.env.VITE_VERTEX_MODEL || 'gemini-2.0-flash-001';
+const MODEL      = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3-flash-preview';
 
 // ── Vertex AI types ───────────────────────────────────────────────────────────
 interface TextPart         { text: string }
@@ -136,10 +136,6 @@ export async function generateResponse(
   userInput: string,
   attachments?: File[]
 ): Promise<string> {
-  if (!PROXY_URL) {
-    throw new Error('VITE_VERTEX_PROXY_URL tidak dikonfigurasi. Tambahkan ke .env.local');
-  }
-
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
 
@@ -186,13 +182,23 @@ export async function generateResponse(
 
   contents.push({ role: 'user', parts: currentParts });
 
-  // ── First call (may trigger function call) ─────────────────────────────────
+  // ── Pre-check RAG untuk text queries (bukan attachment) ───────────────────
+  // Jika RAG tidak punya data → aktifkan Google Search dari awal
+  let preSearchEmpty = false;
+  if (!attachments || attachments.length === 0) {
+    const preSearch = await searchTechnicalManual(userInput.trim(), model);
+    preSearchEmpty = !preSearch.hasResults;
+  }
+
+  // ── First call ────────────────────────────────────────────────────────────
+  // Jika RAG kosong: pakai Google Search grounding (tanpa function declarations)
+  // Jika RAG ada data: pakai function declarations agar Gemini bisa query lebih spesifik
   const firstRes = await callProxy({
     contents,
     systemInstruction: { parts: [{ text: systemInstruction }] },
-    tools: [{ functionDeclarations: [searchDecl] }],
+    ...(preSearchEmpty ? {} : { tools: [{ functionDeclarations: [searchDecl] }] }),
     generationConfig: { maxOutputTokens: 4096 },
-  });
+  }, preSearchEmpty);
 
   const firstCandidate = firstRes.candidates[0];
   if (!firstCandidate) throw new Error('Vertex AI tidak mengembalikan respons.');

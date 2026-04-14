@@ -4,8 +4,8 @@ import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, '.', '');
+export default defineConfig(() => {
+  const baseEnv = loadEnv('', '.', '');        // .env.local — untuk proxy target (selalu full URL)
   return {
     plugins: [
       react(),
@@ -65,6 +65,12 @@ export default defineConfig(({ mode }) => {
 
     server: {
       hmr: process.env.DISABLE_HMR !== 'true',
+      proxy: {
+        '/v1': {
+          target: baseEnv.VITE_VERTEX_PROXY_URL,
+          changeOrigin: true,
+        },
+      },
     },
 
     build: {
