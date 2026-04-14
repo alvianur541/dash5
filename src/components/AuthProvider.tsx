@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 
 interface AuthUser {
@@ -24,8 +24,18 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    try {
+      const saved = localStorage.getItem('dash-user');
+      return saved ? JSON.parse(saved) : null;
+    } catch { return null; }
+  });
   const [authError, setAuthError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) localStorage.setItem('dash-user', JSON.stringify(user));
+    else localStorage.removeItem('dash-user');
+  }, [user]);
 
   const login = async (username: string, password: string) => {
     setAuthError(null);

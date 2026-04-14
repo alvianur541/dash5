@@ -29,6 +29,16 @@ export default defineConfig(({ mode }) => {
                 cacheableResponse: { statuses: [0, 200] },
               },
             },
+            {
+              // App shell — stale-while-revalidate agar tampilan instan
+              urlPattern: /^https:\/\/dash5\.my\.id\/.*/i,
+              handler: 'StaleWhileRevalidate',
+              options: {
+                cacheName: 'app-shell',
+                expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 7 },
+                cacheableResponse: { statuses: [0, 200] },
+              },
+            },
           ],
         },
         manifest: {

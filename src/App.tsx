@@ -11,7 +11,7 @@ import { UnitModel, Message, SessionMeta, ChatSession } from './types';
 import { generateResponse } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, fetchUserSessionList, fetchSessionData } from './services/supabase';
 import { AlertCircle, LogIn, Loader2, PanelLeft, Wrench, Sun, Moon } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
 
@@ -180,17 +180,13 @@ export default function App() {
     }
 
     // Convert attached files to data URLs for display
-    const attachmentUrls: string[] = [];
-    if (attachments && attachments.length > 0) {
-      for (const file of attachments) {
-        const url = await new Promise<string>((resolve) => {
+    const attachmentUrls: string[] = attachments && attachments.length > 0
+      ? await Promise.all(attachments.map(file => new Promise<string>((resolve) => {
           const reader = new FileReader();
           reader.onloadend = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
-        });
-        attachmentUrls.push(url);
-      }
-    }
+        })))
+      : [];
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -333,7 +329,7 @@ export default function App() {
         {/* Top bar — always shown on mobile, shown on desktop when collapsed */}
         <AnimatePresence>
           {isSidebarCollapsed && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, y: -8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
@@ -356,14 +352,14 @@ export default function App() {
               <span className="ml-auto text-xs text-[var(--text-muted)] font-medium bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-main)]">
                 {selectedModel}
               </span>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 
         {/* Error Banner */}
         <AnimatePresence>
           {error && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -374,7 +370,7 @@ export default function App() {
               <button onClick={() => setError(null)} className="ml-auto text-xs underline opacity-70 hover:opacity-100">
                 Tutup
               </button>
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 
@@ -436,7 +432,7 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
         {isDark ? <Sun size={16} /> : <Moon size={16} />}
       </button>
 
-      <motion.div
+      <m.div
         initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
@@ -513,7 +509,7 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
 
           <AnimatePresence>
             {authError && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0, height: 0 }}
                 animate={{ opacity: 1, height: 'auto' }}
                 exit={{ opacity: 0, height: 0 }}
@@ -521,7 +517,7 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
               >
                 <AlertCircle className="w-4 h-4 shrink-0" />
                 <span className="text-[13px]">{authError}</span>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
 
@@ -536,14 +532,14 @@ function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeT
             }
           </button>
         </form>
-      </motion.div>
+      </m.div>
 
       {/* ── Footer ── */}
       <p className={cn(
         "absolute bottom-6 text-[11px]",
         isDark ? "text-[#444]" : "text-[#bbb]"
       )}>
-        Dash⁵ · Heavy Equipment AI · v2.0
+        Dash⁵ · AI Agent v2.0
       </p>
     </div>
   );

@@ -12,7 +12,7 @@ const MODEL_GROUPS: { type: string; models: UnitModel[] }[] = [
   { type: 'Mini Excavator', models: ['ZX48U-5A', 'ZX65USB-5A'] },
   { type: 'Medium Excavator', models: ['ZX138MF-5G', 'ZX200-5G'] },
 ];
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
 interface SidebarProps {
@@ -60,14 +60,14 @@ export function Sidebar({
     return () => window.removeEventListener('resize', check);
   }, []);
 
-  const SIDEBAR_W = isMobile ? 280 : 260;
+  const SIDEBAR_W = isMobile ? 300 : 280;
 
   return (
     <>
       {/* Mobile backdrop */}
       <AnimatePresence>
         {isMobile && !isCollapsed && (
-          <motion.div
+          <m.div
             key="backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -79,7 +79,7 @@ export function Sidebar({
         )}
       </AnimatePresence>
 
-      <motion.div
+      <m.div
         initial={false}
         animate={
           isMobile
@@ -95,16 +95,19 @@ export function Sidebar({
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
           {/* ── Header ── */}
-          <div className="flex items-center justify-between px-4 py-4 shrink-0">
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-[var(--accent-main)] flex items-center justify-center shrink-0">
-                <Wrench className="w-3.5 h-3.5 text-white" />
+          <div className="flex items-center justify-between px-4 pt-5 pb-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 shadow-lg shadow-[var(--accent-main)]/20">
+                <Wrench className="w-4.5 h-4.5 text-white" style={{ width: 18, height: 18 }} />
               </div>
-              <span className="text-[15px] font-bold text-[var(--text-primary)] tracking-tight">Dash⁵</span>
+              <div>
+                <span className="text-[17px] font-bold text-[var(--text-primary)] tracking-tight leading-none">Dash⁵</span>
+                <p className="text-[10px] text-[var(--text-muted)] font-medium tracking-wider uppercase leading-tight mt-0.5">Diagnostic Assistant</p>
+              </div>
             </div>
             <button
               onClick={onToggle}
-              className="p-1.5 hover:bg-white/5 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+              className="p-2 hover:bg-white/8 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
               aria-label="Tutup sidebar"
             >
               {isMobile ? <X size={16} /> : <PanelLeft size={16} />}
@@ -112,13 +115,13 @@ export function Sidebar({
           </div>
 
           {/* ── New Chat ── */}
-          <div className="px-3 mb-1 shrink-0">
+          <div className="px-3 mb-2 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-[var(--text-primary)] transition-all group"
+              className="w-full flex items-center gap-3 px-4 py-3 rounded-xl bg-[var(--accent-main)]/10 hover:bg-[var(--accent-main)]/15 border border-[var(--accent-main)]/20 text-[var(--accent-main)] transition-all group"
             >
-              <Plus size={17} className="text-[var(--text-muted)] group-hover:text-[var(--text-primary)] transition-colors" />
-              <span className="text-sm font-medium">New chat</span>
+              <Plus size={17} />
+              <span className="text-[13px] font-semibold">Chat baru</span>
             </button>
           </div>
 
@@ -127,7 +130,7 @@ export function Sidebar({
 
             {/* Model Selector — grouped by type */}
             <div className="space-y-1">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-2 pt-1">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-2 pt-1 pb-0.5">
                 Model Unit
               </p>
               {MODEL_GROUPS.map(({ type, models }) => {
@@ -139,16 +142,16 @@ export function Sidebar({
                     <button
                       onClick={() => setExpandedType(isOpen ? '' : type)}
                       className={cn(
-                        "w-full flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all text-left",
+                        "w-full flex items-center gap-2.5 px-3 py-2.5 rounded-xl transition-all text-left",
                         hasActive
                           ? "text-[var(--accent-main)]"
                           : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                       )}
                     >
-                      <Zap size={12} className="shrink-0" />
-                      <span className="text-xs font-bold flex-1">{type}</span>
+                      <Zap size={13} className="shrink-0" />
+                      <span className="text-[13px] font-semibold flex-1">{type}</span>
                       <ChevronRight
-                        size={13}
+                        size={14}
                         className={cn(
                           "shrink-0 transition-transform duration-200",
                           isOpen ? "rotate-90" : ""
@@ -159,7 +162,7 @@ export function Sidebar({
                     {/* Models inside type */}
                     <AnimatePresence initial={false}>
                       {isOpen && (
-                        <motion.div
+                        <m.div
                           initial={{ height: 0, opacity: 0 }}
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
@@ -173,18 +176,18 @@ export function Sidebar({
                                 key={model}
                                 onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
                                 className={cn(
-                                  "w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-left",
+                                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
                                   isActive
                                     ? "bg-[var(--accent-main)]/10 border border-[var(--accent-main)]/20"
                                     : "hover:bg-white/5 border border-transparent"
                                 )}
                               >
                                 <div className={cn(
-                                  "w-1.5 h-1.5 rounded-full shrink-0",
-                                  isActive ? "bg-[var(--accent-main)]" : "bg-[var(--text-muted)]"
+                                  "w-2 h-2 rounded-full shrink-0",
+                                  isActive ? "bg-[var(--accent-main)]" : "bg-[var(--text-muted)]/40"
                                 )} />
                                 <span className={cn(
-                                  "text-xs font-semibold truncate",
+                                  "text-[13px] font-semibold truncate",
                                   isActive ? "text-[var(--accent-main)]" : "text-[var(--text-primary)]"
                                 )}>
                                   {model}
@@ -192,7 +195,7 @@ export function Sidebar({
                               </button>
                             );
                           })}
-                        </motion.div>
+                        </m.div>
                       )}
                     </AnimatePresence>
                   </div>
@@ -206,11 +209,11 @@ export function Sidebar({
                 onClick={() => setShowHistory(v => !v)}
                 className="w-full flex items-center justify-between px-2 pt-1 pb-0.5 group/hist"
               >
-                <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--text-muted)] group-hover/hist:text-[var(--text-primary)] transition-colors">
+                <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] group-hover/hist:text-[var(--text-primary)] transition-colors">
                   Riwayat
                 </p>
                 <ChevronRight
-                  size={12}
+                  size={13}
                   className={cn(
                     "text-[var(--text-muted)] group-hover/hist:text-[var(--text-primary)] transition-all duration-200",
                     showHistory ? "rotate-90" : ""
@@ -220,7 +223,7 @@ export function Sidebar({
 
               <AnimatePresence initial={false}>
                 {showHistory && (
-                  <motion.div
+                  <m.div
                     initial={{ height: 0, opacity: 0 }}
                     animate={{ height: 'auto', opacity: 1 }}
                     exit={{ height: 0, opacity: 0 }}
@@ -228,8 +231,8 @@ export function Sidebar({
                     className="overflow-hidden"
                   >
                     {sessions.length === 0 ? (
-                      <div className="px-2 py-3 text-center">
-                        <p className="text-[11px] text-[var(--text-muted)]">Belum ada riwayat chat</p>
+                      <div className="px-2 py-4 text-center">
+                        <p className="text-[12px] text-[var(--text-muted)]">Belum ada riwayat chat</p>
                       </div>
                     ) : (
                       <div className="space-y-0.5">
@@ -245,9 +248,9 @@ export function Sidebar({
                               <button
                                 onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                                 className={cn(
-                                  "w-full text-left px-3 py-2 rounded-xl text-xs transition-all pr-8",
+                                  "w-full text-left px-3 py-2.5 rounded-xl text-[13px] transition-all pr-9",
                                   isActive
-                                    ? "bg-white/8 text-[var(--text-primary)] font-medium"
+                                    ? "bg-white/8 text-[var(--text-primary)] font-semibold"
                                     : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                                 )}
                               >
@@ -256,7 +259,7 @@ export function Sidebar({
 
                               <AnimatePresence>
                                 {(isMobile || hoveredSession === session.id) && (
-                                  <motion.button
+                                  <m.button
                                     initial={{ opacity: 0, scale: 0.8 }}
                                     animate={{ opacity: 1, scale: 1 }}
                                     exit={{ opacity: 0, scale: 0.8 }}
@@ -269,7 +272,7 @@ export function Sidebar({
                                     title="Hapus sesi"
                                   >
                                     <Trash2 size={12} />
-                                  </motion.button>
+                                  </m.button>
                                 )}
                               </AnimatePresence>
                             </div>
@@ -277,7 +280,7 @@ export function Sidebar({
                         })}
                       </div>
                     )}
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>
@@ -291,22 +294,22 @@ export function Sidebar({
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all"
             >
               {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-              <span className="text-sm">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
+              <span className="text-[13px] font-medium">{theme === 'dark' ? 'Light mode' : 'Dark mode'}</span>
             </button>
 
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(v => !v)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 transition-all group"
+                className="w-full flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-white/5 transition-all group"
               >
-                <div className="w-7 h-7 rounded-lg bg-[var(--bg-card)] flex items-center justify-center text-xs font-bold text-[var(--text-primary)] uppercase border border-[var(--border-main)] shrink-0">
+                <div className="w-8 h-8 rounded-xl bg-[var(--accent-main)]/15 flex items-center justify-center text-[13px] font-bold text-[var(--accent-main)] uppercase border border-[var(--accent-main)]/20 shrink-0">
                   {(user?.displayName || 'U')[0]}
                 </div>
                 <div className="flex flex-col items-start min-w-0 flex-1">
-                  <span className="text-sm font-semibold text-[var(--text-primary)] leading-tight truncate w-full text-left">
+                  <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight truncate w-full text-left">
                     {user?.displayName || 'Operator'}
                   </span>
-                  <span className="text-[10px] text-[var(--text-muted)] leading-tight text-left">
+                  <span className="text-[11px] text-[var(--text-muted)] leading-tight text-left mt-0.5">
                     {(user as any)?.role || 'Field Technician'}
                   </span>
                 </div>
@@ -321,7 +324,7 @@ export function Sidebar({
 
               <AnimatePresence>
                 {showUserMenu && (
-                  <motion.div
+                  <m.div
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
@@ -334,14 +337,14 @@ export function Sidebar({
                       <LogOut size={15} className="text-[var(--text-muted)]" />
                       <span>Log out</span>
                     </button>
-                  </motion.div>
+                  </m.div>
                 )}
               </AnimatePresence>
             </div>
           </div>
 
         </div>
-      </motion.div>
+      </m.div>
     </>
   );
 }

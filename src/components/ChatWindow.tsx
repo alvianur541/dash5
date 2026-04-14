@@ -3,11 +3,12 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
-import ReactMarkdown from 'react-markdown';
-import { motion, AnimatePresence } from 'motion/react';
+import { m, AnimatePresence } from 'motion/react';
 import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, Wrench } from 'lucide-react';
+
+const ReactMarkdown = lazy(() => import('react-markdown'));
 
 interface ChatWindowProps {
   messages: Message[];
@@ -20,12 +21,11 @@ interface ChatWindowProps {
 }
 
 const SUGGESTION_CHIPS = [
-  'Cara baca fault code W:2200-3',
-  'Hydraulic tidak responsif saat swing',
+  'Berapa berat Swing Motor?',
+  'Torsi pengencangan baut Flywheel Engine',
+  'Troubleshooting unit mistrack',
   'Engine overheat, apa yang harus dicek?',
-  'Boom silinder lambat saat angkat',
 ];
-
 
 function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString('id-ID', {
@@ -35,7 +35,7 @@ function formatTime(timestamp: number) {
   });
 }
 
-function CopyButton({ text }: { text: string }) {
+const CopyButton = memo(function CopyButton({ text }: { text: string }) {
   const [copied, setCopied] = useState(false);
   const handleCopy = async () => {
     await navigator.clipboard.writeText(text);
@@ -51,7 +51,108 @@ function CopyButton({ text }: { text: string }) {
       {copied ? <Check size={14} className="text-green-400" /> : <Copy size={14} />}
     </button>
   );
-}
+});
+
+// Memoized message item — only re-renders if message or feedback changes
+const MessageItem = memo(function MessageItem({
+  message,
+  feedback,
+  onFeedback,
+  onRetry,
+  isTyping,
+}: {
+  message: Message;
+  feedback: 'up' | 'down' | null;
+  onFeedback: (id: string, type: 'up' | 'down') => void;
+  onRetry: (id: string) => void;
+  isTyping: boolean;
+}) {
+  return (
+    <m.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2 }}
+    >
+      {message.role === 'user' ? (
+        <div className="flex justify-end">
+          <div className="max-w-[80%] space-y-1">
+            <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-[15px] text-[var(--text-primary)] leading-relaxed shadow-sm">
+              {message.content}
+              {message.attachments && message.attachments.length > 0 && (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {message.attachments.map((url, i) => (
+                    <img
+                      key={i}
+                      src={url}
+                      alt="Attachment"
+                      className="max-w-[260px] max-h-[320px] object-contain rounded-lg"
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+            {message.timestamp && (
+              <p className="text-[10px] text-[var(--text-muted)] text-right pr-1">
+                {formatTime(message.timestamp)}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : (
+        <div className="flex gap-3">
+          <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
+            <Wrench className="w-3.5 h-3.5 text-white" />
+          </div>
+          <div className="flex-1 min-w-0 space-y-2">
+            <div className="markdown-body text-[15px] text-[var(--text-primary)]">
+              <Suspense fallback={<span className="text-[var(--text-muted)] text-sm">...</span>}>
+                <ReactMarkdown>{message.content}</ReactMarkdown>
+              </Suspense>
+            </div>
+            <div className="flex items-center gap-1 pt-1">
+              <CopyButton text={message.content} />
+              <button
+                onClick={() => onFeedback(message.id, 'up')}
+                className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                title="Respons bagus"
+              >
+                <ThumbsUp
+                  size={14}
+                  className={feedback === 'up' ? 'text-green-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
+                  style={feedback === 'up' ? { fill: 'currentColor' } : {}}
+                />
+              </button>
+              <button
+                onClick={() => onFeedback(message.id, 'down')}
+                className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
+                title="Respons kurang tepat"
+              >
+                <ThumbsDown
+                  size={14}
+                  className={feedback === 'down' ? 'text-red-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
+                  style={feedback === 'down' ? { fill: 'currentColor' } : {}}
+                />
+              </button>
+              <button
+                onClick={() => !isTyping && onRetry(message.id)}
+                disabled={isTyping}
+                className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                title="Ulangi jawaban"
+              >
+                <RotateCcw size={14} />
+              </button>
+              {message.timestamp && (
+                <span className="ml-auto text-[10px] text-[var(--text-muted)] pr-1">
+                  {formatTime(message.timestamp)}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </m.div>
+  );
+});
 
 export function ChatWindow({
   messages,
@@ -83,7 +184,7 @@ export function ChatWindow({
 
         {/* ── Welcome / Empty State ── */}
         {messages.length === 0 && !isTyping && (
-          <motion.div
+          <m.div
             key="welcome"
             initial={{ opacity: 0, y: 16 }}
             animate={{ opacity: 1, y: 0 }}
@@ -92,8 +193,6 @@ export function ChatWindow({
             className="flex flex-col items-center justify-center min-h-full py-16 px-4"
           >
             <div className="w-full max-w-xl md:max-w-2xl space-y-8">
-
-              {/* Greeting */}
               <div className="text-center space-y-4">
                 <div className="flex items-center justify-center mb-2">
                   <div className="w-14 h-14 rounded-2xl bg-[var(--accent-main)] flex items-center justify-center shadow-xl shadow-[var(--accent-main)]/20">
@@ -113,7 +212,6 @@ export function ChatWindow({
                 </div>
               </div>
 
-              {/* Suggestion Chips */}
               <div className="space-y-2">
                 <p className="text-[11px] font-semibold text-[var(--text-muted)] uppercase tracking-wider text-center">
                   Contoh pertanyaan
@@ -130,110 +228,28 @@ export function ChatWindow({
                   ))}
                 </div>
               </div>
-
             </div>
-          </motion.div>
+          </m.div>
         )}
 
         {/* ── Messages ── */}
         {messages.length > 0 && (
           <div className="w-full max-w-3xl mx-auto px-4 py-8 space-y-8">
             {messages.map((message) => (
-              <motion.div
+              <MessageItem
                 key={message.id}
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.2 }}
-              >
-                {message.role === 'user' ? (
-                  /* ── User Message ── */
-                  <div className="flex justify-end">
-                    <div className="max-w-[80%] space-y-1">
-                      <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-sm text-[var(--text-primary)] leading-relaxed shadow-sm">
-                        {message.content}
-                        {message.attachments && message.attachments.length > 0 && (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            {message.attachments.map((url, i) => (
-                              <img
-                                key={i}
-                                src={url}
-                                alt="Attachment"
-                                className="max-w-[260px] max-h-[320px] object-contain rounded-lg border border-[var(--border-main)]"
-                              />
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      {message.timestamp && (
-                        <p className="text-[10px] text-[var(--text-muted)] text-right pr-1">
-                          {formatTime(message.timestamp)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  /* ── Assistant Message ── */
-                  <div className="flex gap-3">
-                    {/* Avatar */}
-                    <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                      <Wrench className="w-3.5 h-3.5 text-white" />
-                    </div>
-
-                    {/* Content */}
-                    <div className="flex-1 min-w-0 space-y-2">
-                      <div className="markdown-body text-[var(--text-primary)]">
-                        <ReactMarkdown>{message.content}</ReactMarkdown>
-                      </div>
-
-                      {/* Action Buttons + Timestamp — always visible */}
-                      <div className="flex items-center gap-1 pt-1">
-                        <CopyButton text={message.content} />
-                        <button
-                          onClick={() => handleFeedback(message.id, 'up')}
-                          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-                          title="Respons bagus"
-                        >
-                          <ThumbsUp
-                            size={14}
-                            className={feedback[message.id] === 'up' ? 'text-green-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
-                            style={feedback[message.id] === 'up' ? { fill: 'currentColor' } : {}}
-                          />
-                        </button>
-                        <button
-                          onClick={() => handleFeedback(message.id, 'down')}
-                          className="p-1.5 rounded-lg hover:bg-white/5 transition-colors"
-                          title="Respons kurang tepat"
-                        >
-                          <ThumbsDown
-                            size={14}
-                            className={feedback[message.id] === 'down' ? 'text-red-400' : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'}
-                            style={feedback[message.id] === 'down' ? { fill: 'currentColor' } : {}}
-                          />
-                        </button>
-                        <button
-                          onClick={() => !isTyping && onRetry(message.id)}
-                          disabled={isTyping}
-                          className="p-1.5 rounded-lg hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                          title="Ulangi jawaban"
-                        >
-                          <RotateCcw size={14} />
-                        </button>
-                        {message.timestamp && (
-                          <span className="ml-auto text-[10px] text-[var(--text-muted)] pr-1">
-                            {formatTime(message.timestamp)}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </motion.div>
+                message={message}
+                feedback={feedback[message.id] ?? null}
+                onFeedback={handleFeedback}
+                onRetry={onRetry}
+                isTyping={isTyping}
+              />
             ))}
 
             {/* Typing Indicator */}
             <AnimatePresence>
               {isTyping && (
-                <motion.div
+                <m.div
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0 }}
@@ -245,7 +261,7 @@ export function ChatWindow({
                   <div className="flex flex-col justify-center gap-1 py-2">
                     <div className="flex items-center gap-1.5">
                       {[0, 1, 2].map((i) => (
-                        <motion.div
+                        <m.div
                           key={i}
                           animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
                           transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
@@ -254,7 +270,7 @@ export function ChatWindow({
                       ))}
                     </div>
                   </div>
-                </motion.div>
+                </m.div>
               )}
             </AnimatePresence>
           </div>

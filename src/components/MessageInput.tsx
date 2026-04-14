@@ -5,7 +5,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { ArrowUp, Paperclip, X, Mic, MicOff, Loader2 } from 'lucide-react';
-import { AnimatePresence, motion } from 'motion/react';
+import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
 
@@ -86,7 +86,11 @@ export function MessageInput({
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files) {
-      setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
+      const MAX = 5 * 1024 * 1024; // 5MB
+      const valid = Array.from(e.target.files).filter(f => f.size <= MAX);
+      if (valid.length < e.target.files.length)
+        setTranscribeError('File terlalu besar (maks 5MB). File lain tetap ditambahkan.');
+      setAttachments(prev => [...prev, ...valid]);
       e.target.value = '';
     }
   };
@@ -159,7 +163,7 @@ export function MessageInput({
         {/* Attachment Previews */}
         <AnimatePresence>
           {attachments.length > 0 && (
-            <motion.div
+            <m.div
               initial={{ opacity: 0, height: 0 }}
               animate={{ opacity: 1, height: 'auto' }}
               exit={{ opacity: 0, height: 0 }}
@@ -180,7 +184,7 @@ export function MessageInput({
                   </button>
                 </div>
               ))}
-            </motion.div>
+            </m.div>
           )}
         </AnimatePresence>
 
@@ -197,22 +201,22 @@ export function MessageInput({
           {/* Recording indicator bar */}
           <AnimatePresence>
             {isRecording && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
                 className="flex items-center gap-2 px-4 pt-2.5 pb-1"
               >
-                <motion.div
+                <m.div
                   animate={{ scale: [1, 1.3, 1], opacity: [1, 0.5, 1] }}
                   transition={{ duration: 1, repeat: Infinity }}
                   className="w-2 h-2 rounded-full bg-red-500 shrink-0"
                 />
                 <span className="text-[11px] text-red-400 font-medium">Merekam... ketuk mic untuk berhenti</span>
-              </motion.div>
+              </m.div>
             )}
             {isTranscribing && (
-              <motion.div
+              <m.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 exit={{ opacity: 0 }}
@@ -220,7 +224,7 @@ export function MessageInput({
               >
                 <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
                 <span className="text-[11px] text-[var(--accent-main)] font-medium">Mentranskrip suara...</span>
-              </motion.div>
+              </m.div>
             )}
           </AnimatePresence>
 
@@ -307,14 +311,14 @@ export function MessageInput({
         {/* Error / Disclaimer */}
         <AnimatePresence>
           {transcribeError ? (
-            <motion.p
+            <m.p
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               className="text-center text-[11px] text-red-400 font-medium"
             >
               {transcribeError}
-            </motion.p>
+            </m.p>
           ) : (
             <p className="text-center text-[10px] text-[var(--text-muted)] font-medium">
               Dash⁵ dapat membuat kesalahan. Selalu verifikasi kembali sebelum melakukan perbaikan di unit.
