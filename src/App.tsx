@@ -7,65 +7,15 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
-import { UnitModel, Message, SessionMeta, ChatSession } from './types';
+import { LoginPage } from './components/LoginPage';
+import { UnitModel, Message, SessionMeta } from './types';
 import { generateResponse } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, fetchUserSessionList, fetchSessionData } from './services/supabase';
-import { AlertCircle, LogIn, Loader2, PanelLeft, Wrench, Sun, Moon } from 'lucide-react';
+import { loadSessionList, loadSessionData, saveSession, deleteSessionData, listKey, dataKey } from './services/storage';
+import { AlertCircle, Loader2, PanelLeft, Wrench } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
-
-// ─── Session Storage Helpers (per-user) ──────────────────────────────────────
-
-const MAX_SESSIONS = 25;
-
-const listKey  = (uid: string) => `dash-session-list-${uid}`;
-const dataKey  = (uid: string, id: string) => `dash-session-${uid}-${id}`;
-
-function loadSessionList(uid: string): SessionMeta[] {
-  try {
-    return JSON.parse(localStorage.getItem(listKey(uid)) || '[]');
-  } catch {
-    return [];
-  }
-}
-
-function loadSessionData(uid: string, id: string): ChatSession | null {
-  try {
-    const raw = localStorage.getItem(dataKey(uid, id));
-    return raw ? JSON.parse(raw) : null;
-  } catch {
-    return null;
-  }
-}
-
-function saveSession(uid: string, id: string, model: UnitModel, messages: Message[], firstMessage: string) {
-  const sessionData: ChatSession = { id, model, messages };
-  localStorage.setItem(dataKey(uid, id), JSON.stringify(sessionData));
-
-  const title = firstMessage.length > 60
-    ? firstMessage.slice(0, 57) + '...'
-    : firstMessage;
-
-  const list = loadSessionList(uid);
-  const filtered = list.filter(s => s.id !== id);
-  const updated: SessionMeta[] = [
-    { id, title, model, updatedAt: Date.now() },
-    ...filtered,
-  ].slice(0, MAX_SESSIONS);
-  localStorage.setItem(listKey(uid), JSON.stringify(updated));
-  return updated;
-}
-
-function deleteSessionData(uid: string, id: string) {
-  localStorage.removeItem(dataKey(uid, id));
-  const list = loadSessionList(uid);
-  const updated = list.filter(s => s.id !== id);
-  localStorage.setItem(listKey(uid), JSON.stringify(updated));
-  return updated;
-}
-
-// ─── App ─────────────────────────────────────────────────────────────────────
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -76,9 +26,11 @@ export default function App() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => window.innerWidth < 768);
   const [sessionList, setSessionList] = useState<SessionMeta[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
-  // Ref to avoid stale closure when accessing current session ID inside async callback
+  // Refs to avoid stale closures in async callbacks
   const sessionIdRef = useRef<string | null>(null);
+  const messagesRef = useRef<Message[]>([]);
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     return (localStorage.getItem('dash-theme') as 'dark' | 'light') || 'dark';
@@ -91,6 +43,17 @@ export default function App() {
     root.classList.add(`${theme}-theme`);
     localStorage.setItem('dash-theme', theme);
   }, [theme]);
+
+  // Keep refs in sync with state
+  useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  const startNewSession = useCallback(() => {
+    setMessages([]);
+    setError(null);
+    setCurrentSessionId(null);
+    sessionIdRef.current = null;
+  }, []);
 
   // Load sessions when user changes — Supabase primary, localStorage fallback
   useEffect(() => {
@@ -111,19 +74,7 @@ export default function App() {
         localStorage.setItem(listKey(user.uid), JSON.stringify(list));
       }
     });
-  }, [user?.uid]);
-
-  // Keep ref in sync with state
-  useEffect(() => {
-    sessionIdRef.current = currentSessionId;
-  }, [currentSessionId]);
-
-  const startNewSession = useCallback(() => {
-    setMessages([]);
-    setError(null);
-    setCurrentSessionId(null);
-    sessionIdRef.current = null;
-  }, []);
+  }, [user?.uid, startNewSession]);
 
   const handleSelectModel = useCallback((model: UnitModel) => {
     setSelectedModel(model);
@@ -154,15 +105,20 @@ export default function App() {
   }, [user]);
 
   const handleDeleteSession = useCallback((id: string) => {
-    if (!user) return;
+    setDeleteConfirmId(id);
+  }, []);
+
+  const confirmDelete = useCallback(() => {
+    const id = deleteConfirmId;
+    if (!id || !user) return;
+    setDeleteConfirmId(null);
     const updatedList = deleteSessionData(user.uid, id);
     setSessionList(updatedList);
     deleteChatSession(id, user.uid);
-    // If the deleted session is the current one, start fresh
     if (sessionIdRef.current === id) {
       startNewSession();
     }
-  }, [user, startNewSession]);
+  }, [deleteConfirmId, user, startNewSession]);
 
   const handleThemeToggle = useCallback(() => {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
@@ -174,7 +130,7 @@ export default function App() {
     // Get or create session ID
     let sessionId = sessionIdRef.current;
     if (!sessionId) {
-      sessionId = `session_${Date.now()}`;
+      sessionId = crypto.randomUUID();
       setCurrentSessionId(sessionId);
       sessionIdRef.current = sessionId;
     }
@@ -189,13 +145,14 @@ export default function App() {
       : [];
 
     const userMessage: Message = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       role: 'user',
       content: content.trim() || (attachmentUrls.length > 0 ? '[Gambar dilampirkan]' : ''),
       timestamp: Date.now(),
       attachments: attachmentUrls,
     };
 
+    const currentMessages = messagesRef.current;
     setMessages(prev => [...prev, userMessage]);
     setIsTyping(true);
     setError(null);
@@ -204,19 +161,19 @@ export default function App() {
       const response = await generateResponse(
         selectedModel,
         user.displayName || 'Operator',
-        messages,       // history before current message
+        currentMessages,   // history before current message
         content,
         attachments
       );
 
       const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
+        id: crypto.randomUUID(),
         role: 'assistant',
         content: response,
         timestamp: Date.now(),
       };
 
-      const newMessages = [...messages, userMessage, assistantMessage];
+      const newMessages = [...currentMessages, userMessage, assistantMessage];
       setMessages(newMessages);
 
       // Strip base64 attachments before persisting (avoid localStorage quota issues)
@@ -244,16 +201,17 @@ export default function App() {
     } finally {
       setIsTyping(false);
     }
-  }, [user, selectedModel, messages]);
+  }, [user, selectedModel]);
 
   const handleRetry = useCallback(async (assistantMessageId: string) => {
     if (!user) return;
-    const idx = messages.findIndex(m => m.id === assistantMessageId);
+    const currentMessages = messagesRef.current;
+    const idx = currentMessages.findIndex(m => m.id === assistantMessageId);
     if (idx < 1) return;
-    const userMsg = messages[idx - 1];
+    const userMsg = currentMessages[idx - 1];
     if (userMsg?.role !== 'user') return;
 
-    const historyBefore = messages.slice(0, idx - 1);
+    const historyBefore = currentMessages.slice(0, idx - 1);
     setMessages(historyBefore);
     setIsTyping(true);
     setError(null);
@@ -266,8 +224,8 @@ export default function App() {
         userMsg.content,
         undefined
       );
-      const newUserMsg: Message = { ...userMsg, id: Date.now().toString(), timestamp: Date.now() };
-      const assistantMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: response, timestamp: Date.now() };
+      const newUserMsg: Message = { ...userMsg, id: crypto.randomUUID(), timestamp: Date.now() };
+      const assistantMsg: Message = { id: crypto.randomUUID(), role: 'assistant', content: response, timestamp: Date.now() };
       const newMessages = [...historyBefore, newUserMsg, assistantMsg];
       setMessages(newMessages);
 
@@ -290,7 +248,7 @@ export default function App() {
     } finally {
       setIsTyping(false);
     }
-  }, [user, selectedModel, messages]);
+  }, [user, selectedModel]);
 
   // ── Loading ──
   if (authLoading) {
@@ -326,7 +284,7 @@ export default function App() {
 
       <main className="flex-1 flex flex-col overflow-hidden min-w-0">
 
-        {/* Top bar — always shown on mobile, shown on desktop when collapsed */}
+        {/* Top bar — shown when sidebar is collapsed */}
         <AnimatePresence>
           {isSidebarCollapsed && (
             <m.div
@@ -390,133 +348,45 @@ export default function App() {
         />
 
       </main>
-    </div>
-  );
-}
 
-// ─── Login Page ───────────────────────────────────────────────────────────────
-function LoginPage({ theme, onThemeToggle }: { theme: 'dark' | 'light'; onThemeToggle: () => void }) {
-  const { login, authError } = useAuth();
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const isDark = theme === 'dark';
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    await login(username, password);
-    setLoading(false);
-  };
-
-  return (
-    <div className={cn(
-      "min-h-screen w-screen flex flex-col items-center justify-center px-4 transition-colors duration-400",
-      isDark ? "bg-[#111111]" : "bg-[#F5F4F1]"
-    )}>
-
-      {/* ── Theme Toggle ── */}
-      <button
-        onClick={onThemeToggle}
-        className={cn(
-          "absolute top-5 right-5 p-2.5 rounded-xl transition-all",
-          isDark
-            ? "bg-white/5 hover:bg-white/10 text-[#888] hover:text-white"
-            : "bg-black/5 hover:bg-black/10 text-[#888] hover:text-[#111]"
-        )}
-        title={isDark ? 'Light mode' : 'Dark mode'}
-      >
-        {isDark ? <Sun size={16} /> : <Moon size={16} />}
-      </button>
-
-      <m.div
-        initial={{ opacity: 0, y: 24 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-        className="w-full max-w-[360px] flex flex-col items-center gap-8"
-      >
-        {/* ── Brand ── */}
-        <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 bg-[var(--accent-main)] rounded-2xl flex items-center justify-center shadow-lg shadow-[var(--accent-main)]/20">
-            <Wrench className="w-7 h-7 text-white" />
-          </div>
-          <h1 className={cn(
-            "text-[26px] font-bold tracking-tight",
-            isDark ? "text-white" : "text-[#111]"
-          )}>Dash⁵</h1>
-        </div>
-
-        {/* ── Form ── */}
-        <form onSubmit={handleSubmit} className="w-full space-y-2.5">
-          <input
-            id="username"
-            type="text"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            placeholder="Username"
-            required
-            autoComplete="username"
-            autoFocus
-            className={cn(
-              "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
-              "focus:ring-2 focus:ring-[var(--accent-main)]/20",
-              isDark
-                ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#555]"
-                : "bg-white border border-[#e5e5e5] text-[#111] placeholder-[#bbb] focus:border-[#bbb] shadow-sm"
-            )}
-          />
-          <input
-            id="password"
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-            autoComplete="current-password"
-            className={cn(
-              "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
-              "focus:ring-2 focus:ring-[var(--accent-main)]/20",
-              isDark
-                ? "bg-[#1c1c1c] border border-[#333] text-white placeholder-[#525252] focus:border-[#555]"
-                : "bg-white border border-[#e5e5e5] text-[#111] placeholder-[#bbb] focus:border-[#bbb] shadow-sm"
-            )}
-          />
-
-          <AnimatePresence>
-            {authError && (
-              <m.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2.5 text-[#f87171] bg-red-500/8 border border-red-500/15 px-3 py-2.5 rounded-xl"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="text-[13px]">{authError}</span>
-              </m.div>
-            )}
-          </AnimatePresence>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full h-11 mt-1 bg-[var(--accent-main)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px] shadow-lg shadow-[var(--accent-main)]/30"
+      {/* ── Delete Confirmation Dialog ── */}
+      <AnimatePresence>
+        {deleteConfirmId && (
+          <m.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+            onClick={() => setDeleteConfirmId(null)}
           >
-            {loading
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <><span>Masuk</span><LogIn className="w-4 h-4" /></>
-            }
-          </button>
-        </form>
-      </m.div>
-
-      {/* ── Footer ── */}
-      <p className={cn(
-        "absolute bottom-6 text-[11px]",
-        isDark ? "text-[#333]" : "text-[#ccc]"
-      )}>
-        Dash⁵ · AI Agent v2.0
-      </p>
+            <m.div
+              initial={{ opacity: 0, scale: 0.95, y: 8 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 8 }}
+              transition={{ duration: 0.15 }}
+              className="bg-[var(--bg-card)] border border-[var(--border-main)] rounded-2xl p-5 w-full max-w-[320px] shadow-2xl"
+              onClick={e => e.stopPropagation()}
+            >
+              <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-1">Hapus percakapan?</p>
+              <p className="text-[var(--text-muted)] text-[13px] mb-5">Tindakan ini tidak bisa dibatalkan.</p>
+              <div className="flex gap-2.5">
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 h-9 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
+                >
+                  Batal
+                </button>
+                <button
+                  onClick={confirmDelete}
+                  className="flex-1 h-9 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-semibold transition-colors"
+                >
+                  Hapus
+                </button>
+              </div>
+            </m.div>
+          </m.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

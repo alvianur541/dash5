@@ -183,11 +183,16 @@ export async function generateResponse(
   contents.push({ role: 'user', parts: currentParts });
 
   // ── Pre-check RAG untuk text queries (bukan attachment) ───────────────────
-  // Jika RAG tidak punya data → aktifkan Google Search dari awal
+  // Skip untuk pesan pendek/casual (< 15 karakter) — langsung aktifkan Google Search
   let preSearchEmpty = false;
   if (!attachments || attachments.length === 0) {
-    const preSearch = await searchTechnicalManual(userInput.trim(), model);
-    preSearchEmpty = !preSearch.hasResults;
+    const trimmed = userInput.trim();
+    if (trimmed.length >= 15) {
+      const preSearch = await searchTechnicalManual(trimmed, model);
+      preSearchEmpty = !preSearch.hasResults;
+    } else {
+      preSearchEmpty = true; // pesan pendek → skip RAG, pakai Google Search
+    }
   }
 
   // ── First call ────────────────────────────────────────────────────────────
