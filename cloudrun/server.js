@@ -123,7 +123,10 @@ app.post('/v1/transcribe', async (req, res) => {
     return res.status(400).json({ error: 'audio and mimeType are required' });
   }
 
-  const model = 'gemini-2.5-flash';
+  // Strip codec suffix — Vertex AI hanya terima base MIME type (e.g. audio/webm, bukan audio/webm;codecs=opus)
+  const cleanMimeType = mimeType.split(';')[0].trim();
+
+  const model = 'gemini-2.0-flash-001';
   const url =
     `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
     `/locations/${LOCATION}/publishers/google/models/${model}:generateContent`;
@@ -142,7 +145,7 @@ app.post('/v1/transcribe', async (req, res) => {
       body: JSON.stringify({
         contents: [{
           parts: [
-            { inline_data: { mime_type: mimeType, data: audio } },
+            { inline_data: { mime_type: cleanMimeType, data: audio } },
             { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
           ],
         }],
