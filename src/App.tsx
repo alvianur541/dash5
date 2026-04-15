@@ -155,7 +155,7 @@ export default function App() {
     try {
       const response = await generateResponse(
         selectedModel,
-        user.displayName || 'Operator',
+        (user.displayName || 'Operator').split(' ')[0],
         currentMessages,   // history before current message
         content,
         attachments
@@ -214,7 +214,7 @@ export default function App() {
     try {
       const response = await generateResponse(
         selectedModel,
-        user.displayName || 'Operator',
+        (user.displayName || 'Operator').split(' ')[0],
         historyBefore,
         userMsg.content,
         undefined
@@ -333,7 +333,7 @@ export default function App() {
           selectedModel={selectedModel}
           onSendMessage={handleSendMessage}
           onRetry={handleRetry}
-          userName={user?.displayName || 'Operator'}
+          userName={(user?.displayName || 'Operator').split(' ')[0]}
         />
 
         <MessageInput

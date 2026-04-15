@@ -304,7 +304,7 @@ export function Sidebar({
                 </div>
                 <div className="flex flex-col items-start min-w-0 flex-1">
                   <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight truncate w-full text-left">
-                    {user?.displayName || 'Operator'}
+                    {(user?.displayName || 'Operator').split(' ')[0]}
                   </span>
                   <span className="text-[11px] text-[var(--text-muted)] leading-tight text-left mt-0.5">
                     {(user as any)?.role || 'Field Technician'}
