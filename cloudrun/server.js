@@ -153,31 +153,48 @@ app.post('/v1/transcribe', async (req, res) => {
 });
 
 // ── Proxy: POST /v1/embed ─────────────────────────────────────────────────────
-// Body: { query: string }
+// gemini-embedding-001 via Vertex AI OAuth — 3072 dims (sesuai Supabase)
+// Body: { query: string, task_type?: string }
 // Returns: { values: number[] }
 app.post('/v1/embed', async (req, res) => {
-  if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  if (!PROJECT_ID) {
+    return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   }
-  const { query } = req.body;
+  const { query, task_type = 'RETRIEVAL_QUERY' } = req.body;
   if (!query) {
     return res.status(400).json({ error: 'query is required' });
   }
+
+  const model = 'gemini-embedding-001';
+  const url =
+    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
+    `/locations/${LOCATION}/publishers/google/models/${model}:predict`;
+
   try {
-    const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'models/gemini-embedding-001',
-          content: { parts: [{ text: query }] },
-        }),
-      }
-    );
+    const client = await auth.getClient();
+    const tokenRes = await client.getAccessToken();
+    const token = tokenRes.token;
+
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        instances: [{ content: query, task_type }],
+        parameters: { outputDimensionality: 3072 },
+      }),
+    });
+
     const data = await upstream.json();
-    if (!upstream.ok) return res.status(upstream.status).json(data);
-    res.json({ values: data?.embedding?.values ?? [] });
+    if (!upstream.ok) {
+      console.error('Vertex embed error:', JSON.stringify(data));
+      return res.status(upstream.status).json(data);
+    }
+
+    const values = data?.predictions?.[0]?.embeddings?.values ?? [];
+    res.json({ values });
   } catch (err) {
     console.error('Embed error:', err);
     res.status(500).json({ error: String(err) });
