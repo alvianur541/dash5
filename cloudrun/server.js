@@ -13,7 +13,6 @@ app.use(express.json({ limit: '20mb' }));
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || '*';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;   // Vertex AI Express key untuk Gemini 3
 const COHERE_API_KEY = process.env.COHERE_API_KEY;
 
@@ -112,35 +111,48 @@ app.post('/v1/chat', async (req, res) => {
 });
 
 // ── Proxy: POST /v1/transcribe ────────────────────────────────────────────────
+// gemini-2.5-flash via Vertex AI OAuth
 // Body: { audio: base64string, mimeType: string }
 // Returns: { text: string }
 app.post('/v1/transcribe', async (req, res) => {
-  if (!GEMINI_API_KEY) {
-    return res.status(500).json({ error: 'GEMINI_API_KEY not configured' });
+  if (!PROJECT_ID) {
+    return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   }
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) {
     return res.status(400).json({ error: 'audio and mimeType are required' });
   }
 
+  const model = 'gemini-2.5-flash';
+  const url =
+    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
+    `/locations/${LOCATION}/publishers/google/models/${model}:generateContent`;
+
   try {
-    const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [
-              { inline_data: { mime_type: mimeType, data: audio } },
-              { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
-            ],
-          }],
-        }),
-      }
-    );
+    const client = await auth.getClient();
+    const tokenRes = await client.getAccessToken();
+    const token = tokenRes.token;
+
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { inline_data: { mime_type: mimeType, data: audio } },
+            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 1024 },
+      }),
+    });
+
     if (!upstream.ok) {
       const err = await upstream.json();
+      console.error('Vertex transcribe error:', JSON.stringify(err));
       return res.status(upstream.status).json(err);
     }
     const data = await upstream.json();
