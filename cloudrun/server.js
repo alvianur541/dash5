@@ -139,6 +139,7 @@ app.post('/v1/transcribe', async (req, res) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
+          role: 'user',
           parts: [
             { inline_data: { mime_type: cleanMimeType, data: audio } },
             { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
