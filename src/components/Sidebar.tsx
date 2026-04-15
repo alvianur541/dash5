@@ -127,7 +127,7 @@ export function Sidebar({
 
             {/* Model Selector — grouped by type */}
             <div className="space-y-1">
-              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-2 pt-1 pb-0.5">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] px-3 pt-1 pb-0.5">
                 Model Unit
               </p>
               {MODEL_GROUPS.map(({ type, models }) => {
@@ -164,7 +164,7 @@ export function Sidebar({
                           animate={{ height: 'auto', opacity: 1 }}
                           exit={{ height: 0, opacity: 0 }}
                           transition={{ duration: 0.2 }}
-                          className="overflow-hidden pl-3"
+                          className="overflow-hidden"
                         >
                           {models.map((model) => {
                             const isActive = model === selectedModel;
@@ -173,7 +173,7 @@ export function Sidebar({
                                 key={model}
                                 onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
                                 className={cn(
-                                  "w-full flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-left",
+                                  "w-full flex items-center gap-3 pl-6 pr-3 py-2.5 rounded-xl transition-all text-left",
                                   isActive
                                     ? "bg-[var(--accent-main)]/10 border border-[var(--accent-main)]/20"
                                     : "hover:bg-white/5 border border-transparent"
@@ -204,7 +204,7 @@ export function Sidebar({
             <div className="space-y-1">
               <button
                 onClick={() => setShowHistory(v => !v)}
-                className="w-full flex items-center justify-between px-2 pt-1 pb-0.5 group/hist"
+                className="w-full flex items-center justify-between px-3 pt-1 pb-0.5 group/hist"
               >
                 <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-muted)] group-hover/hist:text-[var(--text-primary)] transition-colors">
                   Riwayat
@@ -304,7 +304,7 @@ export function Sidebar({
                 </div>
                 <div className="flex flex-col items-start min-w-0 flex-1">
                   <span className="text-[13px] font-semibold text-[var(--text-primary)] leading-tight truncate w-full text-left">
-                    {(user?.displayName || 'Operator').split(' ')[0]}
+                    {user?.displayName || 'Operator'}
                   </span>
                   <span className="text-[11px] text-[var(--text-muted)] leading-tight text-left mt-0.5">
                     {(user as any)?.role || 'Field Technician'}
