@@ -83,15 +83,10 @@ export default function App() {
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (!user) return;
-    // Try localStorage cache first
-    let session = loadSessionData(user.uid, id);
+    // Prefer Supabase (images preserved) — localStorage as offline fallback only
+    let session = await fetchSessionData(id, user.uid);
     if (!session) {
-      // Fallback to Supabase
-      session = await fetchSessionData(id, user.uid);
-      if (session) {
-        // Populate cache
-        localStorage.setItem(dataKey(user.uid, id), JSON.stringify(session));
-      }
+      session = loadSessionData(user.uid, id);
     }
     if (!session) {
       setError('Gagal memuat percakapan ini. Coba lagi.');
@@ -192,8 +187,8 @@ export default function App() {
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
       setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
 
-      // Persist to Supabase (primary — accessible from any device)
-      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
+      // Persist to Supabase WITH images (primary — images preserved across sessions)
+      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
 
     } catch (err: any) {
       console.error('AI Error:', err.message);
@@ -239,7 +234,7 @@ export default function App() {
         saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
         const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
         setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
-        saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
+        saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
       }
     } catch (err: any) {
       console.error('Retry error:', err.message);
