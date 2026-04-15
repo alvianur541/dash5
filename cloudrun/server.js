@@ -111,37 +111,32 @@ app.post('/v1/chat', async (req, res) => {
 });
 
 // ── Proxy: POST /v1/transcribe ────────────────────────────────────────────────
-// gemini-2.5-flash via Vertex AI OAuth
+// gemini-3.1-flash-lite-preview via Vertex AI Express key (same route as chat)
 // Body: { audio: base64string, mimeType: string }
 // Returns: { text: string }
 app.post('/v1/transcribe', async (req, res) => {
-  if (!PROJECT_ID) {
-    return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
+  if (!VERTEX_API_KEY) {
+    return res.status(500).json({ error: 'VERTEX_API_KEY not configured' });
   }
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) {
     return res.status(400).json({ error: 'audio and mimeType are required' });
   }
 
-  // Strip codec suffix — Vertex AI hanya terima base MIME type (e.g. audio/webm, bukan audio/webm;codecs=opus)
+  // Strip codec suffix — e.g. audio/webm;codecs=opus → audio/webm
   const cleanMimeType = mimeType.split(';')[0].trim();
 
-  const model = 'gemini-2.0-flash-001';
+  const projectId = PROJECT_ID || 'vertex-490600';
+  const model = 'gemini-3.1-flash-lite-preview';
   const url =
-    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
-    `/locations/${LOCATION}/publishers/google/models/${model}:generateContent`;
+    `https://aiplatform.googleapis.com/v1beta1/projects/${projectId}` +
+    `/locations/global/publishers/google/models/${model}:generateContent` +
+    `?key=${VERTEX_API_KEY}`;
 
   try {
-    const client = await auth.getClient();
-    const tokenRes = await client.getAccessToken();
-    const token = tokenRes.token;
-
     const upstream = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{
           parts: [
@@ -155,7 +150,7 @@ app.post('/v1/transcribe', async (req, res) => {
 
     if (!upstream.ok) {
       const err = await upstream.json();
-      console.error('Vertex transcribe error:', JSON.stringify(err));
+      console.error('Transcribe error:', JSON.stringify(err));
       return res.status(upstream.status).json(err);
     }
     const data = await upstream.json();
