@@ -165,7 +165,6 @@ export function MessageInput({
             const currentInput = textareaRef.current?.value?.trim() || '';
             const combined = currentInput ? `${currentInput} ${text}` : text;
             setInput('');
-            setAttachments([]);
             if (textareaRef.current) textareaRef.current.style.height = 'auto';
             onSendMessage(combined);
           }
@@ -258,6 +257,7 @@ export function MessageInput({
             }
             rows={1}
             disabled={disabled || isTranscribing}
+            style={{ height: '38px', resize: 'none' }}
             className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-sm placeholder:text-[var(--text-muted)] px-4 pt-2 pb-0.5 leading-relaxed max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide"
           />
 
