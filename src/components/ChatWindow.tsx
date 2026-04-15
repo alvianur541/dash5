@@ -77,15 +77,15 @@ const MessageItem = memo(function MessageItem({
         <div className="flex justify-end">
           <div className="group max-w-[80%] space-y-1">
             <div className="px-4 py-3 rounded-2xl bg-[var(--bg-card)] border border-[var(--border-main)] text-sm text-[var(--text-primary)] leading-relaxed shadow-sm">
-              {message.content}
+              {message.content && <span>{message.content}</span>}
               {message.attachments && message.attachments.length > 0 && (
-                <div className="mt-3 flex flex-wrap gap-2">
+                <div className={`${message.content ? 'mt-3 ' : ''}flex flex-wrap gap-2`}>
                   {message.attachments.map((url, i) => (
                     <img
                       key={i}
                       src={url}
                       alt="Attachment"
-                      className="max-w-[260px] max-h-[320px] object-contain rounded-lg"
+                      className="max-w-[260px] max-h-[320px] object-contain rounded-xl"
                     />
                   ))}
                 </div>

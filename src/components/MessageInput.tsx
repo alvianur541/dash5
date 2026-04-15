@@ -4,7 +4,7 @@
  */
 
 import { useState, useRef, useLayoutEffect } from 'react';
-import { ArrowUp, Paperclip, X, Mic, MicOff, Loader2 } from 'lucide-react';
+import { ArrowUp, Paperclip, Mic, MicOff, Loader2 } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -40,6 +40,35 @@ async function transcribeWithProxy(base64Audio: string, mimeType: string): Promi
   return data.text ?? '';
 }
 
+// ── Image compression (canvas resize → JPEG 0.82) ────────────────────────────
+async function compressImage(file: File): Promise<File> {
+  const MAX_PX = 1024;
+  const QUALITY = 0.82;
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const { naturalWidth: w, naturalHeight: h } = img;
+      const scale = Math.min(1, MAX_PX / Math.max(w, h));
+      const cw = Math.round(w * scale);
+      const ch = Math.round(h * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = cw;
+      canvas.height = ch;
+      canvas.getContext('2d')!.drawImage(img, 0, 0, cw, ch);
+      canvas.toBlob(
+        blob => resolve(blob
+          ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), { type: 'image/jpeg' })
+          : file),
+        'image/jpeg', QUALITY
+      );
+    };
+    img.onerror = () => resolve(file);
+    img.src = url;
+  });
+}
+
 // ── Component ─────────────────────────────────────────────────────────────────
 export function MessageInput({
   onSendMessage,
@@ -47,7 +76,6 @@ export function MessageInput({
   selectedModel,
 }: MessageInputProps) {
   const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<File[]>([]);
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
 
@@ -66,47 +94,48 @@ export function MessageInput({
   }, [input]);
 
   const handleSend = () => {
-    if (!input.trim() && attachments.length === 0) return;
-    onSendMessage(input.trim(), attachments);
+    if (!input.trim()) return;
+    onSendMessage(input.trim());
     setInput('');
-    setAttachments([]);
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
   };
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-      const MAX_SIZE = 5 * 1024 * 1024; // 5MB
-      const MAX_FILES = 5;
-      let errorMsg: string | null = null;
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!e.target.files || disabled) return;
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const MAX_SIZE = 10 * 1024 * 1024; // 10MB raw (will be compressed)
+    const MAX_FILES = 5;
 
-      const valid = Array.from(e.target.files).filter(f => {
-        if (!ALLOWED_TYPES.includes(f.type)) {
-          errorMsg = 'Hanya file gambar (JPG, PNG, WebP, GIF) yang diizinkan.';
-          return false;
-        }
-        if (f.size > MAX_SIZE) {
-          errorMsg = 'File terlalu besar (maks 5MB).';
-          return false;
-        }
-        return true;
-      });
-
-      const remaining = MAX_FILES - attachments.length;
-      const toAdd = valid.slice(0, remaining);
-      if (valid.length > remaining) errorMsg = `Maksimal ${MAX_FILES} file lampiran.`;
-
-      if (errorMsg) {
-        setTranscribeError(errorMsg);
-        setTimeout(() => setTranscribeError(null), 3000);
+    let errorMsg: string | null = null;
+    const valid = Array.from(e.target.files).filter(f => {
+      if (!ALLOWED_TYPES.includes(f.type)) {
+        errorMsg = 'Hanya file gambar (JPG, PNG, WebP, GIF) yang diizinkan.';
+        return false;
       }
-      if (toAdd.length > 0) setAttachments(prev => [...prev, ...toAdd]);
-      e.target.value = '';
-    }
-  };
+      if (f.size > MAX_SIZE) {
+        errorMsg = 'File terlalu besar (maks 10MB).';
+        return false;
+      }
+      return true;
+    }).slice(0, MAX_FILES);
 
-  const removeAttachment = (index: number) => {
-    setAttachments(prev => prev.filter((_, i) => i !== index));
+    if (valid.length < Array.from(e.target.files).length && !errorMsg)
+      errorMsg = `Maksimal ${MAX_FILES} file lampiran.`;
+
+    if (errorMsg) {
+      setTranscribeError(errorMsg);
+      setTimeout(() => setTranscribeError(null), 3000);
+    }
+
+    e.target.value = '';
+    if (valid.length === 0) return;
+
+    // Compress & auto-send immediately
+    const compressed = await Promise.all(valid.map(compressImage));
+    const currentInput = input.trim();
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = 'auto';
+    onSendMessage(currentInput, compressed);
   };
 
   // ── Voice recording ─────────────────────────────────────────────────────────
@@ -165,41 +194,13 @@ export function MessageInput({
     else if (recordingState === 'recording') stopRecording();
   };
 
-  const canSend = (input.trim().length > 0 || attachments.length > 0) && !disabled;
+  const canSend = input.trim().length > 0 && !disabled;
   const isRecording = recordingState === 'recording';
   const isTranscribing = recordingState === 'transcribing';
 
   return (
     <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-2 transition-colors duration-400">
       <div className="max-w-3xl mx-auto space-y-2">
-
-        {/* Attachment Previews */}
-        <AnimatePresence>
-          {attachments.length > 0 && (
-            <m.div
-              initial={{ opacity: 0, height: 0 }}
-              animate={{ opacity: 1, height: 'auto' }}
-              exit={{ opacity: 0, height: 0 }}
-              className="flex flex-wrap gap-2 px-1"
-            >
-              {attachments.map((file, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-2 bg-[var(--bg-card)] border border-[var(--border-main)] rounded-xl px-3 py-1.5 text-xs text-[var(--text-secondary)]"
-                >
-                  <Paperclip className="w-3 h-3 text-[var(--accent-main)] shrink-0" />
-                  <span className="truncate max-w-[140px]">{file.name}</span>
-                  <button
-                    onClick={() => removeAttachment(i)}
-                    className="p-0.5 rounded-full hover:bg-white/10 transition-colors"
-                  >
-                    <X className="w-3 h-3 text-[var(--text-muted)]" />
-                  </button>
-                </div>
-              ))}
-            </m.div>
-          )}
-        </AnimatePresence>
 
         {/* Input Box */}
         <div className={cn(

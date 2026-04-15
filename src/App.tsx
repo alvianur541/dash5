@@ -147,7 +147,7 @@ export default function App() {
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: content.trim() || (attachmentUrls.length > 0 ? '[Gambar dilampirkan]' : ''),
+      content: content.trim(),
       timestamp: Date.now(),
       attachments: attachmentUrls,
     };
