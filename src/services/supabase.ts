@@ -74,13 +74,14 @@ export async function fetchUserSessionList(userId: string, userName: string): Pr
 }
 
 // ── Fetch full session data by ID ──────────────────────────────────────────
-export async function fetchSessionData(sessionId: string): Promise<import('../types').ChatSession | null> {
+export async function fetchSessionData(sessionId: string, userId: string): Promise<import('../types').ChatSession | null> {
   if (!supabase) return null;
 
   const { data, error } = await supabase
     .from('chat_sessions')
     .select('id, model, messages')
     .eq('id', sessionId)
+    .eq('user_id', userId)
     .single();
 
   if (error || !data) {
@@ -96,13 +97,14 @@ export async function fetchSessionData(sessionId: string): Promise<import('../ty
 }
 
 // ── Delete a chat session from Supabase ────────────────────────────────────
-export async function deleteChatSession(id: string): Promise<void> {
+export async function deleteChatSession(id: string, userId: string): Promise<void> {
   if (!supabase) return;
 
   const { error } = await supabase
     .from('chat_sessions')
     .delete()
-    .eq('id', id);
+    .eq('id', id)
+    .eq('user_id', userId);
 
   if (error) {
     console.error('Failed to delete chat session from Supabase:', error.message);

@@ -136,7 +136,7 @@ export default function App() {
     let session = loadSessionData(user.uid, id);
     if (!session) {
       // Fallback to Supabase
-      session = await fetchSessionData(id);
+      session = await fetchSessionData(id, user.uid);
       if (session) {
         // Populate cache
         localStorage.setItem(dataKey(user.uid, id), JSON.stringify(session));
@@ -157,7 +157,7 @@ export default function App() {
     if (!user) return;
     const updatedList = deleteSessionData(user.uid, id);
     setSessionList(updatedList);
-    deleteChatSession(id);
+    deleteChatSession(id, user.uid);
     // If the deleted session is the current one, start fresh
     if (sessionIdRef.current === id) {
       startNewSession();
