@@ -9,42 +9,42 @@
 
 :root {
   /* Dark Mode */
-  --bg-app: #212121;
-  --bg-sidebar: #171717;
-  --bg-header: rgba(33, 33, 33, 0.8);
-  --bg-card: #2F2F2F;
-  --bg-card-hover: #383838;
-  --bg-input: #2F2F2F;
-  --accent-main: #E87100;
-  --accent-glow: rgba(232, 113, 0, 0.18);
-  --text-primary: #ECECEC;
-  --text-secondary: #9B9B9B;
-  --text-muted: #666666;
-  --border-main: rgba(255, 255, 255, 0.08);
-  --border-glass: rgba(255, 255, 255, 0.04);
+  --bg-app: #30302E;
+  --bg-sidebar: #1F1E1D;
+  --bg-header: rgba(48, 48, 46, 0.85);
+  --bg-card: #262624;
+  --bg-card-hover: #373734;
+  --bg-input: #262624;
+  --accent-main: #D97757;
+  --accent-glow: rgba(217, 119, 87, 0.20);
+  --text-primary: #FAF9F5;
+  --text-secondary: #C2C0B6;
+  --text-muted: #9C9A92;
+  --border-main: rgba(222, 220, 209, 0.12);
+  --border-glass: rgba(222, 220, 209, 0.06);
   --glass-bg: rgba(255, 255, 255, 0.02);
-  --scroll-thumb: rgba(255, 255, 255, 0.1);
-  --scroll-thumb-hover: rgba(255, 255, 255, 0.2);
+  --scroll-thumb: rgba(222, 220, 209, 0.15);
+  --scroll-thumb-hover: rgba(222, 220, 209, 0.25);
 }
 
 .light-theme {
   /* Light Mode */
-  --bg-app: #F9F8F6;
-  --bg-sidebar: #F1EFE9;
-  --bg-header: rgba(249, 248, 246, 0.8);
+  --bg-app: #FAF9F5;
+  --bg-sidebar: #F5F4ED;
+  --bg-header: rgba(250, 249, 245, 0.85);
   --bg-card: #FFFFFF;
-  --bg-card-hover: #F3F2EE;
+  --bg-card-hover: #F0EEE6;
   --bg-input: #FFFFFF;
-  --accent-main: #E87100;
-  --accent-glow: rgba(232, 113, 0, 0.15);
-  --text-primary: #1A1A1A;
-  --text-secondary: #4A4A4A;
-  --text-muted: #8A8A8A;
-  --border-main: rgba(0, 0, 0, 0.08);
-  --border-glass: rgba(0, 0, 0, 0.04);
+  --accent-main: #C6613F;
+  --accent-glow: rgba(198, 97, 63, 0.15);
+  --text-primary: #141413;
+  --text-secondary: #3D3D3A;
+  --text-muted: #73726C;
+  --border-main: rgba(31, 30, 29, 0.10);
+  --border-glass: rgba(31, 30, 29, 0.05);
   --glass-bg: rgba(0, 0, 0, 0.02);
-  --scroll-thumb: rgba(0, 0, 0, 0.1);
-  --scroll-thumb-hover: rgba(0, 0, 0, 0.2);
+  --scroll-thumb: rgba(31, 30, 29, 0.12);
+  --scroll-thumb-hover: rgba(31, 30, 29, 0.22);
 }
 
 body {
@@ -132,14 +132,92 @@ body {
   color: var(--text-primary);
 }
 
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3 {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 1.4rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.markdown-body h1 { font-size: 1.15rem; }
+.markdown-body h2 { font-size: 1.05rem; border-bottom: 1px solid var(--border-main); padding-bottom: 0.3rem; }
+.markdown-body h3 { font-size: 0.95rem; color: var(--accent-main); }
+
 .markdown-body strong {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .markdown-body em {
-  font-style: italic;
-  color: var(--text-secondary);
+  font-style: normal;
+}
+
+/* ── Tables ── */
+.markdown-table-wrap {
+  display: block;
+  overflow-x: auto;
+  margin-bottom: 1.25rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-main);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: inherit;
+  font-family: var(--font-serif);
+}
+
+.markdown-body thead {
+  background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
+}
+
+.markdown-body thead th {
+  padding: 0.65rem 1rem;
+  text-align: left;
+  font-weight: 700;
+  font-size: 0.82rem;
+  font-family: var(--font-serif);
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+  color: var(--accent-main);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent-main) 20%, transparent);
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr {
+  border-bottom: 1px solid var(--border-main);
+  transition: background 0.12s;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: color-mix(in srgb, var(--bg-card) 50%, transparent);
+}
+
+.markdown-body tbody tr:last-child {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:hover {
+  background: color-mix(in srgb, var(--accent-main) 5%, var(--bg-card));
+}
+
+.markdown-body tbody td {
+  padding: 0.6rem 1rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+  line-height: 1.55;
+}
+
+.markdown-body tbody td:first-child {
+  font-weight: 600;
+  font-family: var(--font-serif);
+  white-space: nowrap;
 }
 
 /* Custom Scrollbar */

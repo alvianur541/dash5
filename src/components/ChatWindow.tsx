@@ -10,6 +10,7 @@ import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, Wrench } from 'lucide-rea
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
 import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 
 interface ChatWindowProps {
   messages: Message[];
@@ -22,7 +23,6 @@ interface ChatWindowProps {
 
 const SUGGESTION_CHIPS = [
   'Berapa berat Swing Motor?',
-  'Torsi pengencangan baut Flywheel Engine',
   'Troubleshooting unit mistrack',
   'Engine overheat, apa yang harus dicek?',
 ];
@@ -100,13 +100,18 @@ const MessageItem = memo(function MessageItem({
         </div>
       ) : (
         <div className="group flex gap-3">
-          <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-            <Wrench className="w-3.5 h-3.5 text-white" />
-          </div>
           <div className="flex-1 min-w-0 space-y-2">
             <div className="markdown-body text-[15px] text-[var(--text-primary)]">
               <Suspense fallback={<span className="text-[var(--text-muted)] text-sm">...</span>}>
-                <ReactMarkdown rehypePlugins={[rehypeSanitize]}>{message.content}</ReactMarkdown>
+                <ReactMarkdown
+                  remarkPlugins={[remarkGfm]}
+                  rehypePlugins={[rehypeSanitize]}
+                  components={{
+                    table: ({ children }) => (
+                      <div className="markdown-table-wrap"><table>{children}</table></div>
+                    ),
+                  }}
+                >{message.content}</ReactMarkdown>
               </Suspense>
             </div>
             <div className="flex items-center gap-1 pt-1">
@@ -255,9 +260,6 @@ export function ChatWindow({
                   exit={{ opacity: 0 }}
                   className="flex gap-3"
                 >
-                  <div className="w-7 h-7 rounded-xl bg-[var(--accent-main)] flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-                    <Wrench className="w-3.5 h-3.5 text-white" />
-                  </div>
                   <div className="flex flex-col justify-center gap-1 py-2">
                     <div className="flex items-center gap-1.5">
                       {[0, 1, 2].map((i) => (

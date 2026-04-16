@@ -8,17 +8,18 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
+import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { UnitModel, Message, SessionMeta } from './types';
 import { generateResponse } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, fetchUserSessionList, fetchSessionData } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, listKey, dataKey } from './services/storage';
-import { AlertCircle, Loader2, PanelLeft, Wrench } from 'lucide-react';
+import { AlertCircle, Loader2, PanelLeft, Wrench, Sun, Moon } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
 
 export default function App() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, isRecoveryMode } = useAuth();
   const [selectedModel, setSelectedModel] = useState<UnitModel>('ZX200-5G');
   const [messages, setMessages] = useState<Message[]>([]);
   const [isTyping, setIsTyping] = useState(false);
@@ -254,6 +255,9 @@ export default function App() {
     );
   }
 
+  // ── Reset Password (dari link email) ──
+  if (isRecoveryMode) return <ResetPasswordPage theme={theme} onThemeToggle={handleThemeToggle} />;
+
   // ── Login ──
   if (!user) return <LoginPage theme={theme} onThemeToggle={handleThemeToggle} />;
 
@@ -302,9 +306,18 @@ export default function App() {
                 </div>
                 <span className="text-sm font-bold">Dash⁵</span>
               </div>
-              <span className="ml-auto text-xs text-[var(--text-muted)] font-medium bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-main)]">
-                {selectedModel}
-              </span>
+              <div className="ml-auto flex items-center gap-2">
+                <button
+                  onClick={handleThemeToggle}
+                  className="p-2 rounded-xl hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  aria-label="Toggle theme"
+                >
+                  {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
+                </button>
+                <span className="text-xs text-[var(--text-muted)] font-medium bg-[var(--bg-card)] px-2.5 py-1 rounded-lg border border-[var(--border-main)]">
+                  {selectedModel}
+                </span>
+              </div>
             </m.div>
           )}
         </AnimatePresence>

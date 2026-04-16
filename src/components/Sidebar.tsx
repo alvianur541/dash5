@@ -3,10 +3,11 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, ChevronUp, ChevronRight, Wrench, Sun, Moon, Zap, Trash2, X } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, ChevronUp, ChevronRight, Wrench, Sun, Moon, Zap, Trash2, X, KeyRound, Loader2, CheckCircle2 } from 'lucide-react';
+import { supabase } from '../services/supabase';
 
 const MODEL_GROUPS: { type: string; models: UnitModel[] }[] = [
   { type: 'Mini Excavator', models: ['ZX48U-5A', 'ZX65USB-5A'] },
@@ -45,6 +46,28 @@ export function Sidebar({
 }: SidebarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [showChangePw, setShowChangePw] = useState(false);
+  const [pwNew, setPwNew] = useState('');
+  const [pwConfirm, setPwConfirm] = useState('');
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState<string | null>(null);
+  const [pwSuccess, setPwSuccess] = useState(false);
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwError(null);
+    if (pwNew.length < 6) { setPwError('Password minimal 6 karakter.'); return; }
+    if (pwNew !== pwConfirm) { setPwError('Password tidak cocok.'); return; }
+    setPwLoading(true);
+    const { error } = await supabase!.auth.updateUser({ password: pwNew });
+    setPwLoading(false);
+    if (error) { setPwError(error.message || 'Gagal ganti password.'); return; }
+    setPwSuccess(true);
+    setTimeout(() => {
+      setShowChangePw(false);
+      setPwNew(''); setPwConfirm(''); setPwSuccess(false);
+    }, 1500);
+  };
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
   const [expandedType, setExpandedType] = useState<string>(() => {
@@ -285,7 +308,7 @@ export function Sidebar({
           </div>
 
           {/* ── Footer ── */}
-          <div className="shrink-0 px-3 py-3 border-t border-[var(--border-main)] space-y-1">
+          <div className="shrink-0 px-3 py-3 space-y-1">
             <button
               onClick={onThemeToggle}
               className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-white/5 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all"
@@ -328,12 +351,89 @@ export function Sidebar({
                     className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-card)] border border-[var(--border-main)] rounded-xl shadow-lg overflow-hidden"
                   >
                     <button
+                      onClick={() => { setShowUserMenu(false); setShowChangePw(true); }}
+                      className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
+                    >
+                      <KeyRound size={15} className="text-[var(--text-muted)]" />
+                      <span>Ganti Password</span>
+                    </button>
+                    <button
                       onClick={() => { setShowUserMenu(false); logout(); }}
                       className="w-full flex items-center gap-3 px-4 py-3 text-sm text-[var(--text-primary)] hover:bg-white/5 transition-colors"
                     >
                       <LogOut size={15} className="text-[var(--text-muted)]" />
                       <span>Log out</span>
                     </button>
+                  </m.div>
+                )}
+              </AnimatePresence>
+
+              {/* ── Change Password Modal ── */}
+              <AnimatePresence>
+                {showChangePw && (
+                  <m.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+                    onClick={() => { if (!pwLoading) { setShowChangePw(false); setPwNew(''); setPwConfirm(''); setPwError(null); setPwSuccess(false); } }}
+                  >
+                    <m.div
+                      initial={{ opacity: 0, scale: 0.95, y: 8 }}
+                      animate={{ opacity: 1, scale: 1, y: 0 }}
+                      exit={{ opacity: 0, scale: 0.95, y: 8 }}
+                      transition={{ duration: 0.15 }}
+                      className="bg-[var(--bg-card)] border border-[var(--border-main)] rounded-2xl p-5 w-full max-w-[320px] shadow-2xl"
+                      onClick={e => e.stopPropagation()}
+                    >
+                      <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-4">Ganti Password</p>
+
+                      {pwSuccess ? (
+                        <div className="flex flex-col items-center gap-2 py-4">
+                          <CheckCircle2 className="w-8 h-8 text-green-400" />
+                          <p className="text-[13px] text-[var(--text-secondary)]">Password berhasil diubah!</p>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleChangePassword} className="space-y-2.5">
+                          <input
+                            type="password"
+                            value={pwNew}
+                            onChange={e => setPwNew(e.target.value)}
+                            placeholder="Password baru"
+                            required
+                            autoFocus
+                            className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none bg-[var(--bg-app)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-main)]/50 transition-colors"
+                          />
+                          <input
+                            type="password"
+                            value={pwConfirm}
+                            onChange={e => setPwConfirm(e.target.value)}
+                            placeholder="Konfirmasi password"
+                            required
+                            className="w-full px-3 py-2.5 rounded-xl text-[13px] outline-none bg-[var(--bg-app)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-main)]/50 transition-colors"
+                          />
+                          {pwError && (
+                            <p className="text-[12px] text-red-400">{pwError}</p>
+                          )}
+                          <div className="flex gap-2.5 pt-1">
+                            <button
+                              type="button"
+                              onClick={() => { setShowChangePw(false); setPwNew(''); setPwConfirm(''); setPwError(null); }}
+                              className="flex-1 h-9 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
+                            >
+                              Batal
+                            </button>
+                            <button
+                              type="submit"
+                              disabled={pwLoading}
+                              className="flex-1 h-9 rounded-xl bg-[var(--accent-main)] hover:brightness-110 text-white text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center"
+                            >
+                              {pwLoading ? <Loader2 size={14} className="animate-spin" /> : 'Simpan'}
+                            </button>
+                          </div>
+                        </form>
+                      )}
+                    </m.div>
                   </m.div>
                 )}
               </AnimatePresence>

@@ -198,8 +198,8 @@ export function MessageInput({
   const isTranscribing = recordingState === 'transcribing';
 
   return (
-    <div className="shrink-0 bg-[var(--bg-app)] px-3 pb-2 pt-1 md:px-4 md:pb-3 md:pt-2 transition-colors duration-400">
-      <div className="max-w-3xl mx-auto space-y-2">
+    <div className="shrink-0 bg-[var(--bg-app)] px-3 pt-3 pb-1 md:px-4 md:pt-3 md:pb-2 flex flex-col justify-end transition-colors duration-400" style={{ paddingBottom: 'max(4px, env(safe-area-inset-bottom, 4px))' }}>
+      <div className="max-w-3xl mx-auto w-full space-y-0">
 
         {/* Input Box */}
         <div className={cn(
@@ -332,8 +332,8 @@ export function MessageInput({
               {transcribeError}
             </m.p>
           ) : (
-            <p className="text-center text-[10px] text-[var(--text-muted)] font-medium">
-              Dash⁵ bisa keliru, selalu periksa kembali jawaban
+            <p className="text-center text-[10px] text-[var(--text-muted)] font-medium mt-1">
+              Dash⁵ is AI and can make mistakes.
             </p>
           )}
         </AnimatePresence>
