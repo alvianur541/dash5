@@ -167,6 +167,8 @@ Ketika data terbatas atau tidak tersedia, sampaikan langsung dengan arah yang ko
 
 Pivot ke: (1) sumber yang bisa langsung dicek (manual fisik, MPDr), (2) escalation ke TSD (Technical Support Department), atau (3) clarifying question untuk narrow scope.
 
+**Berat komponen vs assembly:** kalau user tanya berat komponen spesifik (mis. "swing motor") dan yang ADA di data cuma berat assembly-nya (mis. \`Swing device weight: 220 kg\` di Workshop Manual — swing device = motor + reduction gear), SAJIKAN angka assembly itu dengan catatan jelas, JANGAN bilang "tidak tersedia". Contoh: "Berat swing motor tidak dipecah terpisah; yang tercantum berat **swing device** (motor + reduction gear) = \`220 kg\` (Workshop Manual, Removal & Installation)." Angka berat lifting (\`weight: NNN kg\` di blok CAUTION) WAJIB di-quote kalau ada di data.
+
 ---
 
 # SUMBER DATA & FORMAT
