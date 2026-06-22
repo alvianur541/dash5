@@ -6,7 +6,20 @@ export const listKey    = (uid: string) => `dash-session-list-${uid}`;
 const dataKey           = (uid: string, id: string) => `dash-session-${uid}-${id}`;
 const clearedKey        = (uid: string) => `dash-cleared-${uid}`;
 
-export const isSessionsCleared = (uid: string) => !!localStorage.getItem(clearedKey(uid));
+// Flag "baru hapus semua" — TTL PENDEK, bukan permanen.
+// Tujuannya HANYA guard race: fetch Supabase yang sedang in-flight saat user klik
+// "Hapus Semua" jangan re-populate sesi yang baru dihapus.
+// JANGAN permanen — kalau permanen, browser yang pernah "Hapus Semua" berhenti sync
+// dari Supabase SELAMANYA → sesi dari browser/device lain tidak pernah muncul (bug sync).
+const CLEARED_TTL_MS = 15_000;
+
+export const isSessionsCleared = (uid: string): boolean => {
+  const v = localStorage.getItem(clearedKey(uid));
+  if (!v) return false;
+  const ts = parseInt(v, 10);
+  if (!Number.isFinite(ts)) return false; // format lama ('1') → anggap stale, biarkan sync jalan
+  return Date.now() - ts < CLEARED_TTL_MS;
+};
 
 const MAX_EVICTION_ATTEMPTS = 5; // maksimal hapus 5 sesi lama sebelum give up
 
@@ -107,5 +120,5 @@ export function deleteAllSessionData(uid: string, setFlag = true): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));
   localStorage.removeItem(listKey(uid));
-  if (setFlag) localStorage.setItem(clearedKey(uid), '1'); // hanya set flag saat user eksplisit delete
+  if (setFlag) localStorage.setItem(clearedKey(uid), String(Date.now())); // timestamp — flag auto-stale setelah CLEARED_TTL_MS
 }
