@@ -347,6 +347,15 @@ const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
+// Kata yang menandakan query minta SPEC TERUKUR — dipakai searchTechnicalManualMulti
+// untuk keyword-boost (pasangkan komponen + spec word) agar angka spec yang terkubur
+// di chunk prosedur ketangkap (mis. "Swing device weight: 220 kg"). English + Indo.
+const SPEC_TERMS = new Set([
+  'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
+  'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
+  'resistance', 'flow', 'dimension', 'dimensi', 'gap', 'speed',
+]);
+
 function expandQuery(query: string): string {
   // Limit max 3 ekspansi + dedupe per-token (cegah "seal kit" → 8 kata distorsi).
   const seen = new Set<string>();
@@ -559,6 +568,30 @@ export async function searchTechnicalManualMulti(
       .limit(5),
   );
 
+  // ── 1b. Spec-aware keyword boost (non-fault-code) ──
+  // Query spec terukur (weight/torque/pressure/dll) sering MISS: angkanya terkubur di
+  // chunk prosedur panjang (embedding terdilusi) + mismatch istilah (user "swing motor"
+  // vs manual "swing device"). Full-phrase ilike '%swing motor weight%' juga 0 match.
+  // Fix: pasangkan TIAP kata komponen dengan kata spec via ilike AND (%swing% AND %weight%)
+  // → baris "Swing device weight: 220 kg" ketangkap walau istilah beda. Hasil masuk rerank.
+  const specPromises: typeof kwPromises = [];
+  if (!faultCode) {
+    const words = primaryQuery.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
+    const specWord = words.find(w => SPEC_TERMS.has(w));
+    if (specWord) {
+      const components = words.filter(w => w !== specWord && !STOP_WORDS.has(w)).slice(0, 3);
+      for (const comp of components) {
+        specPromises.push(
+          supabase!.from('documents').select('content, metadata')
+            .ilike('content', `%${comp}%`)
+            .ilike('content', `%${specWord}%`)
+            .contains('metadata', strictFilter)
+            .limit(5),
+        );
+      }
+    }
+  }
+
   // ── 2. ONE embedding for vector search ──
   // Pakai primaryQuery langsung — JANGAN expandQuery() di sini.
   // expandQuery() dirancang untuk translate raw Indonesian → English (user input).
@@ -576,7 +609,7 @@ export async function searchTechnicalManualMulti(
     ? stripped
     : primaryQuery;
   const [kwSettled, embeddingResult] = await Promise.allSettled([
-    Promise.allSettled(kwPromises),
+    Promise.allSettled([...kwPromises, ...specPromises]),
     getEmbedding(embeddingQuery),
   ]);
 
