@@ -30,30 +30,13 @@ function getAgenticPreference(): AgenticPreference {
   return 'adaptive';
 }
 
-function shouldUseAgenticForQuery(input: string): boolean {
-  const q = input.trim().toLowerCase();
-  if (!q) return false;
-
-  // Agentic (ReAct + decompose) worth-it untuk query MULTI-ASPEK — minta ≥2 hal berbeda
-  // (komponen/atribut/fault code) yang lebih baik dipecah & dicari paralel. Query tunggal
-  // (1 fault code / 1 spec / 1 PN) tetap lewat single-pass yang lebih cepat & andal.
-  const faultCodes = q.match(/\b(?:[a-z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9a-f]{1,4}|\d{4,6})|\d{3,6}-[0-9a-f]{1,4})\b/gi) ?? [];
-  const multiFaultCode = faultCodes.length >= 2;
-
-  // Konektor yang menggabungkan dua permintaan ("berat swing motor DAN partnumber rotor").
-  const hasConnector = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i.test(q);
-  // Sinyal teknis (komponen/atribut) — cegah false-positive pada obrolan casual ber-"dan".
-  const hasTechnicalTerm = /\b(?:berat|weight|tekanan|pressure|pn|part\s*number|partnumber|harga|price|spec|displacement|torque|torsi|kapasitas|capacity|rpm|clearance|relief|flow|voltage|resistance|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling)\b/i.test(q);
-  const hasDiagnosticIntent = /\b(?:kenapa|mengapa|troubleshoot|troubleshooting|diagnos|analisa|lambat|lemah|drop|bocor|panas|overheat|mati|no\s+start|intermittent|kadang)\b/i.test(q);
-  const wordCount = q.split(/\s+/).length;
-
-  // Multi-aspek: konektor + (istilah teknis ATAU gejala) + cukup panjang (≥5 kata).
-  // Contoh: "berat swing motor dan partnumber rotor", "swing lambat dan pump bocor".
-  const multiAspect = hasConnector && (hasTechnicalTerm || hasDiagnosticIntent) && wordCount >= 5;
-  // Laporan lapangan panjang multi-isu.
-  const longMultiIssue = wordCount >= 12 && (hasConnector || hasDiagnosticIntent);
-
-  return multiFaultCode || multiAspect || longMultiIssue;
+// Default (adaptive) → SINGLE-PASS. Query multi-aspek ("2 pertanyaan dalam 1") sekarang
+// ditangani DETERMINISTIK di dalam generateResponseStream (decompose + dual-search per aspek,
+// lihat resolveMultiAspectQuery di ai.ts) — lebih cepat & andal daripada ReAct loop yang
+// rentan 400 (functionCall/functionResponse). ReAct penuh tetap tersedia via ?agentic=true
+// untuk demo/eksperimen.
+function shouldUseAgenticForQuery(_input: string): boolean {
+  return false;
 }
 
 export default function App() {

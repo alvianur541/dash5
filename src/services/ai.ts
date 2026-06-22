@@ -782,6 +782,93 @@ async function resolveNaturalLanguageQuery(
   };
 }
 
+// ─── Multi-aspek (2+ pertanyaan dalam 1 query) ───────────────────────────────
+// Insight: kalau user PISAH pertanyaannya, retrieval optimal. Jadi tiru itu —
+// pecah query jadi sub-query English (1 INTENT call), cari tiap aspek di TM + Parts
+// paralel, gabung. Deterministik, BUKAN ReAct loop (yang rapuh/lambat/400-prone).
+
+const MULTI_CONNECTOR_RE = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i;
+const MULTI_TECH_RE = /\b(?:berat|weight|diameter|dia|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\b/i;
+
+function isMultiAspectQuery(q: string): boolean {
+  if (!MULTI_CONNECTOR_RE.test(q)) return false;
+  if (q.split(/\s+/).filter(Boolean).length < 5) return false;
+  return MULTI_TECH_RE.test(q);
+}
+
+// Pecah query → array sub-query English (1 komponen+atribut tiap item). Max 4.
+async function decomposeAspects(query: string): Promise<string[]> {
+  const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE component+attribute each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
+Examples:
+"berat swing motor dan partnumber rotor" -> ["swing motor weight","rotor part number"]
+"diameter pin bucket dan part numbernya" -> ["bucket pin diameter","bucket pin part number"]
+"harga seal kit swing dan o-ring" -> ["swing motor seal kit price","o-ring price"]
+"swing lambat dan pump bocor" -> ["swing motor slow response","hydraulic pump leak"]`;
+  try {
+    const res = await callProxy({
+      contents: [{ role: 'user', parts: [{ text: `Decompose: "${query}"` }] }],
+      systemInstruction: { parts: [{ text: SYS }] },
+      generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+    }, false, INTENT_MODEL);
+    const raw = getText(res.candidates[0]?.content?.parts ?? []).trim();
+    const m = raw.match(/\[[\s\S]*?\]/);
+    if (!m) return [];
+    const arr = JSON.parse(m[0]);
+    return Array.isArray(arr) ? arr.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 4) : [];
+  } catch (err) {
+    console.warn('[decomposeAspects] failed:', (err as Error)?.message);
+    return [];
+  }
+}
+
+async function resolveMultiAspectQuery(
+  trimmed: string,
+  history: Message[],
+  model: UnitModel,
+  emit: AgentEventEmit = () => {},
+): Promise<RagRouteResult> {
+  emit({ type: 'thinking', message: 'Memecah query jadi beberapa aspek…' });
+  const subs = await decomposeAspects(trimmed);
+  // Decompose gagal / cuma 1 aspek → balik ke jalur NL biasa (single search).
+  if (subs.length < 2) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
+
+  emit({ type: 'thinking', message: `Mencari ${subs.length} aspek paralel…` });
+
+  // Tiap sub-query → cari di TM + Parts paralel (sama seperti kalau user pisah manual).
+  const tasks = subs.flatMap(sub => {
+    const clean = stripModelFromQuery(sub);
+    return [
+      (async () => {
+        emit({ type: 'tool_call', tool: 'search_technical_manual' });
+        const r = await searchTechnicalManualMulti([clean], model).catch(() => ({ content: '', hasResults: false }));
+        emit({ type: 'tool_result', tool: 'search_technical_manual', found: r.hasResults });
+        return r;
+      })(),
+      (async () => {
+        emit({ type: 'tool_call', tool: 'search_parts_catalog' });
+        const r = await searchPartsCatalog(sub, model, true).catch(() => ({ content: '', hasResults: false }));
+        emit({ type: 'tool_result', tool: 'search_parts_catalog', found: r.hasResults });
+        return r;
+      })(),
+    ];
+  });
+
+  const results = await Promise.all(tasks);
+
+  // Gabung konten unik (dedup persis) dari semua aspek.
+  const seen = new Set<string>();
+  const blocks: string[] = [];
+  for (const r of results) {
+    if (r.hasResults && r.content && !seen.has(r.content)) {
+      seen.add(r.content);
+      blocks.push(r.content);
+    }
+  }
+
+  if (blocks.length === 0) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
+  return { type: 'rag_found', content: blocks.join('\n\n---\n\n'), dataLabel: RAG_LABEL.manual };
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateResponseStream(
@@ -814,11 +901,15 @@ export async function generateResponseStream(
   // Ini cegah pattern lolos ke NLP path → analyzeIntent return "2000" → embed kabur.
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
+  // Multi-aspek (2+ pertanyaan dalam 1 query) dicek SEBELUM parts-only routing —
+  // cegah "diameter X dan part number Y" nyangkut di parts saja (berat/spec tak dicari).
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
-    : (isPartsQuery(trimmed) || hasServiceInterval)
-      ? await resolvePartsQuery(trimmed, history, model, emit)
-      : await resolveNaturalLanguageQuery(trimmed, history, model, emit);
+    : isMultiAspectQuery(trimmed)
+      ? await resolveMultiAspectQuery(trimmed, history, model, emit)
+      : (isPartsQuery(trimmed) || hasServiceInterval)
+        ? await resolvePartsQuery(trimmed, history, model, emit)
+        : await resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
