@@ -160,7 +160,9 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
           transition={{ duration: 0.15 }}
           className="agent-thinking-item"
           style={{
-            fontSize: '12px',
+            fontFamily: 'var(--font-serif)',
+            fontStyle: 'italic',
+            fontSize: '13px',
             color: 'var(--text-muted)',
             display: 'flex',
             alignItems: 'center',
