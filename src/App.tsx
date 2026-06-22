@@ -34,23 +34,26 @@ function shouldUseAgenticForQuery(input: string): boolean {
   const q = input.trim().toLowerCase();
   if (!q) return false;
 
-  // Agentic (ReAct + decompose) HANYA worth-it untuk query MULTI-ISU — di situ decompose
-  // + tool paralel menambah nilai. Single fault code / single gejala lebih cepat & lebih
-  // ANDAL lewat single-pass (generateResponseStream sudah punya engine-manual 2nd-pass +
-  // reasoning pattern). Pemicu terlalu lebar = query simpel kena jalur rapuh & lambat.
+  // Agentic (ReAct + decompose) worth-it untuk query MULTI-ASPEK — minta ≥2 hal berbeda
+  // (komponen/atribut/fault code) yang lebih baik dipecah & dicari paralel. Query tunggal
+  // (1 fault code / 1 spec / 1 PN) tetap lewat single-pass yang lebih cepat & andal.
   const faultCodes = q.match(/\b(?:[a-z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9a-f]{1,4}|\d{4,6})|\d{3,6}-[0-9a-f]{1,4})\b/gi) ?? [];
   const multiFaultCode = faultCodes.length >= 2;
 
+  // Konektor yang menggabungkan dua permintaan ("berat swing motor DAN partnumber rotor").
+  const hasConnector = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i.test(q);
+  // Sinyal teknis (komponen/atribut) — cegah false-positive pada obrolan casual ber-"dan".
+  const hasTechnicalTerm = /\b(?:berat|weight|tekanan|pressure|pn|part\s*number|partnumber|harga|price|spec|displacement|torque|torsi|kapasitas|capacity|rpm|clearance|relief|flow|voltage|resistance|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling)\b/i.test(q);
   const hasDiagnosticIntent = /\b(?:kenapa|mengapa|troubleshoot|troubleshooting|diagnos|analisa|lambat|lemah|drop|bocor|panas|overheat|mati|no\s+start|intermittent|kadang)\b/i.test(q);
-  const hasConnector = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian)\b|[+]/i.test(q);
-  const isLongFieldReport = q.split(/\s+/).length >= 12;
+  const wordCount = q.split(/\s+/).length;
 
-  // Multi fault code → decompose + analisa hubungan.
-  // Gejala diagnostik + konektor isu tambahan → mis. "swing lambat DAN pump bocor".
-  // Laporan lapangan panjang dengan konektor → multi-aspek.
-  return multiFaultCode
-    || (hasDiagnosticIntent && hasConnector)
-    || (isLongFieldReport && hasConnector);
+  // Multi-aspek: konektor + (istilah teknis ATAU gejala) + cukup panjang (≥5 kata).
+  // Contoh: "berat swing motor dan partnumber rotor", "swing lambat dan pump bocor".
+  const multiAspect = hasConnector && (hasTechnicalTerm || hasDiagnosticIntent) && wordCount >= 5;
+  // Laporan lapangan panjang multi-isu.
+  const longMultiIssue = wordCount >= 12 && (hasConnector || hasDiagnosticIntent);
+
+  return multiFaultCode || multiAspect || longMultiIssue;
 }
 
 export default function App() {
@@ -310,11 +313,13 @@ export default function App() {
           });
           if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
         };
+        let streamedAny = false;
         const onChunkCb = (chunk: string) => {
           if (!mountedRef.current) return;
           if (sessionIdRef.current !== sessionSnapshot) return; // ghost content guard
           if (streamCtrl.signal.aborted) return;
           setIsTyping(false);
+          streamedAny = true;
           buffered += chunk;
           if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
         };
@@ -324,12 +329,23 @@ export default function App() {
           setAgentEvents(prev => [...prev, event]);
         };
         const useAgentic = shouldUseAgentic(content);
-        const fullText = useAgentic
-          ? await generateResponseAgentic(
-              selectedModel, userName, currentMessages, content,
-              onChunkCb, onAgentEventCb,
-            )
-          : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+        let fullText: string;
+        try {
+          fullText = useAgentic
+            ? await generateResponseAgentic(
+                selectedModel, userName, currentMessages, content,
+                onChunkCb, onAgentEventCb,
+              )
+            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+        } catch (agErr) {
+          // Fallback: agentic gagal SEBELUM streaming jawaban → diam-diam pakai single-pass
+          // supaya tidak tampil error ke user. Kalau sudah terlanjur streaming, lempar ulang.
+          const aborted = (agErr as Error)?.name === 'AbortError' || (agErr as Error)?.message?.includes('abort');
+          if (!useAgentic || streamedAny || aborted) throw agErr;
+          console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
+          setAgentEvents([]);
+          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+        }
         if (timerId !== null) { clearTimeout(timerId); timerId = null; }
         if (!mountedRef.current) return;
         if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
@@ -396,11 +412,13 @@ export default function App() {
         });
         if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
       };
+      let streamedAny = false;
       const onChunkCb = (chunk: string) => {
         if (!mountedRef.current) return;
         if (sessionIdRef.current !== sessionSnapshot) return;
         if (retryCtrl.signal.aborted) return;
         setIsTyping(false);
+        streamedAny = true;
         buffered += chunk;
         if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
       };
@@ -410,14 +428,26 @@ export default function App() {
         setAgentEvents(prev => [...prev, event]);
       };
       const useAgentic = shouldUseAgentic(userMsg.content);
-      const fullText = useAgentic
-        ? await generateResponseAgentic(
-            selectedModel, userName, historyBefore, userMsg.content,
-            onChunkCb, onAgentEventCb,
-          )
-        : await generateResponseStream(
-            selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
-          );
+      let fullText: string;
+      try {
+        fullText = useAgentic
+          ? await generateResponseAgentic(
+              selectedModel, userName, historyBefore, userMsg.content,
+              onChunkCb, onAgentEventCb,
+            )
+          : await generateResponseStream(
+              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
+            );
+      } catch (agErr) {
+        // Fallback: agentic gagal sebelum streaming → diam-diam single-pass (jangan error ke user).
+        const aborted = (agErr as Error)?.name === 'AbortError' || (agErr as Error)?.message?.includes('abort');
+        if (!useAgentic || streamedAny || aborted) throw agErr;
+        console.warn('[agentic] retry gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
+        setAgentEvents([]);
+        fullText = await generateResponseStream(
+          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
+        );
+      }
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return;
