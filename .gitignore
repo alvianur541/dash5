@@ -1,0 +1,14 @@
+node_modules/
+node-portable/
+build/
+dist/
+coverage/
+.DS_Store
+*.log
+.env*
+!.env.example
+.agents/
+.claude/
+.vscode/
+.tmp/
+CLAUDE.md

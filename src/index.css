@@ -1,0 +1,945 @@
+@import "tailwindcss";
+
+@theme {
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;  /* hero/display — AndalAI-style */
+  --font-sans:    "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-serif:   "Lora", ui-serif, Georgia, serif;
+  --font-mono:    ui-monospace, "Cascadia Code", "SF Mono", "Segoe UI Mono", monospace;
+}
+
+:root {
+  /* Dark Mode — AndalAI-inspired vibrant orange */
+  --bg-app:         #1C1917;
+  --bg-sidebar:     #141413;
+  --bg-header:      rgba(28, 25, 23, 0.85);
+  --bg-card:        #292524;
+  --bg-card-hover:  #343130;
+  --bg-input:       #1C1917;
+  --accent-main:    #F97316;   /* vibrant orange (was #CC785C terra-cotta) */
+  --accent-active:  #EA580C;   /* deeper orange (was #E35B3E) */
+  --accent-glow:    rgba(249, 115, 22, 0.20);
+  --text-primary:   #F5F0EB;
+  --text-secondary: #A09891;
+  --text-muted:     #6B6561;
+  --border-main:    rgba(255, 255, 255, 0.08);
+  --border-glass:   rgba(255, 255, 255, 0.04);
+  --glass-bg:       rgba(255, 255, 255, 0.02);
+  --scroll-thumb:   rgba(255, 255, 255, 0.10);
+  --scroll-thumb-hover: rgba(255, 255, 255, 0.18);
+
+  /* Status colors */
+  --status-success: #4ade80;
+  --status-danger:  #f87171;
+  --status-warn:    #fbbf24;
+
+  /* Radii */
+  --radius-xs:   6px;
+  --radius-sm:   8px;
+  --radius-md:   10px;
+  --radius-lg:   16px;
+  --radius-pill: 999px;
+
+  /* Spacing (4px base) */
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  20px;
+  --space-6:  24px;
+  --space-8:  32px;
+  --space-10: 40px;
+
+  /* Content widths — pixel-fixed supaya konsisten cross-browser
+     (Tailwind max-w-* pakai rem yang Edge/Chrome bisa kalkulasi beda)
+     Sama-sama supaya input bar align dengan chat content */
+  --chat-content-max:  820px;
+  --input-content-max: 820px;
+
+  /* Shadows */
+  --shadow-accent: 0 10px 30px -10px rgba(249, 115, 22, 0.30);
+  --shadow-card:   0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
+  --shadow-modal:  0 25px 50px -12px rgba(0,0,0,0.50);
+  --shadow-glow:   0 0 0 1px rgba(249, 115, 22, 0.20), 0 10px 24px -8px rgba(249, 115, 22, 0.25);
+
+  /* Motion */
+  --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring:   cubic-bezier(0.22, 1, 0.36, 1);
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 400ms;
+}
+
+.light-theme {
+  /* Light Mode — AndalAI-inspired: cream sidebar + vibrant orange accent */
+  --bg-app:         #FFFFFF;
+  --bg-sidebar:     #FAFAFA;   /* cream off-white (was #EDE8E1) */
+  --bg-header:      rgba(255, 255, 255, 0.85);
+  --bg-card:        #FFFFFF;
+  --bg-card-hover:  #F5F5F4;
+  --bg-input:       #FFFFFF;
+  --accent-main:    #F97316;   /* vibrant orange */
+  --accent-active:  #EA580C;
+  --accent-glow:    rgba(249, 115, 22, 0.15);
+  --text-primary:   #1A1614;
+  --text-secondary: #44403C;
+  --text-muted:     #78716C;
+  --border-main:    rgba(0, 0, 0, 0.08);
+  --border-glass:   rgba(0, 0, 0, 0.04);
+  --glass-bg:       rgba(0, 0, 0, 0.02);
+  --scroll-thumb:   rgba(0, 0, 0, 0.10);
+  --scroll-thumb-hover: rgba(0, 0, 0, 0.18);
+}
+
+html {
+  height: 100%;
+  overflow: hidden;       /* cegah document-level scroll di iOS */
+  overscroll-behavior: none;
+}
+
+body {
+  height: 100%;           /* fixed height, bukan min-height — body tidak bisa tumbuh */
+  overflow: hidden;       /* cegah iOS scroll-to-focus menggeser seluruh layout */
+  overscroll-behavior: none;
+  background-color: var(--bg-app);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: -0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size-adjust: from-font;
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  -webkit-overflow-scrolling: auto;
+}
+
+/* Dynamic viewport height for min-h-screen (fixes mobile browser toolbar) */
+.min-h-screen {
+  min-height: 100dvh;
+}
+
+/* Scrollbar utilities */
+.scrollbar-hide {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Thin scrollbar */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scroll-thumb) transparent;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, [role="button"] {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Status pulse animation */
+@keyframes status-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+.status-pulse {
+  animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Markdown body — Inter sans untuk AI response (AndalAI-style modern, clean).
+   Previously used serif styling. Sans-serif is cleaner here.
+   + readability lebih bagus untuk technical content (tabel, kode, spec).
+   Digit-only mono dihilangkan supaya part number tidak terbelah
+   (YD + 00000075). PN/spec dirender mono via inline code (backtick)
+   atau di tabel (full mono). */
+.markdown-body {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.68;
+  color: var(--text-primary);
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.markdown-body hr { display: none; }
+
+.markdown-body p {
+  margin-bottom: 0.6rem;
+}
+
+.markdown-body p:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.3rem;
+  margin-bottom: 0.6rem;
+  margin-top: 0.2rem;
+}
+
+.markdown-body ul {
+  list-style-type: disc;
+}
+
+.markdown-body ol {
+  list-style-type: decimal;
+}
+
+.markdown-body li {
+  margin-bottom: 0.3rem;
+  line-height: 1.68;
+}
+
+/* Inline code: neutral mono, not accent colored. */
+.markdown-body code {
+  font-family: var(--font-mono);
+  font-size: 0.88em;
+  font-weight: 500;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 4px;
+  padding: 0.1em 0.4em;
+  letter-spacing: 0;
+}
+.light-theme .markdown-body code {
+  background: rgba(0, 0, 0, 0.05);
+  color: var(--text-primary);
+}
+
+.markdown-body pre {
+  background: var(--bg-card);
+  border: 1px solid var(--border-main);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+}
+
+.markdown-body pre code {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+/* h1 — judul utama (jarang dipakai AI, tapi kalau ada harus jelas) */
+.markdown-body h1 {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin-top: 1.3rem;
+  margin-bottom: 0.35rem;
+  line-height: 1.4;
+}
+
+/* h2/h3 — section label gaya teknis: uppercase + spaced + muted.
+   Memberi hierarchy yang jelas tanpa dominasi body serif. */
+.markdown-body h2,
+.markdown-body h3 {
+  font-family: "DM Serif Display", var(--font-serif);
+  font-size: 16px;
+  font-weight: 400;
+  color: var(--text-primary);
+  text-transform: none;
+  letter-spacing: 0;
+  margin-top: 1.4rem;
+  margin-bottom: 0.45rem;
+  line-height: 1.4;
+}
+
+/* First heading di response tidak perlu top margin */
+.markdown-body > h1:first-child,
+.markdown-body > h2:first-child,
+.markdown-body > h3:first-child {
+  margin-top: 0.1rem;
+}
+
+/* Strong di Lora — font-weight 700 terlihat distinktif vs body 400 */
+.markdown-body strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.markdown-body em {
+  font-style: normal;       /* italic dinonaktifkan — AI tidak pakai italic untuk label teknis */
+}
+
+/* ── Tables ── */
+.markdown-table-wrap {
+  display: block;
+  overflow-x: auto;
+  margin-bottom: 0.6rem;
+  border-radius: 12px;
+  border: 1px solid var(--border-main);
+}
+
+/* Tables — full monospace karena isinya teknis (PN, qty, item code).
+   Aligned & no fragmentation antar kolom. */
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+}
+
+.markdown-body thead {
+  background: var(--bg-card-hover);
+}
+
+.markdown-body thead th {
+  padding: 0.45rem 0.85rem;
+  text-align: left;
+  font-weight: 600;
+  font-size: 11px;
+  font-family: var(--font-sans);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-main);
+  white-space: nowrap;
+}
+
+.markdown-body tbody tr {
+  border-bottom: 1px solid var(--border-main);
+  transition: background 0.12s;
+}
+
+.markdown-body tbody tr:nth-child(even) {
+  background: rgba(255, 255, 255, 0.02);
+}
+.light-theme .markdown-body tbody tr:nth-child(even) {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.markdown-body tbody tr:last-child {
+  border-bottom: none;
+}
+
+.markdown-body tbody tr:hover {
+  background: color-mix(in srgb, var(--accent-main) 3%, var(--bg-card));
+}
+
+.markdown-body tbody td {
+  padding: 0.55rem 0.9rem;
+  color: var(--text-primary);
+  vertical-align: middle;
+  line-height: 1.55;
+}
+
+.markdown-body tbody td:first-child {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-hover);
+}
+
+.chat-container {
+  max-width: 48rem;
+  margin-left: auto;
+  margin-right: auto;
+  padding-left: 1.5rem;
+  padding-right: 1.5rem;
+}
+
+.premium-glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(12px);
+  border: 1px solid var(--border-glass);
+}
+
+.glass-header {
+  background: var(--bg-header);
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  border-bottom: 1px solid var(--border-main);
+}
+
+.glass-input-bar {
+  background: var(--bg-header);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  transition: background-color 0.3s;
+}
+
+.input-ring:focus-within {
+  border-color: color-mix(in srgb, var(--accent-main) 28%, transparent) !important;
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.scroll-contain {
+  overscroll-behavior-y: contain;
+}
+
+.tap-native {
+  min-height: 44px;
+  transition: transform 120ms var(--ease-standard), background-color 160ms var(--ease-standard);
+}
+
+.tap-native:active {
+  transform: scale(0.97);
+}
+
+/* Input bar floating wrapper */
+.input-bar-float {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  /* Gradient: fade dari chat → solid di bawah input pill */
+  background: linear-gradient(
+    to bottom,
+    transparent 0%,
+    transparent 20%,
+    color-mix(in srgb, var(--bg-app) 60%, transparent) 50%,
+    var(--bg-app) 75%
+  );
+}
+
+/* Chat content bottom padding agar pesan terakhir tidak tertutup input bar */
+.chat-messages-list {
+  padding-bottom: 140px !important;
+}
+
+.message-input-bar {
+  position: static;
+  background: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  transition: background-color 0.3s;
+}
+
+/* Desktop: .input-bar-float solid, tidak perlu gradient */
+@media (min-width: 768px) {
+  .input-bar-float {
+    background: var(--bg-app);
+  }
+}
+
+/* Safe area spacer di bawah input bar.
+   Browser Safari: browser sudah handle safe-area sendiri, cukup gap kecil.
+   Standalone PWA: env(safe-area-inset-bottom) aktif — home indicator perlu spacing. */
+.safe-area-spacer {
+  height: 6px;
+  flex-shrink: 0;
+}
+
+@media all and (display-mode: standalone) {
+  .safe-area-spacer {
+    height: max(20px, env(safe-area-inset-bottom, 20px));
+  }
+}
+
+.mono-text {
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.7rem;
+}
+
+/* ── Welcome screen ── */
+.welcome-screen {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 24px 24px 160px;
+  scrollbar-width: none;
+}
+.welcome-screen::-webkit-scrollbar { display: none; }
+
+@media (min-width: 768px) {
+  .welcome-screen {
+    padding: 48px 24px 160px;
+  }
+}
+
+/* Sidebar header */
+.sidebar-header {
+  padding-top: 20px;
+}
+
+/* ── Topbar native ── */
+.topbar-native {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-app);
+  position: relative; flex-shrink: 0;
+}
+
+/* Mobile: topbar fixed — tidak bisa terseret oleh document scroll iOS.
+   Spacer (.topbar-spacer) mengganti ruang di flow agar ChatWindow tidak
+   mulai dari y=0. Hanya mobile karena desktop tidak punya keyboard issue. */
+@media (max-width: 767px) {
+  .topbar-native {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 30;
+  }
+  .topbar-spacer {
+    height: 56px;
+    flex-shrink: 0;
+  }
+}
+
+.topbar-hamburger {
+  width: 36px; height: 36px; border-radius: 12px; border: none;
+  background: transparent; color: var(--text-primary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s;
+}
+.topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
+.topbar-center {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 5px;
+  cursor: pointer; padding: 5px 12px; border-radius: 999px;
+  background: rgba(255,255,255,0.04);
+  border: 0.5px solid var(--border-main);
+  transition: background 0.15s;
+}
+.topbar-center:hover { background: rgba(255,255,255,0.07); }
+.topbar-model-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-primary); }
+.topbar-newchat {
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: var(--accent-main); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0;
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 2px 8px rgba(204,120,92,0.35);
+}
+.topbar-newchat:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(204,120,92,0.45); }
+
+/* ── Chat messages ── */
+.chat-messages-list {
+  width: 100%; max-width: var(--chat-content-max); margin: 0 auto;
+  padding: 24px 18px 8px;
+  display: flex; flex-direction: column; gap: 24px;
+}
+.msg-user { display: flex; justify-content: flex-end; }
+.msg-user-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 72%;   /* constrains whole message group (text + attachments) */
+}
+.user-bubble {
+  width: fit-content;
+  background: #F97316;        /* vibrant orange — same for light + dark */
+  border: none;
+  border-radius: 18px 18px 4px 18px;
+  padding: 9px 14px;
+  font-family: var(--font-sans);
+  font-size: 14px; font-weight: 400; line-height: 1.5;
+  letter-spacing: -0.005em;
+  color: #ffffff;
+  user-select: text;
+}
+.msg-ts {
+  display: block; font-size: 11px;
+  color: var(--text-muted); margin-top: 5px; opacity: 0.6;
+}
+.msg-ai { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
+.ai-msg-wrap { width: 100%; cursor: pointer; }
+.ai-msg-wrap .markdown-body { font-family: var(--font-serif); font-size: 13.5px; line-height: 1.68; font-weight: 400; }
+.ai-actions {
+  display: flex; align-items: center; gap: 2px;
+  padding-top: 8px; overflow: hidden;
+  transition: opacity 150ms;
+}
+.action-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; border-radius: 8px; border: none;
+  background: transparent; color: var(--text-muted);
+  cursor: pointer; transition: background 0.12s, color 0.12s;
+}
+.action-btn:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+.action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+/* Desktop: action row appears on hover */
+@media (hover: hover) {
+  .ai-actions { opacity: 0; }
+  .ai-msg-wrap:hover .ai-actions { opacity: 1; }
+}
+/* Mobile: selalu visible tapi subtle */
+@media (hover: none) {
+  .ai-actions { opacity: 0.6; }
+}
+
+/* Typing indicator — 3 dot bounce (sebelum chunk pertama datang) */
+.typing-dots { display: flex; align-items: center; gap: 5px; padding: 10px 0 6px; }
+.typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+
+/* Typewriter cursor — blinking caret di akhir pesan AI saat streaming */
+.typewriter-cursor {
+  display: inline-block;
+  vertical-align: text-bottom;
+  margin-left: 2px;
+  color: var(--text-muted);
+  animation: typewriter-blink 0.9s steps(2) infinite;
+}
+.typewriter-cursor::before {
+  content: '▍';
+  font-family: var(--font-sans);
+  font-size: 0.95em;
+  line-height: 1;
+}
+@keyframes typewriter-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+/* -- Welcome -- */
+.welcome-subtitle {
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-muted);
+  letter-spacing: -0.005em;
+  text-align: center;
+  margin-top: -4px;
+}
+/* Desktop: force subtitle ke 1 baris seperti AndalAI. Mobile: wrap natural supaya tidak overflow. */
+@media (min-width: 768px) {
+  .welcome-subtitle-oneline {
+    white-space: nowrap;
+  }
+}
+
+.welcome-greeting {
+  font-family: var(--font-serif);
+  font-size: clamp(1.6rem, 4vw, 2rem);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.model-pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: transparent; border: 0.5px solid var(--border-main);
+  border-radius: 999px; padding: 4px 12px;
+}
+.model-pill-label {
+  font-size: 10px; font-weight: 500; color: var(--text-muted);
+  text-transform: uppercase; letter-spacing: 0.05em;
+}
+.model-pill-sep {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--accent-active);
+}
+.model-pill-name {
+  font-size: 13px; font-weight: 500; color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+.welcome-model-subtitle {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--text-muted);
+  letter-spacing: -0.01em;
+}
+.welcome-empty-hint {
+  font-family: var(--font-serif);
+  font-size: 13.5px;
+  color: var(--text-secondary);
+  max-width: 380px;
+  text-align: center;
+  line-height: 1.5;
+  margin-bottom: 20px;
+}
+.chips-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+@media (min-width: 600px) {
+  .chips-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+}
+.chips-label {
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted);
+}
+.suggestion-chip {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 10px;
+  background: var(--bg-card); border: 0.5px solid var(--border-main);
+  font-family: var(--font-sans);
+  font-size: 13.5px; font-weight: 400; color: var(--text-secondary);
+  cursor: pointer; text-align: left; width: 100%;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+}
+.suggestion-chip:hover {
+  background: var(--bg-app);
+  border-color: color-mix(in srgb, var(--accent-main) 25%, var(--border-main));
+  color: var(--text-primary);
+  transform: translateX(2px);
+}
+.chip-icon { font-size: 15px; flex-shrink: 0; opacity: 0.85; }
+
+.input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
+.pill-side-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: 0.5px solid var(--border-main);
+  background: transparent; color: var(--text-primary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s, border-color 0.15s; margin-bottom: 1px;
+}
+.pill-side-btn:hover { background: var(--bg-app); border-color: var(--text-muted); }
+.pill-side-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.input-pill {
+  flex: 1; display: flex; align-items: flex-end; gap: 6px;
+  background: var(--bg-card);
+  border: 1.5px solid color-mix(in srgb, var(--accent-main) 45%, transparent);
+  border-radius: 18px; padding: 10px 10px 10px 16px;
+  transition: border-color 0.18s, box-shadow 0.18s; min-height: 46px;
+}
+.input-pill:focus-within {
+  border-color: var(--accent-main);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 14%, transparent);
+}
+.input-pill-textarea {
+  flex: 1; background: transparent; border: none; outline: none;
+  resize: none; font-family: var(--font-sans);
+  font-size: 14px; font-weight: 400; line-height: 1.5; color: var(--text-primary);
+  caret-color: var(--accent-main); padding: 0;
+  max-height: 120px; overflow-y: auto; scrollbar-width: none;
+  height: 24px; align-self: center;
+}
+.input-pill-textarea::placeholder { color: var(--text-muted); font-weight: 400; }
+.input-pill-textarea::-webkit-scrollbar { display: none; }
+.pill-send-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: none;
+  background: var(--text-primary); color: var(--bg-app);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: opacity 0.15s;
+}
+.pill-send-btn:hover { opacity: 0.8; }
+.pill-send-btn:active { opacity: 0.7; }
+.pill-mic-btn {
+  width: 30px; height: 30px; border-radius: 8px; border: 0.5px solid var(--border-main);
+  background: transparent; color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; flex-shrink: 0; transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.pill-mic-btn:hover { background: var(--bg-app); color: var(--text-primary); border-color: var(--text-muted); }
+.pill-mic-btn--active { color: #ef4444; }
+.pill-mic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+
+/* ── Send button states ── */
+.send-btn-inactive {
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0.5;
+}
+
+/* ── Light theme overrides ── */
+.light-theme .topbar-hamburger { background: transparent; }
+.light-theme .topbar-hamburger:hover { background: rgba(0,0,0,0.06); }
+.light-theme .topbar-center { background: rgba(0,0,0,0.04); }
+.light-theme .topbar-center:hover { background: rgba(0,0,0,0.07); }
+.light-theme .pill-side-btn { background: rgba(0,0,0,0.06); }
+.light-theme .pill-side-btn:hover { background: rgba(0,0,0,0.1); }
+.light-theme .action-btn:hover { background: rgba(0,0,0,0.05); }
+.light-theme .pill-mic-btn:hover { background: rgba(0,0,0,0.05); }
+
+/* ── Checklist Modal ── */
+.checklist-modal {
+  width: 100%; max-width: 480px;
+  background: var(--bg-app);
+  border-top: 0.5px solid var(--border-main);
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -8px 40px rgba(0,0,0,0.4);
+}
+.checklist-item {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 12px 20px;
+  border-bottom: 0.5px solid var(--border-main);
+  cursor: pointer; transition: background 0.12s;
+  background: transparent; border-left: none; border-right: none;
+  width: 100%; text-align: left;
+}
+.checklist-item:last-child { border-bottom: none; }
+.checklist-item:hover { background: rgba(255,255,255,0.03); }
+.checklist-item--done { opacity: 0.55; }
+.checklist-box {
+  width: 20px; height: 20px; border-radius: 6px;
+  border: 1.5px solid var(--border-main); flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px; transition: background 0.15s, border-color 0.15s;
+  color: transparent;
+}
+.checklist-box--checked {
+  background: var(--accent-main);
+  border-color: var(--accent-main);
+  color: #fff;
+}
+.checklist-trigger-btn {
+  margin-left: 2px;
+}
+.checklist-trigger-btn:hover {
+  color: var(--accent-main) !important;
+}
+
+/* Light theme checklist */
+.light-theme .checklist-modal { box-shadow: 0 -8px 40px rgba(0,0,0,0.12); }
+.light-theme .checklist-item:hover { background: rgba(0,0,0,0.03); }
+
+/* ── Light theme: konversi bg-white/* hover/active ke bg-black/* ──
+   Tailwind bg-white/5 bg-white/8 invisible di light cream bg,
+   override jadi subtle dark tint supaya hover/active tetap kelihatan. */
+.light-theme .hover\:bg-white\/5:hover,
+.light-theme .hover\:bg-white\/8:hover { background-color: rgba(0,0,0,0.04); }
+.light-theme .bg-white\/5  { background-color: rgba(0,0,0,0.04); }
+.light-theme .bg-white\/8  { background-color: rgba(0,0,0,0.06); }
+
+/* Suggestion chip hover di light mode — accent border lebih visible */
+.light-theme .suggestion-chip:hover {
+  background: var(--bg-card-hover);
+  border-color: color-mix(in srgb, var(--accent-main) 30%, var(--border-main));
+}
+
+/* ── Mobile enhancements ────────────────────────────────────────────────── */
+@media (max-width: 767px) {
+
+  /* Topbar — solid background (bukan backdrop-filter) supaya status bar warna ikut tema instantly.
+     backdrop-filter blur body yg sedang transition 0.4s → status bar lag. Solid = instant. */
+  .topbar-native {
+    border-bottom: 1px solid var(--border-main);
+    background: var(--bg-app);
+    padding: 8px 12px;
+  }
+  .topbar-hamburger {
+    width: 40px; height: 40px; border-radius: 12px;
+  }
+  .topbar-newchat {
+    width: 40px; height: 40px;
+    box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 40%, transparent);
+  }
+  .topbar-center {
+    background: color-mix(in srgb, var(--accent-main) 10%, var(--bg-card));
+    border: 1px solid color-mix(in srgb, var(--accent-main) 22%, transparent);
+    padding: 5px 14px;
+  }
+  .topbar-model-name { font-size: 14px; }
+  .topbar-spacer { height: 58px; }
+
+  /* Chat list — tighter padding + smaller gap */
+  .chat-messages-list {
+    padding: 16px 14px 8px;
+    gap: 18px;
+  }
+
+  /* Message group — lebih wide di mobile */
+  .msg-user-group { max-width: 85%; }
+
+  /* AI response — slight reduction on mobile */
+  .ai-msg-wrap .markdown-body { font-size: 13px; line-height: 1.65; }
+
+  /* Action buttons — lebih mudah di-tap */
+  .action-btn { width: 32px; height: 32px; border-radius: 10px; }
+
+  /* Suggestion chips — taller touch target */
+  .suggestion-chip {
+    padding: 13px 16px;
+    border-radius: 12px;
+    active-scale: none;
+  }
+  .suggestion-chip:active { transform: scale(0.98); background: var(--bg-card-hover); }
+
+  /* Input pill — elevation supaya float di atas content */
+  .input-pill {
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25),
+                0 1px 4px rgba(0, 0, 0, 0.15);
+  }
+
+  /* Welcome — sizing on mobile */
+  .welcome-greeting { font-size: clamp(1.4rem, 6vw, 1.8rem); }
+  .welcome-empty-hint { font-size: 13px; }
+
+  /* Chips container — full width on mobile (overrides 440px inline style) */
+  .chips-container {
+    max-width: 100% !important;
+    padding: 0 2px;
+  }
+  .chips-container .suggestion-chip {
+    font-size: 14px !important;
+    border-width: 1px;
+    border-color: color-mix(in srgb, var(--accent-main) 18%, var(--border-main));
+  }
+
+}
+
+/* Scroll-to-bottom FAB — fixed position, hovers above input bar */
+.scroll-fab {
+  position: fixed;
+  bottom: 90px;
+  right: 16px;
+  z-index: 30;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--border-main);
+  background: var(--bg-card);
+  color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.20);
+  cursor: pointer;
+  transition: color 0.15s, box-shadow 0.15s;
+}
+.scroll-fab:hover {
+  color: var(--text-primary);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+}
+
+/* Standalone PWA: safe-area-inset-top untuk notch/dynamic island */
+@media all and (display-mode: standalone) and (max-width: 767px) {
+  .topbar-native {
+    padding-top: max(10px, env(safe-area-inset-top));
+  }
+  .topbar-spacer {
+    height: max(58px, calc(42px + env(safe-area-inset-top)));
+  }
+}
+
+/* Light theme mobile topbar */
+.light-theme .topbar-center {
+  background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
+}

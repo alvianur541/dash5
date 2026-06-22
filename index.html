@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+
+    <!-- PWA -->
+    <meta name="theme-color" content="#1C1917" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Dash5" />
+<link rel="icon" href="/logo-64.png" type="image/png" sizes="64x64" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon-180.png" />
+
+    <!-- SEO / Social -->
+    <meta name="description" content="Dash5 - AI Diagnostic Assistant" />
+
+    <!-- Fonts: Sora (display hero, AndalAI-style) + Inter (body sans) + Lora (markdown serif) via Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet" />
+
+    <title>Dash5</title>
+    <!-- Theme init: apply before React renders to prevent flash -->
+    <script>
+      (function() {
+        var t = localStorage.getItem('dash-theme') || 'dark';
+        document.documentElement.classList.add(t + '-theme');
+        var color = t === 'light' ? '#FFFFFF' : '#1C1917';
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) meta.setAttribute('content', color);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root">
+      <!-- LCP placeholder: base64 inline, zero network roundtrip -->
+      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg-app,#1C1917);">
+        <img alt="Dash5" width="64" height="64"
+          style="width:64px;height:64px;border-radius:18px;object-fit:cover;"
+          fetchpriority="high" decoding="sync"
+          src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAADZklEQVR42u2bW0hUURSG/zPOFF5GQUlnxjHBHqKZUTIsE9IiehAzuqsQpVmavkRRWvRQUV5CSnoykcC8pXhNu1pQ0UVN8zapOfNi5oA6jg9zQUePOr2H2DmjgbP32c9rbVjfWXuvdfbePwMeQykPcMBFhmF8kuFix5AUtDMwRKQH/684GJID55INIpqCXy4+EU3BLxenCJQPEW1f/+94GRqD51wGBQA0AKA5/YUMEAAA4tVOkHI2FXdz85z2Z1kWc3Y7zBYLpoxGGAwG6PU6DGi16PjWAavFsr4BrHZIJBJIJBJ4SaUIDAzE9vBwAIcAAIuLi+jq7ERjQz2aGhtgt9vpWgJubm7YHRWFgvsP0NHVjbQLGRCLxXTuAX5+frh56zZevmlFSMgWejdBlUqNF69eY1dkJL1VQOrtjbKKKoSGhtJbBr28vFBc8hhSb296+4DNwcG4mpVNdyN0JjkFSqXSNQCUFD9CkEKGIIUMwUoFNNu2Ij4uFrk5d6AbHnaukRGLkZyS6noZsLS0BLPZjP6+PhQXFeHA/n24cf0a5ubmeM915NhRMpZARXkZDscfhM1q5eUnk8mhVmvI2AMGBweQnXWFt9+OiAhyNsHnLS1497aVl49GoyGrCjwpLeVl72wlWLcA2tq+Yn5+nrO9v38AWQAWWBa/RkY423t4eJDXCJktZs62GzZuIA+Ap6cnZ9vZ2VnyAPj6+nK2tVqsZAHY5O8PmUzO2d5oNJIFICZmLy97vV5HFoBz59N42f8cGiIHQEJiEkLDwnj9WH35/IkMABERO5GTl8/Lp/t7F0wmk2sDYBgGCYlJqKmrh7u7Oy/fmupquNzFCMMw8PHxgVyuwJ7oaJxISIBKpeY9z8TEOJoaG1wDQHpGJtIzMtd0zoeFhWBZls4zwY72djytqgSVh6ImkwmXL12Ew+GgD8DMzAyST5+CYWwM1F2MTBmNSDx5HNr+flB3Ndbe1ob4uFj09faCmPcBXEtdwb181NXWgrgHEiu1tz093agsL0dz8zMsrKLUrWsALMvCZrPBarFg9Pco9Dodfmi1+PjhPaanp/9/QyY8k4PwTE4AQDUAruoqIQMEAAQDoHUZGMYnGRFfpSVp8jlhCTijtyVJPClyVnRMinKUoUE7vNKHFa2FBN2V1eN/ANW9K9wNa50LAAAAAElFTkSuQmCC" />
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
