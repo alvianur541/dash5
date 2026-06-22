@@ -168,9 +168,11 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
              RULE: ANY query mentioning interval (500/1000/2000 jam/hm/hr) → "parts".
              optimizedQuery MUST be ≥3 words. Interval pattern: "X hour service maintenance parts".
 
-"technical" → Diagnosis, troubleshooting, fault codes, specs (torque/pressure/displacement/clearance),
-              procedures (teardown/assembly), oil/fuel/coolant capacity, electrical circuit,
-              hydraulic flow, operating procedure.
+"technical" → Diagnosis, troubleshooting, fault codes, specs (torque/pressure/displacement/clearance/
+              weight/diameter/length/dimension/size/capacity), procedures (teardown/assembly),
+              oil/fuel/coolant capacity, electrical circuit, hydraulic flow, operating procedure.
+              RULE: berat/dimensi/diameter/ukuran/clearance sebuah komponen = "technical" (ada di
+              Workshop/Technical Manual), BUKAN "parts" — walau komponennya sebuah part.
               NOTE: "harga promo" / "promo Q4" without interval → "parts". With procedure context → "technical".
 
 "general"  → Greetings, acknowledgments, short casual chat directly related to the work context ("halo", "oke", "thanks", "lanjut", "siap", "mantap").
@@ -179,13 +181,18 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
 ═══ STEP 2: BUILD optimizedQuery (parts/technical only) ═══
 
 Rules (apply in order):
-1. EXTRACT core intent: component + attribute/symptom/action
+1. EXTRACT core intent: component FIRST, then attribute/symptom/action — urutan ini cocok dgn
+   spec keyword search. Contoh: "swing motor weight", "bucket pin diameter", "main pump pressure".
 2. TRANSLATE Indonesian → English technical terms from Hitachi service manuals
 3. STRIP: kenapa/berapa/bagaimana/apa/gimana/cara/coba/tolong/mohon/kok/sih/ya/dong + articles
 4. INFER pronouns (itu/ini/nya) → component name from conversation context. NEVER infer model names.
 5. NO PADDING: translate exactly what user said. "swing motor" ≠ "swing motor assembly"
 6. NO MODEL NAME: never add ZX48U-5A / ZX200-5G / KCM 60ZV etc.
-7. UNIT: include only if user explicitly stated it. "berapa berat" → weight (no kg). "berapa kg" → add kg.
+7. KEEP the measurement attribute word — itu kata PEMBEDA utama & memicu pencarian spec.
+   weight/berat→weight, diameter→diameter, panjang→length, lebar→width, tinggi→height,
+   tekanan→pressure, torsi→torque, clearance, kapasitas→capacity, displacement.
+   JANGAN reduksi jadi nama komponen saja ("diameter pin" → "pin" itu SALAH).
+   UNIT: include only if user stated it. "berapa berat" → "...weight" (no kg). "berapa kg" → add kg.
 8. LENGTH proportional to complexity:
    - Simple spec: 2-3 words  → "swing motor weight", "main pump displacement"
    - Symptom+component: 3-4  → "hydraulic pump no suction", "swing motor slow"
@@ -201,6 +208,10 @@ Technical — specs & symptoms:
 "swing lambat kenapa"                         → technical, "swing motor slow response"
 "kenapa pompanya nggak mau narik"             → technical, "hydraulic pump no suction"
 "berapa torque baut head cylinder"            → technical, "cylinder head bolt torque"
+"diameter pin bucket berapa"                  → technical, "bucket pin diameter"
+"panjang arm cylinder"                        → technical, "arm cylinder length"
+"berat swing device"                          → technical, "swing device weight"
+"clearance valve engine"                      → technical, "engine valve clearance"
 "cara adjust relief valve main pump"          → technical, "main pump relief valve adjustment"
 "engine tidak mau hidup setelah ganti filter" → technical, "engine no start after fuel filter replacement"
 "tekanan hydraulic turun saat boom diangkat"  → technical, "hydraulic pressure drop boom lift"
