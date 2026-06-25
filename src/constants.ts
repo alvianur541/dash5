@@ -1,6 +1,11 @@
 import { UnitModel } from './types';
 
-function jakartaTime(): string {
+// Diexport supaya dipakai di user-turn (ai.ts/react-agent.ts), BUKAN di sini.
+// SYSTEM_PROMPT harus tetap byte-identical antar request agar Gemini prompt
+// caching (implicit/explicit) bisa hit — kalau timestamp ada di system prompt,
+// string berubah setiap menit dan cache selalu miss, termasuk di loop agentic
+// yang ngirim system prompt yang sama berkali-kali per 1 pesan user.
+export function jakartaTime(): string {
   return new Date().toLocaleString('id-ID', {
     timeZone: 'Asia/Jakarta',
     weekday: 'long',
@@ -34,7 +39,8 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
 
 return `
 # SITUASI
-${jakartaTime()} WIB | Unit: **${model}** (${machineType}) | Teknisi: ${userName}
+Unit: **${model}** (${machineType}) | Teknisi: ${userName}
+(Waktu saat ini disisipkan di awal pesan user setiap request — pakai itu kalau relevan, jangan asumsi dari training data.)
 
 ---
 

@@ -3,7 +3,7 @@
 // Loop: Reason → Act (tool) → Observe → Reason → ... → Final Answer (streamed).
 
 import { UnitModel, Message } from '../types';
-import { SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import {
   callProxy,
   callProxyStream,
@@ -69,7 +69,10 @@ function buildInitialContents(history: Message[], userInput: string, window = 20
       role: m.role === 'user' ? ('user' as const) : ('model' as const),
       parts: [{ text: m.content }] as Part[],
     }));
-  contents.push({ role: 'user', parts: [{ text: userInput }] });
+  // Timestamp di user-turn, BUKAN system prompt — systemInstruction di loop ReAct
+  // dikirim ulang tiap iterasi (sampai 4x per 1 pesan user), jadi harus byte-identical
+  // antar call agar prompt caching bisa hit (lihat constants.ts).
+  contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userInput}` }] });
   return contents;
 }
 

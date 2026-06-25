@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 
@@ -941,7 +941,9 @@ export async function generateResponseStream(
     ? `${trimmed || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
     : (trimmed || 'Halo');
 
-  contents.push({ role: 'user', parts: [{ text: userText }] });
+  // Timestamp di user-turn, BUKAN system prompt — system prompt harus tetap
+  // byte-identical antar request agar prompt caching bisa hit (lihat constants.ts).
+  contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
   const fullText = await callProxyStream({
     contents,
@@ -1078,7 +1080,9 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
-    contents.push({ role: 'user', parts: currentParts });
+    // Timestamp di user-turn, BUKAN system prompt (lihat constants.ts) — part terpisah,
+    // tidak mengganggu urutan image/text part yang sudah disusun di currentParts.
+    contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     const res = await callProxy({
       contents,
