@@ -270,6 +270,39 @@ function computeConfidence(scored: RerankedDoc[]): { confidence: 'high' | 'mediu
   return { confidence: 'low', topScore };
 }
 
+// ── MMR (Maximal Marginal Relevance) ────────────────────────────────────────
+// Pilih dokumen yang RELEVAN ke query TAPI saling MELENGKAPI — bukan top-k yang isinya
+// 3 chunk nyaris kembar (mis. 3 section promo mirip / 3 langkah prosedur sama). Hasil:
+// konteks ke AI lebih kaya info → jawaban lebih lengkap & akurat.
+// MMR = argmax[ λ·relevance(d) − (1−λ)·max overlap(d, selected) ]
+// Redundansi diukur via Jaccard token (lexical) — deterministik, tanpa embedding tambahan.
+function mmrTokens(s: string): Set<string> {
+  return new Set(s.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
+}
+function mmrJaccard(a: Set<string>, b: Set<string>): number {
+  if (a.size === 0 || b.size === 0) return 0;
+  let inter = 0;
+  for (const t of a) if (b.has(t)) inter++;
+  return inter / (a.size + b.size - inter);
+}
+function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedDoc[] {
+  if (docs.length <= finalN) return docs;
+  const pool = docs.map(d => ({ d, tok: mmrTokens(d.content) }));
+  pool.sort((a, b) => b.d.score - a.d.score);
+  const selected = [pool.shift()!]; // seed: relevansi tertinggi
+  while (selected.length < finalN && pool.length > 0) {
+    let bestIdx = 0, best = -Infinity;
+    for (let i = 0; i < pool.length; i++) {
+      let maxSim = 0;
+      for (const s of selected) maxSim = Math.max(maxSim, mmrJaccard(pool[i].tok, s.tok));
+      const mmr = lambda * pool[i].d.score - (1 - lambda) * maxSim;
+      if (mmr > best) { best = mmr; bestIdx = i; }
+    }
+    selected.push(pool.splice(bestIdx, 1)[0]);
+  }
+  return selected.map(s => s.d);
+}
+
 
 // Daftar nama model — distrip dari query sebelum embedding karena model
 // sudah difilter via Supabase metadata. Menyertakan nama model di query
@@ -354,6 +387,9 @@ const SPEC_TERMS = new Set([
   'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
   'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
   'resistance', 'flow', 'dimension', 'dimensi', 'gap', 'speed',
+  // Dimensi/ukuran — sering ditanya untuk pin/shaft/bushing/bore
+  'diameter', 'dia', 'length', 'panjang', 'width', 'lebar', 'height', 'tinggi',
+  'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore',
 ]);
 
 function expandQuery(query: string): string {
@@ -703,11 +739,15 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
-  const { docs: top, error: rerankErr } = await rerankWithCohere(primaryQuery, filteredDocs, topN);
+  // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
+  const rerankPool = Math.min(filteredDocs.length, Math.max(topN * 2, 6));
+  const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, filteredDocs, rerankPool);
+  // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
+  const top = mmrSelect(reranked, topN, 0.7);
   const { confidence, topScore } = computeConfidence(top);
 
-  console.info('[confidence] tm tier=%s topScore=%s docs=%d',
-    confidence, topScore.toFixed(2), top.length);
+  console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR)',
+    confidence, topScore.toFixed(2), reranked.length, top.length);
 
   // Loose-filter fallback → downgrade confidence ke medium supaya AI inject caveat verifikasi
   const effectiveConfidence = usedLooseFallback && confidence === 'high' ? 'medium' : confidence;
