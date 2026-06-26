@@ -7,6 +7,8 @@ import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
 import { hasProceduralContent } from '../lib/checklist';
+import { saveFeedback } from '../services/supabase';
+import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../services/ai';
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
@@ -314,12 +316,26 @@ const MessageItem = memo(function MessageItem({
 export function ChatWindow({
   messages, isTyping, isStreaming, selectedModel, onSendMessage, onRetry, userName, hasHistory = false, onOpenChecklist, agentEvents = [],
 }: ChatWindowProps) {
+  const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
 
   const handleFeedback = (id: string, type: 'up' | 'down') => {
-    setFeedback(prev => ({ ...prev, [id]: prev[id] === type ? null : type }));
+    setFeedback(prev => {
+      const next = prev[id] === type ? null : type;
+      // Persist HANYA saat memberi rating (bukan saat membatalkan) → sinyal learning loop.
+      if (next && user) {
+        const idx = messages.findIndex(m => m.id === id);
+        const answer = idx >= 0 ? (messages[idx]?.content ?? '') : '';
+        let question = '';
+        for (let i = idx - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') { question = messages[i].content; break; }
+        }
+        saveFeedback({ userId: user.uid, messageId: id, rating: next, question, answer, model: selectedModel }).catch(() => {});
+      }
+      return { ...prev, [id]: next };
+    });
   };
 
   const handleScroll = useCallback(() => {

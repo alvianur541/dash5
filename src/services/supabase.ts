@@ -108,6 +108,36 @@ export async function deleteAllChatSessions(userId: string): Promise<void> {
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
 }
 
+// ── Feedback learning loop ("backprop-spirit") ──────────────────────────────
+// Persist rating 👍/👎 + pertanyaan + jawaban → sinyal untuk perbaikan berkelanjutan
+// (audit jawaban buruk, kelak fine-tuning / RLHF). Fire-and-forget, fail-silent:
+// kalau tabel message_feedback belum dibuat, insert error tertangkap → tidak ganggu UX.
+// SQL tabel ada di catatan (jalankan di Supabase saat siap).
+export async function saveFeedback(payload: {
+  userId: string;
+  messageId: string;
+  rating: 'up' | 'down';
+  question: string;
+  answer: string;
+  model: string;
+}): Promise<void> {
+  if (!supabase) return;
+  try {
+    const { error } = await supabase.from('message_feedback').upsert({
+      user_id: payload.userId,
+      message_id: payload.messageId,
+      rating: payload.rating,
+      question: payload.question.slice(0, 2000),
+      answer: payload.answer.slice(0, 8000),
+      model: payload.model,
+      created_at: new Date().toISOString(),
+    }, { onConflict: 'message_id' });
+    if (error) console.warn('[feedback] tidak tersimpan (tabel message_feedback ada?):', error.message);
+  } catch (e) {
+    console.warn('[feedback] gagal simpan:', (e as Error)?.message);
+  }
+}
+
 const VECTOR_SIMILARITY_THRESHOLD = 0.35;
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
