@@ -154,8 +154,11 @@ async function analyzeIntent(
   history: Message[],
   _model: UnitModel,  // reserved — akan dipakai kalau ada prompt variasi per model
 ): Promise<IntentAnalysis> {
-  const ctx = history.slice(-3)
-    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 150)}`)
+  // Window konteks lebih lebar (6 pesan, 300 char) — follow-up sering merujuk PN/komponen
+  // dari jawaban AI beberapa giliran sebelumnya ("harganya?", "diameternya?", "yang tadi").
+  const ctx = history.slice(-6)
+    .filter(m => m.content?.trim())
+    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
     .join('\n');
 
   const systemPrompt = `You are a query classifier and optimizer for Hitachi/KCM heavy equipment documentation search.
@@ -799,25 +802,39 @@ async function resolveNaturalLanguageQuery(
 // paralel, gabung. Deterministik, BUKAN ReAct loop (yang rapuh/lambat/400-prone).
 
 const MULTI_CONNECTOR_RE = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i;
-const MULTI_TECH_RE = /\b(?:berat|weight|diameter|dia|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\b/i;
+// \w* di akhir grup → toleran sufiks Indonesia (beratnya/diameternya/panjangnya).
+const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
+// Atribut/permintaan terukur — buat deteksi follow-up pendek multi-atribut ("berat dan diameternya").
+const MULTI_ATTR_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|tekanan|pressure|torque|torsi|clearance|displacement|kapasitas|capacity|rpm|harga|price|part\s*number|partnumber|pn|spec|ukuran|size)\w*/gi;
 
 function isMultiAspectQuery(q: string): boolean {
   if (!MULTI_CONNECTOR_RE.test(q)) return false;
-  if (q.split(/\s+/).filter(Boolean).length < 5) return false;
-  return MULTI_TECH_RE.test(q);
+  if (!MULTI_TECH_RE.test(q)) return false;
+  const words = q.split(/\s+/).filter(Boolean).length;
+  const attrCount = (q.match(MULTI_ATTR_RE) ?? []).length;
+  // ≥5 kata (query penuh) ATAU ≥2 atribut terukur (follow-up pendek "berat dan diameternya").
+  return words >= 5 || attrCount >= 2;
 }
 
 // Pecah query → array sub-query English (1 komponen+atribut tiap item). Max 4.
-async function decomposeAspects(query: string): Promise<string[]> {
+// Sadar-konteks: resolusi rujukan ("itu/nya/tadi") ke komponen dari percakapan sebelumnya.
+async function decomposeAspects(query: string, history: Message[] = []): Promise<string[]> {
   const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE component+attribute each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
+RESOLVE references (itu/ini/nya/tadi/tersebut) to the concrete component from the conversation context. If user says "berat & diameternya" after discussing a pin, expand to that component.
 Examples:
 "berat swing motor dan partnumber rotor" -> ["swing motor weight","rotor part number"]
 "diameter pin bucket dan part numbernya" -> ["bucket pin diameter","bucket pin part number"]
 "harga seal kit swing dan o-ring" -> ["swing motor seal kit price","o-ring price"]
-"swing lambat dan pump bocor" -> ["swing motor slow response","hydraulic pump leak"]`;
+"swing lambat dan pump bocor" -> ["swing motor slow response","hydraulic pump leak"]
+[ctx: bahas swing motor] "berat dan diameternya" -> ["swing motor weight","swing motor diameter"]`;
+  const ctx = history.slice(-4)
+    .filter(m => m.content?.trim())
+    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
+    .join('\n');
+  const userMsg = ctx ? `Conversation so far:\n${ctx}\n\nDecompose this latest query: "${query}"` : `Decompose: "${query}"`;
   try {
     const res = await callProxy({
-      contents: [{ role: 'user', parts: [{ text: `Decompose: "${query}"` }] }],
+      contents: [{ role: 'user', parts: [{ text: userMsg }] }],
       systemInstruction: { parts: [{ text: SYS }] },
       generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
@@ -839,7 +856,7 @@ async function resolveMultiAspectQuery(
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
   emit({ type: 'thinking', message: 'Memecah query jadi beberapa aspek…' });
-  const subs = await decomposeAspects(trimmed);
+  const subs = await decomposeAspects(trimmed, history);
   // Decompose gagal / cuma 1 aspek → balik ke jalur NL biasa (single search).
   if (subs.length < 2) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
