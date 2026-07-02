@@ -23,12 +23,19 @@ export function ResetPasswordPage({ theme, onThemeToggle }: ResetPasswordPagePro
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (password.length < 6) { setError('Password minimal 6 karakter.'); return; }
+    if (password.length < 8) { setError('Password minimal 8 karakter.'); return; }
     if (password !== confirm) { setError('Password tidak cocok.'); return; }
     setLoading(true);
     const result = await updatePassword(password);
     setLoading(false);
-    if (!result.ok) { setError(result.error || 'Gagal update password.'); return; }
+    if (!result.ok) {
+      // L-3: map error mentah ke pesan generik.
+      const m = result.error?.toLowerCase() ?? '';
+      setError(m.includes('weak') || m.includes('at least') || m.includes('should be')
+        ? 'Password terlalu lemah — minimal 8 karakter.'
+        : 'Gagal update password. Coba lagi.');
+      return;
+    }
     setSuccess(true);
   };
 

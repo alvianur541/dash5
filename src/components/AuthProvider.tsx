@@ -26,11 +26,20 @@ async function resolveAuthEmail(input: string): Promise<string> {
   const trimmed = input.trim();
   if (trimmed.includes('@')) return trimmed;
   if (!supabase) return `${trimmed.toLowerCase()}@dash5.internal`;
+  const nik = trimmed.toUpperCase();
+  // M-2: pakai RPC SECURITY DEFINER (lookup_auth_email) — 1 NIK → 1 email, TANPA
+  // enumeration. RPC dulu; kalau belum ter-deploy, fallback ke tabel (perilaku lama).
+  // Setelah migrasi (RPC dibuat + policy anon SELECT dicabut), jalur tabel otomatis mati
+  // dan RPC yang dipakai → enumeration NIK→email lewat anon key tertutup.
+  try {
+    const { data, error } = await supabase.rpc('lookup_auth_email', { p_nik: nik });
+    if (!error && typeof data === 'string' && data) return data;
+  } catch { /* RPC belum ada → fallback di bawah */ }
   try {
     const { data } = await supabase
       .from('user_niks')
       .select('auth_email')
-      .eq('nik', trimmed.toUpperCase())
+      .eq('nik', nik)
       .single();
     return data?.auth_email ?? `${trimmed.toLowerCase()}@dash5.internal`;
   } catch {

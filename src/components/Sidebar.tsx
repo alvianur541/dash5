@@ -70,13 +70,20 @@ export function Sidebar({
   const handleChangePassword = async (e: { preventDefault: () => void }) => {
     e.preventDefault();
     setPwError(null);
-    if (pwNew.length < 6) { setPwError('Password minimal 6 karakter.'); return; }
+    if (pwNew.length < 8) { setPwError('Password minimal 8 karakter.'); return; }
     if (pwNew !== pwConfirm) { setPwError('Password tidak cocok.'); return; }
     if (!supabase) { setPwError('Layanan tidak tersedia.'); return; }
     setPwLoading(true);
     const { error } = await supabase.auth.updateUser({ password: pwNew });
     setPwLoading(false);
-    if (error) { setPwError(error.message || 'Gagal ganti password.'); return; }
+    if (error) {
+      // L-3: jangan surface error mentah dari Supabase ke UI.
+      const m = error.message?.toLowerCase() ?? '';
+      setPwError(m.includes('weak') || m.includes('at least') || m.includes('should be')
+        ? 'Password terlalu lemah — minimal 8 karakter.'
+        : 'Gagal ganti password. Coba lagi.');
+      return;
+    }
     setPwSuccess(true);
     setTimeout(() => {
       setShowChangePw(false);
