@@ -1,9 +1,7 @@
 const express = require('express');
-const rateLimit = require('express-rate-limit');
 const { GoogleAuth } = require('google-auth-library');
 
 const app = express();
-app.set('trust proxy', 1); // Cloud Run = 1 proxy hop (untuk rate-limit key & req.ip)
 app.use(express.json({ limit: '20mb' }));
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
@@ -22,48 +20,10 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
-// ── H-1: whitelist model + cap token + allowlist field yang di-forward ke Vertex ──
-const ALLOWED_MODELS = new Set([
-  'gemini-2.5-flash',
-  'gemini-3.5-flash',
-  'gemini-3.1-flash-lite',
-]);
-const MAX_OUTPUT_TOKENS = 16384; // hard cap — cegah cost amplification (image path pakai 16384)
-
-function buildSafeBody(reqBody) {
-  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = reqBody || {};
-  if (!ALLOWED_MODELS.has(model)) {
-    throw Object.assign(new Error('model not allowed'), { status: 400 });
-  }
-  const generationConfig = {
-    ...(body.generationConfig || {}),
-    maxOutputTokens: Math.min(body.generationConfig?.maxOutputTokens ?? 2048, MAX_OUTPUT_TOKENS),
-  };
-  const tools = enableGoogleSearch
-    ? [...(body.tools || []), { googleSearch: {} }]
-    : body.tools;
-  // Allowlist field — JANGAN spread ...body (cegah field arbitrer masuk ke Vertex)
-  const safeBody = { contents: body.contents, generationConfig };
-  if (body.systemInstruction) safeBody.systemInstruction = body.systemInstruction;
-  if (tools) safeBody.tools = tools;
-  if (body.toolConfig) safeBody.toolConfig = body.toolConfig;
-  return { model, safeBody };
-}
-
-// ── H-2: rate limit per-user (key = user id dari JWT; fallback IP) ──
-const perUserLimiter = rateLimit({
-  windowMs: 60_000,   // 1 menit
-  max: 30,            // 30 request / user / menit
-  standardHeaders: true,
-  legacyHeaders: false,
-  keyGenerator: (req) => req.userId || req.ip,
-});
-
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  // M-1: HANYA origin yang match ALLOWED_ORIGIN — tidak ada cabang wildcard di prod.
-  if (origin === ALLOWED_ORIGIN) {
-    res.setHeader('Access-Control-Allow-Origin', ALLOWED_ORIGIN);
+  if (ALLOWED_ORIGIN === '*' || origin === ALLOWED_ORIGIN) {
+    res.setHeader('Access-Control-Allow-Origin', origin || ALLOWED_ORIGIN);
   }
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -81,9 +41,8 @@ async function verifyToken(req, res, next) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
   try {
-    const userId = await verifyJWT(authHeader.slice(7));
-    if (!userId) return res.status(401).json({ error: 'Invalid or expired token' });
-    req.userId = userId; // dipakai rate limiter (H-2) sebagai key per-user
+    const ok = await verifyJWT(authHeader.slice(7));
+    if (!ok) return res.status(401).json({ error: 'Invalid or expired token' });
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -133,37 +92,31 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// Cache: token → { exp, userId }. H-3: TTL 60 detik (revocation window kecil).
 const _jwtCache = new Map();
-const JWT_CACHE_TTL_MS = 60 * 1000;
 async function verifyJWT(token) {
   const hit = _jwtCache.get(token);
-  if (hit && Date.now() < hit.exp) return hit.userId;
+  if (hit && Date.now() < hit) return true;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
   });
-  if (!r.ok) return null;
-  let userId = null;
-  try { userId = (await r.json())?.id ?? null; } catch { /* body tak terbaca */ }
-  if (!userId) return null;
+  if (!r.ok) return false;
   if (_jwtCache.size >= 200) _jwtCache.delete(_jwtCache.keys().next().value);
-  _jwtCache.set(token, { exp: Date.now() + JWT_CACHE_TTL_MS, userId });
-  return userId;
+  _jwtCache.set(token, Date.now() + 5 * 60 * 1000);
+  return true;
 }
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.post('/v1/chat', verifyToken, perUserLimiter, async (req, res) => {
-  let model, safeBody;
-  try { ({ model, safeBody } = buildSafeBody(req.body)); }
-  catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+app.post('/v1/chat', verifyToken, async (req, res) => {
+  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
+  if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
 
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const { url, headers } = await resolveUpstream(model, { stream: false });
     const upstream = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(safeBody), signal: ctrl.signal,
+      method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
     const data = await upstream.json();
     if (!upstream.ok) {
@@ -179,10 +132,9 @@ app.post('/v1/chat', verifyToken, perUserLimiter, async (req, res) => {
   }
 });
 
-app.post('/v1/chat/stream', verifyToken, perUserLimiter, async (req, res) => {
-  let model, safeBody;
-  try { ({ model, safeBody } = buildSafeBody(req.body)); }
-  catch (e) { return res.status(e.status || 400).json({ error: e.message }); }
+app.post('/v1/chat/stream', verifyToken, async (req, res) => {
+  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
+  if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -196,7 +148,7 @@ app.post('/v1/chat/stream', verifyToken, perUserLimiter, async (req, res) => {
   try {
     const { url, headers } = await resolveUpstream(model, { stream: true });
     const upstream = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(safeBody), signal: ctrl.signal,
+      method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
 
     if (!upstream.ok) {
@@ -228,20 +180,12 @@ app.post('/v1/chat/stream', verifyToken, perUserLimiter, async (req, res) => {
   }
 });
 
-const ALLOWED_AUDIO = new Set(['audio/webm', 'audio/mp4', 'audio/mpeg', 'audio/wav', 'audio/ogg']);
-
-app.post('/v1/transcribe', verifyToken, perUserLimiter, async (req, res) => {
+app.post('/v1/transcribe', verifyToken, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) return res.status(400).json({ error: 'audio and mimeType are required' });
-  if (typeof audio !== 'string' || audio.length > 15_000_000) { // ~11MB base64 → ~8MB audio
-    return res.status(400).json({ error: 'audio payload invalid or too large' });
-  }
 
-  const cleanMimeType = String(mimeType).split(';')[0].trim().toLowerCase();
-  if (!ALLOWED_AUDIO.has(cleanMimeType)) { // M-4: whitelist mimeType
-    return res.status(400).json({ error: 'unsupported audio type' });
-  }
+  const cleanMimeType = mimeType.split(';')[0].trim();
   const url =
     `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
     `/locations/${LOCATION}/publishers/google/models/gemini-2.5-flash:generateContent`;
@@ -277,12 +221,10 @@ const upstream = await fetch(url, {
   }
 });
 
-app.post('/v1/embed', verifyToken, perUserLimiter, async (req, res) => {
+app.post('/v1/embed', verifyToken, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { query, task_type = 'RETRIEVAL_QUERY' } = req.body;
-  if (!query || typeof query !== 'string' || query.length > 8000) {
-    return res.status(400).json({ error: 'query must be a string ≤ 8000 chars' });
-  }
+  if (!query) return res.status(400).json({ error: 'query is required' });
 
   const url =
     `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
@@ -311,22 +253,17 @@ const upstream = await fetch(url, {
   }
 });
 
-app.post('/v1/rerank', verifyToken, perUserLimiter, async (req, res) => {
+app.post('/v1/rerank', verifyToken, async (req, res) => {
   if (COHERE_KEYS.length === 0) return res.status(500).json({ error: 'COHERE_API_KEY not configured' });
   const { query, documents, topN = 3 } = req.body;
-  if (!query || typeof query !== 'string') return res.status(400).json({ error: 'query is required' });
-  // M-4: validasi tipe + panjang array documents
-  if (!Array.isArray(documents) || documents.length === 0 || documents.length > 100) {
-    return res.status(400).json({ error: 'documents must be an array of 1-100 items' });
-  }
-  const safeTopN = Math.min(Math.max(parseInt(topN, 10) || 3, 1), 20);
+  if (!query || !documents) return res.status(400).json({ error: 'query and documents are required' });
 
   for (const key of COHERE_KEYS) {
     try {
       const upstream = await fetch('https://api.cohere.com/v2/rerank', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({ model: 'rerank-v4.0-fast', query, documents, top_n: safeTopN }),
+        body: JSON.stringify({ model: 'rerank-v4.0-fast', query, documents, top_n: topN }),
       });
       if (upstream.status === 429 || upstream.status === 401 || upstream.status === 403) {
         console.warn('Cohere key gagal (status %d), coba key berikutnya...', upstream.status);

@@ -73,7 +73,7 @@ Email login (Supabase Auth), with per-user chat session history saved and retrie
 - **Always uses the latest pricing** — the promo system automatically prioritizes the newest active period, preventing the AI from quoting expired prices
 - **Automatic 2nd-pass lookup** — a fault code found in the Technical Manual automatically triggers a follow-up search in the Engine Manual (DTC P-code) with no extra instruction needed
 - **Dual-mode** — fast, stable deterministic routing by default, plus a full agentic (ReAct) path for complex cases
-- **Input hardening** — basic instruction-marker stripping on user input + strict output sanitization (markdown whitelist, no `dangerouslySetInnerHTML`). Note: this reduces, but does not fully prevent, LLM prompt injection — the primary safeguard is grounding (answers must come from retrieved data, not free generation)
+- **Prompt injection defense** — user input is sanitized before being sent to the model
 
 ## 7. Project Status
 
