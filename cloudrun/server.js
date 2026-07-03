@@ -14,9 +14,9 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 // Cost ledger (usage_logs) — service_role key HANYA di server (jangan pernah ke client).
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '0.30'); // per 1M input token
-const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '2.50'); // per 1M output token
-const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '16300');
+const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.5-flash: $1.50 / 1M input
+const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '9.00'); // gemini-3.5-flash: $9.00 / 1M output (incl. thinking)
+const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '17000');
 
 // Dashboard monitoring — HANYA admin (owner) yang boleh lihat data semua teknisi.
 // Admin = akun owner alvianur@gmail.com (login via NIK H0001846). Tambah admin lain
