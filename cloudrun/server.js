@@ -319,8 +319,11 @@ app.post('/v1/usage', verifyToken, async (req, res) => {
     cost_idr: Number(costIdr.toFixed(2)),
   };
 
+  const SUPA = SUPABASE_URL.replace(/\/+$/, ''); // buang trailing slash → cegah // di path
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/usage_logs`, {
+    const r = await fetch(`${SUPA}/rest/v1/usage_logs`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -329,6 +332,7 @@ app.post('/v1/usage', verifyToken, async (req, res) => {
         'Prefer': 'return=minimal',
       },
       body: JSON.stringify(row),
+      signal: ctrl.signal,
     });
     if (!r.ok) {
       console.error('usage_logs insert failed:', r.status, await r.text());
@@ -336,8 +340,15 @@ app.post('/v1/usage', verifyToken, async (req, res) => {
     }
     return res.status(201).json({ ok: true });
   } catch (err) {
-    console.error('usage_logs insert error:', err);
+    // Diagnostik: cause (ENOTFOUND/ECONNREFUSED/timeout/cert) + host target + panjang key.
+    const cause = err && err.cause ? (err.cause.code || err.cause.message || String(err.cause)) : undefined;
+    let host = '(parse fail)';
+    try { host = new URL(`${SUPA}/rest/v1/usage_logs`).host; } catch {}
+    console.error('usage_logs insert error:', err && err.message,
+      '| cause:', cause, '| host:', host, '| urlSet:', !!SUPABASE_URL, '| keyLen:', (SUPABASE_SERVICE_KEY || '').length);
     return res.status(500).json({ error: 'ledger error' });
+  } finally {
+    clearTimeout(timer);
   }
 });
 
