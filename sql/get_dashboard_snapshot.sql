@@ -1,8 +1,9 @@
 -- Monitoring dashboard snapshot (admin-only).
 -- Dipanggil oleh Cloud Run GET /v1/dashboard via service_role (RLS bypass).
--- Gate admin ada di server.js (ADMIN_EMAILS) — fungsi ini sengaja di-revoke dari
--- anon & authenticated supaya tidak bisa dipanggil langsung dari client.
--- Sudah di-apply ke Supabase project ipoxxshvtkragylisogv (migration: dashboard_snapshot_fn).
+-- Gate admin ada di server.js (ADMIN_EMAILS) — fungsi ini di-revoke dari anon &
+-- authenticated supaya tidak bisa dipanggil langsung dari client.
+-- Applied ke Supabase ipoxxshvtkragylisogv (migration terakhir: dashboard_snapshot_v2_hourly).
+-- v2: + hourly (0-23 WIB hari ini), + totals.input_tokens/output_tokens, + per_tool.idr.
 
 create or replace function public.get_dashboard_snapshot()
 returns jsonb
@@ -18,6 +19,8 @@ as $$
       count(*)::int                                                          as questions,
       count(distinct coalesce(nullif(trim(user_name),''), user_nik))::int    as technicians,
       coalesce(sum(input_tokens + output_tokens),0)::bigint                   as tokens,
+      coalesce(sum(input_tokens),0)::bigint                                   as input_tokens,
+      coalesce(sum(output_tokens),0)::bigint                                  as output_tokens,
       coalesce(sum(cost_idr),0)::numeric                                      as idr,
       coalesce(sum(cost_usd),0)::numeric                                      as usd,
       max(created_at)                                                         as last_at
@@ -31,6 +34,18 @@ as $$
     from logs
     where (created_at at time zone 'Asia/Jakarta')::date
         = (now() at time zone 'Asia/Jakarta')::date
+  ),
+  hourly as (
+    select
+      g.jam,
+      count(l.id)::int                                          as query,
+      coalesce(sum(l.input_tokens + l.output_tokens),0)::bigint as tokens,
+      coalesce(sum(l.cost_idr),0)::numeric                      as idr
+    from generate_series(0,23) as g(jam)
+    left join logs l
+      on extract(hour from l.created_at at time zone 'Asia/Jakarta')::int = g.jam
+     and (l.created_at at time zone 'Asia/Jakarta')::date = (now() at time zone 'Asia/Jakarta')::date
+    group by g.jam
   ),
   per_user as (
     select
@@ -49,7 +64,9 @@ as $$
     from logs group by 1 order by idr desc
   ),
   per_tool as (
-    select tool, count(*)::int as kali
+    select tool,
+      count(*)::int          as kali,
+      sum(cost_idr)::numeric as idr
     from logs,
          unnest(case when tools_used is null or array_length(tools_used,1) is null
                      then array['(tanpa tool)'] else tools_used end) as tool
@@ -89,10 +106,11 @@ as $$
     'generated_at', now(),
     'totals',    (select row_to_json(t) from totals t),
     'today',     (select row_to_json(t) from today t),
+    'hourly',    coalesce((select jsonb_agg(row_to_json(h) order by h.jam) from hourly h), '[]'::jsonb),
     'per_user',  coalesce((select jsonb_agg(row_to_json(p)) from per_user  p), '[]'::jsonb),
     'per_model', coalesce((select jsonb_agg(row_to_json(p)) from per_model p), '[]'::jsonb),
     'per_tool',  coalesce((select jsonb_agg(row_to_json(p)) from per_tool  p), '[]'::jsonb),
-    'daily',     coalesce((select jsonb_agg(row_to_json(d)) from daily     d), '[]'::jsonb),
+    'daily',     coalesce((select jsonb_agg(row_to_json(d) order by d.hari) from daily d), '[]'::jsonb),
     'recent',    coalesce((select jsonb_agg(row_to_json(r)) from recent    r), '[]'::jsonb),
     'census',    (select row_to_json(c) from census c)
   );
