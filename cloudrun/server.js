@@ -18,9 +18,15 @@ const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  |
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '2.50'); // per 1M output token
 const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '16300');
 
-// Dashboard monitoring — HANYA admin yang boleh lihat data semua teknisi.
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'h0001846@dash5.internal')
+// Dashboard monitoring — HANYA admin (owner) yang boleh lihat data semua teknisi.
+// Admin = akun owner alvianur@gmail.com (login via NIK H0001846). Tambah admin lain
+// via env ADMIN_EMAILS (comma-separated) kalau perlu.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'alvianur@gmail.com')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
+function isAdminUser(user) {
+  return ADMIN_EMAILS.includes(String(user?.email || '').toLowerCase());
+}
 
 const COHERE_KEYS = [
   process.env.COHERE_API_KEY,
@@ -143,7 +149,7 @@ app.get('/v1/dashboard', async (req, res) => {
   }
   const user = await getAuthUser(authHeader.slice(7));
   if (!user || !user.email) return res.status(401).json({ error: 'Invalid or expired token' });
-  if (!ADMIN_EMAILS.includes(String(user.email).toLowerCase())) {
+  if (!isAdminUser(user)) {
     return res.status(403).json({ error: 'Halaman monitoring khusus admin.' });
   }
 

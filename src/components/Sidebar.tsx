@@ -7,7 +7,8 @@ import { supabase } from '../services/supabase';
 import { SupportModal } from './SupportModal';
 import { MonitorModal } from './MonitorModal';
 
-const ADMIN_EMAIL = 'h0001846@dash5.internal';
+// Panel Monitoring khusus owner: alvianur@gmail.com (login via NIK H0001846).
+const ADMIN_EMAILS = ['alvianur@gmail.com'];
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
@@ -63,7 +64,7 @@ export function Sidebar({
   const [showHistory, setShowHistory] = useState(true);
   const [showSupport, setShowSupport] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
-  const isAdmin = (user?.email ?? '').toLowerCase() === ADMIN_EMAIL;
+  const isAdmin = ADMIN_EMAILS.includes((user?.email ?? '').toLowerCase());
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
