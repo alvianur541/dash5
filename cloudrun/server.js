@@ -18,6 +18,10 @@ const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  |
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '2.50'); // per 1M output token
 const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '16300');
 
+// Dashboard monitoring — HANYA admin yang boleh lihat data semua teknisi.
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'h0001846@dash5.internal')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+
 const COHERE_KEYS = [
   process.env.COHERE_API_KEY,
   process.env.COHERE_API_KEY_2,
@@ -31,7 +35,7 @@ app.use((req, res, next) => {
   if (ALLOWED_ORIGIN === '*' || origin === ALLOWED_ORIGIN) {
     res.setHeader('Access-Control-Allow-Origin', origin || ALLOWED_ORIGIN);
   }
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -111,7 +115,73 @@ async function verifyJWT(token) {
   return true;
 }
 
+// Ambil user Supabase dari token (untuk cek admin). Return object user atau null.
+async function getAuthUser(token) {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
+    });
+    if (!r.ok) return null;
+    return await r.json();
+  } catch { return null; }
+}
+
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// ── Monitoring dashboard (admin-only) ─────────────────────────────────────────
+// Baca agregat usage_logs + census via service_role (RLS bypass). Gate: email
+// requester HARUS ada di ADMIN_EMAILS, supaya teknisi biasa tidak lihat data
+// semua orang. 1 RPC get_dashboard_snapshot() → 1 round-trip, snapshot atomik.
+app.get('/v1/dashboard', async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Auth service misconfigured' });
+  if (!SUPABASE_SERVICE_KEY)               return res.status(503).json({ error: 'Dashboard not configured' });
+
+  const authHeader = req.headers['authorization'];
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Missing authorization token' });
+  }
+  const user = await getAuthUser(authHeader.slice(7));
+  if (!user || !user.email) return res.status(401).json({ error: 'Invalid or expired token' });
+  if (!ADMIN_EMAILS.includes(String(user.email).toLowerCase())) {
+    return res.status(403).json({ error: 'Halaman monitoring khusus admin.' });
+  }
+
+  const SUPA = SUPABASE_URL.replace(/\/+$/, '');
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  try {
+    const r = await fetch(`${SUPA}/rest/v1/rpc/get_dashboard_snapshot`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Connection': 'close',
+      },
+      body: '{}',
+      signal: ctrl.signal,
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      console.error('dashboard rpc failed:', r.status, JSON.stringify(data));
+      return res.status(502).json({ error: 'snapshot failed' });
+    }
+    return res.json({
+      snapshot: data,
+      pricing: {
+        inputPerMUsd:  GEMINI_INPUT_PRICE_USD,
+        outputPerMUsd: GEMINI_OUTPUT_PRICE_USD,
+        usdToIdr:      USD_TO_IDR,
+      },
+    });
+  } catch (err) {
+    console.error('dashboard error:', err && err.message);
+    return res.status(500).json({ error: 'dashboard error' });
+  } finally {
+    clearTimeout(timer);
+  }
+});
 
 app.post('/v1/chat', verifyToken, async (req, res) => {
   const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
