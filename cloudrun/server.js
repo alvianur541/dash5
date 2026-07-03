@@ -320,35 +320,44 @@ app.post('/v1/usage', verifyToken, async (req, res) => {
   };
 
   const SUPA = SUPABASE_URL.replace(/\/+$/, ''); // buang trailing slash → cegah // di path
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 10_000);
+  const url = `${SUPA}/rest/v1/usage_logs`;
+  const headers = {
+    'Content-Type': 'application/json',
+    'apikey': SUPABASE_SERVICE_KEY,
+    'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+    'Prefer': 'return=minimal',
+    'Connection': 'close', // koneksi fresh tiap call → hindari keep-alive stale ("fetch failed")
+  };
+  const payload = JSON.stringify(row);
+  async function attempt() {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 10_000);
+    try { return await fetch(url, { method: 'POST', headers, body: payload, signal: ctrl.signal }); }
+    finally { clearTimeout(timer); }
+  }
+
   try {
-    const r = await fetch(`${SUPA}/rest/v1/usage_logs`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_SERVICE_KEY,
-        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
-        'Prefer': 'return=minimal',
-      },
-      body: JSON.stringify(row),
-      signal: ctrl.signal,
-    });
+    let r;
+    try {
+      r = await attempt();
+    } catch (e1) {
+      // Retry sekali — mitigasi koneksi undici yang stale / transient network.
+      console.warn('usage_logs retry, cause:', (e1 && e1.cause && e1.cause.code) || (e1 && e1.message));
+      r = await attempt();
+    }
     if (!r.ok) {
       console.error('usage_logs insert failed:', r.status, await r.text());
       return res.status(502).json({ error: 'ledger insert failed' });
     }
     return res.status(201).json({ ok: true });
   } catch (err) {
-    // Diagnostik: cause (ENOTFOUND/ECONNREFUSED/timeout/cert) + host target + panjang key.
+    // Diagnostik: cause (ENOTFOUND/ECONNREFUSED/timeout/cert) + host + apakah env ke-set.
     const cause = err && err.cause ? (err.cause.code || err.cause.message || String(err.cause)) : undefined;
     let host = '(parse fail)';
-    try { host = new URL(`${SUPA}/rest/v1/usage_logs`).host; } catch {}
+    try { host = new URL(url).host; } catch {}
     console.error('usage_logs insert error:', err && err.message,
       '| cause:', cause, '| host:', host, '| urlSet:', !!SUPABASE_URL, '| keyLen:', (SUPABASE_SERVICE_KEY || '').length);
     return res.status(500).json({ error: 'ledger error' });
-  } finally {
-    clearTimeout(timer);
   }
 });
 
