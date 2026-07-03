@@ -85,6 +85,22 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
   }
 }
 
+// ── Token usage accumulator (per pertanyaan) ────────────────────────────────
+// callProxy/callProxyStream menambah token ke sini. resetUsage() dipanggil di awal
+// tiap entry publik (generateResponse*), getQuestionUsage() dibaca App.tsx setelah
+// jawaban selesai → dikirim ke ledger /v1/usage. Single-active-question (frontend
+// abort pertanyaan sebelumnya) → accumulator module-level aman.
+let _usage = { input: 0, output: 0, calls: 0 };
+export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0 }; }
+export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
+  return { ..._usage, model: MODEL };
+}
+function addUsage(input?: number, output?: number): void {
+  _usage.input += input || 0;
+  _usage.output += output || 0;
+  _usage.calls += 1;
+}
+
 export async function callProxy(body: VRequest, enableGoogleSearch = false, modelOverride?: string): Promise<VResponse> {
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -98,7 +114,10 @@ export async function callProxy(body: VRequest, enableGoogleSearch = false, mode
     const err = await res.text();
     throw new Error(`Vertex AI error ${res.status}: ${err}`);
   }
-  return res.json() as Promise<VResponse>;
+  const json = await res.json();
+  const u = json?.usageMetadata ?? {};
+  addUsage(u.promptTokenCount, u.candidatesTokenCount);
+  return json as VResponse;
 }
 
 export function getText(parts: Part[]): string {
@@ -350,6 +369,7 @@ export async function callProxyStream(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
+  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -363,11 +383,13 @@ export async function callProxyStream(
       if (!jsonStr || jsonStr === '[DONE]') continue;
       try {
         const json = JSON.parse(jsonStr);
+        if (json.usageMetadata) lastUsage = json.usageMetadata; // kumulatif; chunk terakhir menang
         const text = getText(json.candidates?.[0]?.content?.parts ?? []);
         if (text) { fullText += text; onChunk(text); }
       } catch { /* ignore malformed chunk */ }
     }
   }
+  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
   return fullText;
 }
 
@@ -907,6 +929,7 @@ export async function generateResponseStream(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
+  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
   // Progress indicator — single-pass juga tampilkan "Menganalisa query… / Mencari di …"
   // supaya UI terasa menganalisa (sebelumnya hanya jalur agentic yang punya indikator).
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
@@ -990,6 +1013,7 @@ export async function generateResponseAgentic(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
+  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
   // Sanitize input — sama defense seperti generateResponseStream
   const sanitized = userInput
     .slice(0, 4000)
@@ -1015,6 +1039,7 @@ export async function generateResponse(
   userInput: string,
   attachments?: File[]
 ): Promise<string> {
+  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];

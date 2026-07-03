@@ -7,7 +7,8 @@ import { LoginPage } from './components/LoginPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { ChecklistModal } from './components/ChecklistModal';
 import { UnitModel, Message, SessionMeta } from './types';
-import { generateResponse, generateResponseStream, generateResponseAgentic, type AgentEvent } from './services/ai';
+import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, type AgentEvent } from './services/ai';
+import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared } from './services/storage';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw } from 'lucide-react';
@@ -189,6 +190,23 @@ export default function App() {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
   }, []);
 
+  // Cost ledger: kirim total token 1 pertanyaan ke /v1/usage (fire-and-forget).
+  // Dibaca dari accumulator ai.ts setelah jawaban selesai. tools = dari agent events.
+  const logCost = useCallback((sid: string | null, tools: string[]) => {
+    if (!user) return;
+    const u = getQuestionUsage();
+    logQuestionUsage({
+      userName: user.displayName || 'Operator',
+      userNik: user.email ?? null,
+      sessionId: sid,
+      model: u.model,
+      inputTokens: u.input,
+      outputTokens: u.output,
+      llmCalls: u.calls,
+      toolsUsed: tools,
+    });
+  }, [user]);
+
   // Refresh manual: paksa cek update service worker → tunggu SW baru aktif → reload.
   // Mengatasi masalah PWA serve kode lama (StaleWhileRevalidate) tanpa perlu unregister SW manual.
   const handleRefresh = useCallback(async () => {
@@ -262,11 +280,13 @@ export default function App() {
       saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
     };
 
+    const toolsUsed = new Set<string>();
     try {
       if (attachments && attachments.length > 0) {
         const response = await generateResponse(selectedModel, userName, currentMessages, content, attachments);
         setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: response, timestamp: Date.now() }]);
         persist(response);
+        logCost(sessionId, []);
       } else {
         const assistantId = crypto.randomUUID();
         const assistantTs = Date.now();
@@ -309,6 +329,7 @@ export default function App() {
         const onAgentEventCb = (event: AgentEvent) => {
           if (!mountedRef.current) return;
           if (sessionIdRef.current !== sessionSnapshot) return;
+          if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
           setAgentEvents(prev => [...prev, event]);
         };
         const useAgentic = shouldUseAgentic(content);
@@ -338,6 +359,7 @@ export default function App() {
           return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
         });
         persist(fullText);
+        logCost(sessionSnapshot, [...toolsUsed]);
       }
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
@@ -347,7 +369,7 @@ export default function App() {
       setIsTyping(false);
       setIsStreaming(false);
     }
-  }, [user, selectedModel]);
+  }, [user, selectedModel, logCost]);
 
   const handleRetry = useCallback(async (assistantMessageId: string) => {
     if (!user) return;
@@ -395,6 +417,7 @@ export default function App() {
         });
         if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
       };
+      const toolsUsed = new Set<string>();
       let streamedAny = false;
       const onChunkCb = (chunk: string) => {
         if (!mountedRef.current) return;
@@ -408,6 +431,7 @@ export default function App() {
       const onAgentEventCb = (event: AgentEvent) => {
         if (!mountedRef.current) return;
         if (sessionIdRef.current !== sessionSnapshot) return;
+        if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
         setAgentEvents(prev => [...prev, event]);
       };
       const useAgentic = shouldUseAgentic(userMsg.content);
@@ -447,6 +471,7 @@ export default function App() {
         const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
         setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
         saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
+        logCost(sessionId, [...toolsUsed]);
       }
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
@@ -457,7 +482,7 @@ export default function App() {
       setIsTyping(false);
       setIsStreaming(false);
     }
-  }, [user, selectedModel]);
+  }, [user, selectedModel, logCost]);
 
   if (authLoading) {
     return (

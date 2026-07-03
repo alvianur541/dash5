@@ -12,6 +12,12 @@ const UPSTREAM_TIMEOUT_MS = 60_000;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
+// Cost ledger (usage_logs) — service_role key HANYA di server (jangan pernah ke client).
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '0.30'); // per 1M input token
+const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '2.50'); // per 1M output token
+const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '16300');
+
 const COHERE_KEYS = [
   process.env.COHERE_API_KEY,
   process.env.COHERE_API_KEY_2,
@@ -282,6 +288,57 @@ app.post('/v1/rerank', verifyToken, async (req, res) => {
 
   console.error('All Cohere keys rate limited');
   return res.status(429).json({ error: 'Rerank rate limit reached. Coba lagi dalam 1 menit.' });
+});
+
+// ── Cost ledger: 1 baris per pertanyaan user ──────────────────────────────────
+// Frontend akumulasi token/llm_calls/tools_used untuk 1 pertanyaan lalu POST ke sini.
+// Insert ke usage_logs pakai service_role (RLS bypass, hanya server yang pegang key).
+// Kegagalan insert TIDAK boleh mengganggu — sudah verifyToken (user login) di depan.
+app.post('/v1/usage', verifyToken, async (req, res) => {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
+    console.error('usage_logs: SUPABASE_URL/SUPABASE_SERVICE_KEY belum di-set');
+    return res.status(503).json({ error: 'usage logging not configured' });
+  }
+  const b = req.body || {};
+  const inputTokens  = Math.max(0, parseInt(b.inputTokens, 10)  || 0);
+  const outputTokens = Math.max(0, parseInt(b.outputTokens, 10) || 0);
+  if (inputTokens === 0 && outputTokens === 0) return res.status(204).end();
+
+  const costUsd = (inputTokens / 1e6) * GEMINI_INPUT_PRICE_USD + (outputTokens / 1e6) * GEMINI_OUTPUT_PRICE_USD;
+  const costIdr = costUsd * USD_TO_IDR;
+  const row = {
+    user_name: b.userName ?? null,
+    user_nik: b.userNik ?? null,
+    session_id: b.sessionId ?? null,
+    model: typeof b.model === 'string' ? b.model : 'gemini-2.5-flash',
+    input_tokens: inputTokens,
+    output_tokens: outputTokens,
+    llm_calls: Math.min(Math.max(parseInt(b.llmCalls, 10) || 1, 1), 50),
+    tools_used: Array.isArray(b.toolsUsed) ? b.toolsUsed.filter(t => typeof t === 'string').slice(0, 20) : [],
+    cost_usd: Number(costUsd.toFixed(8)),
+    cost_idr: Number(costIdr.toFixed(2)),
+  };
+
+  try {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/usage_logs`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_SERVICE_KEY,
+        'Authorization': `Bearer ${SUPABASE_SERVICE_KEY}`,
+        'Prefer': 'return=minimal',
+      },
+      body: JSON.stringify(row),
+    });
+    if (!r.ok) {
+      console.error('usage_logs insert failed:', r.status, await r.text());
+      return res.status(502).json({ error: 'ledger insert failed' });
+    }
+    return res.status(201).json({ ok: true });
+  } catch (err) {
+    console.error('usage_logs insert error:', err);
+    return res.status(500).json({ error: 'ledger error' });
+  }
 });
 
 const PORT = process.env.PORT || 8080;
