@@ -518,15 +518,13 @@ img {
   flex-shrink: 0;
 }
 
-/* Standalone: selipkan clearance home-indicator, TAPI di-CLAMP.
-   iOS di device tertentu report env(safe-area-inset-bottom) bogus ~83px
-   (pitfall #14 — terbukti lagi setelah viewport-fit=cover aktif) → tanpa cap,
-   input bar menggantung ~87px dari dasar layar. Cap 20px = feel pre-regresi
-   (dulu spacer fixed 20px & user nyaman); home indicator hanya overlap area
-   gradient di bawah kartu input, bukan kartunya. */
+/* Standalone: nilai TETAP (tanpa env). Tanpa viewport-fit=cover iOS sudah
+   meng-inset webview di atas home indicator, jadi clearance 10px sudah cukup
+   & input tampak mentok ke bawah. JANGAN pakai env() di sini — device tertentu
+   return bogus ~83px → input menggantung (pitfall #14). */
 @media all and (display-mode: standalone) {
   .safe-area-spacer {
-    height: clamp(8px, env(safe-area-inset-bottom, 8px), 20px);
+    height: 10px;
   }
 }
 
@@ -565,14 +563,15 @@ img {
   padding-top: 20px;
 }
 
-/* Standalone PWA: sidebar full-height edge-to-edge → header wajib turun dari
-   status bar (screenshot: "Dash⁵" ketimpa jam), footer naik dari home indicator */
+/* Standalone PWA: nilai tetap (tanpa env — cegah bogus ~83px di footer).
+   Tanpa viewport-fit=cover iOS tidak menaruh konten di bawah status bar/home
+   indicator, jadi 20px/14px sudah pas & konsisten. */
 @media all and (display-mode: standalone) {
   .sidebar-header {
-    padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 8px));
+    padding-top: 20px;
   }
   .sidebar-footer-safe {
-    padding-bottom: clamp(12px, env(safe-area-inset-bottom, 12px), 30px);
+    padding-bottom: 14px;
   }
 }
 
@@ -1064,11 +1063,10 @@ img {
   }
 }
 
-/* Standalone: input bar lebih tinggi (safe-area-spacer) → naikkan FAB agar tidak ketimpa.
-   env di-clamp sama seperti spacer (anti nilai bogus ~83px). */
+/* Standalone: FAB naik sedikit di atas input bar. Nilai tetap (tanpa env). */
 @media all and (display-mode: standalone) {
   .scroll-fab {
-    bottom: calc(90px + clamp(8px, env(safe-area-inset-bottom, 8px), 20px));
+    bottom: 100px;
   }
 }
 

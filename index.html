@@ -2,7 +2,10 @@
 <html lang="id">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <!-- Viewport POLOS (= baseline stabil 665826d). JANGAN tambah viewport-fit=cover:
+         itu menghidupkan env(safe-area-inset-bottom) yg di iPhone tertentu return
+         bogus ~83px → input bar menggantung. Semua jarak bawah pakai nilai tetap. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 
     <!-- PWA -->
     <meta name="theme-color" content="#1C1917" />
