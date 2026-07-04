@@ -54,7 +54,10 @@ export default defineConfig(() => {
           name: 'Dash⁵ — Heavy Equipment Diagnostic',
           short_name: 'Dash⁵',
           description: 'AI-powered heavy equipment troubleshooting assistant for field technicians',
-          theme_color: '#0f172a',
+          lang: 'id',
+          // theme_color WAJIB match --bg-app dark (#1C1917) — sebelumnya #0f172a
+          // (slate, sisa desain lama) bikin title bar / task switcher Android salah warna
+          theme_color: '#1C1917',
           background_color: '#1C1917',
           display: 'standalone',
           start_url: '/',

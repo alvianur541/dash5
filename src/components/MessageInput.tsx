@@ -115,8 +115,12 @@ export function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [input]);
 
+  // Haptic tick halus saat kirim — Android bergetar 8ms, iOS/desktop no-op aman.
+  const buzz = () => { try { navigator.vibrate?.(8); } catch { /* unsupported */ } };
+
   const handleSend = () => {
     if (!input.trim() || isOffline) return;
+    buzz();
     onSendMessage(input.trim());
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = '24px';
@@ -162,6 +166,7 @@ export function MessageInput({
     const currentInput = input.trim();
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = '24px';
+    buzz();
     onSendMessage(currentInput, files);
   };
 
@@ -187,6 +192,7 @@ export function MessageInput({
             const combined = currentInput ? `${currentInput} ${text}` : text;
             setInput('');
             if (textareaRef.current) textareaRef.current.style.height = '24px';
+            buzz();
             onSendMessage(combined);
           }
         } catch {

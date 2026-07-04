@@ -103,7 +103,7 @@ export function Sidebar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/60 z-10 md:hidden"
+            className="fixed inset-0 bg-black/60 backdrop-blur-[2px] z-10 md:hidden"
             onClick={onToggle}
           />
         )}
@@ -119,7 +119,7 @@ export function Sidebar({
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className={cn(
           "bg-[var(--bg-sidebar)] h-full flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
-          isMobile ? "fixed inset-y-0 left-0 shadow-2xl" : "relative shrink-0"
+          isMobile ? "fixed inset-y-0 left-0 shadow-2xl rounded-r-2xl" : "relative shrink-0"
         )}
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">

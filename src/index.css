@@ -164,6 +164,12 @@ button, a, [role="button"] {
   user-select: none;
 }
 
+/* App-feel: gambar tidak bisa di-drag / long-press callout (logo, attachment preview) */
+img {
+  -webkit-user-drag: none;
+  -webkit-touch-callout: none;
+}
+
 /* Status pulse animation */
 @keyframes status-pulse {
   0%, 100% { opacity: 1; }
@@ -580,6 +586,7 @@ button, a, [role="button"] {
   transition: background 0.15s;
 }
 .topbar-center:hover { background: rgba(255,255,255,0.07); }
+.topbar-center:active { transform: translateX(-50%) scale(0.97); }
 .topbar-model-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-primary); }
 .topbar-newchat {
   width: 36px; height: 36px; border-radius: 50%; border: none;
@@ -590,6 +597,7 @@ button, a, [role="button"] {
   box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 38%, transparent);
 }
 .topbar-newchat:hover { transform: translateY(-1px); box-shadow: 0 5px 16px color-mix(in srgb, var(--accent-main) 48%, transparent); }
+.topbar-newchat:active { transform: scale(0.92); }
 
 /* ── Chat messages ── */
 .chat-messages-list {
@@ -636,9 +644,10 @@ button, a, [role="button"] {
   display: flex; align-items: center; justify-content: center;
   width: 28px; height: 28px; border-radius: 8px; border: none;
   background: transparent; color: var(--text-muted);
-  cursor: pointer; transition: background 0.12s, color 0.12s;
+  cursor: pointer; transition: background 0.12s, color 0.12s, transform 0.12s;
 }
 .action-btn:hover { background: rgba(255,255,255,0.06); color: var(--text-primary); }
+.action-btn:active { transform: scale(0.88); }
 .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 /* Desktop: action row appears on hover */
@@ -999,6 +1008,13 @@ button, a, [role="button"] {
   }
   .topbar-spacer {
     height: max(58px, calc(42px + env(safe-area-inset-top)));
+  }
+}
+
+/* Standalone: input bar lebih tinggi (safe-area-spacer) → naikkan FAB agar tidak ketimpa */
+@media all and (display-mode: standalone) {
+  .scroll-fab {
+    bottom: calc(90px + max(14px, env(safe-area-inset-bottom, 14px)));
   }
 }
 
