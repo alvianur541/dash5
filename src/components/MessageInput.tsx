@@ -233,7 +233,7 @@ export function MessageInput({
           "bg-[var(--bg-card)] border",
           isRecording
             ? "border-red-500/40"
-            : "border-[color-mix(in_srgb,var(--accent-main)_18%,transparent)] focus-within:border-[color-mix(in_srgb,var(--accent-main)_45%,transparent)] focus-within:shadow-md",
+            : "border-[color-mix(in_srgb,var(--accent-main)_18%,transparent)] focus-within:border-[color-mix(in_srgb,var(--accent-main)_50%,transparent)] focus-within:shadow-[0_0_0_3px_color-mix(in_srgb,var(--accent-main)_10%,transparent),0_4px_16px_-6px_color-mix(in_srgb,var(--accent-main)_20%,transparent)]",
           disabled && "opacity-60"
         )}>
 
@@ -297,7 +297,7 @@ export function MessageInput({
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={disabled}
-                  className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-all disabled:opacity-40"
+                  className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-all disabled:opacity-40"
                   title="Lampirkan gambar"
                 >
                   <Paperclip size={17} />
@@ -321,7 +321,7 @@ export function MessageInput({
                   "p-2 rounded-xl transition-all disabled:opacity-40",
                   isRecording
                     ? "text-red-400"
-                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
                 )}
                 title={isRecording ? 'Stop recording' : 'Voice input'}
               >
@@ -342,7 +342,7 @@ export function MessageInput({
                 // Mobile: 36×36 (touch-friendly), desktop: 30×30 (compact)
                 "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
                 canSend
-                  ? "bg-[var(--accent-main)] text-white hover:opacity-90"
+                  ? "bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] text-white hover:brightness-110 shadow-[0_2px_10px_-2px_rgba(249,115,22,0.45)]"
                   : "send-btn-inactive cursor-not-allowed"
               )}
               title="Kirim"
