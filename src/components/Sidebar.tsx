@@ -159,7 +159,7 @@ export function Sidebar({
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
               className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all group"
             >
-              <Plus size={14} className="shrink-0 transition-colors" />
+              <Plus size={14} className="shrink-0 transition-colors text-[var(--accent-main)]" />
               <span className="text-[13px] font-medium">New chat</span>
             </button>
           </div>

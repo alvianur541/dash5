@@ -119,6 +119,29 @@ body {
   min-height: 100dvh;
 }
 
+/* ── Micro-detail global ── */
+::selection {
+  background: color-mix(in srgb, var(--accent-main) 26%, transparent);
+  color: var(--text-primary);
+}
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent-main) 55%, transparent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* Ambient login backdrop — glow radial lembut di belakang brand */
+.login-ambient::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(560px 300px at 50% 16%, color-mix(in srgb, var(--accent-main) 10%, transparent), transparent 70%),
+    radial-gradient(400px 260px at 82% 88%, color-mix(in srgb, var(--accent-main) 5%, transparent), transparent 70%);
+}
+
 /* Scrollbar utilities */
 .scrollbar-hide {
   scrollbar-width: none;
@@ -216,11 +239,32 @@ button, a, [role="button"] {
 .markdown-body pre {
   background: var(--bg-card);
   border: 1px solid var(--border-main);
-  border-radius: 10px;
+  border-radius: 12px;
   padding: 1rem 1.25rem;
   overflow-x: auto;
   margin-bottom: 1rem;
 }
+
+/* Blockquote — kutipan spec/warning dari manual: aksen kiri + tint hangat */
+.markdown-body blockquote {
+  margin: 0.6rem 0;
+  padding: 0.55rem 0.95rem;
+  border-left: 3px solid color-mix(in srgb, var(--accent-main) 55%, transparent);
+  background: color-mix(in srgb, var(--accent-main) 5%, transparent);
+  border-radius: 0 10px 10px 0;
+  color: var(--text-secondary);
+}
+.markdown-body blockquote p:last-child { margin-bottom: 0; }
+
+/* Link — accent dengan underline lembut */
+.markdown-body a {
+  color: var(--accent-main);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, var(--accent-main) 40%, transparent);
+  transition: text-decoration-color 0.15s;
+}
+.markdown-body a:hover { text-decoration-color: var(--accent-main); }
 
 .markdown-body pre code {
   font-family: var(--font-mono);
@@ -478,6 +522,9 @@ button, a, [role="button"] {
   overflow-x: hidden;
   padding: 24px 24px 160px;
   scrollbar-width: none;
+  /* Ambient glow — kesan hangat tanpa mengubah layout */
+  background:
+    radial-gradient(520px 300px at 50% 14%, color-mix(in srgb, var(--accent-main) 7%, transparent), transparent 72%);
 }
 .welcome-screen::-webkit-scrollbar { display: none; }
 
@@ -536,13 +583,13 @@ button, a, [role="button"] {
 .topbar-model-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-primary); }
 .topbar-newchat {
   width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: var(--accent-main); color: #fff;
+  background: linear-gradient(135deg, var(--accent-main), var(--accent-active)); color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
-  transition: opacity 0.15s, transform 0.15s;
-  box-shadow: 0 2px 8px rgba(204,120,92,0.35);
+  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 38%, transparent);
 }
-.topbar-newchat:hover { transform: translateY(-1px); box-shadow: 0 4px 12px rgba(204,120,92,0.45); }
+.topbar-newchat:hover { transform: translateY(-1px); box-shadow: 0 5px 16px color-mix(in srgb, var(--accent-main) 48%, transparent); }
 
 /* ── Chat messages ── */
 .chat-messages-list {
@@ -560,7 +607,9 @@ button, a, [role="button"] {
 }
 .user-bubble {
   width: fit-content;
-  background: #F97316;        /* vibrant orange — same for light + dark */
+  /* Gradient halus accent → accent-active + lift shadow: bubble terasa "premium",
+     bukan flat sticker. Warna sama light + dark. */
+  background: linear-gradient(135deg, var(--accent-main) 0%, var(--accent-active) 100%);
   border: none;
   border-radius: 18px 18px 4px 18px;
   padding: 9px 14px;
@@ -569,6 +618,7 @@ button, a, [role="button"] {
   letter-spacing: -0.005em;
   color: #ffffff;
   user-select: text;
+  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 28%, transparent);
 }
 .msg-ts {
   display: block; font-size: 11px;
@@ -603,7 +653,10 @@ button, a, [role="button"] {
 
 /* Typing indicator — 3 dot bounce (sebelum chunk pertama datang) */
 .typing-dots { display: flex; align-items: center; gap: 5px; padding: 10px 0 6px; }
-.typing-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-muted); }
+.typing-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-main) 70%, var(--text-muted));
+}
 
 /* Typewriter cursor — blinking caret di akhir pesan AI saat streaming */
 .typewriter-cursor {
@@ -642,11 +695,12 @@ button, a, [role="button"] {
 }
 
 .welcome-greeting {
-  font-family: var(--font-serif);
-  font-size: clamp(1.6rem, 4vw, 2rem);
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  /* DM Serif Display — editorial, memorable. Sudah dimuat untuk h2/h3 markdown. */
+  font-family: "DM Serif Display", var(--font-serif);
+  font-size: clamp(1.75rem, 4.2vw, 2.15rem);
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.18;
   color: var(--text-primary);
 }
 .model-pill {
@@ -661,6 +715,7 @@ button, a, [role="button"] {
 .model-pill-sep {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent-active);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-active) 65%, transparent);
 }
 .model-pill-name {
   font-size: 13px; font-weight: 500; color: var(--text-primary);
@@ -707,11 +762,13 @@ button, a, [role="button"] {
 }
 .suggestion-chip:hover {
   background: var(--bg-app);
-  border-color: color-mix(in srgb, var(--accent-main) 25%, var(--border-main));
+  border-color: color-mix(in srgb, var(--accent-main) 30%, var(--border-main));
   color: var(--text-primary);
-  transform: translateX(2px);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent-main) 22%, rgba(0,0,0,0.18));
 }
-.chip-icon { font-size: 15px; flex-shrink: 0; opacity: 0.85; }
+.chip-icon { font-size: 15px; flex-shrink: 0; opacity: 0.85; transition: transform 0.18s var(--ease-spring); }
+.suggestion-chip:hover .chip-icon { transform: scale(1.12); }
 
 .input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
 .pill-side-btn {
@@ -725,13 +782,15 @@ button, a, [role="button"] {
 .input-pill {
   flex: 1; display: flex; align-items: flex-end; gap: 6px;
   background: var(--bg-card);
-  border: 1.5px solid color-mix(in srgb, var(--accent-main) 45%, transparent);
+  /* Idle lebih kalem (32%) — full accent disimpan untuk focus, kontras state lebih terasa */
+  border: 1.5px solid color-mix(in srgb, var(--accent-main) 32%, transparent);
   border-radius: 18px; padding: 10px 10px 10px 16px;
   transition: border-color 0.18s, box-shadow 0.18s; min-height: 46px;
 }
 .input-pill:focus-within {
   border-color: var(--accent-main);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 14%, transparent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 14%, transparent),
+              0 4px 18px -6px color-mix(in srgb, var(--accent-main) 25%, transparent);
 }
 .input-pill-textarea {
   flex: 1; background: transparent; border: none; outline: none;
@@ -878,7 +937,6 @@ button, a, [role="button"] {
   .suggestion-chip {
     padding: 13px 16px;
     border-radius: 12px;
-    active-scale: none;
   }
   .suggestion-chip:active { transform: scale(0.98); background: var(--bg-card-hover); }
 
@@ -924,8 +982,13 @@ button, a, [role="button"] {
   cursor: pointer;
   transition: color 0.15s, box-shadow 0.15s;
 }
+.scroll-fab {
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
 .scroll-fab:hover {
   color: var(--text-primary);
+  border-color: color-mix(in srgb, var(--accent-main) 35%, var(--border-main));
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
 }
 
