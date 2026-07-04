@@ -36,6 +36,35 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
+// Model yang boleh dipanggil lewat proxy. `model` dari client diinterpolasi ke URL
+// Vertex — tanpa allowlist, user login bisa inject model arbitrer (cost abuse) atau
+// memanipulasi path request yang jalan pakai kredensial service account kita.
+const ALLOWED_MODELS = new Set(
+  (process.env.ALLOWED_MODELS || 'gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
+    .split(',').map(s => s.trim()).filter(Boolean)
+);
+
+// Rate limit ringan per user (in-memory, tanpa dependency) — jaring pengaman
+// terhadap loop client liar / abuse token curian. 1 pertanyaan ≈ 4-7 call
+// (intent + embed + rerank + chat + compress), jadi 150/menit masih longgar
+// untuk pemakaian normal tapi memutus flood.
+const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
+const _rateBuckets = new Map();
+function rateLimit(req, res, next) {
+  const key = req.headers['authorization'] || req.ip || 'anon';
+  const now = Date.now();
+  let b = _rateBuckets.get(key);
+  if (!b || now >= b.reset) { b = { count: 0, reset: now + 60_000 }; _rateBuckets.set(key, b); }
+  b.count++;
+  if (_rateBuckets.size > 2000) {
+    for (const [k, v] of _rateBuckets) if (now >= v.reset) _rateBuckets.delete(k);
+  }
+  if (b.count > RATE_LIMIT_PER_MIN) {
+    return res.status(429).json({ error: 'Terlalu banyak request. Tunggu sebentar lalu coba lagi.' });
+  }
+  next();
+}
+
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (ALLOWED_ORIGIN === '*' || origin === ALLOWED_ORIGIN) {
@@ -189,8 +218,9 @@ app.get('/v1/dashboard', async (req, res) => {
   }
 });
 
-app.post('/v1/chat', verifyToken, async (req, res) => {
+app.post('/v1/chat', verifyToken, rateLimit, async (req, res) => {
   const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
+  if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
   if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
 
   const ctrl  = new AbortController();
@@ -214,8 +244,9 @@ app.post('/v1/chat', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/v1/chat/stream', verifyToken, async (req, res) => {
+app.post('/v1/chat/stream', verifyToken, rateLimit, async (req, res) => {
   const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
+  if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
   if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
 
   res.setHeader('Content-Type', 'text/event-stream');
@@ -262,7 +293,7 @@ app.post('/v1/chat/stream', verifyToken, async (req, res) => {
   }
 });
 
-app.post('/v1/transcribe', verifyToken, async (req, res) => {
+app.post('/v1/transcribe', verifyToken, rateLimit, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) return res.status(400).json({ error: 'audio and mimeType are required' });
@@ -298,12 +329,13 @@ const upstream = await fetch(url, {
     const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
     return res.json({ text });
   } catch (err) {
+    // Detail error hanya ke log — jangan bocorkan internal (stack/host/config) ke client.
     console.error('Transcribe error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ error: 'Transcribe gagal. Coba lagi.' });
   }
 });
 
-app.post('/v1/embed', verifyToken, async (req, res) => {
+app.post('/v1/embed', verifyToken, rateLimit, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { query, task_type = 'RETRIEVAL_QUERY' } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
@@ -330,12 +362,13 @@ const upstream = await fetch(url, {
     const values = data?.predictions?.[0]?.embeddings?.values ?? [];
     return res.json({ values });
   } catch (err) {
+    // Detail error hanya ke log — jangan bocorkan internal ke client.
     console.error('Embed error:', err);
-    return res.status(500).json({ error: String(err) });
+    return res.status(500).json({ error: 'Embedding gagal. Coba lagi.' });
   }
 });
 
-app.post('/v1/rerank', verifyToken, async (req, res) => {
+app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
   if (COHERE_KEYS.length === 0) return res.status(500).json({ error: 'COHERE_API_KEY not configured' });
   const { query, documents, topN = 3 } = req.body;
   if (!query || !documents) return res.status(400).json({ error: 'query and documents are required' });
@@ -370,27 +403,33 @@ app.post('/v1/rerank', verifyToken, async (req, res) => {
 // Frontend akumulasi token/llm_calls/tools_used untuk 1 pertanyaan lalu POST ke sini.
 // Insert ke usage_logs pakai service_role (RLS bypass, hanya server yang pegang key).
 // Kegagalan insert TIDAK boleh mengganggu — sudah verifyToken (user login) di depan.
-app.post('/v1/usage', verifyToken, async (req, res) => {
+app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     console.error('usage_logs: SUPABASE_URL/SUPABASE_SERVICE_KEY belum di-set');
     return res.status(503).json({ error: 'usage logging not configured' });
   }
   const b = req.body || {};
-  const inputTokens  = Math.max(0, parseInt(b.inputTokens, 10)  || 0);
-  const outputTokens = Math.max(0, parseInt(b.outputTokens, 10) || 0);
+  const inputTokens  = Math.min(Math.max(0, parseInt(b.inputTokens, 10)  || 0), 5_000_000);
+  const outputTokens = Math.min(Math.max(0, parseInt(b.outputTokens, 10) || 0), 5_000_000);
   if (inputTokens === 0 && outputTokens === 0) return res.status(204).end();
+
+  // Cap panjang string dari client — kolom text di DB tidak berbatas, jangan
+  // biarkan payload jumbo/aneh masuk ledger.
+  const clip = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
 
   const costUsd = (inputTokens / 1e6) * GEMINI_INPUT_PRICE_USD + (outputTokens / 1e6) * GEMINI_OUTPUT_PRICE_USD;
   const costIdr = costUsd * USD_TO_IDR;
   const row = {
-    user_name: b.userName ?? null,
-    user_nik: b.userNik ?? null,
-    session_id: b.sessionId ?? null,
-    model: typeof b.model === 'string' ? b.model : 'gemini-2.5-flash',
+    user_name: clip(b.userName, 80),
+    user_nik: clip(b.userNik, 120),
+    session_id: clip(b.sessionId, 80),
+    model: clip(b.model, 60) || 'gemini-2.5-flash',
     input_tokens: inputTokens,
     output_tokens: outputTokens,
     llm_calls: Math.min(Math.max(parseInt(b.llmCalls, 10) || 1, 1), 50),
-    tools_used: Array.isArray(b.toolsUsed) ? b.toolsUsed.filter(t => typeof t === 'string').slice(0, 20) : [],
+    tools_used: Array.isArray(b.toolsUsed)
+      ? b.toolsUsed.filter(t => typeof t === 'string').slice(0, 20).map(t => t.slice(0, 60))
+      : [],
     cost_usd: Number(costUsd.toFixed(8)),
     cost_idr: Number(costIdr.toFixed(2)),
   };

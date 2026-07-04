@@ -485,37 +485,43 @@ function ragErrorTemplate(errorMsg: string): string {
 }
 
 function faultCodeNotFoundTemplate(faultQuery: string, model: string): string {
-  return `Kode \`${faultQuery}\` tidak ada di database manual **${model}** yang saya akses.
+  return `Kode \`${faultQuery}\` tidak ditemukan di database manual **${model}**.
 
-Pastikan:
-- Pembacaan kode benar
-- Model unit sesuai (saat ini di-set ke ${model})`;
+Dua hal yang paling sering jadi penyebabnya:
+1. **Pembacaan kode** — pastikan digit dan suffix persis seperti di monitor (format valid: \`11006-2\`, \`ENG:00436-04\`). Kalau ragu, kirim foto layar monitor — saya baca langsung dari situ.
+2. **Model unit** — chat ini di-set ke **${model}**. Kode dari unit lain tidak akan ketemu di sini.
+
+Kalau keduanya sudah benar dan kode tetap tidak ada, kemungkinan di luar cakupan manual yang tersedia — eskalasi ke Technical Support Department dengan menyebut kode + serial number unit.`;
 }
 
 function partsNotFoundTemplate(query: string, model: string): string {
-  return `Parts untuk **${query}** tidak ada di katalog **${model}** yang saya akses.
+  return `Parts untuk **${query}** tidak ketemu di katalog **${model}** yang saya akses.
 
-Coba:
-- Cek Parts Catalog fisik
-- Konfirmasi ke referensi internal dengan menyebut model unit + komponen.`;
+Supaya pencariannya kena:
+1. Pakai nama komponen sesuai istilah katalog (English) — mis. \`seal kit; swing motor\`, \`bucket tooth\`.
+2. Kalau pegang part number, kirim PN-nya langsung — pencarian PN paling akurat.
+3. Sebut area komponen (engine / hydraulic / undercarriage / attachment) untuk mempersempit section.
+
+Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke tim parts dengan menyebut model + nama komponen.`;
 }
 
 // Adaptive retrieval — saat semua chunk score-nya rendah (<0.3), bypass AI
 // karena risiko halu terlalu tinggi. User dapat saran refine query, bukan
 // jawaban yang "kelihatan benar tapi sebenarnya meleset".
 function lowConfidenceTemplate(query: string, model: string): string {
-  return `Saya belum menemukan data yang cukup spesifik untuk **"${query}"** di manual ${model}.
+  return `Data yang cukup meyakinkan untuk **"${query}"** belum ketemu di manual ${model} — daripada saya kasih jawaban yang meleset, lebih baik pencariannya dipertajam.
 
-Biar hasilnya akurat, coba:
-- Sebut nama komponen lebih spesifik (mis. \`swing motor relief pressure\`, bukan \`tekanan swing\`)
-- Pastikan model unit sudah benar
-- Kalau urgent, eskalasi ke Technical Support Department`;
+Dua cara paling efektif:
+- Sebut komponen + atribut sekaligus — mis. \`swing motor relief pressure\` atau \`travel motor final drive oil capacity\`, bukan \`tekanan swing\`.
+- Pastikan model unit di sidebar sesuai unit yang sedang dikerjakan.
+
+Kalau ini butuh keputusan cepat di lapangan, eskalasi ke Technical Support Department.`;
 }
 
 function offTopicTemplate(): string {
-  return `Saya dirancang khusus untuk diagnosis dan technical support alat berat Hitachi/KCM — fault code, parts lookup, hydraulic spec, troubleshooting.
+  return `Scope saya khusus technical support alat berat Hitachi/KCM — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
 
-Pertanyaan di luar itu di luar scope saya. Ada yang mau dicek di unit?`;
+Untuk pertanyaan tadi, saya bukan sumber yang tepat. Ada yang perlu dicek di unit kamu?`;
 }
 
 // Regex fault code: WAJIB ada digit. [0-9A-F]{2,6} dengan /i match a-f letters

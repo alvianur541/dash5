@@ -152,30 +152,47 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
         <Segmented value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
       </div>
 
-      {/* Bars */}
-      <div className="flex items-end gap-[2px] h-[132px]" onMouseLeave={() => setHover(null)}>
-        {buckets.map((b, i) => {
-          const v = mval(b);
-          const h = v > 0 ? Math.max((v / maxV) * 100, 4) : 0;
-          const dim = hover != null && hover !== i;
+      {/* Bars + garis rata-rata (hanya dari bucket aktif) */}
+      <div className="relative">
+        {(() => {
+          const activeVals = buckets.map(mval).filter(v => v > 0);
+          const avg = activeVals.length >= 2 ? activeVals.reduce((a, v) => a + v, 0) / activeVals.length : 0;
+          if (!avg) return null;
           return (
-            <button
-              key={b.key}
-              type="button"
-              onMouseEnter={() => setHover(i)}
-              onFocus={() => setHover(i)}
-              onClick={() => setHover(i)}
-              className="flex-1 h-full flex flex-col justify-end min-w-0 outline-none"
-              title={`${b.label} — ${mfmt(b)}`}
-              style={{ opacity: dim ? 0.35 : 1, transition: 'opacity .15s' }}
+            <div
+              className="absolute left-0 right-0 border-t border-dashed border-[var(--text-muted)]/45 pointer-events-none z-10"
+              style={{ bottom: `${(avg / maxV) * 100}%` }}
             >
-              <div
-                className="w-full rounded-t-[3px]"
-                style={{ height: v > 0 ? `${h}%` : '2px', background: v > 0 ? 'var(--accent-main)' : 'var(--border-main)' }}
-              />
-            </button>
+              <span className="absolute right-0 -top-[15px] text-[9px] text-[var(--text-muted)] bg-[var(--bg-app)] pl-1.5">
+                rata-rata
+              </span>
+            </div>
           );
-        })}
+        })()}
+        <div className="flex items-end gap-[2px] h-[132px]" onMouseLeave={() => setHover(null)}>
+          {buckets.map((b, i) => {
+            const v = mval(b);
+            const h = v > 0 ? Math.max((v / maxV) * 100, 4) : 0;
+            const dim = hover != null && hover !== i;
+            return (
+              <button
+                key={b.key}
+                type="button"
+                onMouseEnter={() => setHover(i)}
+                onFocus={() => setHover(i)}
+                onClick={() => setHover(i)}
+                className="flex-1 h-full flex flex-col justify-end min-w-0 outline-none"
+                title={`${b.label} — ${mfmt(b)}`}
+                style={{ opacity: dim ? 0.35 : 1, transition: 'opacity .15s' }}
+              >
+                <div
+                  className="w-full rounded-t-[3px]"
+                  style={{ height: v > 0 ? `${h}%` : '2px', background: v > 0 ? 'var(--accent-main)' : 'var(--border-main)' }}
+                />
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {/* Axis */}
@@ -348,9 +365,14 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     <div className="grid sm:grid-cols-2 gap-4">
                       <Panel title="Biaya per Teknisi" aside="urut biaya">
                         <div className="flex flex-col gap-3.5">
-                          {snap.per_user.map(u => (
-                            <Bar key={u.teknisi} name={u.teknisi} value={rp(u.idr)} sub={`${num(u.pertanyaan)} query`} pct={(u.idr / maxUserIdr) * 100} />
-                          ))}
+                          {snap.per_user.map(u => {
+                            const share = snap.totals.idr > 0 ? (u.idr / snap.totals.idr) * 100 : 0;
+                            return (
+                              <Bar key={u.teknisi} name={u.teknisi} value={rp(u.idr)}
+                                sub={`${num(u.pertanyaan)} query · ${share.toFixed(0)}%`}
+                                pct={(u.idr / maxUserIdr) * 100} />
+                            );
+                          })}
                           {snap.per_user.length === 0 && <p className="text-[12px] text-[var(--text-muted)]">Belum ada aktivitas.</p>}
                         </div>
                       </Panel>
@@ -425,7 +447,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                           </thead>
                           <tbody>
                             {snap.recent.map((r, i) => (
-                              <tr key={i} className="border-t border-[var(--border-main)]/50">
+                              <tr key={i} className="border-t border-[var(--border-main)]/50 hover:bg-[var(--accent-main)]/[0.045] transition-colors">
                                 <td className="py-2.5 pr-3 text-[var(--text-muted)] tabular-nums whitespace-nowrap">{dt(r.created_at)}</td>
                                 <td className="py-2.5 pr-3 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.teknisi}</td>
                                 <td className="py-2.5 pr-3 text-[var(--text-secondary)] whitespace-nowrap">
