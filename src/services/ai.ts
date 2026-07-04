@@ -242,9 +242,9 @@ Technical — specs & symptoms:
 Parts — PN, catalog, promo:
 "PN YB60000068 itu apa"           → parts, "YB60000068"
 "harga seal kit swing motor"      → parts, "swing motor seal kit price"
-"ada promo filter hydraulic ngga" → parts, "hydraulic filter promo Q4 FY2025"
+"ada promo filter hydraulic ngga" → parts, "hydraulic filter promo price"
 "harga promo seal kit swing"      → parts, "swing motor seal kit promo price"
-"reman pump berapa harganya"      → parts, "pump reman price Q4 FY2025"
+"reman pump berapa harganya"      → parts, "pump reman promo price"
 
 Parts — service interval (ALWAYS "parts", ALWAYS ≥3 words with "hour maintenance parts"):
 "jadwal CPM 500 jam"              → parts, "500 hour maintenance parts"
@@ -274,10 +274,10 @@ shouldSearch=false → searchType="general" or "off_topic", optimizedQuery=""`;
   const prompt = `${ctx ? `Conversation context:\n${ctx}\n\n` : ''}Technician query: "${userInput}"
 
 Output ONLY this JSON shape (single line, no other text):
-{"shouldSearch":<bool>,"searchType":"technical"|"parts"|"general","optimizedQuery":"<2-10 word English phrase>"}
+{"shouldSearch":<bool>,"searchType":"technical"|"parts"|"general"|"off_topic","optimizedQuery":"<2-10 word English phrase>"}
 
 shouldSearch=true: technical/parts queries → optimizedQuery filled.
-shouldSearch=false: greetings, acknowledgments, casual → optimizedQuery="".`;
+shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" (di luar alat berat) → optimizedQuery="".`;
 
   try {
     const res = await callProxy({

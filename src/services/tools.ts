@@ -69,7 +69,7 @@ const searchPartsCatalogTool: Tool = {
   declaration: {
     name: 'search_parts_catalog',
     description:
-      'Cari Part Number, harga, ketersediaan dari Parts Catalog / Engine Parts Catalog / CPM schedule / Promo Q4 FY2025 + Promo Q1 FY2026 (dua periode aktif). Pakai untuk lookup PN spesifik, schedule maintenance per interval jam, harga promo terbaru.',
+      'Cari Part Number, harga, ketersediaan dari Parts Catalog / Engine Parts Catalog / CPM schedule / semua periode PROMO aktif (harga periode terbaru diprioritaskan otomatis). Pakai untuk lookup PN spesifik, schedule maintenance per interval jam, harga promo terbaru.',
     parameters: {
       type: 'object',
       properties: {
