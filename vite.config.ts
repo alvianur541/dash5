@@ -14,6 +14,10 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         workbox: {
           cleanupOutdatedCaches: true,
+          // SW baru langsung aktif & ambil alih semua tab → update (kode, index.html,
+          // viewport meta) nyampai dalam 1 reload, bukan nunggu semua tab ketutup.
+          skipWaiting: true,
+          clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,woff2}'],
           navigateFallback: 'index.html',
           navigateFallbackDenylist: [/^\/api\//],
