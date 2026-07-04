@@ -8,20 +8,20 @@
 }
 
 :root {
-  /* Dark Mode — AndalAI-inspired vibrant orange */
-  --bg-app:         #1C1917;
-  --bg-sidebar:     #141413;
-  --bg-header:      rgba(28, 25, 23, 0.85);
-  --bg-card:        #292524;
-  --bg-card-hover:  #343130;
-  --bg-input:       #1C1917;
-  --accent-main:    #F97316;   /* vibrant orange (was #CC785C terra-cotta) */
-  --accent-active:  #EA580C;   /* deeper orange (was #E35B3E) */
-  --accent-glow:    rgba(249, 115, 22, 0.20);
-  --text-primary:   #F5F0EB;
-  --text-secondary: #A09891;
-  --text-muted:     #6B6561;
-  --border-main:    rgba(255, 255, 255, 0.08);
+  /* Dark Mode — Claude.ai look: warm charcoal + terracotta */
+  --bg-app:         #1A1915;   /* near-black warm charcoal, NOT pure black */
+  --bg-sidebar:     #161512;
+  --bg-header:      rgba(26, 25, 21, 0.85);
+  --bg-card:        #232320;   /* cards, input bar */
+  --bg-card-hover:  #2E2D28;   /* hover states, pills */
+  --bg-input:       #232320;
+  --accent-main:    #D97757;   /* Claude terracotta/coral (was #F97316 orange) */
+  --accent-active:  #C2634A;   /* deeper terracotta for gradient/active */
+  --accent-glow:    rgba(217, 119, 87, 0.18);
+  --text-primary:   #E8E6DC;   /* warm off-white */
+  --text-secondary: #9B9A93;   /* muted gray */
+  --text-muted:     #6E6D66;   /* section headers, timestamps */
+  --border-main:    rgba(255, 255, 255, 0.07);
   --border-glass:   rgba(255, 255, 255, 0.04);
   --glass-bg:       rgba(255, 255, 255, 0.02);
   --scroll-thumb:   rgba(255, 255, 255, 0.10);
@@ -56,10 +56,10 @@
   --input-content-max: 820px;
 
   /* Shadows */
-  --shadow-accent: 0 10px 30px -10px rgba(249, 115, 22, 0.30);
+  --shadow-accent: 0 10px 30px -10px rgba(217, 119, 87, 0.30);
   --shadow-card:   0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
   --shadow-modal:  0 25px 50px -12px rgba(0,0,0,0.50);
-  --shadow-glow:   0 0 0 1px rgba(249, 115, 22, 0.20), 0 10px 24px -8px rgba(249, 115, 22, 0.25);
+  --shadow-glow:   0 0 0 1px rgba(217, 119, 87, 0.20), 0 10px 24px -8px rgba(217, 119, 87, 0.25);
 
   /* Motion */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
@@ -70,19 +70,19 @@
 }
 
 .light-theme {
-  /* Light Mode — AndalAI-inspired: cream sidebar + vibrant orange accent */
-  --bg-app:         #FFFFFF;
-  --bg-sidebar:     #FAFAFA;   /* cream off-white (was #EDE8E1) */
-  --bg-header:      rgba(255, 255, 255, 0.85);
+  /* Light Mode — Claude.ai cream + terracotta */
+  --bg-app:         #FAF9F5;   /* warm cream */
+  --bg-sidebar:     #F5F4EF;
+  --bg-header:      rgba(250, 249, 245, 0.85);
   --bg-card:        #FFFFFF;
-  --bg-card-hover:  #F5F5F4;
+  --bg-card-hover:  #F2F0E9;
   --bg-input:       #FFFFFF;
-  --accent-main:    #F97316;   /* vibrant orange */
-  --accent-active:  #EA580C;
-  --accent-glow:    rgba(249, 115, 22, 0.15);
-  --text-primary:   #1A1614;
-  --text-secondary: #44403C;
-  --text-muted:     #78716C;
+  --accent-main:    #D97757;   /* Claude terracotta */
+  --accent-active:  #C2634A;
+  --accent-glow:    rgba(217, 119, 87, 0.14);
+  --text-primary:   #1A1915;
+  --text-secondary: #46443E;
+  --text-muted:     #78756C;
   --border-main:    rgba(0, 0, 0, 0.08);
   --border-glass:   rgba(0, 0, 0, 0.04);
   --glass-bg:       rgba(0, 0, 0, 0.02);

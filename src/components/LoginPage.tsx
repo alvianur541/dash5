@@ -78,7 +78,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
       >
         {/* Brand */}
         <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-[14px] overflow-hidden bg-[var(--accent-main)] shadow-[0_12px_32px_-8px_rgba(249,115,22,0.50)] flex items-center justify-center">
+          <div className="w-14 h-14 rounded-[14px] overflow-hidden bg-[var(--accent-main)] shadow-[0_12px_32px_-8px_rgba(217,119,87,0.50)] flex items-center justify-center">
             <img src={LOGO_BASE64} alt="Dash⁵" width={56} height={56} className="w-full h-full object-cover" decoding="sync" fetchPriority="high" />
           </div>
           <h1 className="text-[26px] font-bold tracking-tight text-[var(--text-primary)]">
@@ -136,7 +136,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               <button
                 type="submit"
                 disabled={loginLoading}
-                className="w-full h-11 mt-1 bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px] shadow-[0_8px_24px_-8px_rgba(249,115,22,0.45)]"
+                className="w-full h-11 mt-1 bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px] shadow-[0_8px_24px_-8px_rgba(217,119,87,0.45)]"
               >
                 {loginLoading
                   ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -191,7 +191,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               <button
                 type="submit"
                 disabled={resetLoading}
-                className="w-full h-11 bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[14px] shadow-[0_8px_24px_-8px_rgba(249,115,22,0.45)]"
+                className="w-full h-11 bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] hover:brightness-110 active:scale-[0.98] text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 text-[14px] shadow-[0_8px_24px_-8px_rgba(217,119,87,0.45)]"
               >
                 {resetLoading
                   ? <Loader2 className="w-4 h-4 animate-spin" />

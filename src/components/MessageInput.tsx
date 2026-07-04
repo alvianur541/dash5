@@ -342,7 +342,7 @@ export function MessageInput({
                 // Mobile: 36×36 (touch-friendly), desktop: 30×30 (compact)
                 "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
                 canSend
-                  ? "bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] text-white hover:brightness-110 shadow-[0_2px_10px_-2px_rgba(249,115,22,0.45)]"
+                  ? "bg-gradient-to-br from-[var(--accent-main)] to-[var(--accent-active)] text-white hover:brightness-110 shadow-[0_2px_10px_-2px_rgba(217,119,87,0.45)]"
                   : "send-btn-inactive cursor-not-allowed"
               )}
               title="Kirim"

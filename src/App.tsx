@@ -90,7 +90,7 @@ export default function App() {
     localStorage.setItem('dash-theme', theme);
 
     // Update theme-color meta — remove+re-add (attribute change alone tidak trigger Chrome re-evaluate)
-    const color = theme === 'dark' ? '#1C1917' : '#FFFFFF';
+    const color = theme === 'dark' ? '#1A1915' : '#FAF9F5';
     document.querySelectorAll('meta[name="theme-color"]').forEach(el => el.remove());
     const meta = document.createElement('meta');
     meta.name = 'theme-color';

@@ -8,7 +8,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
 
     <!-- PWA -->
-    <meta name="theme-color" content="#1C1917" />
+    <meta name="theme-color" content="#1A1915" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -30,7 +30,7 @@
       (function() {
         var t = localStorage.getItem('dash-theme') || 'dark';
         document.documentElement.classList.add(t + '-theme');
-        var color = t === 'light' ? '#FFFFFF' : '#1C1917';
+        var color = t === 'light' ? '#FAF9F5' : '#1A1915';
         var meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', color);
       })();
@@ -39,7 +39,7 @@
   <body>
     <div id="root">
       <!-- LCP placeholder: base64 inline, zero network roundtrip -->
-      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg-app,#1C1917);">
+      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg-app,#1A1915);">
         <img alt="Dash5" width="64" height="64"
           style="width:64px;height:64px;border-radius:18px;object-fit:cover;"
           fetchpriority="high" decoding="sync"
