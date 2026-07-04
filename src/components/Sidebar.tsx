@@ -318,7 +318,7 @@ export function Sidebar({
           </div>
 
           {/* ── Footer ── */}
-          <div className="shrink-0 px-3 pt-1 pb-3">
+          <div className="shrink-0 px-3 pt-1 pb-3 sidebar-footer-safe">
             <div className="relative">
               <button
                 onClick={() => setShowUserMenu(v => !v)}

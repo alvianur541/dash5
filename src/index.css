@@ -94,6 +94,10 @@ html {
   height: 100%;
   overflow: hidden;       /* cegah document-level scroll di iOS */
   overscroll-behavior: none;
+  /* iOS standalone bisa letterbox area bawah (viewport lama ke-cache sampai
+     app di-kill/reinstall). Pita itu dicat pakai background <html> — samakan
+     dengan bg app supaya menyatu, tidak terlihat seperti layar kepotong. */
+  background-color: var(--bg-app);
 }
 
 body {
@@ -556,6 +560,17 @@ img {
 /* Sidebar header */
 .sidebar-header {
   padding-top: 20px;
+}
+
+/* Standalone PWA: sidebar full-height edge-to-edge → header wajib turun dari
+   status bar (screenshot: "Dash⁵" ketimpa jam), footer naik dari home indicator */
+@media all and (display-mode: standalone) {
+  .sidebar-header {
+    padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 8px));
+  }
+  .sidebar-footer-safe {
+    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+  }
 }
 
 /* ── Topbar native ── */
