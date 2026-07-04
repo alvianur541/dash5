@@ -510,9 +510,8 @@ img {
   }
 }
 
-/* Safe area spacer di bawah input bar.
-   Browser Safari: browser sudah handle safe-area sendiri, cukup gap kecil.
-   Standalone PWA: env(safe-area-inset-bottom) aktif — home indicator perlu spacing. */
+/* Safe area spacer di bawah input bar — nilai TETAP (tanpa env, lihat pitfall #14).
+   Browser: gap kecil 6px. Standalone: 10px (iOS auto-inset sudah urus home indicator). */
 .safe-area-spacer {
   height: 6px;
   flex-shrink: 0;
