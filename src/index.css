@@ -518,12 +518,15 @@ img {
   flex-shrink: 0;
 }
 
-/* Standalone: cukup selipkan tinggi home-indicator/gesture-bar (env). Floor
-   dikecilkan 20→10px supaya input tidak menggantung tinggi di device tanpa
-   inset besar; device ber-home-indicator tetap aman via env(). */
+/* Standalone: selipkan clearance home-indicator, TAPI di-CLAMP.
+   iOS di device tertentu report env(safe-area-inset-bottom) bogus ~83px
+   (pitfall #14 — terbukti lagi setelah viewport-fit=cover aktif) → tanpa cap,
+   input bar menggantung ~87px dari dasar layar. Cap 20px = feel pre-regresi
+   (dulu spacer fixed 20px & user nyaman); home indicator hanya overlap area
+   gradient di bawah kartu input, bukan kartunya. */
 @media all and (display-mode: standalone) {
   .safe-area-spacer {
-    height: max(10px, env(safe-area-inset-bottom, 10px));
+    height: clamp(8px, env(safe-area-inset-bottom, 8px), 20px);
   }
 }
 
@@ -569,7 +572,7 @@ img {
     padding-top: max(20px, calc(env(safe-area-inset-top, 0px) + 8px));
   }
   .sidebar-footer-safe {
-    padding-bottom: max(12px, env(safe-area-inset-bottom, 12px));
+    padding-bottom: clamp(12px, env(safe-area-inset-bottom, 12px), 30px);
   }
 }
 
@@ -1061,10 +1064,11 @@ img {
   }
 }
 
-/* Standalone: input bar lebih tinggi (safe-area-spacer) → naikkan FAB agar tidak ketimpa */
+/* Standalone: input bar lebih tinggi (safe-area-spacer) → naikkan FAB agar tidak ketimpa.
+   env di-clamp sama seperti spacer (anti nilai bogus ~83px). */
 @media all and (display-mode: standalone) {
   .scroll-fab {
-    bottom: calc(90px + max(14px, env(safe-area-inset-bottom, 14px)));
+    bottom: calc(90px + clamp(8px, env(safe-area-inset-bottom, 8px), 20px));
   }
 }
 
