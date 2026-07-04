@@ -514,9 +514,12 @@ img {
   flex-shrink: 0;
 }
 
+/* Standalone: cukup selipkan tinggi home-indicator/gesture-bar (env). Floor
+   dikecilkan 20→10px supaya input tidak menggantung tinggi di device tanpa
+   inset besar; device ber-home-indicator tetap aman via env(). */
 @media all and (display-mode: standalone) {
   .safe-area-spacer {
-    height: max(20px, env(safe-area-inset-bottom, 20px));
+    height: max(10px, env(safe-area-inset-bottom, 10px));
   }
 }
 
@@ -536,11 +539,11 @@ img {
   justify-content: center;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 24px 24px 160px;
+  padding: 24px 24px 132px;
   scrollbar-width: none;
   /* Ambient glow — kesan hangat tanpa mengubah layout */
   background:
-    radial-gradient(520px 300px at 50% 14%, color-mix(in srgb, var(--accent-main) 7%, transparent), transparent 72%);
+    radial-gradient(520px 300px at 50% 20%, color-mix(in srgb, var(--accent-main) 6%, transparent), transparent 72%);
 }
 .welcome-screen::-webkit-scrollbar { display: none; }
 
@@ -772,22 +775,43 @@ img {
 }
 .suggestion-chip {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-radius: 10px;
-  background: var(--bg-card); border: 0.5px solid var(--border-main);
+  padding: 10px 12px 10px 10px; border-radius: 14px;
+  background: var(--bg-card); border: 1px solid var(--border-main);
   font-family: var(--font-sans);
-  font-size: 13.5px; font-weight: 400; color: var(--text-secondary);
+  font-size: 13.5px; font-weight: 450; color: var(--text-secondary);
   cursor: pointer; text-align: left; width: 100%;
-  transition: background 0.15s, border-color 0.15s, color 0.15s, transform 0.15s;
+  transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.18s, box-shadow 0.18s;
 }
 .suggestion-chip:hover {
-  background: var(--bg-app);
-  border-color: color-mix(in srgb, var(--accent-main) 30%, var(--border-main));
+  background: var(--bg-card-hover);
+  border-color: color-mix(in srgb, var(--accent-main) 32%, var(--border-main));
   color: var(--text-primary);
   transform: translateY(-1px);
-  box-shadow: 0 4px 14px -4px color-mix(in srgb, var(--accent-main) 22%, rgba(0,0,0,0.18));
+  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent-main) 26%, rgba(0,0,0,0.22));
 }
-.chip-icon { font-size: 15px; flex-shrink: 0; opacity: 0.85; transition: transform 0.18s var(--ease-spring); }
-.suggestion-chip:hover .chip-icon { transform: scale(1.12); }
+/* Tile ikon — kotak lembut ber-tint accent, memberi struktur & warna */
+.chip-tile {
+  width: 34px; height: 34px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; line-height: 1;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--accent-main) 12%, transparent);
+  transition: transform 0.2s var(--ease-spring), background 0.18s;
+}
+.suggestion-chip:hover .chip-tile {
+  transform: scale(1.06);
+  background: color-mix(in srgb, var(--accent-main) 18%, transparent);
+}
+.chip-text { flex: 1; min-width: 0; line-height: 1.35; }
+.chip-arrow {
+  flex-shrink: 0; color: var(--text-muted);
+  opacity: 0; transform: translateX(-4px);
+  transition: opacity 0.18s, transform 0.18s, color 0.18s;
+}
+.suggestion-chip:hover .chip-arrow {
+  opacity: 1; transform: translateX(0);
+  color: var(--accent-main);
+}
 
 .input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
 .pill-side-btn {
@@ -952,12 +976,13 @@ img {
   /* Action buttons — lebih mudah di-tap */
   .action-btn { width: 32px; height: 32px; border-radius: 10px; }
 
-  /* Suggestion chips — taller touch target */
+  /* Suggestion chips — taller touch target (selaras tile ikon) */
   .suggestion-chip {
-    padding: 13px 16px;
-    border-radius: 12px;
+    padding: 10px 14px 10px 10px;
+    border-radius: 14px;
   }
   .suggestion-chip:active { transform: scale(0.98); background: var(--bg-card-hover); }
+  .chip-tile { width: 36px; height: 36px; }
 
   /* Input pill — elevation supaya float di atas content */
   .input-pill {

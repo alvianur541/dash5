@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, ListChecks, Search, Sparkles, ChevronDown } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, ListChecks, Search, Sparkles, ChevronDown, ChevronRight } from 'lucide-react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
@@ -374,57 +374,59 @@ export function ChatWindow({
             className="welcome-screen"
             style={{}}
           >
-            <div style={{ width: '100%', maxWidth: '720px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
+            <div style={{ width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '26px' }}>
 
-              {/* Hero — greeting + subtitle fit 1 baris seperti AndalAI */}
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px', textAlign: 'center' }}>
+              {/* Hero — greeting editorial + subtitle kalem */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', textAlign: 'center' }}>
                 <m.h1
                   className="welcome-greeting"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
                   style={{
-                    fontFamily: 'var(--font-display)',
-                    fontSize: 'clamp(22px, 3.6vw, 30px)',
-                    fontWeight: 700,
-                    letterSpacing: '-0.02em',
-                    lineHeight: 1.2,
+                    fontFamily: '"DM Serif Display", var(--font-serif)',
+                    fontSize: 'clamp(23px, 5.4vw, 29px)',
+                    fontWeight: 400,
+                    letterSpacing: '-0.01em',
+                    lineHeight: 1.16,
                     color: 'var(--text-primary)',
                   }}
                 >
                   {getGreeting({ name: userName || 'Operator' })}
                 </m.h1>
                 <m.p
-                  className="welcome-subtitle welcome-subtitle-oneline"
+                  className="welcome-subtitle"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.12 }}
                   style={{
-                    fontSize: '14px',
+                    fontSize: '13.5px',
                     color: 'var(--text-muted)',
                     letterSpacing: '-0.003em',
-                    lineHeight: 1.5,
+                    lineHeight: 1.55,
+                    maxWidth: '330px',
                   }}
                 >
                   {hasHistory
-                    ? <>Lanjut sesi sebelumnya atau mulai topik baru di unit <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
-                    : <>Tanyakan <strong style={{ color: 'var(--accent-main)', fontWeight: 600 }}>fault code</strong>, <strong style={{ color: 'var(--accent-main)', fontWeight: 600 }}>PN parts</strong>, atau <strong style={{ color: 'var(--accent-main)', fontWeight: 600 }}>spec teknis</strong> untuk <strong style={{ color: 'var(--text-primary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
+                    ? <>Lanjut sesi sebelumnya atau mulai topik baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
+                    : <>Fault code, PN parts, atau spec teknis untuk <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
                   }
                 </m.p>
               </div>
 
-              {/* Quick-start chips — kompak, proporsional dengan hero */}
-              <div className="chips-container" style={{ display: 'flex', flexDirection: 'column', gap: '7px', maxWidth: '440px', width: '100%', margin: '0 auto' }}>
+              {/* Quick-start chips — tile ikon + label + panah */}
+              <div className="chips-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', margin: '0 auto' }}>
                 <p className="chips-label" style={{
-                  textAlign: 'center',
+                  textAlign: 'left',
+                  paddingLeft: '4px',
                   marginBottom: '2px',
-                  fontSize: '10.5px',
-                  letterSpacing: '0.12em',
+                  fontSize: '10px',
+                  letterSpacing: '0.14em',
                   textTransform: 'uppercase',
                   color: 'var(--text-muted)',
-                  fontWeight: 500,
+                  fontWeight: 600,
                 }}>
-                  Quick Start
+                  Mulai cepat
                 </p>
                 {(SUGGESTION_CHIPS_BY_MODEL[selectedModel] ?? DEFAULT_CHIPS).map((chip, i) => (
                   <m.button
@@ -434,10 +436,10 @@ export function ChatWindow({
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, delay: 0.22 + i * 0.06 }}
                     onClick={() => onSendMessage(chip.text)}
-                    style={{ fontSize: '13.5px', padding: '11px 16px', borderRadius: '12px' }}
                   >
-                    <span className="chip-icon" style={{ fontSize: '16px' }}>{chip.icon}</span>
-                    {chip.text}
+                    <span className="chip-tile" aria-hidden="true">{chip.icon}</span>
+                    <span className="chip-text">{chip.text}</span>
+                    <ChevronRight size={15} className="chip-arrow" />
                   </m.button>
                 ))}
               </div>
