@@ -523,7 +523,7 @@ img {
    return bogus ~83px → input menggantung (pitfall #14). */
 @media all and (display-mode: standalone) {
   .safe-area-spacer {
-    height: 10px;
+    height: 24px;   /* napas dari home indicator — 10px terasa terlalu mepet */
   }
 }
 
@@ -570,7 +570,7 @@ img {
     padding-top: 20px;
   }
   .sidebar-footer-safe {
-    padding-bottom: 14px;
+    padding-bottom: 18px;
   }
 }
 
@@ -829,6 +829,25 @@ img {
   color: var(--accent-main);
 }
 
+/* Dark mode: kartu chip nyaris menyatu dgn bg (#292524 di atas #1C1917).
+   Perkuat definisi — surface diangkat + border accent-tinted + tile lebih terang. */
+.dark-theme .suggestion-chip {
+  background: color-mix(in srgb, var(--bg-card) 92%, var(--accent-main) 8%);
+  border-color: color-mix(in srgb, var(--accent-main) 16%, rgba(255, 255, 255, 0.10));
+  color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+.dark-theme .suggestion-chip:hover {
+  background: color-mix(in srgb, var(--bg-card-hover) 88%, var(--accent-main) 12%);
+  border-color: color-mix(in srgb, var(--accent-main) 45%, transparent);
+}
+.dark-theme .chip-tile {
+  background: color-mix(in srgb, var(--accent-main) 22%, transparent);
+}
+.dark-theme .suggestion-chip:hover .chip-tile {
+  background: color-mix(in srgb, var(--accent-main) 30%, transparent);
+}
+
 .input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
 .pill-side-btn {
   width: 30px; height: 30px; border-radius: 8px; border: 0.5px solid var(--border-main);
@@ -1065,7 +1084,7 @@ img {
 /* Standalone: FAB naik sedikit di atas input bar. Nilai tetap (tanpa env). */
 @media all and (display-mode: standalone) {
   .scroll-fab {
-    bottom: 100px;
+    bottom: 108px;
   }
 }
 
