@@ -68,38 +68,36 @@ interface ChatWindowProps {
 //   contoh real ZX200: 11006-2 (engine controller), 16606 (EC angle sensor)
 //   contoh real ZX138: 11302-4 (boom raise pilot pressure), 11307 (sensor)
 // KCM 60ZV: WM only — no fault code structure. Topic: brake/hydraulic/power groups
+// 2 chip per model — chip 1 diagnosa (fault code / symptom), chip 2 nilai tambah
+// yang beda per model (spec HCD, prosedur WM, estimasi biaya CPM+promo) supaya
+// cakupan kemampuan terlihat. Semua menembak jalur RAG yang terverifikasi
+// (lihat Quick Reference: Test Cases di CLAUDE.md) — demo tidak boleh zonk.
 const SUGGESTION_CHIPS_BY_MODEL: Record<UnitModel, Array<{ icon: string; text: string }>> = {
   'ZX48U-5A': [
-    { icon: '⚠️', text: 'Analisa fault code ENG:00436-04' },
-    { icon: '🩺', text: 'Swing lambat saat warm-up, akar masalah?' },
-    { icon: '📊', text: 'Relief pressure swing motor' },
+    { icon: '⚠️', text: 'Diagnosa fault code ENG:00436-04 dan langkah pengecekannya' },
+    { icon: '📐', text: 'Relief pressure main pump beserta cara pengukurannya' },
   ],
   'ZX65USB-5A': [
-    { icon: '⚠️', text: 'Analisa fault code ENG:0001D-02' },
-    { icon: '🩺', text: 'Engine susah start, urutan diagnosa?' },
-    { icon: '📊', text: 'Spec engine Yanmar 4TNV88' },
+    { icon: '⚠️', text: 'Diagnosa fault code ENG:0001D-02 dan langkah pengecekannya' },
+    { icon: '🔍', text: 'Engine susah start — urutan pengecekan sistematis' },
   ],
   'ZX138MF-5G': [
-    { icon: '⚠️', text: 'Analisa fault code 11302-4 boom raise' },
-    { icon: '🩺', text: 'Boom angkat lambat, cek dari mana?' },
-    { icon: '📊', text: 'Parts & biaya service 1000 jam' },
+    { icon: '⚠️', text: 'Diagnosa fault code 11302-4 pada sistem boom raise' },
+    { icon: '💰', text: 'Rincian parts dan estimasi biaya service 1000 jam' },
   ],
   'ZX200-5G': [
-    { icon: '⚠️', text: 'Analisa fault code 11006-2' },
-    { icon: '🩺', text: 'Hydraulic power lemah, diagnosa penyebab' },
-    { icon: '📊', text: 'Parts & biaya service 2000 jam' },
+    { icon: '⚠️', text: 'Diagnosa fault code 11006-2 dan dampaknya ke unit' },
+    { icon: '💰', text: 'Rincian parts dan estimasi biaya service 2000 jam' },
   ],
   'KCM 60ZV': [
-    { icon: '🩺', text: 'Steering terasa berat, analisa penyebab' },
-    { icon: '🔧', text: 'Cara adjust parking brake + spec' },
-    { icon: '📊', text: 'Steering relief valve setting' },
+    { icon: '🔍', text: 'Steering terasa berat — analisa penyebab dan pengecekan' },
+    { icon: '📋', text: 'Prosedur adjust parking brake beserta spec-nya' },
   ],
 };
 
 const DEFAULT_CHIPS = [
-  { icon: '⚠️', text: 'Analisa fault code yang muncul di monitor' },
-  { icon: '🩺', text: 'Hydraulic power lemah, diagnosa penyebab' },
-  { icon: '📊', text: 'Parts & biaya service berkala' },
+  { icon: '⚠️', text: 'Diagnosa fault code yang muncul di monitor' },
+  { icon: '💰', text: 'Rincian parts dan biaya service berkala' },
 ];
 
 function formatTime(timestamp: number) {
