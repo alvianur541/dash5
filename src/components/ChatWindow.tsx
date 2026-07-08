@@ -83,11 +83,11 @@ const SUGGESTION_CHIPS_BY_MODEL: Record<UnitModel, Array<{ icon: string; text: s
   ],
   'ZX138MF-5G': [
     { icon: '⚠️', text: 'Diagnosa fault code 11302-4 pada sistem boom raise' },
-    { icon: '💰', text: 'Rincian parts dan estimasi biaya service 1000 jam' },
+    { icon: '🔍', text: 'Boom angkat lambat — analisa penyebab dan pengecekan' },
   ],
   'ZX200-5G': [
     { icon: '⚠️', text: 'Diagnosa fault code 11006-2 dan dampaknya ke unit' },
-    { icon: '💰', text: 'Rincian parts dan estimasi biaya service 2000 jam' },
+    { icon: '🔍', text: 'Hydraulic power lemah — diagnosa penyebab dan langkah cek' },
   ],
   'KCM 60ZV': [
     { icon: '🔍', text: 'Steering terasa berat — analisa penyebab dan pengecekan' },
@@ -97,7 +97,7 @@ const SUGGESTION_CHIPS_BY_MODEL: Record<UnitModel, Array<{ icon: string; text: s
 
 const DEFAULT_CHIPS = [
   { icon: '⚠️', text: 'Diagnosa fault code yang muncul di monitor' },
-  { icon: '💰', text: 'Rincian parts dan biaya service berkala' },
+  { icon: '🔍', text: 'Hydraulic power lemah — diagnosa penyebab dan langkah cek' },
 ];
 
 function formatTime(timestamp: number) {
