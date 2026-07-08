@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react
 import { m, AnimatePresence } from 'motion/react';
 import {
   X, RefreshCw, Loader2, BarChart3, ShieldAlert, Clock, PieChart, BookOpen, User,
-  TrendingUp, TrendingDown, FilterX,
+  TrendingUp, TrendingDown, FilterX, Package, Wrench, Zap, Split,
 } from 'lucide-react';
 import { getAuthToken } from '../services/supabase';
 import { cn } from '../lib/utils';
@@ -56,6 +56,37 @@ const TOOL_LABEL: Record<string, string> = {
 const toolLabel = (t: string) => TOOL_LABEL[t] ?? t.replace(/^search_/, '').replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
 const toolShort = (t: string) => (t === '(tanpa tool)' ? 'Langsung' : toolLabel(t).split(' ')[0]);
 
+/** Ikon per sumber data — anchor visual, senada chip-tile di welcome screen. */
+function toolIcon(t: string, size = 14) {
+  switch (t) {
+    case 'search_technical_manual': return <BookOpen size={size} />;
+    case 'search_parts_catalog':    return <Package size={size} />;
+    case 'search_engine_manual':    return <Wrench size={size} />;
+    case 'search_circuit_diagram':  return <Zap size={size} />;
+    case 'decompose_query':         return <Split size={size} />;
+    default:                        return <Zap size={size} />;
+  }
+}
+
+const initialOf = (s: string) => (s.trim().charAt(0) || '?').toUpperCase();
+
+/** Avatar inisial — hangat, accent-wash; `solid` untuk state terpilih. */
+function Avatar({ name, size = 30, solid = false }: { name: string; size?: number; solid?: boolean }) {
+  return (
+    <span
+      className="flex items-center justify-center rounded-full font-semibold shrink-0 transition-colors"
+      style={{
+        width: size, height: size,
+        fontSize: size * 0.42,
+        background: solid ? 'var(--accent-main)' : 'color-mix(in srgb, var(--accent-main) 15%, transparent)',
+        color: solid ? '#fff' : 'var(--accent-main)',
+      }}
+    >
+      {initialOf(name)}
+    </span>
+  );
+}
+
 type Bucket = { key: string; axis: string; label: string; query: number; tokens: number; idr: number };
 type Metric = 'idr' | 'query' | 'token';
 
@@ -71,16 +102,21 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-function Panel({ title, aside, hint, children, className }: { title: string; aside?: ReactNode; hint?: string; children: ReactNode; className?: string }) {
+function Panel({ title, aside, hint, children, className, delay = 0 }: { title: string; aside?: ReactNode; hint?: string; children: ReactNode; className?: string; delay?: number }) {
   return (
-    <section className={cn('rounded-2xl border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5', className)}>
+    <m.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.38, delay, ease: [0.22, 1, 0.36, 1] }}
+      className={cn('rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5', className)}
+    >
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
         {aside && <div className="text-[11px] text-[var(--text-muted)] shrink-0">{aside}</div>}
       </div>
       {hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{hint}</p>}
       <div className="mt-4">{children}</div>
-    </section>
+    </m.section>
   );
 }
 
@@ -136,6 +172,12 @@ function Spark({ points }: { points: number[] }) {
 /** Donut 2 segmen (input vs output) — hover segmen untuk detail di tengah. */
 function CostDonut({ inIdr, outIdr }: { inIdr: number; outIdr: number }) {
   const [seg, setSeg] = useState<'in' | 'out' | null>(null);
+  // Arc digambar animasi dari 0 saat mount — hook WAJIB sebelum early-return.
+  const [drawn, setDrawn] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setDrawn(true), 60);
+    return () => clearTimeout(t);
+  }, []);
   const total = inIdr + outIdr;
   if (total <= 0) return <p className="text-[12px] text-[var(--text-muted)]">Belum ada aktivitas.</p>;
   const R = 42, SW = 13, C = 2 * Math.PI * R;
@@ -157,10 +199,10 @@ function CostDonut({ inIdr, outIdr }: { inIdr: number; outIdr: number }) {
             cx="59" cy="59" r={R} fill="none"
             stroke="var(--accent-main)"
             strokeWidth={seg === 'in' ? SW + 3 : SW}
-            strokeDasharray={`${inLen} ${C - inLen}`}
+            strokeDasharray={drawn ? `${inLen} ${C - inLen}` : `0.001 ${C}`}
             strokeDashoffset={-GAP / 2}
             strokeLinecap="round"
-            style={{ transition: 'stroke-width .15s', opacity: seg === 'out' ? 0.35 : 1, cursor: 'pointer' }}
+            style={{ transition: 'stroke-dasharray .8s cubic-bezier(.22,1,.36,1), stroke-width .15s', opacity: seg === 'out' ? 0.35 : 1, cursor: 'pointer' }}
             onMouseEnter={() => setSeg('in')}
             onClick={() => setSeg(s => (s === 'in' ? null : 'in'))}
           />
@@ -168,10 +210,10 @@ function CostDonut({ inIdr, outIdr }: { inIdr: number; outIdr: number }) {
             cx="59" cy="59" r={R} fill="none"
             stroke={NEUTRAL}
             strokeWidth={seg === 'out' ? SW + 3 : SW}
-            strokeDasharray={`${outLen} ${C - outLen}`}
+            strokeDasharray={drawn ? `${outLen} ${C - outLen}` : `0.001 ${C}`}
             strokeDashoffset={-(inLen + GAP * 1.5)}
             strokeLinecap="round"
-            style={{ transition: 'stroke-width .15s', opacity: seg === 'in' ? 0.35 : 1, cursor: 'pointer' }}
+            style={{ transition: 'stroke-dasharray .8s cubic-bezier(.22,1,.36,1), stroke-width .15s', opacity: seg === 'in' ? 0.35 : 1, cursor: 'pointer' }}
             onMouseEnter={() => setSeg('out')}
             onClick={() => setSeg(s => (s === 'out' ? null : 'out'))}
           />
@@ -224,7 +266,12 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
   const avg = activeVals.length >= 2 ? activeVals.reduce((a, v) => a + v, 0) / activeVals.length : 0;
 
   return (
-    <section className="rounded-2xl border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5">
+    <m.section
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.38, delay: 0.1, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Tren Aktivitas</h3>
@@ -324,7 +371,7 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
           {emptyDay ? 'Belum ada aktivitas hari ini.' : 'Tren harian akan terisi seiring bertambahnya hari pemakaian.'}
         </p>
       )}
-    </section>
+    </m.section>
   );
 }
 
@@ -455,7 +502,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
             exit={{ opacity: 0, y: 20, scale: 0.98 }}
             transition={{ duration: 0.22, ease: [0.32, 0.72, 0, 1] }}
             className="w-full sm:max-w-4xl bg-[var(--bg-card)] border border-[var(--border-main)]
-                       rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden sm:mx-4 flex flex-col
+                       rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden sm:mx-4 flex flex-col
                        max-h-[94dvh] sm:max-h-[90vh]"
             onClick={e => e.stopPropagation()}
           >
@@ -514,12 +561,20 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
               {snap && derived && !error && (
                 <div className="space-y-4">
                   {/* ── Hero ── */}
-                  <section className="rounded-2xl border border-[var(--border-main)] overflow-hidden">
-                    <div className="bg-[var(--bg-app)] px-5 pt-4 pb-5 flex items-end justify-between gap-4">
+                  <m.section
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.38, ease: [0.22, 1, 0.36, 1] }}
+                    className="rounded-[20px] border border-[var(--border-main)] overflow-hidden"
+                  >
+                    <div
+                      className="px-5 pt-4 pb-5 flex items-end justify-between gap-4"
+                      style={{ background: 'linear-gradient(150deg, color-mix(in srgb, var(--accent-main) 10%, var(--bg-app)) 0%, var(--bg-app) 68%)' }}
+                    >
                       <div className="min-w-0">
                         <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Total biaya · periode berjalan</p>
                         <div className="flex flex-wrap items-end gap-x-3 gap-y-1 mt-2">
-                          <span className="text-[32px] sm:text-[34px] leading-none font-semibold tracking-tight text-[var(--accent-main)] tabular-nums">{rp(snap.totals.idr)}</span>
+                          <span className="text-[34px] sm:text-[38px] leading-none font-semibold tracking-[-0.02em] text-[var(--accent-main)] tabular-nums">{rp(snap.totals.idr)}</span>
                           {derived.delta && (
                             <span className="flex items-center gap-1 text-[11.5px] font-medium text-[var(--text-secondary)] tabular-nums mb-0.5">
                               {derived.delta.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
@@ -546,21 +601,31 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       <Stat label="Teknisi Aktif" value={num(snap.totals.technicians)} sub={`dari ${num(snap.census.niks)} terdaftar`} />
                       <Stat label="Biaya / Query" value={rp(snap.totals.questions ? snap.totals.idr / snap.totals.questions : 0)} sub="rata-rata periode" />
                     </div>
-                  </section>
+                  </m.section>
 
                   {/* ── Sorotan (narasi otomatis) ── */}
                   {derived.insights.length > 0 && (
-                    <section className="rounded-2xl border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5">
-                      <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-3">Sorotan</h3>
-                      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2.5">
+                    <m.section
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.38, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
+                      className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
+                    >
+                      <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-3.5">Sorotan</h3>
+                      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
                         {derived.insights.map((ins, i) => (
-                          <div key={i} className="flex items-start gap-2.5">
-                            <span className="text-[var(--accent-main)] mt-[3px] shrink-0">{ins.icon}</span>
-                            <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed tabular-nums">{ins.text}</p>
+                          <div key={i} className="flex items-start gap-3">
+                            <span
+                              className="w-7 h-7 rounded-[9px] flex items-center justify-center shrink-0"
+                              style={{ background: 'color-mix(in srgb, var(--accent-main) 13%, transparent)', color: 'var(--accent-main)' }}
+                            >
+                              {ins.icon}
+                            </span>
+                            <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed tabular-nums pt-0.5">{ins.text}</p>
                           </div>
                         ))}
                       </div>
-                    </section>
+                    </m.section>
                   )}
 
                   {/* ── Tren interaktif ── */}
@@ -568,7 +633,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
 
                   {/* ── Teknisi (drill-down) + Donut komposisi ── */}
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Panel title="Biaya per Teknisi" aside="urut biaya" hint="Klik nama untuk menyaring Aktivitas Terbaru.">
+                    <Panel title="Biaya per Teknisi" aside="urut biaya" hint="Klik nama untuk menyaring Aktivitas Terbaru." delay={0.14}>
                       <div className="flex flex-col gap-1">
                         {snap.per_user.map(u => {
                           const share = snap.totals.idr > 0 ? (u.idr / snap.totals.idr) * 100 : 0;
@@ -581,21 +646,24 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                               onClick={() => setSelTeknisi(isSel ? null : u.teknisi)}
                               aria-pressed={isSel}
                               className={cn(
-                                'text-left rounded-xl px-2.5 py-2 -mx-1 transition-colors',
+                                'flex items-center gap-3 text-left rounded-xl px-2.5 py-2 -mx-1 transition-colors',
                                 isSel ? 'bg-[var(--accent-main)]/[0.08]' : 'hover:bg-[var(--accent-main)]/[0.04]',
                               )}
                             >
-                              <div className="flex items-baseline justify-between gap-3 mb-1.5">
-                                <span className={cn('text-[13px] truncate', isSel ? 'font-semibold text-[var(--accent-main)]' : 'text-[var(--text-primary)]')}>
-                                  {u.teknisi}
-                                </span>
-                                <span className="text-[12.5px] font-semibold text-[var(--text-primary)] tabular-nums shrink-0">
-                                  {rp(u.idr)}<span className="text-[var(--text-muted)] font-normal"> · {num(u.pertanyaan)} query · {share.toFixed(0)}%</span>
-                                </span>
-                              </div>
-                              <div className="h-1.5 rounded-full bg-[var(--border-main)]/45 overflow-hidden">
-                                <div className="h-full rounded-full transition-[width] duration-700 ease-out"
-                                  style={{ width: `${Math.max((u.idr / maxIdr) * 100, 2)}%`, background: 'var(--accent-main)' }} />
+                              <Avatar name={u.teknisi} solid={isSel} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                                  <span className={cn('text-[13px] truncate', isSel ? 'font-semibold text-[var(--accent-main)]' : 'text-[var(--text-primary)]')}>
+                                    {u.teknisi}
+                                  </span>
+                                  <span className="text-[12.5px] font-semibold text-[var(--text-primary)] tabular-nums shrink-0">
+                                    {rp(u.idr)}<span className="text-[var(--text-muted)] font-normal"> · {num(u.pertanyaan)} query · {share.toFixed(0)}%</span>
+                                  </span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-[var(--border-main)]/45 overflow-hidden">
+                                  <div className="h-full rounded-full transition-[width] duration-700 ease-out"
+                                    style={{ width: `${Math.max((u.idr / maxIdr) * 100, 2)}%`, background: 'var(--accent-main)' }} />
+                                </div>
                               </div>
                             </button>
                           );
@@ -604,7 +672,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       </div>
                     </Panel>
 
-                    <Panel title="Komposisi Biaya" aside="input vs output" hint="Arahkan kursor ke segmen untuk rincian.">
+                    <Panel title="Komposisi Biaya" aside="input vs output" hint="Arahkan kursor ke segmen untuk rincian." delay={0.18}>
                       <CostDonut inIdr={derived.inIdr} outIdr={derived.outIdr} />
                       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-4 pt-3 border-t border-[var(--border-main)]/60 tabular-nums">
                         {num(snap.totals.input_tokens)} token input · {num(snap.totals.output_tokens)} token output. Tarif output {pricing ? `${(pricing.outputPerMUsd / pricing.inputPerMUsd).toFixed(0)}×` : ''} lebih tinggi, namun volume input yang menentukan total biaya.
@@ -614,21 +682,29 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
 
                   {/* ── Sumber data + cakupan ── */}
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Panel title="Sumber Data Terpakai" aside="frekuensi · biaya">
-                      <div className="flex flex-col gap-3.5">
+                    <Panel title="Sumber Data Terpakai" aside="frekuensi · biaya" delay={0.22}>
+                      <div className="flex flex-col gap-3">
                         {snap.per_tool.map(t => {
                           const maxTool = Math.max(1, ...snap.per_tool.map(x => x.kali));
                           return (
-                            <div key={t.tool} className="flex flex-col gap-1.5">
-                              <div className="flex items-baseline justify-between gap-3">
-                                <span className="text-[13px] text-[var(--text-primary)] truncate">{toolLabel(t.tool)}</span>
-                                <span className="text-[12.5px] font-semibold text-[var(--text-primary)] tabular-nums shrink-0">
-                                  {num(t.kali)}×<span className="text-[var(--text-muted)] font-normal"> · {rp0(t.idr)}</span>
-                                </span>
-                              </div>
-                              <div className="h-1.5 rounded-full bg-[var(--border-main)]/45 overflow-hidden">
-                                <div className="h-full rounded-full transition-[width] duration-700 ease-out"
-                                  style={{ width: `${Math.max((t.kali / maxTool) * 100, 2)}%`, background: 'color-mix(in srgb, var(--text-muted) 45%, transparent)' }} />
+                            <div key={t.tool} className="flex items-center gap-3">
+                              <span
+                                className="w-8 h-8 rounded-[10px] flex items-center justify-center shrink-0"
+                                style={{ background: 'color-mix(in srgb, var(--text-muted) 12%, transparent)', color: 'var(--text-secondary)' }}
+                              >
+                                {toolIcon(t.tool, 15)}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                                  <span className="text-[13px] text-[var(--text-primary)] truncate">{toolLabel(t.tool)}</span>
+                                  <span className="text-[12.5px] font-semibold text-[var(--text-primary)] tabular-nums shrink-0">
+                                    {num(t.kali)}×<span className="text-[var(--text-muted)] font-normal"> · {rp0(t.idr)}</span>
+                                  </span>
+                                </div>
+                                <div className="h-1.5 rounded-full bg-[var(--border-main)]/45 overflow-hidden">
+                                  <div className="h-full rounded-full transition-[width] duration-700 ease-out"
+                                    style={{ width: `${Math.max((t.kali / maxTool) * 100, 2)}%`, background: 'color-mix(in srgb, var(--text-muted) 45%, transparent)' }} />
+                                </div>
                               </div>
                             </div>
                           );
@@ -637,7 +713,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       </div>
                     </Panel>
 
-                    <Panel title="Cakupan Sistem">
+                    <Panel title="Cakupan Sistem" delay={0.26}>
                       <div className="grid grid-cols-2 gap-px bg-[var(--border-main)] rounded-xl overflow-hidden border border-[var(--border-main)]">
                         {[
                           { v: num(snap.census.docs), l: 'Dokumen (chunk)' },
@@ -657,6 +733,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                   {/* ── Aktivitas terbaru (terfilter drill-down) ── */}
                   <Panel
                     title="Aktivitas Terbaru"
+                    delay={0.3}
                     aside={
                       selTeknisi ? (
                         <button
@@ -687,7 +764,12 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                           {filteredRecent.map((r, i) => (
                             <tr key={i} className="border-t border-[var(--border-main)]/50 hover:bg-[var(--accent-main)]/[0.045] transition-colors">
                               <td className="py-2.5 pr-3 text-[var(--text-muted)] tabular-nums whitespace-nowrap">{dt(r.created_at)}</td>
-                              <td className="py-2.5 pr-3 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.teknisi}</td>
+                              <td className="py-2.5 pr-3 whitespace-nowrap">
+                                <span className="flex items-center gap-2">
+                                  <Avatar name={r.teknisi} size={20} />
+                                  <span className="text-[var(--text-primary)] font-medium">{r.teknisi}</span>
+                                </span>
+                              </td>
                               <td className="py-2.5 pr-3 text-[var(--text-secondary)] whitespace-nowrap">
                                 {(r.tools_used && r.tools_used.length) ? r.tools_used.map(toolShort).join(', ') : <span className="text-[var(--text-muted)]">Langsung</span>}
                               </td>
