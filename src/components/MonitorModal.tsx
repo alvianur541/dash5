@@ -111,10 +111,10 @@ function Panel({ title, aside, hint, children, className, delay = 0 }: { title: 
       className={cn('rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5', className)}
     >
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">{title}</h3>
+        <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">{title}</h3>
         {aside && <div className="text-[11px] text-[var(--text-muted)] shrink-0">{aside}</div>}
       </div>
-      {hint && <p className="text-[11px] text-[var(--text-muted)] mt-0.5">{hint}</p>}
+      {hint && <p className="text-[11px] text-[var(--text-muted)] mt-1">{hint}</p>}
       <div className="mt-4">{children}</div>
     </m.section>
   );
@@ -274,8 +274,8 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <h3 className="text-[13px] font-semibold text-[var(--text-primary)]">Tren Aktivitas</h3>
-          <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Arahkan kursor atau sentuh batang untuk rincian.</p>
+          <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Tren Aktivitas</h3>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1">Arahkan kursor atau sentuh batang untuk rincian.</p>
         </div>
         <div className="flex items-center gap-2">
           <Segmented id="metric" value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
@@ -518,7 +518,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                   <BarChart3 size={16} className="text-[var(--accent-main)]" />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[14px] font-semibold text-[var(--text-primary)] leading-tight">Monitoring Pemakaian</p>
+                  <p className="font-editorial text-[17px] text-[var(--text-primary)] leading-tight">Monitoring Pemakaian</p>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight flex items-center gap-1.5 mt-0.5">
                     {snap && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                     <span className="tabular-nums truncate">
@@ -573,11 +573,11 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     >
                       <div className="min-w-0">
                         <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Total biaya · periode berjalan</p>
-                        <div className="flex flex-wrap items-end gap-x-3 gap-y-1 mt-2">
-                          <span className="text-[34px] sm:text-[38px] leading-none font-semibold tracking-[-0.02em] text-[var(--accent-main)] tabular-nums">{rp(snap.totals.idr)}</span>
+                        <div className="flex flex-wrap items-end gap-x-3 gap-y-1.5 mt-2">
+                          <span className="font-editorial text-[36px] sm:text-[42px] leading-none text-[var(--accent-main)]">{rp(snap.totals.idr)}</span>
                           {derived.delta && (
-                            <span className="flex items-center gap-1 text-[11.5px] font-medium text-[var(--text-secondary)] tabular-nums mb-0.5">
-                              {derived.delta.up ? <TrendingUp size={12} /> : <TrendingDown size={12} />}
+                            <span className="flex items-center gap-1 text-[11px] font-medium text-[var(--text-secondary)] tabular-nums mb-1 px-2 py-0.5 rounded-full border border-[var(--border-main)] bg-[var(--bg-card)]/60">
+                              {derived.delta.up ? <TrendingUp size={11} /> : <TrendingDown size={11} />}
                               {dec2(derived.delta.pct)}% vs kemarin
                             </span>
                           )}
@@ -611,7 +611,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       transition={{ duration: 0.38, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
                       className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
                     >
-                      <h3 className="text-[13px] font-semibold text-[var(--text-primary)] mb-3.5">Sorotan</h3>
+                      <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)] mb-3.5">Sorotan</h3>
                       <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
                         {derived.insights.map((ins, i) => (
                           <div key={i} className="flex items-start gap-3">

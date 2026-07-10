@@ -741,6 +741,13 @@ img {
   line-height: 1.18;
   color: var(--text-primary);
 }
+
+/* Judul editorial — serif display utk heading dashboard/modal, match welcome-greeting */
+.font-editorial {
+  font-family: "DM Serif Display", var(--font-serif);
+  font-weight: 400;
+  letter-spacing: 0.002em;
+}
 .model-pill {
   display: inline-flex; align-items: center; gap: 6px;
   background: transparent; border: 0.5px solid var(--border-main);
