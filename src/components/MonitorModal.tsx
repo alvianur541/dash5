@@ -31,10 +31,11 @@ interface DashboardResponse {
 
 const PROXY_URL = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
+// currencyDisplay 'code' → tampil "IDR 1.234,56" (bukan "Rp") — permintaan owner.
 const rp = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', currencyDisplay: 'code', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 const rp0 = (n: number) =>
-  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0);
+  new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', currencyDisplay: 'code', maximumFractionDigits: 0 }).format(n || 0);
 const num = (n: number) => new Intl.NumberFormat('id-ID').format(Math.round(n || 0));
 const dec2 = (n: number) => new Intl.NumberFormat('id-ID', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n || 0);
 const fixColon = (s: string) => s.replace('.', ':');
@@ -609,34 +610,6 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     </div>
                   </m.section>
 
-                  {/* ── Sorotan (narasi otomatis) ── */}
-                  {derived.insights.length > 0 && (
-                    <m.section
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.38, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
-                      className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
-                    >
-                      <div className="flex items-baseline justify-between gap-3 mb-3.5">
-                        <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Sorotan</h3>
-                        <span className="text-[11px] text-[var(--text-muted)] shrink-0">ringkasan otomatis dari data</span>
-                      </div>
-                      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
-                        {derived.insights.map((ins, i) => (
-                          <div key={i} className="flex items-start gap-3">
-                            <span
-                              className="w-7 h-7 rounded-[9px] flex items-center justify-center shrink-0"
-                              style={{ background: 'color-mix(in srgb, var(--accent-main) 13%, transparent)', color: 'var(--accent-main)' }}
-                            >
-                              {ins.icon}
-                            </span>
-                            <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed tabular-nums pt-0.5">{ins.text}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </m.section>
-                  )}
-
                   {/* ── Tren interaktif ── */}
                   <TrendChart hourly={derived.hourlyB} daily={derived.dailyB} />
 
@@ -798,10 +771,38 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     </div>
                   </Panel>
 
+                  {/* ── Sorotan (narasi otomatis) — penutup: kesimpulan setelah data ── */}
+                  {derived.insights.length > 0 && (
+                    <m.section
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.38, delay: 0.34, ease: [0.22, 1, 0.36, 1] }}
+                      className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
+                    >
+                      <div className="flex items-baseline justify-between gap-3 mb-3.5">
+                        <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Sorotan</h3>
+                        <span className="text-[11px] text-[var(--text-muted)] shrink-0">ringkasan otomatis dari data</span>
+                      </div>
+                      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
+                        {derived.insights.map((ins, i) => (
+                          <div key={i} className="flex items-start gap-3">
+                            <span
+                              className="w-7 h-7 rounded-[9px] flex items-center justify-center shrink-0"
+                              style={{ background: 'color-mix(in srgb, var(--accent-main) 13%, transparent)', color: 'var(--accent-main)' }}
+                            >
+                              {ins.icon}
+                            </span>
+                            <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed tabular-nums pt-0.5">{ins.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    </m.section>
+                  )}
+
                   {/* Catatan tarif */}
                   {pricing && (
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed px-1">
-                      Perhitungan biaya mengikuti tarif resmi gemini-3.5-flash — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs Rp {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
+                      Perhitungan biaya mengikuti tarif resmi gemini-3.5-flash — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs IDR {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
                     </p>
                   )}
                 </div>
