@@ -275,7 +275,7 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Tren Aktivitas</h3>
-          <p className="text-[11px] text-[var(--text-muted)] mt-1">Arahkan kursor atau sentuh batang untuk rincian.</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1">Sentuh atau arahkan kursor pada batang untuk melihat rincian.</p>
         </div>
         <div className="flex items-center gap-2">
           <Segmented id="metric" value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
@@ -514,15 +514,21 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
             {/* Header */}
             <div className="flex items-center justify-between px-5 pt-3 sm:pt-5 pb-4 border-b border-[var(--border-main)] shrink-0">
               <div className="flex items-center gap-3 min-w-0">
-                <div className="w-8 h-8 rounded-xl bg-[var(--accent-main)]/12 flex items-center justify-center shrink-0">
-                  <BarChart3 size={16} className="text-[var(--accent-main)]" />
+                <div className="w-9 h-9 rounded-xl bg-[var(--accent-main)]/12 flex items-center justify-center shrink-0">
+                  <BarChart3 size={17} className="text-[var(--accent-main)]" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-editorial text-[17px] text-[var(--text-primary)] leading-tight">Monitoring Pemakaian</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <p className="font-editorial text-[18px] text-[var(--text-primary)] leading-tight truncate">Dashboard Dash⁵</p>
+                    <span className="text-[9px] font-semibold uppercase tracking-[0.08em] px-1.5 py-[3px] rounded-md shrink-0"
+                      style={{ background: 'color-mix(in srgb, var(--accent-main) 12%, transparent)', color: 'var(--accent-main)' }}>
+                      Admin
+                    </span>
+                  </div>
                   <p className="text-[11px] text-[var(--text-muted)] leading-tight flex items-center gap-1.5 mt-0.5">
                     {snap && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />}
                     <span className="tabular-nums truncate">
-                      {snap ? `Data langsung · diperbarui ${jam(snap.generated_at)} WIB` : 'Menghubungkan ke Supabase'}
+                      {snap ? `Pemantauan pemakaian & biaya · sinkron ${jam(snap.generated_at)} WIB` : 'Menghubungkan ke basis data…'}
                     </span>
                   </p>
                 </div>
@@ -544,7 +550,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
               {loading && !snap && (
                 <div className="flex flex-col items-center justify-center py-20 gap-3">
                   <Loader2 size={22} className="animate-spin text-[var(--accent-main)]" />
-                  <p className="text-[13px] text-[var(--text-muted)]">Memuat data monitoring…</p>
+                  <p className="text-[13px] text-[var(--text-muted)]">Menyiapkan dashboard…</p>
                 </div>
               )}
 
@@ -572,7 +578,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       style={{ background: 'linear-gradient(150deg, color-mix(in srgb, var(--accent-main) 10%, var(--bg-app)) 0%, var(--bg-app) 68%)' }}
                     >
                       <div className="min-w-0">
-                        <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Total biaya · periode berjalan</p>
+                        <p className="text-[10.5px] font-medium uppercase tracking-[0.12em] text-[var(--text-muted)]">Total biaya pemakaian AI · periode berjalan</p>
                         <div className="flex flex-wrap items-end gap-x-3 gap-y-1.5 mt-2">
                           <span className="font-editorial text-[36px] sm:text-[42px] leading-none text-[var(--accent-main)]">{rp(snap.totals.idr)}</span>
                           {derived.delta && (
@@ -583,7 +589,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                           )}
                         </div>
                         <p className="text-[12px] text-[var(--text-muted)] tabular-nums mt-1.5">
-                          setara ${dec2(snap.totals.usd)} · {rp(snap.today.idr)} hari ini
+                          ≈ ${dec2(snap.totals.usd)} USD · {rp(snap.today.idr)} terpakai hari ini
                         </p>
                       </div>
                       <div className="shrink-0 hidden sm:flex flex-col items-end gap-1">
@@ -611,7 +617,10 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       transition={{ duration: 0.38, delay: 0.05, ease: [0.22, 1, 0.36, 1] }}
                       className="rounded-[20px] border border-[var(--border-main)] bg-[var(--bg-app)] p-4 sm:p-5"
                     >
-                      <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)] mb-3.5">Sorotan</h3>
+                      <div className="flex items-baseline justify-between gap-3 mb-3.5">
+                        <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Sorotan</h3>
+                        <span className="text-[11px] text-[var(--text-muted)] shrink-0">ringkasan otomatis dari data</span>
+                      </div>
                       <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3">
                         {derived.insights.map((ins, i) => (
                           <div key={i} className="flex items-start gap-3">
@@ -633,7 +642,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
 
                   {/* ── Teknisi (drill-down) + Donut komposisi ── */}
                   <div className="grid sm:grid-cols-2 gap-4">
-                    <Panel title="Biaya per Teknisi" aside="urut biaya" hint="Klik nama untuk menyaring Aktivitas Terbaru." delay={0.14}>
+                    <Panel title="Biaya per Teknisi" aside="diurutkan dari tertinggi" hint="Pilih nama teknisi untuk menyaring tabel Aktivitas Terbaru." delay={0.14}>
                       <div className="flex flex-col gap-1">
                         {snap.per_user.map(u => {
                           const share = snap.totals.idr > 0 ? (u.idr / snap.totals.idr) * 100 : 0;
@@ -672,7 +681,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                       </div>
                     </Panel>
 
-                    <Panel title="Komposisi Biaya" aside="input vs output" hint="Arahkan kursor ke segmen untuk rincian." delay={0.18}>
+                    <Panel title="Komposisi Biaya" aside="input vs output" hint="Sentuh segmen donat untuk melihat rincian per komponen." delay={0.18}>
                       <CostDonut inIdr={derived.inIdr} outIdr={derived.outIdr} />
                       <p className="text-[11px] text-[var(--text-muted)] leading-relaxed mt-4 pt-3 border-t border-[var(--border-main)]/60 tabular-nums">
                         {num(snap.totals.input_tokens)} token input · {num(snap.totals.output_tokens)} token output. Tarif output {pricing ? `${(pricing.outputPerMUsd / pricing.inputPerMUsd).toFixed(0)}×` : ''} lebih tinggi, namun volume input yang menentukan total biaya.
@@ -792,7 +801,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                   {/* Catatan tarif */}
                   {pricing && (
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed px-1">
-                      Tarif gemini-3.5-flash · input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token · kurs Rp {num(pricing.usdToIdr)}. Data langsung dari basis data internal, khusus admin.
+                      Perhitungan biaya mengikuti tarif resmi gemini-3.5-flash — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs Rp {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
                     </p>
                   )}
                 </div>
