@@ -239,8 +239,15 @@ Technical — specs & symptoms:
 "tekanan hydraulic turun saat boom diangkat"  → technical, "hydraulic pressure drop boom lift"
 "masih bocor juga tuh" [ctx: hydraulic cyl]  → technical, "hydraulic cylinder leak"
 
+Technical — wheel loader (KCM/ZW: steering, transmission, lift arm, brake):
+"steering berat sebelah"                      → technical, "steering heavy one side"
+"transmisi selip pas maju"                    → technical, "transmission slip forward"
+"lift arm lambat naik"                        → technical, "lift arm slow raise"
+"parking brake nggak ngunci"                  → technical, "parking brake not holding"
+
 Parts — PN, catalog, promo:
 "PN YB60000068 itu apa"           → parts, "YB60000068"
+"PN filter transmisi"             → parts, "transmission filter"
 "harga seal kit swing motor"      → parts, "swing motor seal kit price"
 "ada promo filter hydraulic ngga" → parts, "hydraulic filter promo price"
 "harga promo seal kit swing"      → parts, "swing motor seal kit promo price"

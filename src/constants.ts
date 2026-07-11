@@ -38,9 +38,11 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
 
   const faultCodeSource = isKcm
     ? 'WORKSHOP MANUAL'
-    : model === 'ZX200-5G'
-      ? 'TROUBLESHOOTING MANUAL'
-      : 'TECHNICAL MANUAL';
+    : isZw
+      ? 'TECHNICAL MANUAL / WORKSHOP MANUAL (sesuai dokumen yang tersisip)'
+      : model === 'ZX200-5G'
+        ? 'TROUBLESHOOTING MANUAL'
+        : 'TECHNICAL MANUAL';
 
 return `
 # SITUASI
