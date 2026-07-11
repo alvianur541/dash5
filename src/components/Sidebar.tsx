@@ -15,7 +15,7 @@ import { useAuth } from './AuthProvider';
 const MODEL_GROUPS: { type: string; models: UnitModel[] }[] = [
   { type: 'Mini Excavator', models: ['ZX48U-5A', 'ZX65USB-5A'] },
   { type: 'Medium Excavator', models: ['ZX138MF-5G', 'ZX200-5G'] },
-  { type: 'Wheel Loader', models: ['KCM 60ZV'] },
+  { type: 'Wheel Loader', models: ['KCM 60ZV', 'ZW140'] },
 ];
 
 interface SidebarProps {

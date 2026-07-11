@@ -19,17 +19,22 @@ export function jakartaTime(): string {
 
 export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
   const isKcm = model.startsWith('KCM');
+  const isZw  = model.startsWith('ZW');   // Hitachi wheel loader seri ZW (mis. ZW140)
   const brandLabel = isKcm
     ? 'KCM (Kawasaki Construction Machinery, anak grup Hitachi)'
-    : 'Hitachi (seri 5A–5G)';
-  const machineType = isKcm ? 'wheel loader' : 'excavator';
+    : isZw
+      ? 'Hitachi (wheel loader seri ZW)'
+      : 'Hitachi (seri 5A–5G)';
+  const machineType = (isKcm || isZw) ? 'wheel loader' : 'excavator';
   const dealerOf = isKcm ? 'KCM/Hitachi' : 'Hitachi';
 
   const enginePnHint = isKcm
     ? 'ISUZU BB-6BG1T. Engine PN: `YZ`+10-12digit. Body PN: 5-5digit (mis. `34820-66720`).'
-    : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
-      ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
-      : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
+    : isZw
+      ? 'Hitachi wheel loader seri ZW. PN mengikuti format Hitachi (alphanumeric prefix `Y*` atau pure digit) — quote persis dari data.'
+      : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
+        ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
+        : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
 
   const faultCodeSource = isKcm
     ? 'WORKSHOP MANUAL'

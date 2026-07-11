@@ -337,7 +337,7 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
 // Daftar nama model — distrip dari query sebelum embedding karena model
 // sudah difilter via Supabase metadata. Menyertakan nama model di query
 // embedding akan bias vector search ke chunk yang literal mention model.
-const MODEL_NAMES_RE = /\b(ZX48U-5A|ZX65USB-5A|ZX138MF-5G|ZX200-5G|KCM\s+60ZV)\b\s*/gi;
+const MODEL_NAMES_RE = /\b(ZX48U-5A|ZX65USB-5A|ZX138MF-5G|ZX200-5G|KCM\s+60ZV|ZW140(?:-\w+)?)\b\s*/gi;
 
 export function stripModelFromQuery(query: string): string {
   return query.replace(MODEL_NAMES_RE, '').replace(/\s+/g, ' ').trim();
