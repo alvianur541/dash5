@@ -103,12 +103,13 @@ function CatalogPanel() {
                   <span className="text-[var(--accent-main)]/60 text-[10px] group-open/model:rotate-180 transition-transform duration-200">▾</span>
                 </summary>
                 <div className="divide-y divide-[var(--border-main)]">
-                  {entries.sort((a, b) => a.kategori.localeCompare(b.kategori)).map(({ kategori }) => (
+                  {entries.sort((a, b) => a.kategori.localeCompare(b.kategori)).map(({ kategori, count }) => (
                     <div key={kategori} className="px-3 py-1.5 flex items-center gap-2">
                       <span className="w-1 h-1 rounded-full bg-[var(--text-muted)] shrink-0" />
-                      <span className="text-[11.5px] text-[var(--text-secondary)]">
+                      <span className="text-[11.5px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
                         {kategori.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
+                      <span className="text-[10.5px] text-[var(--text-muted)] tabular-nums shrink-0">{count}</span>
                     </div>
                   ))}
                 </div>
