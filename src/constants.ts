@@ -17,9 +17,57 @@ export function jakartaTime(): string {
   });
 }
 
+/** Deskripsi singkat tiap jenis dokumen — dipakai merender inventaris per model. */
+const DOC_DESC: Record<string, string> = {
+  'TROUBLESHOOTING':           'fault code & trouble symptom',
+  'TECHNICAL MANUAL':          'spec teknis & deskripsi sistem',
+  'WORKSHOP MANUAL':           'teardown, torque, clearance, prosedur repair',
+  'ENGINE MANUAL':             'DTC P-code & internal engine',
+  'OPERATIONAL PRINCIPLE':     'cara kerja sistem (hydraulic/electrical flow)',
+  'OPERATOR MANUAL':           'prosedur operasi, interval, kapasitas fluida',
+  'HYDRAULIC CIRCUIT DIAGRAM': 'tekanan/setting/displacement hidrolik',
+  'PARTS CATALOG':             'PN body, per section',
+  'ENGINE PARTS CATALOG':      'PN internal engine',
+  'CPM':                       'PN wajib ganti per interval jam',
+  'PROMO':                     'harga promo periodik',
+  'BROSUR MANUAL':             'dimensi, berat, engine power',
+  'SALES MANUAL':              'fitur & comparison spec',
+  'TECHNICAL NEWS':            'service bulletin resmi TSD-CE Hexindo',
+};
+
+/**
+ * Inventaris dokumen NYATA per model — census Supabase (Jul 2026, terverifikasi).
+ * Prompt HANYA menyebut sumber yang benar-benar ada supaya AI tidak pernah
+ * menyuruh teknisi "cek CPM/Engine Manual" untuk model yang tidak punya.
+ */
+const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
+  'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
+  'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'PROMO', 'CPM'],
+  'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO', 'CPM'],
+  'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO', 'CPM'],
+  'KCM 60ZV':   ['WORKSHOP MANUAL', 'PARTS CATALOG', 'OPERATOR MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO'],
+  'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL'],
+};
+
+/** Sumber yang TIDAK dimiliki model — supaya AI tidak merujuk dokumen kosong. */
+const ABSENT_SOURCES: Record<UnitModel, string> = {
+  'ZX48U-5A':   '',
+  'ZX65USB-5A': 'Parts Catalog & Operator Manual',
+  'ZX138MF-5G': 'Parts Catalog, Engine Parts Catalog & Operator Manual',
+  'ZX200-5G':   '',
+  'KCM 60ZV':   'Technical Manual, Troubleshooting Manual, Engine Manual & CPM',
+  'ZW140':      'Engine Manual, Engine Parts Catalog, Operator Manual, CPM & data PROMO',
+};
+
 export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
   const isKcm = model.startsWith('KCM');
   const isZw  = model.startsWith('ZW');   // Hitachi wheel loader seri ZW (mis. ZW140)
+  const sourceList = (SOURCE_INVENTORY[model] ?? [])
+    .map(k => `- **${k}** — ${DOC_DESC[k] ?? ''}`)
+    .join('\n');
+  const absent = ABSENT_SOURCES[model]
+    ? `\n\n**TIDAK tersedia untuk ${model}:** ${ABSENT_SOURCES[model]}. Jangan pernah menyuruh ${userName} "cek dokumen tersebut" — arahkan ke sumber yang memang ada, ke unit fisik, atau ke Technical Support Department.`
+    : '';
   const brandLabel = isKcm
     ? 'KCM (Kawasaki Construction Machinery, anak grup Hitachi)'
     : isZw
@@ -186,20 +234,15 @@ Pivot ke: (1) sumber yang bisa langsung dicek (manual fisik, MPDr), (2) escalati
 
 # SUMBER DATA & FORMAT
 
-Jenis dokumen yang mungkin muncul:
-- **${faultCodeSource}** — utama untuk fault code/troubleshooting ${model}
-- **WORKSHOP MANUAL** — teardown, torque, clearance
-- **ENGINE MANUAL** — DTC P-code, engine internal${isKcm ? ' (KCM tidak punya)' : ''}
-- **OPERATIONAL PRINCIPLE** — cara kerja sistem
-- **OPERATOR MANUAL** — operasi, interval, kapasitas
-- **HYDRAULIC CIRCUIT DIAGRAM** — pump/relief spec (hanya ZX48U-5A)
-- **CPM** — schedule maintenance PN per interval jam
-- **PROMO** — harga periodik. Pilih periode terbaru/aktif dari data yang disisipkan; jangan memakai harga lama kalau periode lebih baru memuat PN yang sama.
-- **PARTS CATALOG / ENGINE PARTS CATALOG** — section-based PN list
-- **BROSUR MANUAL / SALES MANUAL** — spec produk, fitur, comparison${model === 'ZX48U-5A' ? `
-- **TECHNICAL NEWS** — Service Bulletin resmi TSD-CE Hexindo. Untuk ZX48U-5A: ada bulletin **ZX48U-5A SE (Super Economy)** — variant baru dengan engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor), serial prefix \`HCMAEA10\` (vs standard \`HCMAEA90\`), brand LANDCROS.` : ''}
+Dokumen yang BENAR-BENAR ada untuk **${model}** (hanya ini — jangan rujuk selainnya):
+${sourceList}
 
+Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${model === 'ZX48U-5A' ? `
+Catatan TECHNICAL NEWS: ada bulletin **ZX48U-5A SE (Super Economy)** — variant engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor), serial prefix \`HCMAEA10\` (vs standard \`HCMAEA90\`), brand LANDCROS.` : ''}
+${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai periode terbaru/aktif dari data yang disisipkan; jangan memakai harga periode lama kalau PN yang sama ada di periode terbaru.\n' : ''}
 **Format chunk:** header \`Section: ...\` / \`Document: ...\` boleh dipakai untuk grouping, **jangan disalin verbatim**.
+**Label section tidak selalu bermakna.** Sebagian katalog memakai kode internal (mis. \`AICA (7)\`, \`BICA (8)\`) yang tidak berarti apa pun bagi teknisi. JANGAN sebut kode section semacam itu sebagai petunjuk lokasi — sebut nama komponennya saja.
+**Data hasil scan bisa kotor.** Kalau baris parts terlihat rusak (qty aneh, teks terpotong, karakter nyasar), ambil HANYA field yang terbaca jelas (PN + nama part). Jangan reproduksi karakter sampah, dan jangan menebak field yang rusak — sebut singkat bahwa baris itu tidak terbaca utuh.
 **Workshop Manual notasi:** \`(12)\` = item diagram, \`j: 10 mm\` = wrench, \`m: 245 N·m\` = torque, \`l: 6 mm\` = hex.
 **Format PN ${model}:** ${enginePnHint}
 
