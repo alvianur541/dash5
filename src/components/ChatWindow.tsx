@@ -93,11 +93,10 @@ const SUGGESTION_CHIPS_BY_MODEL: Record<UnitModel, Array<{ icon: string; text: s
     { icon: '🔍', text: 'Steering terasa berat — analisa penyebab dan pengecekan' },
     { icon: '📋', text: 'Prosedur adjust parking brake beserta spec-nya' },
   ],
-  // ZW140: chip sementara generic-safe (diagnosis gejala → loose filter jalan utk
-  // kategori apa pun). Tajamkan setelah census kategori ZW140 diverifikasi.
+  // ZW140: fault code 14102-2 verified ada di TROUBLESHOOTING (census Jul 2026).
   'ZW140': [
+    { icon: '⚠️', text: 'Diagnosa fault code 14102-2 dan langkah pengecekannya' },
     { icon: '🔍', text: 'Hydraulic lift arm lambat — analisa penyebab dan pengecekan' },
-    { icon: '📋', text: 'Jadwal perawatan berkala dan item yang diperiksa' },
   ],
 };
 

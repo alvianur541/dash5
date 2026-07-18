@@ -31,7 +31,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
   const enginePnHint = isKcm
     ? 'ISUZU BB-6BG1T. Engine PN: `YZ`+10-12digit. Body PN: 5-5digit (mis. `34820-66720`).'
     : isZw
-      ? 'Hitachi wheel loader seri ZW. PN mengikuti format Hitachi (alphanumeric prefix `Y*` atau pure digit) — quote persis dari data.'
+      ? 'Hitachi wheel loader seri ZW. Body PN: 5 karakter alfanumerik + dash + 5 digit (mis. `263E7-17091`, `26418-82071`) — quote persis dari data.'
       : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
         ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
         : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
@@ -39,7 +39,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
   const faultCodeSource = isKcm
     ? 'WORKSHOP MANUAL'
     : isZw
-      ? 'TECHNICAL MANUAL / WORKSHOP MANUAL (sesuai dokumen yang tersisip)'
+      ? 'TROUBLESHOOTING MANUAL'
       : model === 'ZX200-5G'
         ? 'TROUBLESHOOTING MANUAL'
         : 'TECHNICAL MANUAL';

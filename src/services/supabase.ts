@@ -191,7 +191,8 @@ const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|va
 //   34820-66720        (KCM 60ZV / Kawasaki body: 5-digit + dash + 5-digit)
 // Range \d{6,12} cover Hitachi/Isuzu/Yanmar/KCM PNs tanpa false positive
 // jangka pendek (4-5 digit) yang biasa muncul di service interval atau spec value.
-const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d{5}-\d{5})\b/;
+// + \d[0-9A-Z]{4}-\d{5}: ZW140 (5 alfanumerik diawali digit + 5 digit, mis. 163E3-42241, 26418-82071)
+const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
 export function isPartsQuery(query: string): boolean {
   return PARTS_KEYWORDS_RE.test(query)
@@ -588,6 +589,9 @@ interface RAGResult {
 const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
   'ZX200-5G': 'TROUBLESHOOTING',
   'KCM 60ZV': 'WORKSHOP MANUAL',
+  // ZW140: fault code (14102-2 dll) ADA di TROUBLESHOOTING (23 chunk, verified
+  // Jul 2026). TECHNICAL MANUAL-nya deskripsi sistem — 0 chunk fault code.
+  'ZW140': 'TROUBLESHOOTING',
 };
 const DEFAULT_TROUBLESHOOTING_KATEGORI = 'TECHNICAL MANUAL';
 
