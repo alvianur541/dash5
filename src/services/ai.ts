@@ -512,18 +512,10 @@ Supaya pencariannya kena:
 Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke tim parts dengan menyebut model + nama komponen.`;
 }
 
-// Adaptive retrieval — saat semua chunk score-nya rendah (<0.3), bypass AI
-// karena risiko halu terlalu tinggi. User dapat saran refine query, bukan
-// jawaban yang "kelihatan benar tapi sebenarnya meleset".
-function lowConfidenceTemplate(query: string, model: string): string {
-  return `Data yang cukup meyakinkan untuk **"${query}"** belum ketemu di manual ${model} — daripada saya kasih jawaban yang meleset, lebih baik pencariannya dipertajam.
-
-Dua cara paling efektif:
-- Sebut komponen + atribut sekaligus — mis. \`swing motor relief pressure\` atau \`travel motor final drive oil capacity\`, bukan \`tekanan swing\`.
-- Pastikan model unit di sidebar sesuai unit yang sedang dikerjakan.
-
-Kalau ini butuh keputusan cepat di lapangan, eskalasi ke Technical Support Department.`;
-}
+// Catatan: adaptive-retrieval low-confidence dulu bypass AI (lowConfidenceTemplate).
+// Sekarang low-confidence & no-result pada jalur teknis NL di-fallback ke web
+// (google_search mode 'technical' + EXTERNAL_DIRECTIVE) — lebih berguna daripada
+// buntu canned, tetap anti-halu untuk angka unit. Template lama dihapus.
 
 function offTopicTemplate(): string {
   return `Scope saya khusus technical support alat berat Hitachi/KCM — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
@@ -549,13 +541,27 @@ const RAG_LABEL = {
 
 const FALLBACK_RESPONSE = 'Maaf, sistem tidak bisa memproses permintaan ini.';
 
+// Directive jalur fallback web (mode 'technical'). Disuntik ke USER-turn (BUKAN
+// system prompt) supaya SYSTEM_PROMPT tetap byte-identical → prompt caching hit.
+// Guardrail: web boleh untuk konsep/diagnosa umum, HARAM untuk klaim angka unit.
+const EXTERNAL_DIRECTIVE = (model: string): string =>
+  `[SUMBER EKSTERNAL] Manual internal ${model} tidak memuat data spesifik untuk pertanyaan ini. Jawab profesional memakai prinsip teknik umum + hasil penelusuran web. ATURAN WAJIB:
+- Sampaikan sekali di awal, natural: jawaban ini rujukan umum industri, bukan dari manual resmi ${model}.
+- Angka eksekusi-kritis (torque, tekanan, PN, clearance, fault code) DILARANG diklaim sebagai spec resmi unit. Kalau memberi angka, tandai sebagai "kisaran umum" dan minta verifikasi ke manual fisik unit.
+- Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
+- Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;
+
 // ─── Tipe routing ──────────────────────────────────────────────────────────────
 
 /** Discriminated union — hasil routing RAG sebelum AI dipanggil */
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low' }
   | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks ini langsung
-  | { type: 'google_search' };             // tidak ada RAG, fallback Google
+  // Fallback Google-search grounding. mode:
+  //   'casual'    → obrolan ringan (halo/oke) — no directive khusus
+  //   'technical' → pertanyaan teknis TANPA data manual → jawab pakai referensi
+  //                 umum/web + directive guardrail (label sumber, no fabrikasi angka unit)
+  | { type: 'google_search'; mode: 'casual' | 'technical' };
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
@@ -757,7 +763,7 @@ async function resolveNaturalLanguageQuery(
 ): Promise<RagRouteResult> {
   const intent = await analyzeIntent(trimmed, history, model);
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate() };
-  if (!intent.shouldSearch) return { type: 'google_search' };
+  if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
     // Guard: jangan pakai optimizedQuery < 3 kata (mis. "2000" untuk "service 2000 jam")
@@ -785,14 +791,13 @@ async function resolveNaturalLanguageQuery(
     if (errMsg) return { type: 'rag_canned', text: errMsg };
   }
 
-  if (!ragResult.hasResults) return { type: 'google_search' };
-
-  // Adaptive retrieval — chunk score semua rendah → bypass, no halu.
-  // Hanya apply ke natural-language technical path. Fault code path tidak
-  // dicek confidence karena literal-contain filter sudah precision check.
-  if (ragResult.confidence === 'low') {
-    return { type: 'rag_canned', text: lowConfidenceTemplate(trimmed, model) };
-  }
+  // Manual internal tidak memuat / cuma nyerempet (confidence rendah) → JANGAN buntu.
+  // Fallback ke referensi umum + web grounding (mode 'technical' → directive guardrail
+  // di generateResponseStream: label sumber eksternal, no fabrikasi angka unit).
+  // Fault code & parts tetap internal-only (di resolver masing-masing) karena
+  // web tak bisa kasih PN Hitachi asli / arti fault code model-spesifik dgn aman.
+  if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
+  if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
   // Contextual Compression — extract baris relevan saja dari setiap chunk.
   // Drastis kurangi token input + AI tidak distracted oleh noise.
@@ -978,21 +983,25 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const isGoogleSearch   = routeResult.type === 'google_search';
+  const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
   const ragContent       = routeResult.type === 'rag_found' ? routeResult.content   : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  const thinkingLevel    = isFaultCode ? 'medium' : ragContent ? 'low' : 'minimal';
-  // RAG: 4096. Google-search fallback (pertanyaan teknis tanpa data lokal, mis.
-  // "pengaruh BBM B50 ke filter solar"): 2048 — cukup untuk jawaban lengkap & profesional,
-  // bukan terpotong di 512. Casual murni ("halo","oke"): 512 supaya tetap ringkas.
-  const maxOutputTokens  = ragContent ? 4096 : isGoogleSearch ? 2048 : 512;
+  // Technical external-fallback butuh reasoning tipis utk sintesis rapi; casual minimal.
+  const thinkingLevel    = isFaultCode ? 'medium' : (ragContent || gsTechnical) ? 'low' : 'minimal';
+  // RAG: 4096. Fallback web teknis (pertanyaan teknis tanpa data manual, mis.
+  // "pengaruh BBM B50 ke filter solar"): 2048 — jawaban lengkap & profesional.
+  // Casual murni ("halo","oke") + casual google: 512 supaya ringkas.
+  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
     ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
     : '';
   const userText         = ragContent
     ? `${trimmed || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
-    : (trimmed || 'Halo');
+    : gsTechnical
+      ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
+      : (trimmed || 'Halo');
 
   // Timestamp di user-turn, BUKAN system prompt — system prompt harus tetap
   // byte-identical antar request agar prompt caching bisa hit (lihat constants.ts).
