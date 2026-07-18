@@ -21,7 +21,7 @@
   --text-primary:   #E8E6DC;   /* warm off-white */
   --text-secondary: #9B9A93;   /* muted gray */
   --text-muted:     #6E6D66;   /* section headers, timestamps */
-  --border-main:    rgba(255, 255, 255, 0.07);
+  --border-main:    rgba(255, 255, 255, 0.06);
   --border-glass:   rgba(255, 255, 255, 0.04);
   --glass-bg:       rgba(255, 255, 255, 0.02);
   --scroll-thumb:   rgba(255, 255, 255, 0.10);
@@ -75,7 +75,7 @@
   --bg-sidebar:     #F5F4EF;
   --bg-header:      rgba(250, 249, 245, 0.85);
   --bg-card:        #FFFFFF;
-  --bg-card-hover:  #F2F0E9;
+  --bg-card-hover:  #F1EFE9;
   --bg-input:       #FFFFFF;
   --accent-main:    #D97757;   /* Claude terracotta */
   --accent-active:  #C2634A;
@@ -83,7 +83,7 @@
   --text-primary:   #1A1915;
   --text-secondary: #46443E;
   --text-muted:     #78756C;
-  --border-main:    rgba(0, 0, 0, 0.08);
+  --border-main:    rgba(0, 0, 0, 0.06);
   --border-glass:   rgba(0, 0, 0, 0.04);
   --glass-bg:       rgba(0, 0, 0, 0.02);
   --scroll-thumb:   rgba(0, 0, 0, 0.10);
@@ -144,17 +144,7 @@ select:focus-visible {
   outline: none;
 }
 
-/* Ambient login backdrop — glow radial lembut di belakang brand */
-.login-ambient::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(560px 300px at 50% 16%, color-mix(in srgb, var(--accent-main) 10%, transparent), transparent 70%),
-    radial-gradient(400px 260px at 82% 88%, color-mix(in srgb, var(--accent-main) 5%, transparent), transparent 70%);
-}
+/* Quiet Claude: login polos di atas bg — ambient gradient dihapus */
 
 /* Scrollbar utilities */
 .scrollbar-hide {
@@ -545,9 +535,7 @@ img {
   overflow-x: hidden;
   padding: 24px 24px 132px;
   scrollbar-width: none;
-  /* Ambient glow — kesan hangat tanpa mengubah layout */
-  background:
-    radial-gradient(520px 300px at 50% 20%, color-mix(in srgb, var(--accent-main) 6%, transparent), transparent 72%);
+  /* Quiet Claude: polos di atas bg — tanpa ambient gradient */
 }
 .welcome-screen::-webkit-scrollbar { display: none; }
 
@@ -619,14 +607,14 @@ img {
 .topbar-model-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-primary); }
 .topbar-newchat {
   width: 36px; height: 36px; border-radius: 50%; border: none;
-  background: linear-gradient(135deg, var(--accent-main), var(--accent-active)); color: #fff;
+  background: var(--accent-main); color: #fff;
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0;
-  transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 38%, transparent);
+  transition: opacity 0.15s, transform 0.15s;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
-.topbar-newchat:hover { transform: translateY(-1px); box-shadow: 0 5px 16px color-mix(in srgb, var(--accent-main) 48%, transparent); }
-.topbar-newchat:active { transform: scale(0.92); }
+.topbar-newchat:hover { filter: brightness(1.08); }
+.topbar-newchat:active { transform: scale(0.92); opacity: 0.85; }
 
 /* ── Chat messages ── */
 .chat-messages-list {
@@ -644,18 +632,17 @@ img {
 }
 .user-bubble {
   width: fit-content;
-  /* Gradient halus accent → accent-active + lift shadow: bubble terasa "premium",
-     bukan flat sticker. Warna sama light + dark. */
-  background: linear-gradient(135deg, var(--accent-main) 0%, var(--accent-active) 100%);
+  /* Quiet Claude: bubble user NETRAL (bukan accent) — signature Claude.ai.
+     Teks ink di atas bg-hover, tanpa gradient, tanpa shadow. */
+  background: var(--bg-card-hover);
   border: none;
-  border-radius: 18px 18px 4px 18px;
+  border-radius: 18px;
   padding: 9px 14px;
   font-family: var(--font-sans);
   font-size: 14px; font-weight: 400; line-height: 1.5;
   letter-spacing: -0.005em;
-  color: #ffffff;
+  color: var(--text-primary);
   user-select: text;
-  box-shadow: 0 2px 10px color-mix(in srgb, var(--accent-main) 28%, transparent);
 }
 .msg-ts {
   display: block; font-size: 11px;
@@ -760,7 +747,6 @@ img {
 .model-pill-sep {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--accent-active);
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent-active) 65%, transparent);
 }
 .model-pill-name {
   font-size: 13px; font-weight: 500; color: var(--text-primary);
@@ -796,64 +782,24 @@ img {
   font-size: 11px; font-weight: 500;
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted);
 }
+/* Quiet Claude: pill teks-saja — tanpa ikon/emoji, tanpa lift, tanpa shadow.
+   Boundary cukup 1px line; hover = bg-hover + ink. */
 .suggestion-chip {
-  display: flex; align-items: center; gap: 12px;
-  padding: 10px 12px 10px 10px; border-radius: 14px;
+  display: block;
+  padding: 11px 16px; border-radius: 16px;
   background: var(--bg-card); border: 1px solid var(--border-main);
   font-family: var(--font-sans);
   font-size: 13.5px; font-weight: 450; color: var(--text-secondary);
+  line-height: 1.4;
   cursor: pointer; text-align: left; width: 100%;
-  transition: background 0.18s, border-color 0.18s, color 0.18s, transform 0.18s, box-shadow 0.18s;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 .suggestion-chip:hover {
   background: var(--bg-card-hover);
-  border-color: color-mix(in srgb, var(--accent-main) 32%, var(--border-main));
   color: var(--text-primary);
-  transform: translateY(-1px);
-  box-shadow: 0 6px 18px -8px color-mix(in srgb, var(--accent-main) 26%, rgba(0,0,0,0.22));
 }
-/* Tile ikon — kotak lembut ber-tint accent, memberi struktur & warna */
-.chip-tile {
-  width: 34px; height: 34px; flex-shrink: 0;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 16px; line-height: 1;
-  border-radius: 10px;
-  background: color-mix(in srgb, var(--accent-main) 12%, transparent);
-  transition: transform 0.2s var(--ease-spring), background 0.18s;
-}
-.suggestion-chip:hover .chip-tile {
-  transform: scale(1.06);
-  background: color-mix(in srgb, var(--accent-main) 18%, transparent);
-}
-.chip-text { flex: 1; min-width: 0; line-height: 1.35; }
-.chip-arrow {
-  flex-shrink: 0; color: var(--text-muted);
-  opacity: 0; transform: translateX(-4px);
-  transition: opacity 0.18s, transform 0.18s, color 0.18s;
-}
-.suggestion-chip:hover .chip-arrow {
-  opacity: 1; transform: translateX(0);
-  color: var(--accent-main);
-}
-
-/* Dark mode: kartu chip nyaris menyatu dgn bg (#292524 di atas #1C1917).
-   Perkuat definisi — surface diangkat + border accent-tinted + tile lebih terang. */
-.dark-theme .suggestion-chip {
-  background: color-mix(in srgb, var(--bg-card) 92%, var(--accent-main) 8%);
-  border-color: color-mix(in srgb, var(--accent-main) 16%, rgba(255, 255, 255, 0.10));
-  color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
-}
-.dark-theme .suggestion-chip:hover {
-  background: color-mix(in srgb, var(--bg-card-hover) 88%, var(--accent-main) 12%);
-  border-color: color-mix(in srgb, var(--accent-main) 45%, transparent);
-}
-.dark-theme .chip-tile {
-  background: color-mix(in srgb, var(--accent-main) 22%, transparent);
-}
-.dark-theme .suggestion-chip:hover .chip-tile {
-  background: color-mix(in srgb, var(--accent-main) 30%, transparent);
-}
+/* Dark: border sedikit lebih terang supaya pill tidak menyatu dgn bg */
+.dark-theme .suggestion-chip { border-color: rgba(255, 255, 255, 0.10); }
 
 .input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
 .pill-side-btn {
@@ -1023,13 +969,11 @@ img {
     padding: 10px 14px 10px 10px;
     border-radius: 14px;
   }
-  .suggestion-chip:active { transform: scale(0.98); background: var(--bg-card-hover); }
-  .chip-tile { width: 36px; height: 36px; }
+  .suggestion-chip:active { opacity: 0.7; background: var(--bg-card-hover); }
 
-  /* Input pill — elevation supaya float di atas content */
+  /* Input pill — boundary halus saja (quiet Claude: max shadow 0 1px 2px) */
   .input-pill {
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25),
-                0 1px 4px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
 
   /* Welcome — sizing on mobile */
@@ -1043,8 +987,6 @@ img {
   }
   .chips-container .suggestion-chip {
     font-size: 14px !important;
-    border-width: 1px;
-    border-color: color-mix(in srgb, var(--accent-main) 18%, var(--border-main));
   }
 
 }
@@ -1068,14 +1010,8 @@ img {
   cursor: pointer;
   transition: color 0.15s, box-shadow 0.15s;
 }
-.scroll-fab {
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
 .scroll-fab:hover {
   color: var(--text-primary);
-  border-color: color-mix(in srgb, var(--accent-main) 35%, var(--border-main));
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
 }
 
 /* Standalone PWA: safe-area-inset-top untuk notch/dynamic island */

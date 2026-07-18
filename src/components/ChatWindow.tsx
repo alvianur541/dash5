@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, ListChecks, Search, Sparkles, ChevronDown, ChevronRight } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, ListChecks, Search, Sparkles, ChevronDown } from 'lucide-react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
@@ -440,9 +440,7 @@ export function ChatWindow({
                     transition={{ duration: 0.3, delay: 0.22 + i * 0.06 }}
                     onClick={() => onSendMessage(chip.text)}
                   >
-                    <span className="chip-tile" aria-hidden="true">{chip.icon}</span>
-                    <span className="chip-text">{chip.text}</span>
-                    <ChevronRight size={15} className="chip-arrow" />
+                    {chip.text}
                   </m.button>
                 ))}
               </div>
