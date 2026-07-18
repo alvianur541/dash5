@@ -282,58 +282,63 @@ export default function App() {
 
     const toolsUsed = new Set<string>();
     try {
+      // Mesin streaming dipakai SEMUA jalur (teks & foto) — dulu jalur foto
+      // non-stream tanpa progress: user lihat layar diam lalu jawaban muncul
+      // sekaligus, padahal foto paling lambat (OCR → search → 2nd-pass).
+      const assistantId = crypto.randomUUID();
+      const assistantTs = Date.now();
+      const sessionSnapshot = sessionId; // capture — guard ghost content jika session switch
+      let displayed = '';
+      let buffered = '';
+      let timerId: ReturnType<typeof setTimeout> | null = null;
+      const FLUSH_INTERVAL = 80;
+      const FLUSH_BATCH = 200;
+      // AbortController per stream — ref tidak masuk deps, aman
+      const streamCtrl = new AbortController();
+      abortStreamRef.current = streamCtrl;
+      const drip = () => {
+        timerId = null;
+        if (!mountedRef.current) return;
+        if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch
+        if (streamCtrl.signal.aborted) return;
+        if (!buffered.length) return;
+        const batch = buffered.slice(0, FLUSH_BATCH);
+        buffered = buffered.slice(FLUSH_BATCH);
+        displayed += batch;
+        const snap = displayed;
+        setMessages(prev => {
+          const exists = prev.some(m => m.id === assistantId);
+          if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: snap, timestamp: assistantTs }];
+          return prev.map(m => m.id === assistantId ? { ...m, content: snap } : m);
+        });
+        if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
+      };
+      let streamedAny = false;
+      const onChunkCb = (chunk: string) => {
+        if (!mountedRef.current) return;
+        if (sessionIdRef.current !== sessionSnapshot) return; // ghost content guard
+        if (streamCtrl.signal.aborted) return;
+        setIsTyping(false);
+        streamedAny = true;
+        buffered += chunk;
+        if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
+      };
+      const onAgentEventCb = (event: AgentEvent) => {
+        if (!mountedRef.current) return;
+        if (sessionIdRef.current !== sessionSnapshot) return;
+        if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
+        setAgentEvents(prev => [...prev, event]);
+      };
+
+      let fullText: string;
       if (attachments && attachments.length > 0) {
-        const response = await generateResponse(selectedModel, userName, currentMessages, content, attachments);
-        setMessages(prev => [...prev, { id: crypto.randomUUID(), role: 'assistant', content: response, timestamp: Date.now() }]);
-        persist(response);
-        logCost(sessionId, []);
+        // Jalur foto: sekarang streaming + progress event (OCR → cocokkan manual → diagnosis)
+        fullText = await generateResponse(
+          selectedModel, userName, currentMessages, content, attachments,
+          onChunkCb, onAgentEventCb,
+        );
       } else {
-        const assistantId = crypto.randomUUID();
-        const assistantTs = Date.now();
-        const sessionSnapshot = sessionId; // capture — guard ghost content jika session switch
-        let displayed = '';
-        let buffered = '';
-        let timerId: ReturnType<typeof setTimeout> | null = null;
-        const FLUSH_INTERVAL = 80;
-        const FLUSH_BATCH = 200;
-        // AbortController per stream — ref tidak masuk deps, aman
-        const streamCtrl = new AbortController();
-        abortStreamRef.current = streamCtrl;
-        const drip = () => {
-          timerId = null;
-          if (!mountedRef.current) return;
-          if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch
-          if (streamCtrl.signal.aborted) return;
-          if (!buffered.length) return;
-          const batch = buffered.slice(0, FLUSH_BATCH);
-          buffered = buffered.slice(FLUSH_BATCH);
-          displayed += batch;
-          const snap = displayed;
-          setMessages(prev => {
-            const exists = prev.some(m => m.id === assistantId);
-            if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: snap, timestamp: assistantTs }];
-            return prev.map(m => m.id === assistantId ? { ...m, content: snap } : m);
-          });
-          if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
-        };
-        let streamedAny = false;
-        const onChunkCb = (chunk: string) => {
-          if (!mountedRef.current) return;
-          if (sessionIdRef.current !== sessionSnapshot) return; // ghost content guard
-          if (streamCtrl.signal.aborted) return;
-          setIsTyping(false);
-          streamedAny = true;
-          buffered += chunk;
-          if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
-        };
-        const onAgentEventCb = (event: AgentEvent) => {
-          if (!mountedRef.current) return;
-          if (sessionIdRef.current !== sessionSnapshot) return;
-          if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
-          setAgentEvents(prev => [...prev, event]);
-        };
         const useAgentic = shouldUseAgentic(content);
-        let fullText: string;
         try {
           fullText = useAgentic
             ? await generateResponseAgentic(
@@ -350,17 +355,18 @@ export default function App() {
           setAgentEvents([]);
           fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         }
-        if (timerId !== null) { clearTimeout(timerId); timerId = null; }
-        if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
-        setMessages(prev => {
-          const exists = prev.some(m => m.id === assistantId);
-          if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
-          return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
-        });
-        persist(fullText);
-        logCost(sessionSnapshot, [...toolsUsed]);
       }
+
+      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
+      if (!mountedRef.current) return;
+      if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === assistantId);
+        if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
+        return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
+      });
+      persist(fullText);
+      logCost(sessionSnapshot, [...toolsUsed]);
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);

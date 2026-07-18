@@ -1059,14 +1059,20 @@ export async function generateResponse(
   userName: string,
   history: Message[],
   userInput: string,
-  attachments?: File[]
+  attachments?: File[],
+  onChunk?: (text: string) => void,
+  onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
   resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
+  // Progress indicator — jalur foto adalah yang PALING lambat (OCR → search per
+  // kode → 2nd-pass Engine Manual → generate). Tanpa event, user lihat layar diam.
+  const emit: AgentEventEmit = onAgentEvent ?? (() => {});
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
 
   if (attachments && attachments.length > 0) {
+    emit({ type: 'thinking', message: 'Membaca foto…' });
     const imageResults = await Promise.allSettled(attachments.map(fileToInlineData));
     const imageParts = imageResults
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
@@ -1075,9 +1081,17 @@ export async function generateResponse(
     currentParts.push(...imageParts);
 
     try {
+      emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
       const faultCodes = await extractFaultCodes(imageParts);
 
       if (faultCodes.length > 0) {
+        emit({
+          type: 'thinking',
+          message: faultCodes.length === 1
+            ? `Terbaca kode ${faultCodes[0]} — mencocokkan ke manual…`
+            : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
+        });
+        emit({ type: 'tool_call', tool: 'search_technical_manual' });
         // Search per code + 2nd-pass Engine Manual (sama seperti text path).
         // Image path sebelumnya tidak punya 2nd-pass sehingga P-code diagnosis
         // tidak ter-inject, dan AI ngarang dari training.
@@ -1092,7 +1106,9 @@ export async function generateResponse(
             if (result.hasResults) {
               const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
               if (pCodes.length > 0) {
+                emit({ type: 'tool_call', tool: 'search_engine_manual' });
                 const emResult = await searchEngineManual(pCodes, model);
+                emit({ type: 'tool_result', tool: 'search_engine_manual', found: emResult.hasResults });
                 if (emResult.hasResults) {
                   content += '\n\n[ENGINE MANUAL]\n' + emResult.content;
                 }
@@ -1113,6 +1129,8 @@ export async function generateResponse(
             console.warn('[generateResponse] Fault code search failed for one code:', r.reason instanceof Error ? r.reason.message : String(r.reason));
           }
         }
+
+        emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
 
         // Kalau SEMUA code tidak ditemukan → bypass AI, return canned
         if (found.length === 0 && notFound.length > 0) {
@@ -1137,10 +1155,12 @@ export async function generateResponse(
 
         currentParts.push({ text: `${note}\n\n${injection}` });
       } else {
+        emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
         currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
       }
     } catch (err) {
       console.error('Image fault code extraction failed:', err);
+      emit({ type: 'thinking', message: 'Pembacaan kode gagal — menganalisa gambar langsung…' });
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
@@ -1148,11 +1168,26 @@ export async function generateResponse(
     // tidak mengganggu urutan image/text part yang sudah disusun di currentParts.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
-    const res = await callProxy({
+    emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
+
+    // 8192 (turun dari 16384): multi-code image analysis tetap muat — jalur fault
+    // code teks pakai 4096 & cukup. Cap lebih rendah = latency & biaya turun.
+    const body: VRequest = {
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 16384, temperature: 0.3, thinkingConfig: { thinkingLevel: 'medium' } },
-    });
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.3, thinkingConfig: { thinkingLevel: 'medium' } },
+    };
+
+    // Streaming kalau caller kasih onChunk — jawaban muncul bertahap seperti jalur
+    // teks (sebelumnya non-stream: user nunggu diam lalu jawaban muncul sekaligus).
+    if (onChunk) {
+      const streamed = await callProxyStream(body, onChunk);
+      emit({ type: 'done' });
+      return streamed || 'Maaf, sistem tidak bisa memproses permintaan ini.';
+    }
+
+    const res = await callProxy(body);
+    emit({ type: 'done' });
     const text = getText(res.candidates[0]?.content?.parts ?? []);
     return text || 'Maaf, sistem tidak bisa memproses permintaan ini.';
   }
