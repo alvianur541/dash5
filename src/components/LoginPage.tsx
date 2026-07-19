@@ -13,6 +13,23 @@ interface LoginPageProps {
 
 type View = 'login' | 'forgot' | 'forgot-sent';
 
+// Permintaan akses login → email ke admin. Body sudah berisi template supaya
+// admin langsung dapat data yang dibutuhkan (NIK dipakai sebagai username login),
+// bukan email kosong yang harus ditanya balik.
+const REQUEST_ACCESS_MAILTO =
+  'mailto:admin@dash5.my.id'
+  + '?subject=' + encodeURIComponent('Permintaan Akses Login Dash⁵')
+  + '&body=' + encodeURIComponent(
+      'Halo Admin Dash⁵,\n\n'
+      + 'Saya ingin mengajukan akses login. Berikut data saya:\n\n'
+      + 'Nama lengkap : \n'
+      + 'NIK          : \n'
+      + 'Jabatan      : \n'
+      + 'Cabang       : \n'
+      + 'No. HP       : \n\n'
+      + 'Terima kasih.'
+    );
+
 export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   const { login, authError, sendResetEmail } = useAuth();
   const [view, setView] = useState<View>('login');
@@ -151,6 +168,16 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               >
                 Lupa password?
               </button>
+
+              <p className="w-full text-center text-[12.5px] leading-relaxed text-[var(--text-muted)] pt-0.5">
+                Belum punya akun?{' '}
+                <a
+                  href={REQUEST_ACCESS_MAILTO}
+                  className="text-[var(--accent-main)] underline underline-offset-2 decoration-[var(--accent-main)]/40 hover:decoration-[var(--accent-main)] transition-colors"
+                >
+                  Ajukan akses ke admin
+                </a>
+              </p>
             </m.form>
           )}
 
