@@ -175,7 +175,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                   href={REQUEST_ACCESS_MAILTO}
                   className="text-[var(--accent-main)] underline underline-offset-2 decoration-[var(--accent-main)]/40 hover:decoration-[var(--accent-main)] transition-colors"
                 >
-                  Ajukan akses ke admin
+                  Hubungi admin
                 </a>
               </p>
             </m.form>
