@@ -20,13 +20,13 @@ const REQUEST_ACCESS_MAILTO =
   'mailto:admin@dash5.my.id'
   + '?subject=' + encodeURIComponent('Permintaan Akses Login Dash⁵')
   + '&body=' + encodeURIComponent(
-      'Halo Admin Dash⁵,\n\n'
-      + 'Saya ingin mengajukan akses login. Berikut data saya:\n\n'
-      + 'Nama lengkap : \n'
-      + 'NIK          : \n'
-      + 'Jabatan      : \n'
-      + 'Cabang       : \n'
-      + 'No. HP       : \n\n'
+      'Halo,\n\n'
+      + 'Saya ingin mengajukan akses login Dash⁵.\n\n'
+      + 'Nama:\n'
+      + 'NIK:\n'
+      + 'Jabatan:\n'
+      + 'Cabang:\n'
+      + 'No. HP:\n\n'
       + 'Terima kasih.'
     );
 
@@ -161,23 +161,24 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                 }
               </button>
 
-              <button
-                type="button"
-                onClick={() => setView('forgot')}
-                className="w-full text-center text-[13px] pt-1 transition-colors text-[var(--text-muted)] hover:text-[var(--text-secondary)]"
-              >
-                Lupa password?
-              </button>
-
-              <p className="w-full text-center text-[12.5px] leading-relaxed text-[var(--text-muted)] pt-0.5">
-                Belum punya akun?{' '}
+              {/* Aksi sekunder — sepasang, setara, tenang. Accent disimpan
+                  khusus untuk tombol Masuk supaya tidak ada dua CTA bersaing. */}
+              <div className="flex items-center justify-center gap-3 pt-2 text-[13px] text-[var(--text-muted)]">
+                <button
+                  type="button"
+                  onClick={() => setView('forgot')}
+                  className="transition-colors hover:text-[var(--text-primary)]"
+                >
+                  Lupa password?
+                </button>
+                <span aria-hidden="true" className="opacity-40">·</span>
                 <a
                   href={REQUEST_ACCESS_MAILTO}
-                  className="text-[var(--accent-main)] underline underline-offset-2 decoration-[var(--accent-main)]/40 hover:decoration-[var(--accent-main)] transition-colors"
+                  className="transition-colors hover:text-[var(--text-primary)]"
                 >
                   Hubungi admin
                 </a>
-              </p>
+              </div>
             </m.form>
           )}
 
