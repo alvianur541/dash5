@@ -364,9 +364,10 @@ export function MessageInput({
           )}
         </AnimatePresence>
 
-        {/* Desktop disclaimer */}
+        {/* Disclaimer: nada praktik kerja, bukan boilerplate AI ("... dapat keliru,
+            verifikasi info penting" = calque dari ChatGPT, terbaca template). */}
         <div className="hidden md:flex items-center justify-center mt-2 text-[11px] text-[var(--text-muted)] opacity-70">
-          <span>Dash⁵ dapat keliru — verifikasi info penting.</span>
+          <span>Cek ulang ke manual unit sebelum dikerjakan.</span>
         </div>
 
       </div>
