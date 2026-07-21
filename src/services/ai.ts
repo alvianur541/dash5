@@ -355,6 +355,33 @@ Rules:
   return raw.split(',').map(c => c.trim()).filter(Boolean);
 }
 
+/**
+ * Guard loop degeneratif — model kadang macet mengulang frasa identik sampai
+ * kena cap token (kejadian nyata: "Ditulis oleh Dash⁵. " ×50 di akhir jawaban;
+ * temperature rendah tanpa repetition penalty rawan ini).
+ *
+ * Dua pola yang di-collapse (keduanya AMAN untuk konten sah):
+ * 1. Unit kalimat (diakhiri .!?…) yang persis sama berulang ≥4× beruntun → 1×.
+ *    Separator tabel markdown ("| --- |") tidak kena karena tanpa punctuation.
+ * 2. Baris utuh identik berulang ≥4× beruntun → 1×. Baris data tabel yang sah
+ *    tidak pernah identik 4× beruntun (PN/qty pasti beda).
+ */
+function collapseDegenerateLoops(text: string): string {
+  let out = text;
+  let prev = '';
+  while (prev !== out) {
+    prev = out;
+    out = out
+      .replace(/([^\n]{8,160}?[.!?…]\s*)(?:\1){3,}/g, '$1')
+      .replace(/(^[^\n]{4,160}\n)(?:\1){3,}/gm, '$1');
+  }
+  return out;
+}
+
+// Deteksi dini di tail stream — unit kalimat sama berulang ≥6× berarti model
+// sudah pasti macet; hentikan baca supaya tidak bayar token sampah sampai cap.
+const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
+
 export async function callProxyStream(
   body: VRequest,
   onChunk: (text: string) => void,
@@ -395,9 +422,16 @@ export async function callProxyStream(
         if (text) { fullText += text; onChunk(text); }
       } catch { /* ignore malformed chunk */ }
     }
+    // Loop degeneratif terdeteksi di tail → stop baca (hemat token), teks
+    // dibersihkan sebelum return; UI final di-overwrite dgn hasil bersih.
+    if (fullText.length > 400 && TAIL_LOOP_RE.test(fullText.slice(-800))) {
+      console.warn('[stream] degenerate loop terdeteksi — stream dihentikan dini');
+      reader.cancel().catch(() => {});
+      break;
+    }
   }
   addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
-  return fullText;
+  return collapseDegenerateLoops(fullText);
 }
 
 /**
@@ -1188,7 +1222,7 @@ export async function generateResponse(
 
     const res = await callProxy(body);
     emit({ type: 'done' });
-    const text = getText(res.candidates[0]?.content?.parts ?? []);
+    const text = collapseDegenerateLoops(getText(res.candidates[0]?.content?.parts ?? []));
     return text || 'Maaf, sistem tidak bisa memproses permintaan ini.';
   }
 

@@ -327,6 +327,8 @@ Simbol teknis → Unicode langsung: Ω, ΔP, ×, ≥, ≤, ∞. Contoh: \`resist
 
 **Dilarang — italic untuk label teknis:** jangan pakai \`*teks*\` atau \`_teks_\` untuk label seperti "Target Normal:", "Catatan:", "Spec:". Gunakan bold atau plain text.
 
+**Dilarang — tanda tangan/atribusi:** JANGAN PERNAH menutup jawaban dengan "Ditulis oleh...", "— Dash⁵", salam penutup, atau footer atribusi apa pun. Setelah closing actionable, BERHENTI — jangan tambah satu kalimat pun.
+
 ---
 
 # GAMBAR
