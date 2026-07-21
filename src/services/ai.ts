@@ -313,6 +313,36 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
   }
 }
 
+/**
+ * HyDE (Hypothetical Document Embeddings) — tulis SATU kalimat teknis singkat
+ * yang "berlagak" kutipan service manual menjawab query. Dipakai sebagai
+ * second-pass embedding saat retrieval pertama gagal: kalimat penuh jauh lebih
+ * dekat ke frasa manual daripada query 2-3 kata yang embeddingnya kabur.
+ *
+ * AMAN untuk tool diagnostik: output HyDE HANYA di-embed untuk mencari chunk,
+ * TIDAK PERNAH ditampilkan / masuk ke jawaban. Jadi walau kalimatnya salah,
+ * paling buruk cuma retrieval kurang pas → fallback web (perilaku lama).
+ * Larangan angka spesifik = jaga-jaga supaya vektor tidak bias ke angka karangan.
+ */
+async function hydeExpand(query: string): Promise<string | null> {
+  const SYS = 'Tulis SATU kalimat teknis singkat dalam bahasa Inggris, seolah kutipan dari service manual alat berat, yang menjawab pertanyaan user. Fokus: nama komponen + gejala/fungsi/sistem terkait. DILARANG menyebut angka spesifik (torque/tekanan/RPM/PN — jangan mengarang). DILARANG menyebut nama/merek model. Output HANYA satu kalimat itu, tanpa kutip, tanpa preamble.';
+  try {
+    const res = await callProxy({
+      contents: [{ role: 'user', parts: [{ text: `Pertanyaan teknisi: "${query.slice(0, 300)}"` }] }],
+      systemInstruction: { parts: [{ text: SYS }] },
+      generationConfig: { maxOutputTokens: 80, temperature: 0.2, thinkingConfig: { thinkingLevel: 'minimal' } },
+    }, false, INTENT_MODEL);
+    const out = getText(res.candidates[0]?.content?.parts ?? []).trim().replace(/^["'`]|["'`]$/g, '');
+    const wc = out.split(/\s+/).filter(Boolean).length;
+    // Guard: 4-45 kata, bukan echo query, bukan refusal ("I cannot"/"maaf").
+    if (wc < 4 || wc > 45) return null;
+    if (/\b(cannot|can't|unable|maaf|sorry|tidak dapat)\b/i.test(out)) return null;
+    return stripModelFromQuery(out);
+  } catch {
+    return null;
+  }
+}
+
 function historyToContents(history: Message[], window = 20): VContent[] {
   return history.slice(-window)
     .filter(m => m.content?.trim())
@@ -817,12 +847,30 @@ async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  const ragResult = await searchTechnicalManualMulti([query], model);
+  let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
     const errMsg = ragErrorTemplate(ragResult.ragError);
     if (errMsg) return { type: 'rag_canned', text: errMsg };
+  }
+
+  // ── HyDE second-pass adaptif ──────────────────────────────────────────────
+  // Retrieval pertama miss/low → SEBELUM menyerah ke web, coba lagi dengan
+  // embedding dari "kalimat jawaban hipotetis" (HyDE). Query pendek/kabur
+  // (2-3 kata) sering punya embedding noisy; kalimat teknis penuh jauh lebih
+  // dekat ke frasa manual. AMAN: teks HyDE HANYA dipakai untuk embedding,
+  // tidak pernah masuk jawaban → nol risiko halu. Latency cuma di jalur gagal.
+  if (!ragResult.hasResults || ragResult.confidence === 'low') {
+    const hyde = await hydeExpand(trimmed);
+    if (hyde) {
+      emit({ type: 'thinking', message: 'Memperluas cakupan pencarian…' });
+      emit({ type: 'tool_call', tool: 'search_technical_manual' });
+      const retry = await searchTechnicalManualMulti([hyde], model);
+      emit({ type: 'tool_result', tool: 'search_technical_manual', found: retry.hasResults });
+      // Pakai hasil retry hanya kalau BENAR lebih baik (ada isi & bukan low).
+      if (retry.hasResults && retry.confidence !== 'low') ragResult = retry;
+    }
   }
 
   // Manual internal tidak memuat / cuma nyerempet (confidence rendah) → JANGAN buntu.
