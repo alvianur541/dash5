@@ -1019,6 +1019,50 @@ async function resolveMultiAspectQuery(
   return { type: 'rag_found', content: blocks.join('\n\n---\n\n'), dataLabel: RAG_LABEL.manual };
 }
 
+// ─── Answer cache (sisi-klien, per-perangkat) ───────────────────────────────
+// Cache jawaban FINAL untuk query MANDIRI (fault code, parts, spec) → re-ask &
+// tap quick-start chip identik jadi instan + gratis (poin #3 best-practice RAG).
+// Bukan lintas-teknisi (itu butuh Supabase), tapi re-ask per-perangkat umum.
+//
+// GUARDRAIL KETAT (jaga fondasi anti-halu & kesegaran):
+//   - HANYA cache jawaban dari DATA MANUAL (routeResult.type === 'rag_found').
+//     Web-fallback (google_search), canned, casual → TIDAK di-cache.
+//   - Query mandiri saja: yang mengandung rujukan konteks (itu/ini/nya/tadi)
+//     di-skip — jawabannya bergantung percakapan sebelumnya.
+//   - Di-scope per userName → jawaban ber-nama tidak bocor antar user 1 device.
+//   - TTL 3 hari → batasi basi kalau manual di-ingest ulang.
+//   - Jalur gambar & agentic TIDAK ikut (unik / opt-in).
+const ANSWER_CACHE_PREFIX = 'dash-ans:';
+const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
+const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
+
+function answerCacheKey(model: string, userName: string, query: string): string | null {
+  const q = query.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (q.length < 6 || q.length > 300) return null;   // terlalu pendek (casual) / panjang
+  if (CONTEXT_REF_RE.test(q)) return null;            // context-dependent → jangan cache
+  return `${ANSWER_CACHE_PREFIX}${model}::${userName.toLowerCase()}::${q}`;
+}
+
+function readAnswerCache(key: string): string | null {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const { text, exp } = JSON.parse(raw) as { text?: unknown; exp?: unknown };
+    if (typeof text !== 'string' || typeof exp !== 'number' || Date.now() > exp) {
+      localStorage.removeItem(key);
+      return null;
+    }
+    return text;
+  } catch { return null; }
+}
+
+function writeAnswerCache(key: string, text: string): void {
+  try {
+    if (text.length < 40 || text.length > 20000) return; // jangan cache jawaban sampah/kepanjangan
+    localStorage.setItem(key, JSON.stringify({ text, exp: Date.now() + ANSWER_CACHE_TTL_MS }));
+  } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateResponseStream(
@@ -1041,6 +1085,20 @@ export async function generateResponseStream(
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
     .replace(/<\|[^|]*\|>/g, '[blocked]'); // ChatML-style tokens
   const trimmed  = sanitized.trim();
+
+  // Answer-cache HIT → stream instan, lewati embed/search/LLM total (gratis:
+  // resetUsage() bikin token=0 → tidak ke-log ledger). Cache hanya berisi
+  // jawaban dari data manual (lihat write di bawah), jadi hit = jawaban valid.
+  const cacheKey = answerCacheKey(model, userName, trimmed);
+  if (cacheKey) {
+    const cached = readAnswerCache(cacheKey);
+    if (cached) {
+      console.info('[answer-cache] HIT');
+      // Langsung stream (agentEvents kosong → indikator tak muncul, mulus & instan).
+      return streamCanned(cached, onChunk);
+    }
+  }
+
   const contents = historyToContents(history, 20);
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
@@ -1094,6 +1152,12 @@ export async function generateResponseStream(
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT(model, userName) }] },
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, isGoogleSearch);
+
+  // Simpan ke answer-cache HANYA jawaban dari DATA MANUAL (rag_found) — bukan
+  // web-fallback/canned/casual. Re-ask identik berikutnya jadi instan & gratis.
+  if (cacheKey && routeResult.type === 'rag_found' && fullText) {
+    writeAnswerCache(cacheKey, fullText);
+  }
 
   return fullText || FALLBACK_RESPONSE;
 }
