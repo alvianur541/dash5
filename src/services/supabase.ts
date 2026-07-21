@@ -1127,8 +1127,18 @@ export async function searchPartsCatalog(
     };
   }
 
-  // CPM selalu duluan di context — model lebih perhatian ke awal prompt.
-  // Lalu exact_part_no match, lalu similarity. PROMO setelah CPM.
+  // Urutan konteks (invarian — jangan diubah):
+  //   1. CPM selalu duluan (model paling perhatian ke awal prompt)
+  //   2. exact_part_no match (PN literal ketemu persis — presisi mutlak)
+  //   3. sisanya by relevance
+  //
+  // UPGRADE relevance untuk #3: query NAMA KOMPONEN (bukan PN literal) kini
+  // di-rerank Cohere cross-encoder + MMR — sebelumnya urutan murni cosine
+  // similarity pgvector (bi-encoder), yang lemah membedakan section bertetangga
+  // (mis. "seal kit swing" vs section seal kit lain / promo mirip). Jalur TM
+  // sudah lama pakai pola ini; parts (jalur tersibuk) kini setara.
+  // PN literal TIDAK di-rerank: exact match + konteksnya sudah deterministik,
+  // rerank hanya menambah 1 RTT tanpa nilai.
   const nonCpm = [...bodyData, ...engineData, ...promoData];
   nonCpm.sort((a, b) => {
     const aExact = a.match_type === 'exact_part_no' ? 1 : 0;
@@ -1136,7 +1146,33 @@ export async function searchPartsCatalog(
     if (aExact !== bExact) return bExact - aExact;
     return (b.similarity ?? 0) - (a.similarity ?? 0);
   });
-  const merged = [...cpmData, ...nonCpm];
+
+  let orderedNonCpm = nonCpm;
+  if (!partNum && nonCpm.length > 3) {
+    const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
+    const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
+    if (rest.length > 3) {
+      const { docs: reranked, error } = await rerankWithCohere(
+        queryText,
+        rest.map(d => d.content),
+        Math.min(rest.length, 12),
+      );
+      if (!error && reranked.length > 0) {
+        // MMR: hasil relevan tapi saling melengkapi (hindari 3 section nyaris kembar)
+        const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
+        const byContent = new Map(rest.map(d => [d.content, d]));
+        orderedNonCpm = [
+          ...exact,
+          ...diverse
+            .map(r => byContent.get(r.content))
+            .filter((d): d is HybridResult => !!d),
+        ];
+        console.info('[parts] rerank+MMR aktif: %d kandidat → %d', rest.length, diverse.length);
+      }
+    }
+  }
+
+  const merged = [...cpmData, ...orderedNonCpm];
 
   // Ambil top 12 (naik dari 7) agar lebih banyak section PROMO/PARTS terwakili.
   // Compression akan extract baris relevan dari banyak section sebelum AI dapat context.
