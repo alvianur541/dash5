@@ -427,7 +427,7 @@ export function ChatWindow({
                   letterSpacing: '0.14em',
                   textTransform: 'uppercase',
                   color: 'var(--text-muted)',
-                  fontWeight: 600,
+                  fontWeight: 500,
                 }}>
                   Mulai cepat
                 </p>
