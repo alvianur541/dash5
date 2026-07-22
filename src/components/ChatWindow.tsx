@@ -418,16 +418,18 @@ export function ChatWindow({
               </div>
 
               {/* Quick-start chips — tile ikon + label + panah */}
-              <div className="chips-container" style={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', margin: '0 auto' }}>
+              <div className="chips-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', margin: '0 auto' }}>
                 <p className="chips-label" style={{
                   textAlign: 'left',
-                  paddingLeft: '4px',
-                  marginBottom: '2px',
-                  fontSize: '10px',
-                  letterSpacing: '0.14em',
-                  textTransform: 'uppercase',
+                  paddingLeft: '2px',
+                  marginBottom: '4px',
+                  fontFamily: 'var(--font-serif)',
+                  fontStyle: 'italic',
+                  fontSize: '14px',
+                  letterSpacing: '0',
+                  textTransform: 'none',
                   color: 'var(--text-muted)',
-                  fontWeight: 500,
+                  fontWeight: 400,
                 }}>
                   Contoh pertanyaan
                 </p>
