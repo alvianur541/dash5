@@ -429,7 +429,7 @@ export function ChatWindow({
                   color: 'var(--text-muted)',
                   fontWeight: 500,
                 }}>
-                  Mulai cepat
+                  Contoh pertanyaan
                 </p>
                 {(SUGGESTION_CHIPS_BY_MODEL[selectedModel] ?? DEFAULT_CHIPS).map((chip, i) => (
                   <m.button
