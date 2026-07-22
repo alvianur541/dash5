@@ -69,25 +69,6 @@ function toolIcon(t: string, size = 14) {
   }
 }
 
-const initialOf = (s: string) => (s.trim().charAt(0) || '?').toUpperCase();
-
-/** Avatar inisial — hangat, accent-wash; `solid` untuk state terpilih. */
-function Avatar({ name, size = 30, solid = false }: { name: string; size?: number; solid?: boolean }) {
-  return (
-    <span
-      className="flex items-center justify-center rounded-full font-semibold shrink-0 transition-colors"
-      style={{
-        width: size, height: size,
-        fontSize: size * 0.42,
-        background: solid ? 'var(--accent-main)' : 'color-mix(in srgb, var(--accent-main) 15%, transparent)',
-        color: solid ? '#fff' : 'var(--accent-main)',
-      }}
-    >
-      {initialOf(name)}
-    </span>
-  );
-}
-
 type Bucket = { key: string; axis: string; label: string; query: number; tokens: number; idr: number };
 type Metric = 'idr' | 'query' | 'token';
 
@@ -628,12 +609,11 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                               onClick={() => setSelTeknisi(isSel ? null : u.teknisi)}
                               aria-pressed={isSel}
                               className={cn(
-                                'flex items-center gap-3 text-left rounded-xl px-2.5 py-2 -mx-1 transition-colors',
+                                'block text-left rounded-xl px-2.5 py-2 -mx-1 transition-colors',
                                 isSel ? 'bg-[var(--accent-main)]/[0.08]' : 'hover:bg-[var(--accent-main)]/[0.04]',
                               )}
                             >
-                              <Avatar name={u.teknisi} solid={isSel} />
-                              <div className="flex-1 min-w-0">
+                              <div className="min-w-0">
                                 <div className="flex items-baseline justify-between gap-3 mb-1.5">
                                   <span className={cn('text-[13px] truncate', isSel ? 'font-semibold text-[var(--accent-main)]' : 'text-[var(--text-primary)]')}>
                                     {u.teknisi}
@@ -746,12 +726,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                           {filteredRecent.map((r, i) => (
                             <tr key={i} className="border-t border-[var(--border-main)]/50 hover:bg-[var(--accent-main)]/[0.045] transition-colors">
                               <td className="py-2.5 pr-3 text-[var(--text-muted)] tabular-nums whitespace-nowrap">{dt(r.created_at)}</td>
-                              <td className="py-2.5 pr-3 whitespace-nowrap">
-                                <span className="flex items-center gap-2">
-                                  <Avatar name={r.teknisi} size={20} />
-                                  <span className="text-[var(--text-primary)] font-medium">{r.teknisi}</span>
-                                </span>
-                              </td>
+                              <td className="py-2.5 pr-3 text-[var(--text-primary)] font-medium whitespace-nowrap">{r.teknisi}</td>
                               <td className="py-2.5 pr-3 text-[var(--text-secondary)] whitespace-nowrap">
                                 {(r.tools_used && r.tools_used.length) ? r.tools_used.map(toolShort).join(', ') : <span className="text-[var(--text-muted)]">Langsung</span>}
                               </td>
