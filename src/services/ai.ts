@@ -3,7 +3,7 @@ import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
-export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.5-flash';
+export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
 interface TextPart            { text: string }

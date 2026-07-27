@@ -14,8 +14,8 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 // Cost ledger (usage_logs) — service_role key HANYA di server (jangan pernah ke client).
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
-const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.5-flash: $1.50 / 1M input
-const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '9.00'); // gemini-3.5-flash: $9.00 / 1M output (incl. thinking)
+const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.6-flash: $1.50 / 1M input
+const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '7.50'); // gemini-3.6-flash: $7.50 / 1M output (turun dari $9 di 3.5)
 const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '17000');
 
 // Dashboard monitoring — HANYA admin (owner) yang boleh lihat data semua teknisi.
@@ -40,7 +40,7 @@ const COHERE_KEYS = [
 // Vertex — tanpa allowlist, user login bisa inject model arbitrer (cost abuse) atau
 // memanipulasi path request yang jalan pakai kredensial service account kita.
 const ALLOWED_MODELS = new Set(
-  (process.env.ALLOWED_MODELS || 'gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
+  (process.env.ALLOWED_MODELS || 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
 );
 
