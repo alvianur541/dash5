@@ -241,7 +241,7 @@ export async function runReActAgent(
       toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
     }, false, MODEL);
 
-    const parts = res.candidates[0]?.content?.parts ?? [];
+    const parts = res.candidates?.[0]?.content?.parts ?? [];
     const fnCall = extractFunctionCall(parts);
 
     if (!fnCall) {

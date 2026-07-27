@@ -229,7 +229,7 @@ const decomposeQueryTool: Tool = {
         false,
         INTENT_MODEL,
       );
-      const raw = getText(res.candidates[0]?.content?.parts ?? []).trim();
+      const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
       // Robust JSON extraction — toleran terhadap markdown fence atau text bocor
       const arrMatch = raw.match(/\[[\s\S]*?\]/);
       const subQueries = arrMatch ? toStrArray(JSON.parse(arrMatch[0])).slice(0, 4) : [];

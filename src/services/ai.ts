@@ -39,9 +39,12 @@ export interface VRequest {
 }
 
 export interface VResponse {
-  candidates: Array<{
-    content: { role: string; parts: Part[] };
-    finishReason: string;
+  // OPTIONAL: Gemini bisa balas 200 TANPA candidates (safety block via
+  // promptFeedback, atau MAX_TOKENS tanpa content). Tipe wajib-ada dulu bikin
+  // `res.candidates[0]` crash saat undefined. Optional → TS paksa `?.[0]`.
+  candidates?: Array<{
+    content?: { role: string; parts: Part[] };
+    finishReason?: string;
   }>;
 }
 
@@ -292,7 +295,7 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
       systemInstruction: { parts: [{ text: systemPrompt }] },
       generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
-    const raw = getText(res.candidates[0]?.content?.parts ?? []).trim();
+    const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
     // Cari JSON object pertama — toleran terhadap text bocor sebelum/sesudah JSON
     const jsonStart = raw.indexOf('{');
     const jsonEnd   = raw.lastIndexOf('}');
@@ -332,7 +335,7 @@ async function hydeExpand(query: string): Promise<string | null> {
       systemInstruction: { parts: [{ text: SYS }] },
       generationConfig: { maxOutputTokens: 80, temperature: 0.2, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
-    const out = getText(res.candidates[0]?.content?.parts ?? []).trim().replace(/^["'`]|["'`]$/g, '');
+    const out = getText(res.candidates?.[0]?.content?.parts ?? []).trim().replace(/^["'`]|["'`]$/g, '');
     const wc = out.split(/\s+/).filter(Boolean).length;
     // Guard: 4-45 kata, bukan echo query, bukan refusal ("I cannot"/"maaf").
     if (wc < 4 || wc > 45) return null;
@@ -380,7 +383,7 @@ Rules:
     generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
   }, false, INTENT_MODEL);
 
-  const raw = getText(res.candidates[0]?.content?.parts ?? []).trim();
+  const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
   if (!raw || raw.toUpperCase() === 'NONE') return [];
   return raw.split(',').map(c => c.trim()).filter(Boolean);
 }
@@ -501,7 +504,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
         systemInstruction: { parts: [{ text: SYS }] },
         generationConfig: { maxOutputTokens: 350, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
       }, false, INTENT_MODEL);
-      const compressed = getText(res.candidates[0]?.content?.parts ?? []).trim();
+      const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
       if (compressed.length < 30) return chunk; // over-stripped, fallback ke original
       return compressed;
     } catch (err) {
@@ -960,7 +963,7 @@ Examples:
       systemInstruction: { parts: [{ text: SYS }] },
       generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
-    const raw = getText(res.candidates[0]?.content?.parts ?? []).trim();
+    const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
     const m = raw.match(/\[[\s\S]*?\]/);
     if (!m) return [];
     const arr = JSON.parse(m[0]);
@@ -1334,7 +1337,7 @@ export async function generateResponse(
 
     const res = await callProxy(body);
     emit({ type: 'done' });
-    const text = collapseDegenerateLoops(getText(res.candidates[0]?.content?.parts ?? []));
+    const text = collapseDegenerateLoops(getText(res.candidates?.[0]?.content?.parts ?? []));
     return text || 'Maaf, sistem tidak bisa memproses permintaan ini.';
   }
 
