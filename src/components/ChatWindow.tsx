@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, NotebookPen, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
@@ -284,17 +284,19 @@ const MessageItem = memo(function MessageItem({
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
 
-          {/* Gap-triggered Catatan Lapangan — muncul saat KB tak punya data untuk
-              pertanyaan ini. Ajak teknisi menambal lubang ilmu untuk rekan berikutnya. */}
-          {!isStreaming && message.knowledgeGap && onOpenFieldNote && (
+          {/* Catatan Lapangan — muncul saat AI MENDETEKSI teknisi berbagi ilmu di
+              pesannya. Sudah terisi hasil ekstraksi AI; teknisi tinggal cek & simpan. */}
+          {!isStreaming && message.knowledgeCandidate && onOpenFieldNote && (
             <button
               className="fieldnote-cta"
               onClick={() => onOpenFieldNote(message.id)}
             >
-              <span className="fieldnote-cta-icon"><NotebookPen size={15} /></span>
+              <span className="fieldnote-cta-icon"><Lightbulb size={15} /></span>
               <span className="fieldnote-cta-text">
-                <span className="fieldnote-cta-title">Data ini belum ada di knowledge base</span>
-                <span className="fieldnote-cta-sub">Punya info dari lapangan? Bagikan biar teknisi lain terbantu</span>
+                <span className="fieldnote-cta-title">Sepertinya kamu berbagi ilmu lapangan</span>
+                <span className="fieldnote-cta-sub">
+                  {message.knowledgeCandidate.component ? `${message.knowledgeCandidate.component} · ` : ''}ketuk untuk cek &amp; simpan ke knowledge base
+                </span>
               </span>
               <ArrowRight size={15} className="fieldnote-cta-arrow" />
             </button>

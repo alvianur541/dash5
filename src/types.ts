@@ -1,16 +1,11 @@
 
 export type UnitModel = 'ZX48U-5A' | 'ZX65USB-5A' | 'ZX138MF-5G' | 'ZX200-5G' | 'KCM 60ZV' | 'ZW140';
 
-// Sinyal "knowledge base tidak punya data untuk pertanyaan ini" — dipakai untuk
-// memicu tawaran Catatan Lapangan (crowd-source ilmu teknisi menambal gap KB).
-export type GapReason =
-  | 'not_found'       // fault code / parts tidak ada di KB (canned)
-  | 'web_fallback'    // manual internal kosong → fallback referensi umum/web
-  | 'partial';        // ada data nyerempet tapi jawaban akui bagian penting tak termuat
-
-export interface KnowledgeGap {
-  reason: GapReason;
-  topic: string;      // pertanyaan/topik yang datanya tidak ditemukan
+// Ilmu lapangan yang DIDETEKSI + DIEKSTRAK AI dari pesan teknisi (bukan diisi manual).
+// Dipakai memicu kartu "kamu berbagi ilmu — simpan?" (teknisi tinggal konfirmasi).
+export interface KnowledgeCandidate {
+  component: string;   // komponen/sistem yang dibahas (hasil ekstraksi AI)
+  note: string;        // ringkasan ilmu/trik yang AI tangkap dari ucapan teknisi
 }
 
 export interface Message {
@@ -19,7 +14,7 @@ export interface Message {
   content: string;
   timestamp: number;
   attachments?: string[];
-  knowledgeGap?: KnowledgeGap;   // set kalau jawaban ini mentok karena KB tak punya data
+  knowledgeCandidate?: KnowledgeCandidate;   // set kalau AI mendeteksi teknisi berbagi ilmu
 }
 
 export interface SessionMeta {

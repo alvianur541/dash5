@@ -6,8 +6,9 @@ import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { FieldNoteModal } from './components/FieldNoteModal';
-import { UnitModel, Message, SessionMeta, KnowledgeGap } from './types';
+import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
 import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, type AgentEvent } from './services/ai';
+import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared } from './services/storage';
@@ -52,7 +53,7 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
-  const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; gap?: KnowledgeGap; question: string; answer: string } | null>(null);
+  const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; candidate?: KnowledgeCandidate; question: string; answer: string } | null>(null);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Default adaptive: simple lookup tetap single-pass, diagnosis kompleks otomatis ReAct.
@@ -268,8 +269,8 @@ export default function App() {
     const rawTitle = content.trim() || (attachmentUrls.length > 0 ? '[Gambar]' : 'New chat');
     const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
 
-    const persist = (fullText: string, gap?: KnowledgeGap) => {
-      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now(), knowledgeGap: gap };
+    const persist = (fullText: string) => {
+      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
       const newMessages = [...currentMessages, userMessage, assistantMessage];
       const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
@@ -279,7 +280,6 @@ export default function App() {
     };
 
     const toolsUsed = new Set<string>();
-    let capturedGap: KnowledgeGap | undefined;
     try {
       // Mesin streaming dipakai SEMUA jalur (teks & foto) — dulu jalur foto
       // non-stream tanpa progress: user lihat layar diam lalu jawaban muncul
@@ -328,10 +328,6 @@ export default function App() {
         if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
         setAgentEvents(prev => [...prev, event]);
       };
-      const onMetaCb = (meta: { knowledgeGap?: KnowledgeGap }) => {
-        if (sessionIdRef.current !== sessionSnapshot) return;
-        capturedGap = meta.knowledgeGap;
-      };
 
       let fullText: string;
       if (attachments && attachments.length > 0) {
@@ -348,7 +344,7 @@ export default function App() {
                 selectedModel, userName, currentMessages, content,
                 onChunkCb, onAgentEventCb,
               )
-            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb, onMetaCb);
+            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         } catch (agErr) {
           // Fallback: agentic gagal SEBELUM streaming jawaban → diam-diam pakai single-pass
           // supaya tidak tampil error ke user. Kalau sudah terlanjur streaming, lempar ulang.
@@ -356,7 +352,7 @@ export default function App() {
           if (!useAgentic || streamedAny || aborted) throw agErr;
           console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
           setAgentEvents([]);
-          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb, onMetaCb);
+          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         }
       }
 
@@ -365,11 +361,21 @@ export default function App() {
       if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
       setMessages(prev => {
         const exists = prev.some(m => m.id === assistantId);
-        if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs, knowledgeGap: capturedGap }];
-        return prev.map(m => m.id === assistantId ? { ...m, content: fullText, knowledgeGap: capturedGap } : m);
+        if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
+        return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
       });
-      persist(fullText, capturedGap);
+      persist(fullText);
       logCost(sessionSnapshot, [...toolsUsed]);
+
+      // Deteksi ilmu lapangan DARI pesan teknisi (async, non-blocking pasca-jawaban).
+      // Kalau AI menangkap ada ilmu reusable → tempel candidate ke pesan → kartu muncul.
+      if (content.trim()) {
+        detectFieldKnowledge(content, selectedModel).then(candidate => {
+          if (!candidate) return;
+          if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
+        }).catch(() => {});
+      }
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
@@ -443,11 +449,6 @@ export default function App() {
         if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
         setAgentEvents(prev => [...prev, event]);
       };
-      let capturedGap: KnowledgeGap | undefined;
-      const onMetaCb = (meta: { knowledgeGap?: KnowledgeGap }) => {
-        if (sessionIdRef.current !== sessionSnapshot) return;
-        capturedGap = meta.knowledgeGap;
-      };
       const useAgentic = shouldUseAgentic(userMsg.content);
       let fullText: string;
       try {
@@ -457,7 +458,7 @@ export default function App() {
               onChunkCb, onAgentEventCb,
             )
           : await generateResponseStream(
-              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb, onMetaCb,
+              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
             );
       } catch (agErr) {
         // Fallback: agentic gagal sebelum streaming → diam-diam single-pass (jangan error ke user).
@@ -466,18 +467,26 @@ export default function App() {
         console.warn('[agentic] retry gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
         setAgentEvents([]);
         fullText = await generateResponseStream(
-          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb, onMetaCb,
+          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
         );
       }
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return;
-      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText, knowledgeGap: capturedGap } : m));
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m));
+
+      if (userMsg.content.trim()) {
+        detectFieldKnowledge(userMsg.content, selectedModel).then(candidate => {
+          if (!candidate) return;
+          if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
+        }).catch(() => {});
+      }
 
       const sessionId = sessionIdRef.current;
       if (sessionId) {
         const newUserMsg: Message = { ...userMsg, id: crypto.randomUUID(), timestamp: Date.now() };
-        const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs, knowledgeGap: capturedGap };
+        const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs };
         const newMessages = [...historyBefore, newUserMsg, assistantMsg];
         const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
         const rawTitle = userMsg.content.trim() || '[Gambar]';
@@ -667,7 +676,7 @@ export default function App() {
             if (idx < 0) return;
             const asst = msgs[idx];
             const q = idx > 0 && msgs[idx - 1].role === 'user' ? msgs[idx - 1].content : '';
-            setFieldNoteState({ messageId: id, gap: asst.knowledgeGap, question: q, answer: asst.content });
+            setFieldNoteState({ messageId: id, candidate: asst.knowledgeCandidate, question: q, answer: asst.content });
           }}
           agentEvents={agentEvents}
         />
@@ -690,7 +699,7 @@ export default function App() {
         onClose={() => setFieldNoteState(null)}
         model={selectedModel}
         contributorName={user?.displayName || 'Operator'}
-        gap={fieldNoteState?.gap}
+        candidate={fieldNoteState?.candidate}
         sourceMessageId={fieldNoteState?.messageId}
         sourceQuestion={fieldNoteState?.question}
         sourceAnswer={fieldNoteState?.answer}
