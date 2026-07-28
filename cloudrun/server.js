@@ -36,10 +36,10 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
-// Rerank model Cohere. Default `rerank-v4.0-pro` — state-of-the-art quality untuk
-// akurasi retrieval (diagnostik: akurasi > latency). Bisa rollback ke
-// `rerank-v4.0-fast` via env COHERE_RERANK_MODEL tanpa ubah kode.
-const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-pro';
+// Rerank model Cohere. Default `rerank-v4.0-fast` — latency rendah (~500ms), penting
+// untuk pemakaian lapangan yang butuh cepat. Pro (state-of-the-art) terlalu lambat di
+// jalur kritis (~1-5s). Bisa dicoba lagi via env COHERE_RERANK_MODEL=rerank-v4.0-pro.
+const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast';
 
 // Model yang boleh dipanggil lewat proxy. `model` dari client diinterpolasi ke URL
 // Vertex — tanpa allowlist, user login bisa inject model arbitrer (cost abuse) atau
