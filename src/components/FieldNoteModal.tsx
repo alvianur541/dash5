@@ -7,6 +7,7 @@ import { polishFieldNote, submitFieldNote } from '../services/fieldNotes';
 interface FieldNoteModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onSaved?: () => void;             // dipanggil saat tersimpan → parent buang kartu (cegah dobel)
   model: UnitModel;
   contributorName: string;
   candidate?: KnowledgeCandidate;   // hasil deteksi+ekstraksi AI (pre-fill)
@@ -18,7 +19,7 @@ interface FieldNoteModalProps {
 type Phase = 'edit' | 'submitting' | 'done';
 
 export function FieldNoteModal({
-  isOpen, onClose, model, contributorName, candidate, sourceMessageId, sourceQuestion, sourceAnswer,
+  isOpen, onClose, onSaved, model, contributorName, candidate, sourceMessageId, sourceQuestion, sourceAnswer,
 }: FieldNoteModalProps) {
   const [component, setComponent] = useState('');
   const [note, setNote] = useState('');
@@ -59,6 +60,7 @@ export function FieldNoteModal({
       noteContent: note,
     });
     if (res.ok && res.verdict === 'worthy') {
+      onSaved?.();                       // parent buang kartu → tak bisa di-Save lagi
       setPhase('done');
       setTimeout(() => { onClose(); }, 2000);
     } else if (res.ok && res.verdict === 'reject') {

@@ -697,6 +697,10 @@ export default function App() {
       <FieldNoteModal
         isOpen={fieldNoteState !== null}
         onClose={() => setFieldNoteState(null)}
+        onSaved={() => {
+          const id = fieldNoteState?.messageId;
+          if (id) setMessages(prev => prev.map(m => m.id === id ? { ...m, knowledgeCandidate: undefined } : m));
+        }}
         model={selectedModel}
         contributorName={user?.displayName || 'Operator'}
         candidate={fieldNoteState?.candidate}

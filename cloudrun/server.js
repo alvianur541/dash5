@@ -627,6 +627,19 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
     return res.status(200).json({ verdict: 'reject', reason: judged.reason || 'Catatan belum layak masuk knowledge base.' });
   }
 
+  // Idempotency — cegah dobel kalau pesan yang sama di-Save berkali-kali.
+  if (srcMsgId) {
+    try {
+      const dup = await svcFetch(`/rest/v1/field_notes?select=id&status=eq.approved&source_message_id=eq.${encodeURIComponent(srcMsgId)}&limit=1`);
+      if (dup.ok) {
+        const arr = await dup.json();
+        if (Array.isArray(arr) && arr.length > 0) {
+          return res.status(200).json({ verdict: 'worthy', duplicate: true });
+        }
+      }
+    } catch { /* cek gagal → lanjut ingest saja */ }
+  }
+
   // 3) LAYAK → embed → ingest ke documents (RPC service_role) → catat audit approved
   const cleanComponent = judged.component || component;
   const cleanNote = judged.note || note;
