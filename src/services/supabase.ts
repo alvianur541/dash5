@@ -138,7 +138,11 @@ export async function saveFeedback(payload: {
   }
 }
 
-const VECTOR_SIMILARITY_THRESHOLD = 0.35;
+// Pre-filter recall gate SEBELUM Cohere rerank. Sengaja longgar (0.30): chunk relevan
+// yang beda istilah (user "swing motor" vs manual "swing device") sering cosine 0.30-0.35
+// — dibuang di 0.35 padahal reranker bisa nangkap. Cohere rerank + computeConfidence
+// yang jadi penyaring kualitas final, jadi biarkan lebih banyak kandidat lolos ke rerank.
+const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
@@ -608,7 +612,7 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 3,
+  topN = 4,   // 4 chunk (naik dari 3): jawaban diagnosa sering butuh impact+root cause+langkah
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };
@@ -774,7 +778,7 @@ export async function searchTechnicalManualMulti(
   }
 
   // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
-  const rerankPool = Math.min(filteredDocs.length, Math.max(topN * 2, 6));
+  const rerankPool = Math.min(filteredDocs.length, Math.max(topN * 2, 8));
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, filteredDocs, rerankPool);
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   const top = mmrSelect(reranked, topN, 0.7);
