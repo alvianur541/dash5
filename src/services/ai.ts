@@ -484,7 +484,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   // Extraction balance — drop narrative bloat tapi PRESERVE enough context
   // untuk AI bisa frame agentic response (section name, related notes, dll).
   // Terlalu aggressive compress (cuma raw data row) bikin AI sound monoton.
-  const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
+  const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
   // Cap chunk yg dikirim ke INTENT_MODEL — context window flash-lite ~8K input.
   const MAX_CHUNK_FOR_COMPRESS = 8000;
@@ -1069,6 +1069,29 @@ function writeAnswerCache(key: string, text: string): void {
   } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
 }
 
+// ─── Anti-halu: telemetri grounding angka spec ──────────────────────────────────
+// Cek DETERMINISTIK apakah angka spec (dengan unit) yang DIKUTIP AI benar ada di DATA
+// yang disisipkan. Wajib ada unit di belakang angka → step number/qty tidak ke-flag.
+// Telemetri dulu (console) untuk ukur laju halu tanpa ubah UX; basis eskalasi nanti
+// (flag visual / regen) kalau observasi menunjukkan perlu.
+const GROUNDING_SPEC_RE = /(\d+(?:[.,]\d+)?)\s*(N·?m|Nm|MPa|kPa|bar|psi|kgf?|mm|cm|rpm|°C|kW|HP|L\b|Ω|μm)\b/gi;
+function normalizeNum(s: string): string {
+  return s.replace(/,/g, '.').replace(/^0+(\d)/, '$1');
+}
+function verifyGrounding(answer: string, context: string): void {
+  if (!context || !answer) return;
+  const ctxNums = new Set((context.match(/\d+(?:[.,]\d+)?/g) ?? []).map(normalizeNum));
+  const ungrounded: string[] = [];
+  let total = 0;
+  for (const m of answer.matchAll(GROUNDING_SPEC_RE)) {
+    total++;
+    if (!ctxNums.has(normalizeNum(m[1]))) ungrounded.push(m[0].trim());
+  }
+  if (total > 0 && ungrounded.length > 0) {
+    console.warn('[grounding] %d/%d angka spec TIDAK ditemukan di data:', ungrounded.length, total, ungrounded.slice(0, 10));
+  }
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function generateResponseStream(
@@ -1164,6 +1187,9 @@ export async function generateResponseStream(
   if (cacheKey && routeResult.type === 'rag_found' && fullText) {
     writeAnswerCache(cacheKey, fullText);
   }
+
+  // Anti-halu telemetri — cek angka spec di jawaban benar bersumber dari data.
+  if (ragContent && fullText) verifyGrounding(fullText, ragContent);
 
   return fullText || FALLBACK_RESPONSE;
 }
