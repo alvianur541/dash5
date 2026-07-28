@@ -143,6 +143,10 @@ export async function saveFeedback(payload: {
 // — dibuang di 0.35 padahal reranker bisa nangkap. Cohere rerank + computeConfidence
 // yang jadi penyaring kualitas final, jadi biarkan lebih banyak kandidat lolos ke rerank.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
+// Cap jumlah dokumen yang dikirim ke Cohere rerank. Threshold 0.30 + keyword +
+// spec-boost bisa hasilkan 25-30 kandidat → rerank-v4.0-pro lambat & bisa timeout.
+// 18 sudah cukup (keyword exact + top vektor by similarity di depan) & bounded latency.
+const RERANK_INPUT_CAP = 18;
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
@@ -254,7 +258,10 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
   if (docs.length === 0) return { docs: [] };
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+  // 8s (naik dari 5s): rerank-v4.0-pro lebih lambat dari -fast. Dengan input di-cap
+  // (lihat RERANK_INPUT_CAP di pemanggil), pro biasanya selesai 3-5s — 8s beri margin
+  // supaya tidak abort & fallback ke urutan vektor (yang menghapus benefit pro).
+  const timer = setTimeout(() => controller.abort(), 8000);
 
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -777,9 +784,11 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
+  // Cap input rerank → bounded latency untuk rerank-v4.0-pro (cegah timeout).
+  const rerankInput = filteredDocs.slice(0, RERANK_INPUT_CAP);
   // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
-  const rerankPool = Math.min(filteredDocs.length, Math.max(topN * 2, 8));
-  const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, filteredDocs, rerankPool);
+  const rerankPool = Math.min(rerankInput.length, Math.max(topN * 2, 8));
+  const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   const top = mmrSelect(reranked, topN, 0.7);
   const { confidence, topScore } = computeConfidence(top);
@@ -1156,10 +1165,12 @@ export async function searchPartsCatalog(
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
     if (rest.length > 3) {
+      // Cap input rerank (rest sudah tersortir by similarity) → bounded latency pro.
+      const rerankRest = rest.slice(0, RERANK_INPUT_CAP);
       const { docs: reranked, error } = await rerankWithCohere(
         queryText,
-        rest.map(d => d.content),
-        Math.min(rest.length, 12),
+        rerankRest.map(d => d.content),
+        Math.min(rerankRest.length, 12),
       );
       if (!error && reranked.length > 0) {
         // MMR: hasil relevan tapi saling melengkapi (hindari 3 section nyaris kembar)
