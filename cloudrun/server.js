@@ -36,6 +36,11 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
+// Rerank model Cohere. Default `rerank-v4.0-pro` — state-of-the-art quality untuk
+// akurasi retrieval (diagnostik: akurasi > latency). Bisa rollback ke
+// `rerank-v4.0-fast` via env COHERE_RERANK_MODEL tanpa ubah kode.
+const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-pro';
+
 // Model yang boleh dipanggil lewat proxy. `model` dari client diinterpolasi ke URL
 // Vertex — tanpa allowlist, user login bisa inject model arbitrer (cost abuse) atau
 // memanipulasi path request yang jalan pakai kredensial service account kita.
@@ -378,7 +383,7 @@ app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
       const upstream = await fetch('https://api.cohere.com/v2/rerank', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({ model: 'rerank-v4.0-fast', query, documents, top_n: topN }),
+        body: JSON.stringify({ model: COHERE_RERANK_MODEL, query, documents, top_n: topN }),
       });
       if (upstream.status === 429 || upstream.status === 401 || upstream.status === 403) {
         console.warn('Cohere key gagal (status %d), coba key berikutnya...', upstream.status);
