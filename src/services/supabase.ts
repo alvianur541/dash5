@@ -145,8 +145,10 @@ export async function saveFeedback(payload: {
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 // Cap jumlah dokumen yang dikirim ke Cohere rerank. Threshold 0.30 + keyword +
 // spec-boost bisa hasilkan 25-30 kandidat → rerank-v4.0-pro lambat & bisa timeout.
-// 18 sudah cukup (keyword exact + top vektor by similarity di depan) & bounded latency.
-const RERANK_INPUT_CAP = 18;
+// 15 = keseimbangan: cukup ruang untuk keyword-exact + top vektor by similarity
+// (chunk jawaban hampir selalu di sini), tapi pro selesai ~2.5-4s (aman di bawah 8s).
+// Turunkan ke 12 kalau mau lebih cepat; jangan < 10 (reranker kurang bahan).
+const RERANK_INPUT_CAP = 15;
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
