@@ -46,6 +46,16 @@ const SANITIZE_SCHEMA = {
   protocols: { href: ['http', 'https', 'mailto', 'tel'] },
 };
 
+// Ekstrak teks polos dari node hast — untuk deteksi blockquote "catatan lapangan"
+// (biar bisa dikasih shading beda dari data manual resmi).
+function hastText(node: unknown): string {
+  const n = node as { type?: string; value?: string; children?: unknown[] } | null;
+  if (!n) return '';
+  if (n.type === 'text') return n.value ?? '';
+  if (Array.isArray(n.children)) return n.children.map(hastText).join('');
+  return '';
+}
+
 interface ChatWindowProps {
   messages: Message[];
   isTyping: boolean;
@@ -249,6 +259,13 @@ const MessageItem = memo(function MessageItem({
                 components={{
                   table: ({ children }) => (
                     <div className="markdown-table-wrap"><table>{children}</table></div>
+                  ),
+                  // Blockquote yang berisi "catatan lapangan" → callout shaded (ilmu
+                  // teknisi, belum resmi) supaya beda jelas dari data manual resmi.
+                  blockquote: ({ children, node }) => (
+                    hastText(node).toLowerCase().includes('catatan lapangan')
+                      ? <blockquote className="fieldnote-callout">{children}</blockquote>
+                      : <blockquote>{children}</blockquote>
                   ),
                   // Header tabel pakai font mono — selaras dengan body cell yg
                   // sering berisi PN/spec/code dalam backtick (juga mono).

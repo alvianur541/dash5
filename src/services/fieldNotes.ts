@@ -51,12 +51,11 @@ const GREETING_RE = /^(hai|halo|hi|oke|ok|sip|siap|makasih|terima kasih|thanks?|
 export async function detectFieldKnowledge(message: string, model: UnitModel): Promise<KnowledgeCandidate | null> {
   const msg = message.trim();
   const words = msg.split(/\s+/).filter(Boolean).length;
-  if (msg.length < 25) { console.info('[field-note] skip: <25 chars'); return null; }
-  if (GREETING_RE.test(msg) && msg.length < 60) { console.info('[field-note] skip: greeting'); return null; }
-  if (msg.endsWith('?') && words < 12) { console.info('[field-note] skip: short question'); return null; }
-  if (words < 5) { console.info('[field-note] skip: <5 words'); return null; }
+  if (msg.length < 25) return null;                          // terlalu pendek untuk memuat ilmu
+  if (GREETING_RE.test(msg) && msg.length < 60) return null;
+  if (msg.endsWith('?') && words < 12) return null;          // pertanyaan pendek
+  if (words < 5) return null;
 
-  console.info('[field-note] detect start (len=%d words=%d)', msg.length, words);
   try {
     const res = await callProxy(
       {
@@ -68,17 +67,14 @@ export async function detectFieldKnowledge(message: string, model: UnitModel): P
       INTENT_MODEL,
     );
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-    console.info('[field-note] raw judge output:', raw.slice(0, 300));
     const m = raw.match(/\{[\s\S]*\}/);
-    if (!m) { console.warn('[field-note] no JSON in output'); return null; }
+    if (!m) return null;
     const parsed = JSON.parse(m[0]) as { present?: boolean; component?: string; note?: string };
-    if (parsed.present !== true) { console.info('[field-note] present=false'); return null; }
+    if (parsed.present !== true) return null;
     const note = String(parsed.note ?? '').trim().slice(0, 2000);
-    if (note.length < 15) { console.info('[field-note] note too short'); return null; }
-    console.info('[field-note] ✓ candidate:', parsed.component, '|', note.slice(0, 80));
+    if (note.length < 15) return null;
     return { component: String(parsed.component ?? '').trim().slice(0, 120), note };
-  } catch (e) {
-    console.warn('[field-note] detect error:', (e as Error)?.message);
+  } catch {
     return null;
   }
 }

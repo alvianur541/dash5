@@ -707,6 +707,19 @@ img {
 }
 .fieldnote-cta-arrow { flex-shrink: 0; color: var(--accent-main); }
 
+/* Callout catatan lapangan di dalam jawaban AI — shading aksen supaya bagian
+   dari ilmu teknisi (belum resmi) beda jelas dari data manual resmi. */
+.markdown-body blockquote.fieldnote-callout {
+  margin: 12px 0;
+  padding: 9px 13px;
+  border-left: 3px solid var(--accent-main);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--accent-main) 9%, transparent);
+  font-style: normal;
+}
+.markdown-body blockquote.fieldnote-callout > :first-child { margin-top: 0; }
+.markdown-body blockquote.fieldnote-callout > :last-child { margin-bottom: 0; }
+
 /* Typing indicator — 3 dot bounce (sebelum chunk pertama datang) */
 .typing-dots { display: flex; align-items: center; gap: 5px; padding: 10px 0 6px; }
 .typing-dot {

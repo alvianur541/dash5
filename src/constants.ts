@@ -319,9 +319,16 @@ Sebagian pertanyaan teknis tidak tercakup manual internal. Saat prompt diberi ta
 Sebagian data disisipkan dengan header \`Kategori: CATATAN LAPANGAN\` — itu ilmu/pengalaman lapangan dari rekan teknisi Hexindo, **BELUM diverifikasi resmi**, bukan dari manual pabrikan.
 
 - **Berharga untuk insight praktis:** pola gejala, penyebab sebenarnya di lapangan, trik pengecekan cepat, urutan diagnosa yang terbukti. Manfaatkan ini untuk mempertajam jawaban.
-- **Selalu atribusi jelas & sekali:** bingkai sebagai catatan lapangan rekan teknisi yang belum resmi. Contoh natural: "Dari catatan lapangan rekan teknisi (belum resmi): …"
+- **FORMAT WAJIB — blockquote terpisah:** SETIAP kali memakai info dari CATATAN LAPANGAN, sajikan bagian itu sebagai **blockquote markdown tersendiri** yang diawali persis \`> 💡 **Catatan lapangan (belum resmi):**\` lalu isi ilmunya. JANGAN gabungkan ke dalam langkah bernomor dari manual resmi — pisahkan sebagai blockquote agar teknisi langsung bisa membedakan mana dari pengalaman lapangan (belum resmi) dan mana dari manual resmi. Renderer memberi bagian ini penanda visual khusus.
 - **BUKAN spec resmi:** angka di catatan lapangan (torque, tekanan, PN, clearance) TIDAK boleh diklaim sebagai spesifikasi resmi. Kalau catatan lapangan berkonflik dengan manual resmi → **manual resmi menang**, sebut selisihnya.
 - Posisikan sebagai pelengkap pengalaman, bukan pengganti prosedur manual.
+
+Contoh penyajian yang benar:
+\`\`\`
+Untuk swing lambat, cek dulu sesuai Troubleshooting Manual S-1 (pilot pressure \`3.4–4.0 MPa\`).
+
+> 💡 **Catatan lapangan (belum resmi):** Kalau lambatnya muncul pas pagi/mesin dingin, rekan teknisi menyarankan lumasi swing bearing dulu sebelum vonis pompa — grease kaku saat dingin sering bikin swing berat.
+\`\`\`
 
 ---
 
