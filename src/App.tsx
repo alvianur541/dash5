@@ -5,8 +5,8 @@ import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
-import { ChecklistModal } from './components/ChecklistModal';
-import { UnitModel, Message, SessionMeta } from './types';
+import { FieldNoteModal } from './components/FieldNoteModal';
+import { UnitModel, Message, SessionMeta, KnowledgeGap } from './types';
 import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, type AgentEvent } from './services/ai';
 import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
@@ -16,7 +16,6 @@ import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
 import { useNetwork } from './hooks/useNetwork';
-import { clearAllChecklists } from './hooks/useChecklist';
 
 type AgenticPreference = 'adaptive' | 'always' | 'never';
 
@@ -53,7 +52,7 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
-  const [checklistState, setChecklistState] = useState<{ messageId: string; content: string } | null>(null);
+  const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; gap?: KnowledgeGap; question: string; answer: string } | null>(null);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Default adaptive: simple lookup tetap single-pass, diagnosis kompleks otomatis ReAct.
@@ -180,7 +179,6 @@ export default function App() {
     if (!user) return;
     setDeleteAllConfirm(false);
     deleteAllSessionData(user.uid);
-    clearAllChecklists();
     setSessionList([]);
     startNewSession();
     await deleteAllChatSessions(user.uid);
@@ -270,8 +268,8 @@ export default function App() {
     const rawTitle = content.trim() || (attachmentUrls.length > 0 ? '[Gambar]' : 'New chat');
     const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
 
-    const persist = (fullText: string) => {
-      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
+    const persist = (fullText: string, gap?: KnowledgeGap) => {
+      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now(), knowledgeGap: gap };
       const newMessages = [...currentMessages, userMessage, assistantMessage];
       const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
@@ -281,6 +279,7 @@ export default function App() {
     };
 
     const toolsUsed = new Set<string>();
+    let capturedGap: KnowledgeGap | undefined;
     try {
       // Mesin streaming dipakai SEMUA jalur (teks & foto) — dulu jalur foto
       // non-stream tanpa progress: user lihat layar diam lalu jawaban muncul
@@ -329,6 +328,10 @@ export default function App() {
         if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
         setAgentEvents(prev => [...prev, event]);
       };
+      const onMetaCb = (meta: { knowledgeGap?: KnowledgeGap }) => {
+        if (sessionIdRef.current !== sessionSnapshot) return;
+        capturedGap = meta.knowledgeGap;
+      };
 
       let fullText: string;
       if (attachments && attachments.length > 0) {
@@ -345,7 +348,7 @@ export default function App() {
                 selectedModel, userName, currentMessages, content,
                 onChunkCb, onAgentEventCb,
               )
-            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb, onMetaCb);
         } catch (agErr) {
           // Fallback: agentic gagal SEBELUM streaming jawaban → diam-diam pakai single-pass
           // supaya tidak tampil error ke user. Kalau sudah terlanjur streaming, lempar ulang.
@@ -353,7 +356,7 @@ export default function App() {
           if (!useAgentic || streamedAny || aborted) throw agErr;
           console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
           setAgentEvents([]);
-          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb, onMetaCb);
         }
       }
 
@@ -362,10 +365,10 @@ export default function App() {
       if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
       setMessages(prev => {
         const exists = prev.some(m => m.id === assistantId);
-        if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
-        return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
+        if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs, knowledgeGap: capturedGap }];
+        return prev.map(m => m.id === assistantId ? { ...m, content: fullText, knowledgeGap: capturedGap } : m);
       });
-      persist(fullText);
+      persist(fullText, capturedGap);
       logCost(sessionSnapshot, [...toolsUsed]);
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
@@ -440,6 +443,11 @@ export default function App() {
         if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
         setAgentEvents(prev => [...prev, event]);
       };
+      let capturedGap: KnowledgeGap | undefined;
+      const onMetaCb = (meta: { knowledgeGap?: KnowledgeGap }) => {
+        if (sessionIdRef.current !== sessionSnapshot) return;
+        capturedGap = meta.knowledgeGap;
+      };
       const useAgentic = shouldUseAgentic(userMsg.content);
       let fullText: string;
       try {
@@ -449,7 +457,7 @@ export default function App() {
               onChunkCb, onAgentEventCb,
             )
           : await generateResponseStream(
-              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
+              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb, onMetaCb,
             );
       } catch (agErr) {
         // Fallback: agentic gagal sebelum streaming → diam-diam single-pass (jangan error ke user).
@@ -458,17 +466,18 @@ export default function App() {
         console.warn('[agentic] retry gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
         setAgentEvents([]);
         fullText = await generateResponseStream(
-          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
+          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb, onMetaCb,
         );
       }
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return;
+      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText, knowledgeGap: capturedGap } : m));
 
       const sessionId = sessionIdRef.current;
       if (sessionId) {
         const newUserMsg: Message = { ...userMsg, id: crypto.randomUUID(), timestamp: Date.now() };
-        const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs };
+        const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs, knowledgeGap: capturedGap };
         const newMessages = [...historyBefore, newUserMsg, assistantMsg];
         const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
         const rawTitle = userMsg.content.trim() || '[Gambar]';
@@ -652,7 +661,14 @@ export default function App() {
           onRetry={handleRetry}
           userName={(user?.displayName || 'Operator').split(' ')[0]}
           hasHistory={sessionList.length > 0}
-          onOpenChecklist={(id, content) => setChecklistState({ messageId: id, content })}
+          onOpenFieldNote={(id) => {
+            const msgs = messagesRef.current;
+            const idx = msgs.findIndex(m => m.id === id);
+            if (idx < 0) return;
+            const asst = msgs[idx];
+            const q = idx > 0 && msgs[idx - 1].role === 'user' ? msgs[idx - 1].content : '';
+            setFieldNoteState({ messageId: id, gap: asst.knowledgeGap, question: q, answer: asst.content });
+          }}
           agentEvents={agentEvents}
         />
 
@@ -668,12 +684,16 @@ export default function App() {
 
       </main>
 
-      {/* ── Smart Checklist Modal ── */}
-      <ChecklistModal
-        isOpen={checklistState !== null}
-        onClose={() => setChecklistState(null)}
-        messageId={checklistState?.messageId ?? ''}
-        rawContent={checklistState?.content ?? ''}
+      {/* ── Catatan Lapangan Modal ── */}
+      <FieldNoteModal
+        isOpen={fieldNoteState !== null}
+        onClose={() => setFieldNoteState(null)}
+        model={selectedModel}
+        contributorName={user?.displayName || 'Operator'}
+        gap={fieldNoteState?.gap}
+        sourceMessageId={fieldNoteState?.messageId}
+        sourceQuestion={fieldNoteState?.question}
+        sourceAnswer={fieldNoteState?.answer}
       />
 
       {/* ── Delete All Confirmation Dialog ── */}

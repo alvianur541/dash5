@@ -1,5 +1,5 @@
 import { SYSTEM_PROMPT, jakartaTime } from '../constants';
-import { UnitModel, Message } from '../types';
+import { UnitModel, Message, KnowledgeGap } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
@@ -618,12 +618,19 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 - Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
 - Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;
 
+// Partial-gap detector — jawaban rag_found yang JUJUR mengaku bagian penting tak
+// termuat di data (mis. kasus kapasitas total coolant: chunk cuma "engine only").
+// Deterministik & gratis (regex di teks final) — tak perlu LLM classify tambahan.
+// Sengaja ketat (harus menyebut "data/chunk/manual/knowledge") agar tak false-positive
+// pada kalimat biasa yang kebetulan pakai kata "tidak ada".
+const GAP_PHRASE_RE = /tidak tercantum|belum ter-?ingest|tidak dimuat|(?:tidak|belum)\s+(?:tersedia|terdapat|ada|termuat)\s+(?:di|dalam|pada)\s+(?:data|chunk|manual|knowledge|berkas)|di luar cakupan data|tidak ada di (?:data|knowledge)/i;
+
 // ─── Tipe routing ──────────────────────────────────────────────────────────────
 
 /** Discriminated union — hasil routing RAG sebelum AI dipanggil */
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low' }
-  | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks ini langsung
+  | { type: 'rag_canned'; text: string; gap?: KnowledgeGap }   // bypass AI, kirim teks ini langsung; gap=KB tak punya data
   // Fallback Google-search grounding. mode:
   //   'casual'    → obrolan ringan (halo/oke) — no directive khusus
   //   'technical' → pertanyaan teknis TANPA data manual → jawab pakai referensi
@@ -701,7 +708,7 @@ async function resolveFaultCodeQuery(
   }
 
   if (!ragResult.hasResults) {
-    return { type: 'rag_canned', text: faultCodeNotFoundTemplate(faultQuery, model) };
+    return { type: 'rag_canned', text: faultCodeNotFoundTemplate(faultQuery, model), gap: { reason: 'not_found', topic: faultQuery } };
   }
 
   const augmented = await augmentWithEngineManual(ragResult.content, faultQuery, model, emit);
@@ -796,7 +803,7 @@ async function resolvePartsQuery(
         return { type: 'rag_found', content: note + wmResult.content, dataLabel: RAG_LABEL.parts, confidence: wmResult.confidence };
       }
     }
-    return { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model) };
+    return { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model), gap: { reason: 'not_found', topic: trimmed } };
   }
 
   let finalContent = ragResult.content;
@@ -843,7 +850,7 @@ async function resolveNaturalLanguageQuery(
     emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
     return ragResult.hasResults
       ? { type: 'rag_found', content: ragResult.content, dataLabel: RAG_LABEL.parts }
-      : { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model) };
+      : { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model), gap: { reason: 'not_found', topic: trimmed } };
   }
 
   // Technical: guard juga untuk query pendek
@@ -1075,6 +1082,7 @@ export async function generateResponseStream(
   userInput: string,
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
+  onMeta?: (meta: { knowledgeGap?: KnowledgeGap }) => void,
 ): Promise<string> {
   resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
   // Progress indicator — single-pass juga tampilkan "Menganalisa query… / Mencari di …"
@@ -1097,6 +1105,9 @@ export async function generateResponseStream(
     const cached = readAnswerCache(cacheKey);
     if (cached) {
       console.info('[answer-cache] HIT');
+      // Cached = jawaban dari data manual (rag_found). Tetap cek partial-gap agar
+      // re-ask identik tetap memunculkan tawaran Catatan Lapangan bila relevan.
+      if (GAP_PHRASE_RE.test(cached)) onMeta?.({ knowledgeGap: { reason: 'partial', topic: trimmed } });
       // Langsung stream (agentEvents kosong → indikator tak muncul, mulus & instan).
       return streamCanned(cached, onChunk);
     }
@@ -1123,7 +1134,11 @@ export async function generateResponseStream(
         ? await resolvePartsQuery(trimmed, history, model, emit)
         : await resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
-  if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
+  if (routeResult.type === 'rag_canned') {
+    // Not-found (fault/parts) = KB gap → tawarkan Catatan Lapangan. Off-topic/error tidak.
+    if (routeResult.gap) onMeta?.({ knowledgeGap: routeResult.gap });
+    return streamCanned(routeResult.text, onChunk);
+  }
 
   const isGoogleSearch   = routeResult.type === 'google_search';
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
@@ -1160,6 +1175,15 @@ export async function generateResponseStream(
   // web-fallback/canned/casual. Re-ask identik berikutnya jadi instan & gratis.
   if (cacheKey && routeResult.type === 'rag_found' && fullText) {
     writeAnswerCache(cacheKey, fullText);
+  }
+
+  // Deteksi knowledge-gap untuk memicu tawaran Catatan Lapangan:
+  //   web_fallback → manual internal kosong, jawaban dari referensi umum
+  //   partial      → rag_found tapi jawaban akui bagian penting tak termuat (regex frasa)
+  if (gsTechnical) {
+    onMeta?.({ knowledgeGap: { reason: 'web_fallback', topic: trimmed } });
+  } else if (routeResult.type === 'rag_found' && fullText && GAP_PHRASE_RE.test(fullText)) {
+    onMeta?.({ knowledgeGap: { reason: 'partial', topic: trimmed } });
   }
 
   return fullText || FALLBACK_RESPONSE;

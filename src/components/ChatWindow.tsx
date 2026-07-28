@@ -2,11 +2,10 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, ListChecks, Search, Sparkles, ChevronDown } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, NotebookPen, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
-import { hasProceduralContent } from '../lib/checklist';
 import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../services/ai';
@@ -56,7 +55,7 @@ interface ChatWindowProps {
   onRetry: (assistantMessageId: string) => void;
   userName?: string;
   hasHistory?: boolean;
-  onOpenChecklist?: (messageId: string, content: string) => void;
+  onOpenFieldNote?: (messageId: string) => void;
   agentEvents?: AgentEvent[];
 }
 
@@ -203,7 +202,7 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, onRetry, isTyping, isStreaming = false, onOpenChecklist,
+  message, feedback, onFeedback, onRetry, isTyping, isStreaming = false, onOpenFieldNote,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
@@ -211,7 +210,7 @@ const MessageItem = memo(function MessageItem({
   onRetry: (id: string) => void;
   isTyping: boolean;
   isStreaming?: boolean;
-  onOpenChecklist?: (messageId: string, content: string) => void;
+  onOpenFieldNote?: (messageId: string) => void;
 }) {
 
   if (message.role === 'user') {
@@ -284,17 +283,25 @@ const MessageItem = memo(function MessageItem({
             </Suspense>
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
+
+          {/* Gap-triggered Catatan Lapangan — muncul saat KB tak punya data untuk
+              pertanyaan ini. Ajak teknisi menambal lubang ilmu untuk rekan berikutnya. */}
+          {!isStreaming && message.knowledgeGap && onOpenFieldNote && (
+            <button
+              className="fieldnote-cta"
+              onClick={() => onOpenFieldNote(message.id)}
+            >
+              <span className="fieldnote-cta-icon"><NotebookPen size={15} /></span>
+              <span className="fieldnote-cta-text">
+                <span className="fieldnote-cta-title">Data ini belum ada di knowledge base</span>
+                <span className="fieldnote-cta-sub">Punya info dari lapangan? Bagikan biar teknisi lain terbantu</span>
+              </span>
+              <ArrowRight size={15} className="fieldnote-cta-arrow" />
+            </button>
+          )}
+
           <div className="ai-actions">
             <CopyButton text={message.content} />
-            {onOpenChecklist && hasProceduralContent(message.content) && (
-              <button
-                className="action-btn"
-                title="Checklist prosedur"
-                onClick={() => onOpenChecklist(message.id, message.content)}
-              >
-                <ListChecks size={14} />
-              </button>
-            )}
             <button className="action-btn" title="Respons bagus"
               onClick={() => onFeedback(message.id, 'up')}>
               <ThumbsUp size={14}
@@ -317,7 +324,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, onSendMessage, onRetry, userName, hasHistory = false, onOpenChecklist, agentEvents = [],
+  messages, isTyping, isStreaming, selectedModel, onSendMessage, onRetry, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -467,7 +474,7 @@ export function ChatWindow({
                 onRetry={onRetry}
                 isTyping={isTyping}
                 isStreaming={showCursor}
-                onOpenChecklist={onOpenChecklist}
+                onOpenFieldNote={onOpenFieldNote}
               />
             );
           })}
