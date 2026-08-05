@@ -39,9 +39,7 @@ export interface VRequest {
 }
 
 export interface VResponse {
-  // OPTIONAL: Gemini bisa balas 200 TANPA candidates (safety block via
-  // promptFeedback, atau MAX_TOKENS tanpa content). Tipe wajib-ada dulu bikin
-  // `res.candidates[0]` crash saat undefined. Optional → TS paksa `?.[0]`.
+  // Optional: Gemini bisa balas 200 tanpa candidates (safety block / MAX_TOKENS) → wajib akses `?.[0]`.
   candidates?: Array<{
     content?: { role: string; parts: Part[] };
     finishReason?: string;
@@ -54,8 +52,7 @@ interface IntentAnalysis {
   optimizedQuery: string;
 }
 
-// Callback progress event (thinking/tool_call/tool_result) — dipakai single-pass juga
-// agar UI tetap menampilkan indikator "Menganalisa query… / Mencari di …" seperti agentic.
+// Progress event (thinking/tool_call/tool_result) — single-pass juga pakai ini utk indikator UI.
 type AgentEventEmit = (event: import('./react-agent').AgentEvent) => void;
 
 function fileToInlineData(file: File): Promise<InlineDataPart> {
@@ -89,10 +86,8 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
 }
 
 // ── Token usage accumulator (per pertanyaan) ────────────────────────────────
-// callProxy/callProxyStream menambah token ke sini. resetUsage() dipanggil di awal
-// tiap entry publik (generateResponse*), getQuestionUsage() dibaca App.tsx setelah
-// jawaban selesai → dikirim ke ledger /v1/usage. Single-active-question (frontend
-// abort pertanyaan sebelumnya) → accumulator module-level aman.
+// resetUsage() di awal tiap entry publik; getQuestionUsage() dibaca App.tsx utk ledger.
+// Single-active-question → accumulator module-level aman.
 let _usage = { input: 0, output: 0, calls: 0 };
 export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0 }; }
 export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
@@ -130,18 +125,11 @@ export function getText(parts: Part[]): string {
     .join('');
 }
 
-/**
- * Bersihkan optimizedQuery hasil AI:
- * - Hapus kata duplikat (swing…swing, kg…kg, weight…mass dianggap sama via map)
- * - Max 10 kata (safety cap) — cukup untuk query paling kompleks, cegah dump verbose
- * Deterministic, tidak butuh AI tambahan.
- */
+/** Bersihkan optimizedQuery AI: dedup kata (via synonym map) + cap 10 kata. Deterministik. */
 function cleanOptimizedQuery(query: string): string {
   if (!query.trim()) return query;
 
-  // Normalisasi synonym teknis umum ke bentuk canonical supaya dedup lebih akurat
-  // Synonym → canonical untuk dedup. JANGAN map unit (kg, MPa, rpm) ke kata lain
-  // karena teknisi sering query spesifik unit → kehilangan unit = query rusak.
+  // Synonym → canonical utk dedup. JANGAN map unit (kg/MPa/rpm) — query unit-spesifik jadi rusak.
   const SYNONYMS: Record<string, string> = {
     mass: 'weight', berat: 'weight',
     spec: 'specification', specs: 'specification',
@@ -149,9 +137,7 @@ function cleanOptimizedQuery(query: string): string {
     press: 'pressure', tekanan: 'pressure',
     vol: 'volume', cap: 'capacity', kapasitas: 'capacity',
   };
-  // Kata filler yang sering di-pad AI tapi tidak ada di manual teknis
-  // 'specification' dikeluarkan dari STOPWORDS — ada di SYNONYMS sebagai canonical dari spec/specs.
-  // Filter 'specification' di sini justru buang kata penting di query teknis ("hydraulic specification").
+  // Filler yang sering di-pad AI. 'specification' sengaja TIDAK di sini (kata penting, ada di SYNONYMS).
   const STOPWORDS = new Set(['the', 'and', 'for', 'of', 'in', 'on', 'at', 'with',
     'information', 'data', 'detail', 'value']);
 
@@ -356,10 +342,8 @@ function historyToContents(history: Message[], window = 20): VContent[] {
 }
 
 async function extractFaultCodes(imageParts: InlineDataPart[]): Promise<string[]> {
-  // Pakai INTENT_MODEL (gemini-3.1-flash-lite-preview) bukan main MODEL.
-  // gemini-3-flash-preview punya thinking mode aktif by default — makan 284-285
-  // thinking tokens dari budget, leaving ~12 token output → MAX_TOKENS truncate.
-  // flash-lite tidak punya thinking → full budget output.
+  // INTENT_MODEL (flash-lite), bukan main MODEL: model utama punya thinking → makan budget →
+  // output OCR ke-truncate (fault code tak lengkap). flash-lite no-thinking → full output.
   const SYS_PROMPT = `OCR fault code specialist untuk Hitachi/KCM heavy equipment monitor display.
 Format output: 1 baris, comma-separated codes, atau "NONE".
 
@@ -467,23 +451,11 @@ export async function callProxyStream(
   return collapseDegenerateLoops(fullText);
 }
 
-/**
- * Contextual Compression — extract HANYA baris/kalimat yg langsung relevan
- * dengan query dari setiap chunk, pakai INTENT_MODEL (flash-lite, no thinking).
- * Run paralel via Promise.allSettled — N chunks jadi 1 RTT sekitar 500ms.
- *
- * Apply selektif (lihat caller): hanya untuk natural-language technical path.
- * Skip untuk fault code (full content matters) & parts (PN list integrity).
- *
- * Fallback per-chunk:
- * - Chunk < 500 chars: skip compress (sudah compact)
- * - Compress fail: return original
- * - Result < 30 chars: return original (over-stripped, tidak useful)
- */
+/** Contextual Compression — extract baris relevan-query tiap chunk via INTENT_MODEL, paralel.
+ *  Hanya NL-technical path (skip fault code & parts). Fallback per-chunk: <500 char / gagal /
+ *  hasil <30 char → pakai original. */
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
-  // Extraction balance — drop narrative bloat tapi PRESERVE enough context
-  // untuk AI bisa frame agentic response (section name, related notes, dll).
-  // Terlalu aggressive compress (cuma raw data row) bikin AI sound monoton.
+  // Extraction balance: buang narasi, sisakan konteks (section/notes) — compress terlalu agresif = jawaban monoton.
   const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
   // Cap chunk yg dikirim ke INTENT_MODEL — context window flash-lite ~8K input.
@@ -517,18 +489,12 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   return results.map((r, i) => r.status === 'fulfilled' ? r.value : chunks[i]);
 }
 
-/**
- * Extract P-codes hanya dari baris yang mengandung salah satu search term.
- * Mencegah extract SEMUA P-code dari chunk panjang (mis. Engine Fault Code
- * List punya 30+ P-code) yang akan menyebabkan 30+ embed calls di searchEngineManual.
- * Limit ke 3 P-codes teratas untuk efisiensi.
- */
+/** Extract P-code HANYA dari baris yg mengandung search term (cegah 30+ embed calls dari
+ *  chunk "Engine Fault Code List" yg punya puluhan P-code). Cap 3 P-code. */
 function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
   const pCodes: string[] = [];
-  // P-code variant: P1234 (standard) atau P1234-04 (DTC subcode suffix Yanmar/Isuzu).
-  // Capture base P-code (P\d{4}) — suffix di-strip karena searchEngineManual
-  // ilike '%P0340%' akan match baris yang punya 'P0340/4' atau 'P0340-04' juga.
+  // Capture base P-code (P\d{4}); suffix di-strip — ilike '%P0340%' tetap match 'P0340-04'/'P0340/4'.
   const P_CODE_RE = /\bP\d{4}\b/gi;
   for (const line of lines) {
     const lineUpper = line.toUpperCase();
@@ -542,10 +508,8 @@ function extractRelatedPCodes(content: string, searchTerms: string[]): string[] 
   return [...new Set(pCodes)].slice(0, 3);
 }
 
-// Canned templates untuk "data not found" cases — bypass AI total supaya
-// guaranteed correct text, no halu, no roundtrip ke Vertex.
-// User adalah tim Hexindo (dealer) — JANGAN suruh "konsultasi dealer Hexindo".
-// Singkatan teknis (MPDr, TM, WM, TA) tidak di-expand — teknisi sudah tahu.
+// Canned templates "data not found" — bypass AI (guaranteed no halu). User = tim Hexindo,
+// JANGAN suruh "konsultasi dealer". Singkatan teknis (MPDr/TM/WM) tak di-expand.
 function ragErrorTemplate(errorMsg: string): string {
   const isTimeout = errorMsg.toLowerCase().includes('timeout');
   const isRerank  = errorMsg.toLowerCase().includes('rerank');
@@ -579,10 +543,7 @@ Supaya pencariannya kena:
 Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke tim parts dengan menyebut model + nama komponen.`;
 }
 
-// Catatan: adaptive-retrieval low-confidence dulu bypass AI (lowConfidenceTemplate).
-// Sekarang low-confidence & no-result pada jalur teknis NL di-fallback ke web
-// (google_search mode 'technical' + EXTERNAL_DIRECTIVE) — lebih berguna daripada
-// buntu canned, tetap anti-halu untuk angka unit. Template lama dihapus.
+// Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
   return `Scope saya khusus technical support alat berat Hitachi/KCM — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
@@ -590,13 +551,9 @@ function offTopicTemplate(): string {
 Untuk pertanyaan tadi, saya bukan sumber yang tepat. Ada yang perlu dicek di unit kamu?`;
 }
 
-// Regex fault code: WAJIB ada digit. [0-9A-F]{2,6} dengan /i match a-f letters
-// → "blade","cafe","dead" dianggap fault code (false positive).
-// Letter-prefix TANPA dash WAJIB ≥4 digit — kalau tidak, fuel grade "B50"/"B30"/"B100"
-// (biodiesel blend) & shorthand pendek ke-detect sebagai fault code → misroute ke TM
-// search → canned "kode tidak ada". Real code: CA2769/W:1208 (≥4 digit) atau punya
-// dash suffix (ENG:00436-04, 11006-2). Pure-digit tetap boleh 3-6 digit (16606).
-// Di-hoist ke module level — tidak di-compile ulang setiap generateResponseStream call.
+// Regex fault code WAJIB ada digit (cegah "blade"/"cafe" false-positive). Letter-prefix tanpa
+// dash wajib ≥4 digit — kalau tidak fuel grade "B50"/"B100" ke-detect. Real: CA2769/W:1208
+// atau dash-suffix (ENG:00436-04, 11006-2). Hoisted module-level (tak re-compile per call).
 const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
 // ─── Konstanta ────────────────────────────────────────────────────────────────
@@ -608,9 +565,8 @@ const RAG_LABEL = {
 
 const FALLBACK_RESPONSE = 'Maaf, sistem tidak bisa memproses permintaan ini.';
 
-// Directive jalur fallback web (mode 'technical'). Disuntik ke USER-turn (BUKAN
-// system prompt) supaya SYSTEM_PROMPT tetap byte-identical → prompt caching hit.
-// Guardrail: web boleh untuk konsep/diagnosa umum, HARAM untuk klaim angka unit.
+// Directive fallback web (mode 'technical'). Di USER-turn (bukan system prompt) supaya
+// SYSTEM_PROMPT byte-identical → prompt caching hit. Guardrail: HARAM klaim angka unit dari web.
 const EXTERNAL_DIRECTIVE = (model: string): string =>
   `[SUMBER EKSTERNAL] Manual internal ${model} tidak memuat data spesifik untuk pertanyaan ini. Jawab profesional memakai prinsip teknik umum + hasil penelusuran web. ATURAN WAJIB:
 - Sampaikan sekali di awal, natural: jawaban ini rujukan umum industri, bukan dari manual resmi ${model}.
@@ -623,11 +579,8 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 /** Discriminated union — hasil routing RAG sebelum AI dipanggil */
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low' }
-  | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks ini langsung
-  // Fallback Google-search grounding. mode:
-  //   'casual'    → obrolan ringan (halo/oke) — no directive khusus
-  //   'technical' → pertanyaan teknis TANPA data manual → jawab pakai referensi
-  //                 umum/web + directive guardrail (label sumber, no fabrikasi angka unit)
+  | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
+  // google_search: 'casual' (obrolan ringan) | 'technical' (teknis tanpa data manual → web + guardrail)
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
@@ -641,12 +594,8 @@ function streamCanned(text: string, onChunk: (text: string) => void): string {
   return text;
 }
 
-/** Deteksi fault code di input: regex exact-match atau embedded dalam kalimat.
- *  Untuk EMBEDDED: pure digit (tanpa letter prefix/dash suffix) DITOLAK karena
- *  bisa false-positive dengan service interval ("service 2000 jam" → "2000"
- *  bukan fault code, itu interval). Pure digit hanya valid kalau FULL match. */
-// Letter-prefix tanpa dash WAJIB ≥4 digit (lihat FAULT_CODE_PATTERN) — cegah "BBM B50"
-// di tengah kalimat ke-detect sebagai fault code. Pure-digit embedded tetap wajib dash.
+/** Deteksi fault code: exact-match atau embedded. EMBEDDED pure-digit DITOLAK (false-positive
+ *  dgn service interval "2000 jam"); pure-digit valid hanya kalau FULL match. */
 const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/i;
 
 function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
@@ -657,12 +606,7 @@ function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQ
   return { isFaultCode: looksLike || !!embeddedCode, faultQuery: embeddedCode ?? trimmed };
 }
 
-/**
- * 2nd-pass: enrichment dari ENGINE MANUAL via P-codes yang diekstrak dari TM result.
- * P-codes diambil HANYA dari baris yang mengandung fault code — mencegah 30+ embed
- * calls dari chunk Engine Fault Code List yang bisa punya puluhan P-code sekaligus.
- * Kegagalan Engine Manual bersifat non-fatal: konten TM tetap dikembalikan.
- */
+/** 2nd-pass: enrichment ENGINE MANUAL via P-code dari TM result. Non-fatal (TM tetap dikembalikan). */
 async function augmentWithEngineManual(
   tmContent: string,
   faultQuery: string,
@@ -712,13 +656,8 @@ async function resolveFaultCodeQuery(
 // pada INTENT_MODEL yang rentan strip angka interval menjadi "2000" saja.
 const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b/i;
 
-/**
- * Parse tabel CPM dan ekstrak parts yang diganti di interval tertentu.
- * Solusi untuk RINGKASAN yang terpotong "..." di CPM chunk — alih-alih
- * mengandalkan RINGKASAN, baca langsung dari tabel utama yang selalu lengkap.
- * Mengembalikan list bersih yang diprepend ke RAG content agar model tidak
- * perlu "interpretasi" tabel → drastis kurangi hallucination PN.
- */
+/** Parse tabel CPM → list parts di interval tertentu. Baca langsung tabel (bukan RINGKASAN yg
+ *  terpotong "...") → model tak perlu interpretasi tabel → kurangi halu PN. */
 function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
 
@@ -763,8 +702,8 @@ async function resolvePartsQuery(
   const isLongQuery  = trimmed.split(/\s+/).length >= 4;
   let searchQuery    = trimmed;
 
-  // Fast-path: deteksi service interval pattern (mis. "service 2000 jam", "2000 hm")
-  // Bangun embed query langsung — bypass analyzeIntent yang sering return "2000" saja.
+  // Fast-path service interval ("service 2000 jam") → embed query langsung, bypass analyzeIntent
+  // (yg sering return "2000" saja).
   const intervalMatch = !hasLiteralPN && trimmed.match(SERVICE_INTERVAL_RE);
   if (intervalMatch) {
     searchQuery = `${intervalMatch[1]} hour service maintenance schedule parts`;
@@ -776,9 +715,8 @@ async function resolvePartsQuery(
     }
   }
 
-  // Service interval queries: pakai fungsi terpisah yang HANYA search CPM + PROMO.
-  // Tidak include PARTS CATALOG (ratusan PN tak relevan = source hallucination).
-  // Hemat 2 RPC calls juga (skip body + engine catalog search).
+  // Service interval → fungsi terpisah, HANYA CPM + PROMO (skip PARTS CATALOG: ratusan PN tak
+  // relevan = sumber halu; hemat 2 RPC).
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
   const ragResult = intervalMatch
     ? await searchServiceIntervalParts(searchQuery, model)
@@ -786,9 +724,8 @@ async function resolvePartsQuery(
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
 
   if (!ragResult.hasResults) {
-    // Smart fallback: model belum punya PARTS CATALOG (ZX65USB-5A, ZX138MF-5G) →
-    // coba Workshop Manual yg sering inline-mention PN. Bukan canned template,
-    // beri user info partial daripada zero info.
+    // Smart fallback: model tanpa PARTS CATALOG (ZX65USB/ZX138MF) → Workshop Manual (sering
+    // inline-mention PN) → info partial > zero info.
     if (MODELS_WITHOUT_PARTS_CATALOG.has(model)) {
       const wmResult = await searchTechnicalManualMulti([trimmed], model, 3, 'WORKSHOP MANUAL');
       if (wmResult.hasResults) {
@@ -804,9 +741,7 @@ async function resolvePartsQuery(
     const hours    = parseInt(intervalMatch[1]);
     const partsList = extractCpmPartsForInterval(ragResult.content, hours);
     if (partsList) {
-      // Bangun konten terstruktur: extracted CPM list + PROMO chunks.
-      // Raw CPM table tidak dimasukkan — model langsung lihat list bersih.
-      // Ambil semua chunk PROMO dari kedua periode aktif (Q4 + Q1) — bukan CPM
+      // Konten terstruktur: CPM list bersih (raw table di-drop) + chunk PROMO (semua periode aktif).
       const promoChunks = ragResult.content
         .split(/\n\n---\n\n/)
         .filter(c => /Kategori:\s*PROMO/i.test(c));
@@ -833,8 +768,7 @@ async function resolveNaturalLanguageQuery(
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
-    // Guard: jangan pakai optimizedQuery < 3 kata (mis. "2000" untuk "service 2000 jam")
-    // → embed query tidak bermakna → hasil acak → halu. Sama seperti guard di resolvePartsQuery.
+    // Guard: optimizedQuery <3 kata ("2000") → embed tak bermakna → hasil acak → halu.
     const optWords = intent.optimizedQuery?.trim().split(/\s+/).length ?? 0;
     const useOpt   = optWords >= 3;
     const searchQ  = useOpt ? intent.optimizedQuery : trimmed;
@@ -859,11 +793,8 @@ async function resolveNaturalLanguageQuery(
   }
 
   // ── HyDE second-pass adaptif ──────────────────────────────────────────────
-  // Retrieval pertama miss/low → SEBELUM menyerah ke web, coba lagi dengan
-  // embedding dari "kalimat jawaban hipotetis" (HyDE). Query pendek/kabur
-  // (2-3 kata) sering punya embedding noisy; kalimat teknis penuh jauh lebih
-  // dekat ke frasa manual. AMAN: teks HyDE HANYA dipakai untuk embedding,
-  // tidak pernah masuk jawaban → nol risiko halu. Latency cuma di jalur gagal.
+  // Miss/low → coba lagi pakai embedding "kalimat jawaban hipotetis" (query pendek embed-nya noisy;
+  // kalimat teknis penuh lebih dekat ke frasa manual). AMAN: HyDE hanya utk embedding, tak masuk jawaban.
   if (!ragResult.hasResults || ragResult.confidence === 'low') {
     const hyde = await hydeExpand(trimmed);
     if (hyde) {
@@ -876,11 +807,8 @@ async function resolveNaturalLanguageQuery(
     }
   }
 
-  // Manual internal tidak memuat / cuma nyerempet (confidence rendah) → JANGAN buntu.
-  // Fallback ke referensi umum + web grounding (mode 'technical' → directive guardrail
-  // di generateResponseStream: label sumber eksternal, no fabrikasi angka unit).
-  // Fault code & parts tetap internal-only (di resolver masing-masing) karena
-  // web tak bisa kasih PN Hitachi asli / arti fault code model-spesifik dgn aman.
+  // Manual internal kosong/nyerempet (low) → JANGAN buntu, fallback web (mode 'technical' + guardrail
+  // anti-halu angka). Fault code & parts tetap internal-only (web tak bisa PN/fault-code model-spesifik).
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
@@ -925,9 +853,8 @@ async function resolveNaturalLanguageQuery(
 }
 
 // ─── Multi-aspek (2+ pertanyaan dalam 1 query) ───────────────────────────────
-// Insight: kalau user PISAH pertanyaannya, retrieval optimal. Jadi tiru itu —
-// pecah query jadi sub-query English (1 INTENT call), cari tiap aspek di TM + Parts
-// paralel, gabung. Deterministik, BUKAN ReAct loop (yang rapuh/lambat/400-prone).
+// Pecah query jadi sub-query English (1 INTENT call), cari tiap aspek di TM+Parts paralel, gabung.
+// Deterministik, BUKAN ReAct loop (rapuh/lambat/400-prone).
 
 const MULTI_CONNECTOR_RE = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i;
 // \w* di akhir grup → toleran sufiks Indonesia (beratnya/diameternya/panjangnya).
@@ -944,8 +871,8 @@ function isMultiAspectQuery(q: string): boolean {
   return words >= 5 || attrCount >= 2;
 }
 
-// Pecah query → array sub-query English (1 komponen+atribut tiap item). Max 4.
-// Sadar-konteks: resolusi rujukan ("itu/nya/tadi") ke komponen dari percakapan sebelumnya.
+// Pecah query → sub-query English (1 komponen+atribut tiap item, max 4). Sadar-konteks:
+// resolusi rujukan (itu/nya/tadi) ke komponen dari percakapan sebelumnya.
 async function decomposeAspects(query: string, history: Message[] = []): Promise<string[]> {
   const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE component+attribute each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
 RESOLVE references (itu/ini/nya/tadi/tersebut) to the concrete component from the conversation context. If user says "berat & diameternya" after discussing a pin, expand to that component.
@@ -1026,18 +953,10 @@ async function resolveMultiAspectQuery(
 }
 
 // ─── Answer cache (sisi-klien, per-perangkat) ───────────────────────────────
-// Cache jawaban FINAL untuk query MANDIRI (fault code, parts, spec) → re-ask &
-// tap quick-start chip identik jadi instan + gratis (poin #3 best-practice RAG).
-// Bukan lintas-teknisi (itu butuh Supabase), tapi re-ask per-perangkat umum.
-//
-// GUARDRAIL KETAT (jaga fondasi anti-halu & kesegaran):
-//   - HANYA cache jawaban dari DATA MANUAL (routeResult.type === 'rag_found').
-//     Web-fallback (google_search), canned, casual → TIDAK di-cache.
-//   - Query mandiri saja: yang mengandung rujukan konteks (itu/ini/nya/tadi)
-//     di-skip — jawabannya bergantung percakapan sebelumnya.
-//   - Di-scope per userName → jawaban ber-nama tidak bocor antar user 1 device.
-//   - TTL 3 hari → batasi basi kalau manual di-ingest ulang.
-//   - Jalur gambar & agentic TIDAK ikut (unik / opt-in).
+// Cache jawaban final query mandiri → re-ask identik instan & gratis. Guardrail:
+//   - HANYA rag_found (web/canned/casual TIDAK di-cache) — jaga anti-halu.
+//   - Query dgn rujukan konteks (itu/nya/tadi) di-skip (jawaban context-dependent).
+//   - Scope per userName (jawaban ber-nama tak bocor antar user), TTL 3 hari.
 const ANSWER_CACHE_PREFIX = 'dash-ans:';
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
@@ -1070,10 +989,8 @@ function writeAnswerCache(key: string, text: string): void {
 }
 
 // ─── Anti-halu: telemetri grounding angka spec ──────────────────────────────────
-// Cek DETERMINISTIK apakah angka spec (dengan unit) yang DIKUTIP AI benar ada di DATA
-// yang disisipkan. Wajib ada unit di belakang angka → step number/qty tidak ke-flag.
-// Telemetri dulu (console) untuk ukur laju halu tanpa ubah UX; basis eskalasi nanti
-// (flag visual / regen) kalau observasi menunjukkan perlu.
+// Cek deterministik: angka spec (dgn unit) yg DIKUTIP AI benar ada di DATA yg disisipkan.
+// Wajib ada unit → step number/qty tak ke-flag. Telemetri console dulu (basis eskalasi nanti).
 const GROUNDING_SPEC_RE = /(\d+(?:[.,]\d+)?)\s*(N·?m|Nm|MPa|kPa|bar|psi|kgf?|mm|cm|rpm|°C|kW|HP|L\b|Ω|μm)\b/gi;
 function normalizeNum(s: string): string {
   return s.replace(/,/g, '.').replace(/^0+(\d)/, '$1');
@@ -1103,21 +1020,18 @@ export async function generateResponseStream(
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
   resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
-  // Progress indicator — single-pass juga tampilkan "Menganalisa query… / Mencari di …"
-  // supaya UI terasa menganalisa (sebelumnya hanya jalur agentic yang punya indikator).
+  // Progress indicator — single-pass juga emit "thinking/tool_call" utk UI (dulu cuma agentic).
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
 
-  // Sanitize user input — defense against basic prompt injection.
-  // Cap length (cegah DoS via giant prompt) + escape suspicious instruction markers.
+  // Sanitize input (anti prompt-injection): cap 4000 char + blokir instruction markers.
   const sanitized = userInput
     .slice(0, 4000)
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
     .replace(/<\|[^|]*\|>/g, '[blocked]'); // ChatML-style tokens
   const trimmed  = sanitized.trim();
 
-  // Answer-cache HIT → stream instan, lewati embed/search/LLM total (gratis:
-  // resetUsage() bikin token=0 → tidak ke-log ledger). Cache hanya berisi
-  // jawaban dari data manual (lihat write di bawah), jadi hit = jawaban valid.
+  // Answer-cache HIT → stream instan, lewati embed/search/LLM (token=0, tak ke-log ledger).
+  // Cache hanya isi jawaban rag_found (lihat write di bawah) → hit = valid.
   const cacheKey = answerCacheKey(model, userName, trimmed);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
@@ -1134,13 +1048,11 @@ export async function generateResponseStream(
 
   const { isFaultCode, faultQuery } = detectFaultCodeInQuery(trimmed);
 
-  // Service interval pattern (mis. "service 2000 jam", "parts 1000 hm") di-route
-  // ke parts pipeline meski isPartsQuery=false (typo, kata berbeda dari keyword).
-  // Ini cegah pattern lolos ke NLP path → analyzeIntent return "2000" → embed kabur.
+  // Service interval ("service 2000 jam") di-route ke parts meski isPartsQuery=false — cegah
+  // lolos ke NLP → analyzeIntent return "2000" → embed kabur.
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
-  // Multi-aspek (2+ pertanyaan dalam 1 query) dicek SEBELUM parts-only routing —
-  // cegah "diameter X dan part number Y" nyangkut di parts saja (berat/spec tak dicari).
+  // Multi-aspek dicek SEBELUM parts-routing — cegah "diameter X dan PN Y" nyangkut di parts saja.
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
     : isMultiAspectQuery(trimmed)
@@ -1158,9 +1070,7 @@ export async function generateResponseStream(
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   // Technical external-fallback butuh reasoning tipis utk sintesis rapi; casual minimal.
   const thinkingLevel    = isFaultCode ? 'medium' : (ragContent || gsTechnical) ? 'low' : 'minimal';
-  // RAG: 4096. Fallback web teknis (pertanyaan teknis tanpa data manual, mis.
-  // "pengaruh BBM B50 ke filter solar"): 2048 — jawaban lengkap & profesional.
-  // Casual murni ("halo","oke") + casual google: 512 supaya ringkas.
+  // RAG 4096 · web-teknis 2048 · casual 512.
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
@@ -1172,8 +1082,7 @@ export async function generateResponseStream(
       ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (trimmed || 'Halo');
 
-  // Timestamp di user-turn, BUKAN system prompt — system prompt harus tetap
-  // byte-identical antar request agar prompt caching bisa hit (lihat constants.ts).
+  // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
   const fullText = await callProxyStream({
@@ -1182,8 +1091,7 @@ export async function generateResponseStream(
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, isGoogleSearch);
 
-  // Simpan ke answer-cache HANYA jawaban dari DATA MANUAL (rag_found) — bukan
-  // web-fallback/canned/casual. Re-ask identik berikutnya jadi instan & gratis.
+  // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
   if (cacheKey && routeResult.type === 'rag_found' && fullText) {
     writeAnswerCache(cacheKey, fullText);
   }
@@ -1195,16 +1103,12 @@ export async function generateResponseStream(
 }
 
 // ─── Agentic API (Sprint 2) ──────────────────────────────────────────────────
-// ReAct loop wrapper. Opt-in via URL param ?agentic=true (lihat App.tsx).
-// Tidak ubah generateResponseStream existing — orthogonal path.
+// ReAct loop wrapper — opt-in via ?agentic=true (lihat App.tsx). Orthogonal, tak ubah single-pass.
 
 export type { AgentEvent } from './react-agent';
 
-/**
- * Multi-step agentic response — AI pilih tool dari catalog 5 tools, decompose
- * query kompleks, panggil tool berurutan/paralel, synthesize jawaban final.
- * Stream final answer via onChunk (sama interface dengan generateResponseStream).
- */
+/** Multi-step agentic — AI pilih dari 5 tool, decompose, panggil berurutan/paralel, synthesize.
+ *  Stream final via onChunk (interface sama dgn generateResponseStream). */
 export async function generateResponseAgentic(
   model: UnitModel,
   userName: string,
@@ -1242,8 +1146,7 @@ export async function generateResponse(
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
   resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
-  // Progress indicator — jalur foto adalah yang PALING lambat (OCR → search per
-  // kode → 2nd-pass Engine Manual → generate). Tanpa event, user lihat layar diam.
+  // Progress indicator — jalur foto paling lambat (OCR → search → 2nd-pass → generate).
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
@@ -1270,17 +1173,15 @@ export async function generateResponse(
             : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
         });
         emit({ type: 'tool_call', tool: 'search_technical_manual' });
-        // Search per code + 2nd-pass Engine Manual (sama seperti text path).
-        // Image path sebelumnya tidak punya 2nd-pass sehingga P-code diagnosis
-        // tidak ter-inject, dan AI ngarang dari training.
+        // Search per code + 2nd-pass Engine Manual (sama seperti text path) — tanpa 2nd-pass,
+        // P-code diagnosis tak ter-inject → AI ngarang dari training.
         const settled = await Promise.allSettled(
           faultCodes.map(async code => {
             const terms = extractSearchTerms(code);
             let result = await searchTechnicalManualMulti(terms, model);
             let content = result.content;
 
-            // 2nd-pass: P-codes hanya dari baris yang relevan (extractRelatedPCodes)
-            // bukan seluruh chunk — mencegah 20+ embed calls dari chunk panjang
+            // 2nd-pass: P-code hanya dari baris relevan (extractRelatedPCodes) — cegah 20+ embed calls.
             if (result.hasResults) {
               const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
               if (pCodes.length > 0) {
@@ -1316,8 +1217,7 @@ export async function generateResponse(
           return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
         }
 
-        // Instruksi eksplisit ke AI: jelaskan SETIAP kode dengan heading,
-        // JANGAN jadikan satu kode sebagai footnote kode lain.
+        // Instruksi eksplisit: jelaskan SETIAP kode dgn heading terpisah (bukan footnote kode lain).
         const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
         const note = `Fault code terdeteksi dari gambar: **${faultCodes.join(', ')}**\n\n` +
           `INSTRUKSI: Jelaskan SETIAP fault code di atas dalam heading terpisah (## Kode X). ` +
@@ -1342,8 +1242,7 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
-    // Timestamp di user-turn, BUKAN system prompt (lihat constants.ts) — part terpisah,
-    // tidak mengganggu urutan image/text part yang sudah disusun di currentParts.
+    // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
