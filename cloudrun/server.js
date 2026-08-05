@@ -6,11 +6,8 @@ app.use(express.json({ limit: '20mb' }));
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
-// Daftar origin yang boleh (comma-separated). Wildcard '*' SENGAJA tidak didukung dan
-// akan dibuang: semua endpoint di sini berjalan atas nama user terautentikasi dan
-// memakai kredensial service account kita, jadi tidak ada alasan sah membukanya ke
-// origin sembarang. Untuk dev lokal, tambahkan origin-nya secara eksplisit
-// (mis. ALLOWED_ORIGIN='https://dash5.my.id,http://localhost:3000').
+// Origin allowlist (comma-separated). Wildcard '*' SENGAJA dibuang — endpoint jalan pakai
+// kredensial service account kita, jadi tak boleh dibuka ke origin sembarang. Dev lokal: tambah eksplisit.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'https://dash5.my.id')
   .split(',').map(s => s.trim()).filter(s => s && s !== '*');
 if (ALLOWED_ORIGINS.length === 0) {
@@ -27,9 +24,7 @@ const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  |
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '7.50'); // gemini-3.6-flash: $7.50 / 1M output (turun dari $9 di 3.5)
 const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '17000');
 
-// Dashboard monitoring — HANYA admin (owner) yang boleh lihat data semua teknisi.
-// Admin = akun owner alvianur@gmail.com (login via NIK H0001846). Tambah admin lain
-// via env ADMIN_EMAILS (comma-separated) kalau perlu.
+// Dashboard admin gate — HANYA owner (alvianur@gmail.com) lihat data semua teknisi. Tambah via env ADMIN_EMAILS.
 const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'alvianur@gmail.com')
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 
@@ -45,23 +40,19 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
-// Rerank model Cohere. Default `rerank-v4.0-fast` — latency rendah (~500ms), penting
-// untuk pemakaian lapangan yang butuh cepat. Pro (state-of-the-art) terlalu lambat di
-// jalur kritis (~1-5s). Bisa dicoba lagi via env COHERE_RERANK_MODEL=rerank-v4.0-pro.
+// Rerank Cohere. Default `rerank-v4.0-fast` (~500ms) — pro terlalu lambat di jalur kritis.
+// Bisa dicoba lagi via env COHERE_RERANK_MODEL=rerank-v4.0-pro.
 const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast';
 
-// Model yang boleh dipanggil lewat proxy. `model` dari client diinterpolasi ke URL
-// Vertex — tanpa allowlist, user login bisa inject model arbitrer (cost abuse) atau
-// memanipulasi path request yang jalan pakai kredensial service account kita.
+// Allowlist model — `model` client diinterpolasi ke URL Vertex; tanpa ini user bisa inject model
+// arbitrer (cost abuse / path manipulation pada request yg jalan pakai service account).
 const ALLOWED_MODELS = new Set(
   (process.env.ALLOWED_MODELS || 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
 );
 
-// Rate limit ringan per user (in-memory, tanpa dependency) — jaring pengaman
-// terhadap loop client liar / abuse token curian. 1 pertanyaan ≈ 4-7 call
-// (intent + embed + rerank + chat + compress), jadi 150/menit masih longgar
-// untuk pemakaian normal tapi memutus flood.
+// Rate limit per user (in-memory) — jaring pengaman loop client liar / token curian.
+// 1 pertanyaan ≈ 4-7 call, jadi 150/menit longgar utk normal tapi memutus flood.
 const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
 const _rateBuckets = new Map();
 function rateLimit(req, res, next) {
@@ -103,8 +94,7 @@ async function verifyToken(req, res, next) {
   try {
     const user = await fetchAuthUser(authHeader.slice(7));
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
-    // Identitas TERVERIFIKASI. Endpoint di bawah wajib pakai ini — jangan pernah
-    // percaya nama/NIK/email yang dikirim di body request.
+    // Identitas TERVERIFIKASI — endpoint wajib pakai ini, JANGAN percaya nama/NIK/email dari body.
     req.authUser = user;
     next();
   } catch (err) {
@@ -155,10 +145,8 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// Verifikasi token ke Supabase + cache object user-nya (bukan cuma boolean "valid"),
-// supaya endpoint bisa memakai identitas asli tanpa round-trip tambahan.
-// TTL 60 detik (turun dari 5 menit): token yang dicabut ikut berhenti diterima dalam
-// ≤1 menit. Dengan ~4-7 call per pertanyaan, ini tetap ±1 panggilan auth/menit/user.
+// Verifikasi token ke Supabase + cache object user (bukan cuma boolean) supaya endpoint pakai
+// identitas asli tanpa round-trip. TTL 60s: token dicabut berhenti diterima ≤1 menit.
 const AUTH_CACHE_TTL_MS = parseInt(process.env.AUTH_CACHE_TTL_MS || '60000', 10);
 const _userCache = new Map();
 
@@ -179,9 +167,8 @@ async function fetchAuthUser(token) {
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 // ── Monitoring dashboard (admin-only) ─────────────────────────────────────────
-// Baca agregat usage_logs + census via service_role (RLS bypass). Gate: email
-// requester HARUS ada di ADMIN_EMAILS, supaya teknisi biasa tidak lihat data
-// semua orang. 1 RPC get_dashboard_snapshot() → 1 round-trip, snapshot atomik.
+// Agregat usage_logs + census via service_role. Gate: email ada di ADMIN_EMAILS (teknisi biasa
+// tak lihat data semua orang). 1 RPC get_dashboard_snapshot() → snapshot atomik.
 app.get('/v1/dashboard', verifyToken, rateLimit, async (req, res) => {
   if (!SUPABASE_SERVICE_KEY) return res.status(503).json({ error: 'Dashboard not configured' });
   if (!isAdminUser(req.authUser)) {
@@ -406,8 +393,7 @@ app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
 });
 
 // ── Cost ledger: 1 baris per pertanyaan user ──────────────────────────────────
-// Frontend akumulasi token/llm_calls/tools_used untuk 1 pertanyaan lalu POST ke sini.
-// Insert ke usage_logs pakai service_role (RLS bypass, hanya server yang pegang key).
+// Frontend akumulasi token/llm_calls/tools untuk 1 pertanyaan → POST → insert usage_logs (service_role).
 // Kegagalan insert TIDAK boleh mengganggu — sudah verifyToken (user login) di depan.
 app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
@@ -419,14 +405,11 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   const outputTokens = Math.min(Math.max(0, parseInt(b.outputTokens, 10) || 0), 5_000_000);
   if (inputTokens === 0 && outputTokens === 0) return res.status(204).end();
 
-  // Cap panjang string dari client — kolom text di DB tidak berbatas, jangan
-  // biarkan payload jumbo/aneh masuk ledger.
+  // Cap panjang string client — jangan biarkan payload jumbo masuk ledger.
   const clip = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
 
-  // Identitas WAJIB dari token terverifikasi, bukan dari body. Kalau dari body, teknisi
-  // mana pun yang login bisa POST ledger atas nama rekannya (verifyToken cuma memastikan
-  // pengirim user sah, bukan bahwa dia orang yang diklaim) — dan dashboard admin
-  // mengelompokkan biaya persis berdasarkan dua kolom ini.
+  // Identitas WAJIB dari token (req.authUser), bukan body — kalau dari body, teknisi bisa POST ledger
+  // atas nama rekan (dashboard admin kelompokkan biaya dari kolom ini).
   const authUser = req.authUser || {};
   const authMeta = authUser.user_metadata || {};
   const authEmail = typeof authUser.email === 'string' ? authUser.email : null;
@@ -435,8 +418,7 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   const costUsd = (inputTokens / 1e6) * GEMINI_INPUT_PRICE_USD + (outputTokens / 1e6) * GEMINI_OUTPUT_PRICE_USD;
   const costIdr = costUsd * USD_TO_IDR;
   const row = {
-    // Sama persis dengan nilai yang dulu dikirim client (display_name + email), jadi
-    // pengelompokan historis di dashboard tetap nyambung — bedanya kini tak bisa dipalsukan.
+    // Sama dgn nilai yg dulu dikirim client → pengelompokan historis nyambung, tapi kini tak bisa dipalsukan.
     user_name: displayName || (authEmail ? authEmail.split('@')[0] : null),
     user_nik: clip(authEmail, 120),
     session_id: clip(b.sessionId, 80),
@@ -494,10 +476,8 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
 });
 
 // ── Catatan Lapangan: AI menilai kelayakan → auto-ingest ke KB (tanpa gerbang admin) ──
-// Juri + ingest WAJIB di server: kalau di client, siapa pun bisa lewati juri & nyuntik
-// langsung ke KB. Di sini juri tak bisa di-bypass; write ke documents pakai RPC
-// service_role (ingest_field_note_document). Semua masuk sbg Kategori CATATAN LAPANGAN
-// (dilabeli belum-resmi di SYSTEM_PROMPT, tak menimpa spec manual).
+// Juri + ingest WAJIB di server (kalau di client bisa di-bypass). Write ke documents via RPC
+// service_role. Semua masuk Kategori CATATAN LAPANGAN (dilabeli belum-resmi, tak menimpa manual).
 const FIELD_NOTE_JUDGE_MODEL = process.env.FIELD_NOTE_JUDGE_MODEL || 'gemini-3.1-flash-lite';
 const FIELD_NOTE_MODELS = new Set(['ZX48U-5A','ZX65USB-5A','ZX138MF-5G','ZX200-5G','KCM 60ZV','ZW140']);
 
@@ -597,8 +577,7 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
   const answer     = typeof b.sourceAnswer === 'string' ? b.sourceAnswer.slice(0, 4000) : '';
   const srcMsgId   = typeof b.sourceMessageId === 'string' ? b.sourceMessageId.slice(0, 80) : null;
   const gapReason  = typeof b.gapReason === 'string' ? b.gapReason.slice(0, 40) : 'manual';
-  // Nama kontributor dari token, bukan body — provenance catatan yang masuk KB harus
-  // menunjuk penulis sebenarnya. (contributor_id sudah otoritatif; ini melengkapi labelnya.)
+  // Nama kontributor dari token, bukan body — provenance harus menunjuk penulis sebenarnya.
   const contribMeta = req.authUser?.user_metadata || {};
   const contribName = (typeof contribMeta.display_name === 'string' ? contribMeta.display_name
                       : typeof contribMeta.full_name === 'string' ? contribMeta.full_name
@@ -608,8 +587,7 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
   if (note.length < 10)   return res.status(200).json({ verdict: 'reject', reason: 'Catatan terlalu pendek — tulis minimal 1 kalimat bermakna.' });
   if (note.length > 4000) return res.status(400).json({ error: 'Catatan terlalu panjang.' });
 
-  // Identitas kontributor (provenance) dari token terverifikasi — sudah di-resolve
-  // verifyToken, jadi tidak perlu round-trip auth kedua di sini.
+  // Identitas kontributor dari token (sudah di-resolve verifyToken, tak perlu round-trip kedua).
   const uid = req.authUser?.id || null;
   const email = req.authUser?.email || null;
   let nik = null;
