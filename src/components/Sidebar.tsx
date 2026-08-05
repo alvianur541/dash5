@@ -7,8 +7,12 @@ import { supabase } from '../services/supabase';
 import { SupportModal } from './SupportModal';
 import { MonitorModal } from './MonitorModal';
 
-// Panel Monitoring khusus owner: alvianur@gmail.com (login via NIK H0001846).
-const ADMIN_EMAILS = ['alvianur@gmail.com'];
+// Panel Monitoring khusus owner. HANYA untuk menyembunyikan tombolnya — gerbang
+// sebenarnya ada di server (/v1/dashboard cek ADMIN_EMAILS terhadap token), jadi
+// mengakali daftar ini di browser tetap dapat 403. Samakan isinya dengan env
+// ADMIN_EMAILS di Cloud Run supaya tombol tidak muncul untuk orang yang ditolak server.
+const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS ?? 'alvianur@gmail.com')
+  .split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 

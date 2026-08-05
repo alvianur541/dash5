@@ -25,16 +25,17 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 async function resolveAuthEmail(input: string): Promise<string> {
   const trimmed = input.trim();
   if (trimmed.includes('@')) return trimmed;
-  if (!supabase) return `${trimmed.toLowerCase()}@dash5.internal`;
+  const fallback = `${trimmed.toLowerCase()}@dash5.internal`;
+  if (!supabase) return fallback;
   try {
-    const { data } = await supabase
-      .from('user_niks')
-      .select('auth_email')
-      .eq('nik', trimmed.toUpperCase())
-      .single();
-    return data?.auth_email ?? `${trimmed.toLowerCase()}@dash5.internal`;
+    // RPC, BUKAN select ke user_niks. Lookup ini jalan sebelum login (pakai anon key
+    // yang ada di bundle), jadi kalau tabelnya bisa dibaca langsung, siapa pun bisa
+    // mengunduh seluruh daftar NIK + email admin. RPC hanya menjawab satu NIK yang
+    // sudah diketahui penanya — resolve tetap bisa, enumerasi tidak.
+    const { data } = await supabase.rpc('resolve_auth_email', { p_nik: trimmed });
+    return typeof data === 'string' && data ? data : fallback;
   } catch {
-    return `${trimmed.toLowerCase()}@dash5.internal`;
+    return fallback;
   }
 }
 

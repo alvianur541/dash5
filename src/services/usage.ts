@@ -5,9 +5,10 @@ import { getAuthToken } from './supabase';
 
 const PROXY_URL = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
+// Identitas (nama/email) SENGAJA tidak ada di sini — server mengambilnya dari token
+// yang sudah diverifikasi. Kalau dikirim dari sini, ledger bisa dipalsukan atas nama
+// teknisi lain dan atribusi biaya di dashboard admin jadi tidak bisa dipercaya.
 export interface QuestionUsage {
-  userName: string;
-  userNik?: string | null;
   sessionId: string | null;
   model: string;
   inputTokens: number;

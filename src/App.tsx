@@ -195,8 +195,6 @@ export default function App() {
     if (!user) return;
     const u = getQuestionUsage();
     logQuestionUsage({
-      userName: user.displayName || 'Operator',
-      userNik: user.email ?? null,
       sessionId: sid,
       model: u.model,
       inputTokens: u.input,
@@ -702,7 +700,6 @@ export default function App() {
           if (id) setMessages(prev => prev.map(m => m.id === id ? { ...m, knowledgeCandidate: undefined } : m));
         }}
         model={selectedModel}
-        contributorName={user?.displayName || 'Operator'}
         candidate={fieldNoteState?.candidate}
         sourceMessageId={fieldNoteState?.messageId}
         sourceQuestion={fieldNoteState?.question}

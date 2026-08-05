@@ -6,7 +6,16 @@ app.use(express.json({ limit: '20mb' }));
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN || 'https://dash5.my.id';
+// Daftar origin yang boleh (comma-separated). Wildcard '*' SENGAJA tidak didukung dan
+// akan dibuang: semua endpoint di sini berjalan atas nama user terautentikasi dan
+// memakai kredensial service account kita, jadi tidak ada alasan sah membukanya ke
+// origin sembarang. Untuk dev lokal, tambahkan origin-nya secara eksplisit
+// (mis. ALLOWED_ORIGIN='https://dash5.my.id,http://localhost:3000').
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'https://dash5.my.id')
+  .split(',').map(s => s.trim()).filter(s => s && s !== '*');
+if (ALLOWED_ORIGINS.length === 0) {
+  console.error('ALLOWED_ORIGIN kosong / hanya "*" — CORS ditutup total. Set origin eksplisit.');
+}
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
 const UPSTREAM_TIMEOUT_MS = 60_000;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
@@ -72,8 +81,9 @@ function rateLimit(req, res, next) {
 
 app.use((req, res, next) => {
   const origin = req.headers.origin;
-  if (ALLOWED_ORIGIN === '*' || origin === ALLOWED_ORIGIN) {
-    res.setHeader('Access-Control-Allow-Origin', origin || ALLOWED_ORIGIN);
+  if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin'); // jangan biarkan cache menyilangkan ACAO antar origin
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -91,8 +101,11 @@ async function verifyToken(req, res, next) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
   try {
-    const ok = await verifyJWT(authHeader.slice(7));
-    if (!ok) return res.status(401).json({ error: 'Invalid or expired token' });
+    const user = await fetchAuthUser(authHeader.slice(7));
+    if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
+    // Identitas TERVERIFIKASI. Endpoint di bawah wajib pakai ini — jangan pernah
+    // percaya nama/NIK/email yang dikirim di body request.
+    req.authUser = user;
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -142,29 +155,25 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-const _jwtCache = new Map();
-async function verifyJWT(token) {
-  const hit = _jwtCache.get(token);
-  if (hit && Date.now() < hit) return true;
+// Verifikasi token ke Supabase + cache object user-nya (bukan cuma boolean "valid"),
+// supaya endpoint bisa memakai identitas asli tanpa round-trip tambahan.
+// TTL 60 detik (turun dari 5 menit): token yang dicabut ikut berhenti diterima dalam
+// ≤1 menit. Dengan ~4-7 call per pertanyaan, ini tetap ±1 panggilan auth/menit/user.
+const AUTH_CACHE_TTL_MS = parseInt(process.env.AUTH_CACHE_TTL_MS || '60000', 10);
+const _userCache = new Map();
+
+async function fetchAuthUser(token) {
+  const hit = _userCache.get(token);
+  if (hit && Date.now() < hit.expiresAt) return hit.user;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
   });
-  if (!r.ok) return false;
-  if (_jwtCache.size >= 200) _jwtCache.delete(_jwtCache.keys().next().value);
-  _jwtCache.set(token, Date.now() + 5 * 60 * 1000);
-  return true;
-}
-
-// Ambil user Supabase dari token (untuk cek admin). Return object user atau null.
-async function getAuthUser(token) {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
-  try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
-      headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
-    });
-    if (!r.ok) return null;
-    return await r.json();
-  } catch { return null; }
+  if (!r.ok) { _userCache.delete(token); return null; }
+  const user = await r.json();
+  if (_userCache.size >= 200) _userCache.delete(_userCache.keys().next().value);
+  _userCache.set(token, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  return user;
 }
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
@@ -173,17 +182,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 // Baca agregat usage_logs + census via service_role (RLS bypass). Gate: email
 // requester HARUS ada di ADMIN_EMAILS, supaya teknisi biasa tidak lihat data
 // semua orang. 1 RPC get_dashboard_snapshot() → 1 round-trip, snapshot atomik.
-app.get('/v1/dashboard', async (req, res) => {
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Auth service misconfigured' });
-  if (!SUPABASE_SERVICE_KEY)               return res.status(503).json({ error: 'Dashboard not configured' });
-
-  const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ error: 'Missing authorization token' });
-  }
-  const user = await getAuthUser(authHeader.slice(7));
-  if (!user || !user.email) return res.status(401).json({ error: 'Invalid or expired token' });
-  if (!isAdminUser(user)) {
+app.get('/v1/dashboard', verifyToken, rateLimit, async (req, res) => {
+  if (!SUPABASE_SERVICE_KEY) return res.status(503).json({ error: 'Dashboard not configured' });
+  if (!isAdminUser(req.authUser)) {
     return res.status(403).json({ error: 'Halaman monitoring khusus admin.' });
   }
 
@@ -422,11 +423,22 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   // biarkan payload jumbo/aneh masuk ledger.
   const clip = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
 
+  // Identitas WAJIB dari token terverifikasi, bukan dari body. Kalau dari body, teknisi
+  // mana pun yang login bisa POST ledger atas nama rekannya (verifyToken cuma memastikan
+  // pengirim user sah, bukan bahwa dia orang yang diklaim) — dan dashboard admin
+  // mengelompokkan biaya persis berdasarkan dua kolom ini.
+  const authUser = req.authUser || {};
+  const authMeta = authUser.user_metadata || {};
+  const authEmail = typeof authUser.email === 'string' ? authUser.email : null;
+  const displayName = clip(authMeta.display_name, 80) || clip(authMeta.full_name, 80);
+
   const costUsd = (inputTokens / 1e6) * GEMINI_INPUT_PRICE_USD + (outputTokens / 1e6) * GEMINI_OUTPUT_PRICE_USD;
   const costIdr = costUsd * USD_TO_IDR;
   const row = {
-    user_name: clip(b.userName, 80),
-    user_nik: clip(b.userNik, 120),
+    // Sama persis dengan nilai yang dulu dikirim client (display_name + email), jadi
+    // pengelompokan historis di dashboard tetap nyambung — bedanya kini tak bisa dipalsukan.
+    user_name: displayName || (authEmail ? authEmail.split('@')[0] : null),
+    user_nik: clip(authEmail, 120),
     session_id: clip(b.sessionId, 80),
     model: clip(b.model, 60) || 'gemini-2.5-flash',
     input_tokens: inputTokens,
@@ -585,17 +597,21 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
   const answer     = typeof b.sourceAnswer === 'string' ? b.sourceAnswer.slice(0, 4000) : '';
   const srcMsgId   = typeof b.sourceMessageId === 'string' ? b.sourceMessageId.slice(0, 80) : null;
   const gapReason  = typeof b.gapReason === 'string' ? b.gapReason.slice(0, 40) : 'manual';
-  const contribName = typeof b.contributorName === 'string' ? b.contributorName.slice(0, 80) : null;
+  // Nama kontributor dari token, bukan body — provenance catatan yang masuk KB harus
+  // menunjuk penulis sebenarnya. (contributor_id sudah otoritatif; ini melengkapi labelnya.)
+  const contribMeta = req.authUser?.user_metadata || {};
+  const contribName = (typeof contribMeta.display_name === 'string' ? contribMeta.display_name
+                      : typeof contribMeta.full_name === 'string' ? contribMeta.full_name
+                      : '').slice(0, 80) || null;
 
   if (!FIELD_NOTE_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak valid.' });
   if (note.length < 10)   return res.status(200).json({ verdict: 'reject', reason: 'Catatan terlalu pendek — tulis minimal 1 kalimat bermakna.' });
   if (note.length > 4000) return res.status(400).json({ error: 'Catatan terlalu panjang.' });
 
-  // Identitas kontributor (provenance) dari token
-  const token = req.headers['authorization'].slice(7);
-  const user = await getAuthUser(token);
-  const uid = user?.id || null;
-  const email = user?.email || null;
+  // Identitas kontributor (provenance) dari token terverifikasi — sudah di-resolve
+  // verifyToken, jadi tidak perlu round-trip auth kedua di sini.
+  const uid = req.authUser?.id || null;
+  const email = req.authUser?.email || null;
   let nik = null;
   if (email) {
     try {

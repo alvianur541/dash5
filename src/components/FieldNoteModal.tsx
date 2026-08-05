@@ -9,7 +9,6 @@ interface FieldNoteModalProps {
   onClose: () => void;
   onSaved?: () => void;             // dipanggil saat tersimpan → parent buang kartu (cegah dobel)
   model: UnitModel;
-  contributorName: string;
   candidate?: KnowledgeCandidate;   // hasil deteksi+ekstraksi AI (pre-fill)
   sourceMessageId?: string;
   sourceQuestion?: string;
@@ -19,7 +18,7 @@ interface FieldNoteModalProps {
 type Phase = 'edit' | 'submitting' | 'done';
 
 export function FieldNoteModal({
-  isOpen, onClose, onSaved, model, contributorName, candidate, sourceMessageId, sourceQuestion, sourceAnswer,
+  isOpen, onClose, onSaved, model, candidate, sourceMessageId, sourceQuestion, sourceAnswer,
 }: FieldNoteModalProps) {
   const [component, setComponent] = useState('');
   const [note, setNote] = useState('');
@@ -51,7 +50,6 @@ export function FieldNoteModal({
     setPhase('submitting'); setError(null); setRejectReason(null);
     const res = await submitFieldNote({
       model,
-      contributorName,
       sourceMessageId,
       sourceQuestion,
       sourceAnswer,

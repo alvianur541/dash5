@@ -12,9 +12,9 @@ import { UnitModel, KnowledgeCandidate } from '../types';
 
 const proxyUrl = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
+// contributorName SENGAJA tidak ada — provenance diambil server dari token.
 export interface SubmitFieldNoteInput {
   model: UnitModel;
-  contributorName: string;
   sourceMessageId?: string;
   sourceQuestion?: string;
   sourceAnswer?: string;
@@ -128,7 +128,6 @@ export async function submitFieldNote(input: SubmitFieldNoteInput): Promise<Subm
       signal: ctrl.signal,
       body: JSON.stringify({
         model:            input.model,
-        contributorName:  input.contributorName,
         sourceMessageId:  input.sourceMessageId,
         sourceQuestion:   input.sourceQuestion,
         sourceAnswer:     input.sourceAnswer,
