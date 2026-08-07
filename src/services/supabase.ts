@@ -580,7 +580,8 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 4,   // 4 chunk (naik dari 3): jawaban diagnosa sering butuh impact+root cause+langkah
+  topN = 5,   // 5 chunk (naik dari 4): diagnosa gejala sering melibatkan >1 tabel troubleshooting
+              // (mis. E-8 Travel HP Mode + E-13 overload) + prosedur + spec — 4 kadang buang 1 cabang
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };

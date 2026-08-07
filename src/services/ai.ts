@@ -463,7 +463,7 @@ export async function callProxyStream(
  *  hasil <30 char → pakai original. */
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
   // Extraction balance: buang narasi, sisakan konteks (section/notes) — compress terlalu agresif = jawaban monoton.
-  const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
+  const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Chunk berisi PROSEDUR/langkah troubleshooting/tabel troubleshooting → salin SEMUA langkah & SEMUA baris penyebab UTUH, jangan diringkas/di-skip/digabung — langkah yang hilang di sini tidak bisa dipulihkan lagi.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
   // Cap chunk yg dikirim ke INTENT_MODEL — context window flash-lite ~8K input.
   const MAX_CHUNK_FOR_COMPRESS = 8000;
@@ -472,7 +472,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
     const safeChunk = chunk.length > MAX_CHUNK_FOR_COMPRESS
       ? chunk.slice(0, MAX_CHUNK_FOR_COMPRESS) + '\n[...truncated]'
       : chunk;
-    return `QUERY: "${userQuery}"\n\nCHUNK:\n${safeChunk}\n\nOUTPUT (max 150 kata, verbatim excerpts + minimal context, no preamble):`;
+    return `QUERY: "${userQuery}"\n\nCHUNK:\n${safeChunk}\n\nOUTPUT (verbatim excerpts + minimal context, no preamble; prosedur/troubleshooting: SEMUA langkah utuh, selain itu max 250 kata):`;
   };
 
   const compressOne = async (chunk: string): Promise<string> => {
@@ -481,7 +481,9 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
       const res = await callProxy({
         contents: [{ role: 'user', parts: [{ text: buildPrompt(chunk) }] }],
         systemInstruction: { parts: [{ text: SYS }] },
-        generationConfig: { maxOutputTokens: 350, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+        // 600 (naik dari 350): chunk prosedur troubleshooting butuh ruang utk SEMUA langkah —
+        // cap ketat dulu bikin langkah terpotong diam-diam.
+        generationConfig: { maxOutputTokens: 600, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
       }, false, INTENT_MODEL);
       const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
       if (compressed.length < 30) return chunk; // over-stripped, fallback ke original

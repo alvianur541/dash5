@@ -176,9 +176,11 @@ async function forceFinalAnswer(
   observations: ToolResult[],
   onChunk: (text: string) => void,
 ): Promise<string> {
+  // 1500 (naik dari 500): potongan 500 char membuang langkah troubleshooting dari observasi —
+  // jawaban akhir jadi tidak lengkap. 1500 muat prosedur penuh per tool result.
   const summary = observations
     .filter(o => o.hasResults)
-    .map(o => `- ${o.toolName}: ${o.content.slice(0, 500)}${o.content.length > 500 ? '...' : ''}`)
+    .map(o => `- ${o.toolName}: ${o.content.slice(0, 1500)}${o.content.length > 1500 ? '...' : ''}`)
     .join('\n');
 
   const forceMsg = `Iterations habis (max 4). Synthesize dari observations berikut ke final answer Bahasa Indonesia. Quote verbatim dari data — JANGAN ngarang.\n\nObservations:\n${summary || '(tidak ada data dari tools)'}`;
