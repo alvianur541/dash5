@@ -686,7 +686,6 @@ export default function App() {
           isTyping={isTyping}
           isStreaming={isStreaming}
           selectedModel={selectedModel}
-          onSendMessage={handleSendMessage}
           onRetry={handleRetry}
           userName={(user?.displayName || 'Operator').split(' ')[0]}
           hasHistory={sessionList.length > 0}

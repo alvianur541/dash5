@@ -61,58 +61,12 @@ interface ChatWindowProps {
   isTyping: boolean;
   isStreaming: boolean;
   selectedModel: UnitModel;
-  onSendMessage: (content: string) => void;
   onRetry: (assistantMessageId: string) => void;
   userName?: string;
   hasHistory?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
   agentEvents?: AgentEvent[];
 }
-
-// Suggestion chips per model — fault code & topic VERIFIED ada di Supabase:
-//
-// ZX48U-5A & ZX65USB-5A: Yanmar 4TNV88, fault format 'ENG: xxxxx-xx'
-//   contoh real: 0001D-02 (accelerator), 00436-04 (speed sensor)
-// ZX138MF-5G & ZX200-5G: Isuzu, fault format 'xxxxx-x'
-//   contoh real ZX200: 11006-2 (engine controller), 16606 (EC angle sensor)
-//   contoh real ZX138: 11302-4 (boom raise pilot pressure), 11307 (sensor)
-// KCM 60ZV: WM only — no fault code structure. Topic: brake/hydraulic/power groups
-// 2 chip per model — chip 1 diagnosa (fault code / symptom), chip 2 nilai tambah
-// yang beda per model (spec HCD, prosedur WM, estimasi biaya CPM+promo) supaya
-// cakupan kemampuan terlihat. Semua menembak jalur RAG yang terverifikasi
-// (lihat Quick Reference: Test Cases di CLAUDE.md) — demo tidak boleh zonk.
-const SUGGESTION_CHIPS_BY_MODEL: Record<UnitModel, Array<{ icon: string; text: string }>> = {
-  'ZX48U-5A': [
-    { icon: '⚠️', text: 'Diagnosa fault code ENG:00436-04 dan langkah pengecekannya' },
-    { icon: '📐', text: 'Relief pressure main pump beserta cara pengukurannya' },
-  ],
-  'ZX65USB-5A': [
-    { icon: '⚠️', text: 'Diagnosa fault code ENG:0001D-02 dan langkah pengecekannya' },
-    { icon: '🔍', text: 'Engine susah start — urutan pengecekan sistematis' },
-  ],
-  'ZX138MF-5G': [
-    { icon: '⚠️', text: 'Diagnosa fault code 11302-4 pada sistem boom raise' },
-    { icon: '🔍', text: 'Boom angkat lambat — analisa penyebab dan pengecekan' },
-  ],
-  'ZX200-5G': [
-    { icon: '⚠️', text: 'Diagnosa fault code 11006-2 dan dampaknya ke unit' },
-    { icon: '🔍', text: 'Hydraulic power lemah — diagnosa penyebab dan langkah cek' },
-  ],
-  'KCM 60ZV': [
-    { icon: '🔍', text: 'Steering terasa berat — analisa penyebab dan pengecekan' },
-    { icon: '📋', text: 'Prosedur adjust parking brake beserta spec-nya' },
-  ],
-  // ZW140: fault code 14102-2 verified ada di TROUBLESHOOTING (census Jul 2026).
-  'ZW140': [
-    { icon: '⚠️', text: 'Diagnosa fault code 14102-2 dan langkah pengecekannya' },
-    { icon: '🔍', text: 'Hydraulic lift arm lambat — analisa penyebab dan pengecekan' },
-  ],
-};
-
-const DEFAULT_CHIPS = [
-  { icon: '⚠️', text: 'Diagnosa fault code yang muncul di monitor' },
-  { icon: '🔍', text: 'Hydraulic power lemah — diagnosa penyebab dan langkah cek' },
-];
 
 function formatTime(timestamp: number) {
   return new Date(timestamp).toLocaleTimeString('id-ID', {
@@ -338,7 +292,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, onSendMessage, onRetry, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
+  messages, isTyping, isStreaming, selectedModel, onRetry, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -443,43 +397,15 @@ export function ChatWindow({
                     fontSize: '13.5px',
                     color: 'var(--text-muted)',
                     letterSpacing: '-0.003em',
-                    lineHeight: 1.55,
-                    maxWidth: '330px',
+                    lineHeight: 1.6,
+                    maxWidth: '380px',
                   }}
                 >
                   {hasHistory
-                    ? <>Lanjut sesi sebelumnya atau mulai topik baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
-                    : <>Fault code, PN parts, atau spec teknis untuk <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
+                    ? <>Lanjut sesi sebelumnya, atau langsung ketik pertanyaan baru di kolom bawah — fault code, part number, spec teknis, atau jadwal service unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
+                    : <>Langsung ketik pertanyaanmu di kolom bawah — fault code, part number, spec teknis, atau jadwal service unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>. Bisa juga kirim foto layar monitor, kode errornya saya baca langsung.</>
                   }
                 </m.p>
-              </div>
-
-              {/* Quick-start chips — tile ikon + label + panah */}
-              <div className="chips-container" style={{ display: 'flex', flexDirection: 'column', gap: '6px', width: '100%', margin: '0 auto' }}>
-                <p className="chips-label" style={{
-                  textAlign: 'left',
-                  paddingLeft: '2px',
-                  marginBottom: '4px',
-                  fontSize: '13px',
-                  letterSpacing: '-0.003em',
-                  textTransform: 'none',
-                  color: 'var(--text-muted)',
-                  fontWeight: 500,
-                }}>
-                  Contoh pertanyaan
-                </p>
-                {(SUGGESTION_CHIPS_BY_MODEL[selectedModel] ?? DEFAULT_CHIPS).map((chip, i) => (
-                  <m.button
-                    key={chip.text}
-                    className="suggestion-chip"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, delay: 0.22 + i * 0.06 }}
-                    onClick={() => onSendMessage(chip.text)}
-                  >
-                    {chip.text}
-                  </m.button>
-                ))}
               </div>
 
             </div>
