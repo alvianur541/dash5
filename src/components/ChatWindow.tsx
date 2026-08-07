@@ -465,13 +465,11 @@ export function ChatWindow({
                   textAlign: 'left',
                   paddingLeft: '2px',
                   marginBottom: '4px',
-                  fontFamily: 'var(--font-serif)',
-                  fontStyle: 'italic',
-                  fontSize: '14px',
-                  letterSpacing: '0',
+                  fontSize: '13px',
+                  letterSpacing: '-0.003em',
                   textTransform: 'none',
                   color: 'var(--text-muted)',
-                  fontWeight: 400,
+                  fontWeight: 500,
                 }}>
                   Contoh pertanyaan
                 </p>
