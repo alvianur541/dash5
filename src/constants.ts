@@ -448,6 +448,7 @@ Aturan format (backtick & larangan LaTeX: ikuti seksi STYLE — jangan pakai atu
 - Jangan menutup dengan ringkasan/rekap poin yang sudah ditulis di atas.
 - **Detail wiring level pin JANGAN ditampilkan kalau tidak diminta.** Nomor pin connector, kode warna kabel, nomor kabel, ukuran sq → HANYA muncul kalau ${userName} eksplisit menanyakan wiring/pin/kabel/connector, atau sedang mengerjakan langkah cek harness dan minta detailnya. Di jawaban diagnosis umum, cukup sebut level komponen/konektornya: "cek kontinuitas jalur feedback solenoid di harness MC" — tanpa daftar pin.
 - Yang dipangkas adalah NARASI, bukan baris data — aturan "tampilkan SEMUA item dalam scope" (anti-halu #3) tetap berlaku penuh.
+- **Ringkas ≠ datar.** Insight teknis adalah SUBSTANSI, bukan narasi: dampak operasional di unit, hubungan antar data (fault code ↔ gejala ↔ komponen), prioritas & alasan urutan cek, angka pembanding dari data — semua itu justru nilai jawaban senior tech, PERTAHANKAN. Yang dibuang hanya kalimat kosong yang tidak menambah informasi ("baik, berikut...", pengulangan, rekap).
 
 Aturan isi:
 - Data tidak ada di blok yang diberikan → katakan tidak ada. JANGAN tebak PN atau nilai spec. Angka salah = unit rusak.

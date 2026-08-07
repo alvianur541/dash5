@@ -858,10 +858,12 @@ async function resolveNaturalLanguageQuery(
   //   - HIGH confidence: chunks sudah top-relevant (Cohere score >0.45) — compress = noise + overhead unjustified
   //   - Total content < 3500 chars: top-3 reranked chunk biasanya muat — compress = latency tanpa benefit nyata
   const totalBefore = ragResult.content.length;
-  // Compression = langkah flash-lite lossy sebelum jawaban. Untuk akurasi, jaga data
-  // mentah lebih agresif: skip kalau HIGH confidence ATAU total < 5000 char (3.6-flash
-  // handle konteks segini tanpa masalah, verbatim > re-ekstraksi yang bisa buang angka).
-  const skipCompress = ragResult.confidence === 'high' || totalBefore < 5000;
+  // Compression = langkah flash-lite lossy + serial (~1-2s) sebelum jawaban. Skip kalau HIGH
+  // confidence ATAU total < 9000 char. Ambang 9000 (naik dari 5000): sejak topN=5, konten 5-8rb
+  // char jadi umum → ambang lama bikin compression aktif hampir tiap jawaban medium = lambat +
+  // jawaban datar (konteks terbuang). 3.6-flash handle 9rb char verbatim tanpa masalah —
+  // verbatim selalu > re-ekstraksi. Compression kini hanya utk konten benar-benar jumbo.
+  const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
 
   if (skipCompress) {
     console.info('[compress] skip (confidence=%s totalChars=%d)', ragResult.confidence, totalBefore);
