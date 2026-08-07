@@ -567,9 +567,9 @@ const KIT_HINT =
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
-  return `Scope saya khusus technical support alat berat Hitachi — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
+  return `Waduh, kalau itu di luar bidangku 😅 Aku spesialisnya alat berat Hitachi — fault code, troubleshooting, spec, sama parts.
 
-Untuk pertanyaan tadi, saya bukan sumber yang tepat. Ada yang perlu dicek di unit kamu?`;
+Yuk balik ke unit kamu — ada yang mau dicek?`;
 }
 
 // Regex fault code WAJIB ada digit (cegah "blade"/"cafe" false-positive). Letter-prefix tanpa
