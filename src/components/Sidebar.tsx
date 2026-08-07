@@ -288,9 +288,10 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                "w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8",
+                                "w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
                                 isActive
-                                  ? "bg-[var(--accent-main)]/8 text-[var(--text-primary)] font-medium"
+                                  // Aksen 2px tepi kiri (inset — tanpa geser layout): penanda "kamu di sini"
+                                  ? "bg-[var(--accent-main)]/8 text-[var(--text-primary)] font-medium shadow-[inset_2px_0_0_var(--accent-main)]"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                               )}
                             >
