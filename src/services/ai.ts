@@ -585,9 +585,9 @@ const KIT_HINT =
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
-  return `Waduh, pertanyaan kamu out of topic 😅 Kalau soal beginian aku angkat tangan — jalurku ya seputar unit: fault code, troubleshooting, spec, sama parts.
+  return `Waduh, pertanyaan kamu out of topic 😅 Kalau soal beginian aku ngga bisa jawab — kamu bisa tanya seputar unit: fault code, troubleshooting, spec, sama parts.
 
-Balik ke unitnya yuk, ada yang bisa aku bantu cek?`;
+Oke, ada yang bisa aku bantu cek di unit kamu?`;
 }
 
 // Regex fault code WAJIB ada digit (cegah "blade"/"cafe" false-positive). Letter-prefix tanpa
