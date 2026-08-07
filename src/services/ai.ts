@@ -741,7 +741,7 @@ async function resolvePartsQuery(
     if (MODELS_WITHOUT_PARTS_CATALOG.has(model)) {
       const wmResult = await searchTechnicalManualMulti([trimmed], model, 3, 'WORKSHOP MANUAL');
       if (wmResult.hasResults) {
-        const note = `[CATATAN: Parts Catalog ${model} belum ter-ingest di knowledge base. Info di bawah dari Workshop Manual — PN mungkin disebut inline tapi tidak terstruktur. Verifikasi ke catalog fisik.]\n\n`;
+        const note = `[CATATAN: Parts Catalog ${model} belum lengkap. Info di bawah dari Workshop Manual — PN mungkin disebut inline tapi tidak terstruktur. Sampaikan dgn bahasa lapangan (JANGAN pakai kata "ter-ingest"/"knowledge base"), minta cocokkan ke katalog fisik.]\n\n`;
         return { type: 'rag_found', content: note + wmResult.content, dataLabel: RAG_LABEL.parts, confidence: wmResult.confidence };
       }
     }
