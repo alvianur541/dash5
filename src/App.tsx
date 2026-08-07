@@ -288,7 +288,7 @@ export default function App() {
       let displayed = '';
       let buffered = '';
       let timerId: ReturnType<typeof setTimeout> | null = null;
-      const FLUSH_INTERVAL = 80;
+      const FLUSH_INTERVAL = 40;
       const FLUSH_BATCH = 200;
       // AbortController per stream — ref tidak masuk deps, aman
       const streamCtrl = new AbortController();
@@ -299,8 +299,11 @@ export default function App() {
         if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch
         if (streamCtrl.signal.aborted) return;
         if (!buffered.length) return;
-        const batch = buffered.slice(0, FLUSH_BATCH);
-        buffered = buffered.slice(FLUSH_BATCH);
+        // Adaptif: buffer menumpuk (jawaban sudah diterima dari server) → flush lebih besar,
+        // jangan pura-pura "mengetik" lama. Batch minimum tetap kecil supaya live stream halus.
+        const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
+        const batch = buffered.slice(0, size);
+        buffered = buffered.slice(size);
         displayed += batch;
         const snap = displayed;
         setMessages(prev => {
@@ -411,7 +414,7 @@ export default function App() {
       let displayed = '';
       let buffered = '';
       let timerId: ReturnType<typeof setTimeout> | null = null;
-      const FLUSH_INTERVAL = 80;
+      const FLUSH_INTERVAL = 40;
       const FLUSH_BATCH = 200;
       const drip = () => {
         timerId = null;
@@ -419,8 +422,10 @@ export default function App() {
         if (sessionIdRef.current !== sessionSnapshot) return;
         if (retryCtrl.signal.aborted) return;
         if (!buffered.length) return;
-        const batch = buffered.slice(0, FLUSH_BATCH);
-        buffered = buffered.slice(FLUSH_BATCH);
+        // Adaptif — sama seperti handleSend: buffer besar → flush besar, tampilan tak menyeret.
+        const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
+        const batch = buffered.slice(0, size);
+        buffered = buffered.slice(size);
         displayed += batch;
         const snap = displayed;
         setMessages(prev => {
