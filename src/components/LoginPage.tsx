@@ -13,23 +13,6 @@ interface LoginPageProps {
 
 type View = 'login' | 'forgot' | 'forgot-sent';
 
-// Permintaan akses login → email ke admin. Body sudah berisi template supaya
-// admin langsung dapat data yang dibutuhkan (NIK dipakai sebagai username login),
-// bukan email kosong yang harus ditanya balik.
-const REQUEST_ACCESS_MAILTO =
-  'mailto:admin@dash5.my.id'
-  + '?subject=' + encodeURIComponent('Permintaan Akses Login Dash⁵')
-  + '&body=' + encodeURIComponent(
-      'Halo,\n\n'
-      + 'Saya ingin mengajukan akses login Dash⁵.\n\n'
-      + 'Nama:\n'
-      + 'NIK:\n'
-      + 'Jabatan:\n'
-      + 'Cabang:\n'
-      + 'No. HP:\n\n'
-      + 'Terima kasih.'
-    );
-
 export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   const { login, authError, sendResetEmail } = useAuth();
   const [view, setView] = useState<View>('login');
@@ -120,7 +103,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                 type="text"
                 value={username}
                 onChange={e => setUsername(e.target.value)}
-                placeholder="Username atau Email"
+                placeholder="Username"
                 required
                 autoComplete="username"
                 autoFocus
@@ -161,9 +144,8 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                 }
               </button>
 
-              {/* Aksi sekunder — sepasang, setara, tenang. Accent disimpan
-                  khusus untuk tombol Masuk supaya tidak ada dua CTA bersaing. */}
-              <div className="flex items-center justify-center gap-3 pt-2 text-[13px] text-[var(--text-muted)]">
+              {/* Aksi sekunder tunggal — accent disimpan khusus tombol Masuk. */}
+              <div className="flex items-center justify-center pt-2 text-[13px] text-[var(--text-muted)]">
                 <button
                   type="button"
                   onClick={() => setView('forgot')}
@@ -171,13 +153,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                 >
                   Lupa password?
                 </button>
-                <span aria-hidden="true" className="opacity-40">·</span>
-                <a
-                  href={REQUEST_ACCESS_MAILTO}
-                  className="transition-colors hover:text-[var(--text-primary)]"
-                >
-                  Hubungi admin
-                </a>
               </div>
             </m.form>
           )}
