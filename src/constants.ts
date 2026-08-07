@@ -256,6 +256,10 @@ ${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai periode t
 Format parts chunk: \`item | PN | Part Name | qty:N | svc:D/S/K\`
 Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` = sudah dalam kit.
 
+**Cari "seal kit / repair kit":** kit sering TIDAK punya 1 PN bundel — komponennya bertanda \`svc:K\`. Kalau ADA baris bernama "KIT" ber-PN tunggal → sajikan itu. Kalau TIDAK ada → JANGAN jawab "tidak ada"; kumpulkan SEMUA part \`svc:K\` di section relevan sebagai **komponen penyusun kit** (PN + nama + qty apa adanya), lalu catat singkat katalog tak mencantumkan 1 PN kit-bundel. HARAM mengarang PN kit.
+**PN yang dicari tidak ketemu:** nyatakan tegas "PN \`X\` tidak ada di data ${model}". Boleh sebut part lain HANYA kalau benar-benar di section yang sama DAN diberi label "beda part, bukan pengganti \`X\`" — dilarang menyodorkan PN berbeda seolah itu jawaban atas \`X\`.
+**Base PN vs suffix:** PN yang dicari (mis. \`1033091\`) bisa muncul di PROMO dengan suffix (\`1033091HPB\`/\`…HPA\`/\`…PS\`). Cocokkan berdasarkan nomor dasar; tampilkan suffix apa adanya.
+
 **Output format:**
 - Multi-part → tabel markdown wajib: \`| Item | Part No | Part Name | Qty | Svc |\`. PN dalam backtick.
 - 1 PN spesifik → inline 1-2 baris.
@@ -373,6 +377,7 @@ Pesan user bisa berisi blok data hasil pencarian sistem. Patuhi ketat:
 - "GUNAKAN PERSIS PN di atas" → salin PN apa adanya, jangan substitusi.
 - "[ENGINE MANUAL]" → data pendukung P-code, gabungkan dengan diagnosis utama.
 - "[CATATAN: Parts Catalog ... belum ter-ingest]" → sampaikan info apa adanya plus disclaimer verifikasi ke katalog fisik.
+- "[PETUNJUK KIT] ..." → user mencari seal/repair kit. Ikuti aturannya: kalau tidak ada baris kit-bundel, sajikan komponen \`svc:K\` sebagai isi kit; jangan mengarang PN kit.
 - Beberapa fault code sekaligus → satu heading per kode (\`## Kode X\`), jangan jadikan satu kode sebagai footnote kode lain.
 - Data terlihat tidak cukup untuk menjawab angka/PN/prosedur → jawab keterbatasannya dulu, lalu beri 1 pertanyaan klarifikasi atau 1 sumber fisik yang harus dicek. Jangan isi kekosongan dengan "umumnya".
 - "[SUMBER EKSTERNAL] ..." → pertanyaan teknis tapi manual internal tidak memuatnya. Jawab pakai prinsip umum + web SESUAI aturan di seksi SUMBER EKSTERNAL: label rujukan umum, jangan klaim angka unit sebagai spec resmi, fokus konsep/diagnosa.

@@ -543,6 +543,18 @@ Supaya pencariannya kena:
 Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke Parts Counter dengan menyebut model + nama komponen.`;
 }
 
+// Query "seal kit"/"repair kit": katalog Hitachi sering tak punya 1 PN kit-bundel — komponennya
+// ditandai svc:K. Deterministik: kalau kit-query & data mengandung part svc:K, injeksi petunjuk
+// agar AI menyajikan komponen svc:K sebagai "isi kit" (bukan jawab "tidak ada"), tanpa mengarang PN.
+const KIT_QUERY_RE = /\bkit\b/i;
+const KIT_HINT =
+  '[PETUNJUK KIT] User mencari seal kit / repair kit. Di katalog Hitachi, kit sering TIDAK punya ' +
+  'satu PN bundel — komponennya ditandai `svc:K`. Aturan: (1) kalau ADA baris bernama "KIT" dengan ' +
+  'PN tunggal di data, sajikan itu. (2) kalau TIDAK ada baris kit-bundel, JANGAN jawab "tidak ada" — ' +
+  'kumpulkan SEMUA part `svc:K` di section paling relevan, sajikan sebagai komponen penyusun kit ' +
+  '(PN + nama + qty apa adanya), lalu jelaskan singkat katalog tak mencantumkan satu PN kit-bundel. ' +
+  'HARAM mengarang PN kit yang tidak ada di data.';
+
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
@@ -761,6 +773,9 @@ async function resolvePartsQuery(
         ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[periodeLine, ...promoLines].filter(Boolean).join('\n')}`
         : cpmHeader;
     }
+  } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
+    // Kit-query & data punya komponen svc:K → injeksi petunjuk deterministik (lihat KIT_HINT).
+    finalContent = `${KIT_HINT}\n\n${finalContent}`;
   }
 
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
