@@ -605,8 +605,8 @@ I can help with anything about your unit — fault codes, troubleshooting, specs
 
 Anything on the unit I can check for you?`;
   }
-  return `Waduh, pertanyaan kamu out of topic 😅
-Kalau soal beginian aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshooting, spec, atau parts.
+  return `Waduh, pertanyaan kamu out of topic 😅.
+Maaf aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshooting, spec, atau parts.
 
 Apa ada yang bisa aku bantu cek?`;
 }
