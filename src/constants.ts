@@ -50,6 +50,25 @@ const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
   'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO'],
 };
 
+/** Section PROMO Q2 FY2026 yang BENAR-BENAR ada per model (census DB Aug 2026).
+ *  Berbeda-beda per model — KCM cuma 2 section, ZX200 punya 10. AI dilarang menyuruh
+ *  cek section yang tidak ada di daftar modelnya. */
+const PROMO_SECTIONS_BY_MODEL: Record<UnitModel, string[]> = {
+  'ZX48U-5A':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
+  'ZX65USB-5A': ['FILTER PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
+  'ZX138MF-5G': ['ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
+  'ZX200-5G':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
+  'KCM 60ZV':   ['COOLANT', 'LUBRICANT'],
+  'ZW140':      ['FILTER PARTS', 'COOLANT', 'LUBRICANT'],
+};
+
+/** CPM sebagian model dipetakan dari tabel unit setara (tertulis di chunk-nya).
+ *  AI wajib jujur menyebut pemetaan ini saat menyajikan jadwal CPM. */
+const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
+  'ZX138MF-5G': 'ZX110-5G',
+  'ZX65USB-5A': 'ZX65U-5A',
+};
+
 /** Sumber yang TIDAK dimiliki model — supaya AI tidak merujuk dokumen kosong. */
 const ABSENT_SOURCES: Record<UnitModel, string> = {
   'ZX48U-5A':   '',
@@ -89,7 +108,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
   // tahu topiknya ada dan tidak menyuruh teknisi cari ke tempat lain.
   const bulletins: string[] = [];
   if (model === 'ZX48U-5A') {
-    bulletins.push('**No.13/2026 — ZX48U-5A SE (Super Economy)**: engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor) vs standard \`4TNV88-ZPHB\`, serial prefix \`HCMAEA10\` (standard \`HCMAEA90\`), brand LANDCROS');
+    bulletins.push('**No.13/2026 — ZX48U-5A SE (Super Economy)**: engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor) vs standard \`4TNV88-ZPHB\`, ECU digantikan Relay Control, identifikasi unit via serial prefix \`HCMAEA10\` (standard \`HCMAEA90\`) & sticker, perbedaan accessories kabin, brand LANDCROS');
   }
   if (model === 'ZX48U-5A' || model === 'ZX65USB-5A') {
     bulletins.push('**No.06/2021 — Penggantian & Update Software ECU ZX-5A**: prosedur reprogram ECU 5 tahap memakai tool **Smart Assist** (download software → input serial number ECU baru → copy data value dari ECU lama → flash & verifikasi → upload log ke Service Center)');
@@ -294,7 +313,7 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 - Group by section kalau >1 section.
 
 **CPM + PROMO cross-reference:**
-1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
+${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit setara **${CPM_EQUIVALENT[model]}** (tertulis di chunk-nya). Saat menyajikan jadwal CPM, sebut singkat & natural bahwa jadwal ini mengacu tabel ${CPM_EQUIVALENT[model]} — jangan mengklaim sebagai tabel khusus ${model}.\n` : ''}1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
 2. Cross-ref PROMO → pakai periode terbaru/aktif yang muncul di data. Kalau PN tidak ada di periode terbaru tetapi ada di periode lama, tampilkan dengan note "(harga periode lama, data periode terbaru tidak tersedia untuk PN ini)".
 3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
@@ -303,15 +322,16 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 
 ⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. FILTER PARTS mulai 15 Juli, LUBRICANT & COOLANT mulai 5 Agustus, sama-sama berakhir 30 September). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
 
-**Section PROMO** (scan SEMUA, jangan asumsi 1 section):
-ATTACHMENT / COOLANT / ELECTRICAL / FILTER / G.E.T. (bucket teeth) / INNERPART HYDRAULIC / LUBRICANT (oli) / REMAN COMPONENT (suffix PI) / UNDERCARRIAGE / ZX MINI PARTS.
+**Section PROMO aktif untuk ${model}** (census DB — HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
+${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
+Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada. Parts di luar cakupan section di atas → "harga promo tidak tersedia untuk part ini, konfirmasi ke Parts Counter."
 
 **PN suffix variant:**
 - \`HPA\` / \`HPB\` / \`HP\` suffix → sebut "varian alternatif" — **JANGAN sebut "Hitachi Astrea" atau nama brand distribusi.**
 - \`PS\` suffix → "PS variant".
 - Tanpa suffix → "Genuine part".
 
-Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT.
+Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS.
 
 ---
 
