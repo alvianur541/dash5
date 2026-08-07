@@ -402,8 +402,8 @@ export function ChatWindow({
                   }}
                 >
                   {hasHistory
-                    ? <>Lanjut sesi sebelumnya, atau langsung ketik pertanyaan baru di kolom bawah — fault code, part number, spec teknis, atau jadwal service unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>.</>
-                    : <>Langsung ketik pertanyaanmu di kolom bawah — fault code, part number, spec teknis, atau jadwal service unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>. Bisa juga kirim foto layar monitor, kode errornya saya baca langsung.</>
+                    ? <>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>? Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</>
+                    : <>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>? Ketik aja langsung di bawah — fault code, part number, atau spec teknis. Ada kode error di monitor? Foto aja layarnya, saya bacakan.</>
                   }
                 </m.p>
               </div>
