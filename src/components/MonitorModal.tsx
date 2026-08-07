@@ -260,8 +260,8 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
           <p className="text-[11px] text-[var(--text-muted)] mt-1">Sentuh atau arahkan kursor pada batang untuk melihat rincian.</p>
         </div>
         <div className="flex items-center gap-2">
-          <Segmented id="metric" value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
-          <Segmented id="gran" value={gran} onChange={setGran} options={[{ v: 'jam', label: 'Jam' }, { v: 'hari', label: 'Hari' }]} />
+          <Segmented<Metric> id="metric" value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
+          <Segmented<'jam' | 'hari'> id="gran" value={gran} onChange={setGran} options={[{ v: 'jam', label: 'Jam' }, { v: 'hari', label: 'Hari' }]} />
         </div>
       </div>
 

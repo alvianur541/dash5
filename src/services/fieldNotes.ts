@@ -45,6 +45,11 @@ Output HANYA JSON valid (tanpa markdown): {"present":true|false,"component":"<ko
 
 const GREETING_RE = /^(hai|halo|hi|oke|ok|sip|siap|makasih|terima kasih|thanks?|pagi|siang|sore|malam|test|tes|coba)\b/i;
 
+// Pesan yang DIAWALI kata tanya/perintah-lookup = hampir pasti pertanyaan, bukan berbagi ilmu.
+// Teknisi sering tidak pakai "?" ("berapa tekanan main pump mpa") → tanpa gate ini, hampir tiap
+// pertanyaan memicu 1 call flash-lite deteksi yang pasti return false = biaya sia-sia.
+const LOOKUP_START_RE = /^(berapa(kah)?|apa(kah)?|siapa|kenapa|mengapa|gimana|bagaimana|di\s?mana|kapan|cari(kan)?|cek|tolong|minta|mohon|ada(kah)?\s|harga|pn\s|part\s*number|kode|fault|diagnosa|jelaskan|sebutkan|tampilkan|kasih|butuh|perlu|mau\s+(tanya|cari|cek)|what|how|why|when|where|which|who|find|check|list|show|give)\b/i;
+
 /** Deteksi + ekstrak ilmu dari pesan teknisi. Return candidate atau null (tak ada ilmu).
  *  Ada heuristik gate murah supaya LLM tidak dipanggil untuk pesan yang jelas bukan
  *  berbagi ilmu (sapaan, lookup pendek, pesan pendek). */
@@ -54,6 +59,7 @@ export async function detectFieldKnowledge(message: string, model: UnitModel): P
   if (msg.length < 25) return null;                          // terlalu pendek untuk memuat ilmu
   if (GREETING_RE.test(msg) && msg.length < 60) return null;
   if (msg.endsWith('?') && words < 12) return null;          // pertanyaan pendek
+  if (LOOKUP_START_RE.test(msg) && words < 15) return null;  // pertanyaan/lookup tanpa "?" — skip LLM
   if (words < 5) return null;
 
   try {
