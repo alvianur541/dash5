@@ -1,5 +1,5 @@
 
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
@@ -11,7 +11,8 @@ import { generateResponse, generateResponseStream, generateResponseAgentic, getQ
 import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
-import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared } from './services/storage';
+import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, type PocketItem } from './services/storage';
+import { PocketModal } from './components/PocketModal';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -55,6 +56,10 @@ export default function App() {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; candidate?: KnowledgeCandidate; question: string; answer: string } | null>(null);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
+  // Saku — jawaban tersimpan offline (localStorage per-user)
+  const [pocket, setPocket] = useState<PocketItem[]>([]);
+  const [pocketView, setPocketView] = useState<PocketItem | null>(null);
+  const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
   const [isRefreshing, setIsRefreshing] = useState(false);
   // Default adaptive: simple lookup tetap single-pass, diagnosis kompleks otomatis ReAct.
   // URL override: ?agentic=true memaksa agent, ?agentic=false memaksa single-pass.
@@ -101,6 +106,40 @@ export default function App() {
 
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+
+  // Muat Saku saat login (per-user)
+  useEffect(() => {
+    if (!user) { setPocket([]); setPocketView(null); return; }
+    setPocket(loadPocket(user.uid));
+  }, [user]);
+
+  const togglePocket = useCallback((messageId: string) => {
+    if (!user) return;
+    const msgs = messagesRef.current;
+    const idx = msgs.findIndex(m => m.id === messageId);
+    if (idx < 0) return;
+    const asst = msgs[idx];
+    if (asst.role !== 'assistant' || !asst.content?.trim()) return;
+    if (loadPocket(user.uid).some(p => p.id === messageId)) {
+      setPocket(removePocketItem(user.uid, messageId));
+      return;
+    }
+    let question = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') { question = msgs[i].content; break; }
+    }
+    setPocket(savePocketItem(user.uid, {
+      id: messageId,
+      model: selectedModel,
+      question: question.slice(0, 300),
+      answer: asst.content.slice(0, 20000),
+      savedAt: Date.now(),
+    }));
+  }, [user, selectedModel]);
+
+  const deletePocketItem = useCallback((id: string) => {
+    if (user) setPocket(removePocketItem(user.uid, id));
+  }, [user]);
 
   // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
   // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend).
@@ -431,6 +470,9 @@ export default function App() {
         onToggle={() => setIsSidebarCollapsed(v => !v)}
         theme={theme}
         onThemeToggle={handleThemeToggle}
+        pocketItems={pocket}
+        onOpenPocketItem={setPocketView}
+        onDeletePocketItem={deletePocketItem}
       />
 
       <main className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
@@ -561,6 +603,8 @@ export default function App() {
           selectedModel={selectedModel}
           userName={(user?.displayName || 'Operator').split(' ')[0]}
           hasHistory={sessionList.length > 0}
+          pocketIds={pocketIds}
+          onTogglePocket={togglePocket}
           onOpenFieldNote={(id) => {
             const msgs = messagesRef.current;
             const idx = msgs.findIndex(m => m.id === id);
@@ -585,6 +629,13 @@ export default function App() {
         </div>
 
       </main>
+
+      {/* ── Saku viewer — baca jawaban tersimpan (offline-ready) ── */}
+      <PocketModal
+        item={pocketView}
+        onClose={() => setPocketView(null)}
+        onDelete={deletePocketItem}
+      />
 
       {/* ── Catatan Lapangan Modal ── */}
       <FieldNoteModal

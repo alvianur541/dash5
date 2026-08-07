@@ -2,8 +2,9 @@
 import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3 } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3, Bookmark } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
 import { MonitorModal } from './MonitorModal';
 
@@ -35,6 +36,9 @@ interface SidebarProps {
   onToggle: () => void;
   theme?: 'dark' | 'light';
   onThemeToggle?: () => void;
+  pocketItems?: PocketItem[];
+  onOpenPocketItem?: (item: PocketItem) => void;
+  onDeletePocketItem?: (id: string) => void;
 }
 
 export function Sidebar({
@@ -50,6 +54,9 @@ export function Sidebar({
   onToggle,
   theme,
   onThemeToggle,
+  pocketItems = [],
+  onOpenPocketItem,
+  onDeletePocketItem,
 }: SidebarProps) {
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -236,6 +243,37 @@ export function Sidebar({
               );
             })}
           </div>
+
+          {/* ── Saku — jawaban tersimpan, bisa dibaca offline. Hilang kalau kosong (quiet). ── */}
+          {pocketItems.length > 0 && (
+            <div className="shrink-0 px-3">
+              <p className="flex items-center gap-1.5 px-3 pt-4 pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
+                <Bookmark size={11} /> Saku
+              </p>
+              <div className="space-y-0.5">
+                {pocketItems.map(item => (
+                  <div key={item.id} className="relative group/pocket">
+                    <button
+                      onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
+                      className="w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] active:bg-white/8"
+                    >
+                      <span className="block truncate">{item.question || '(tanpa judul)'}</span>
+                    </button>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
+                      className={cn(
+                        "absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all",
+                        isMobile ? "opacity-100" : "opacity-0 group-hover/pocket:opacity-100"
+                      )}
+                      title="Hapus dari Saku"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* ── Riwayat header ── */}
           <div className="shrink-0 px-3">

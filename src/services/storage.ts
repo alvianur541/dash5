@@ -116,6 +116,43 @@ export function deleteSessionData(uid: string, id: string): SessionMeta[] {
   return updated;
 }
 
+// ── Saku: jawaban tersimpan untuk dibaca OFFLINE ─────────────────────────────
+// localStorage per-user → tetap terbaca tanpa sinyal (shell PWA sudah di-cache SW).
+// Cap 30 item, dedup by messageId, newest-first. safeSetItem = eviction-aware.
+
+export interface PocketItem {
+  id: string;          // messageId jawaban sumber — dipakai dedup & toggle
+  model: string;
+  question: string;
+  answer: string;
+  savedAt: number;
+}
+
+const MAX_POCKET_ITEMS = 30;
+const pocketKey = (uid: string) => `dash-pocket-${uid}`;
+
+export function loadPocket(uid: string): PocketItem[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(pocketKey(uid)) || '[]');
+    return Array.isArray(parsed) ? parsed.filter(p => p && typeof p.id === 'string' && typeof p.answer === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+export function savePocketItem(uid: string, item: PocketItem): PocketItem[] {
+  const list = loadPocket(uid).filter(p => p.id !== item.id);
+  const updated = [item, ...list].slice(0, MAX_POCKET_ITEMS);
+  safeSetItem(pocketKey(uid), JSON.stringify(updated));
+  return updated;
+}
+
+export function removePocketItem(uid: string, id: string): PocketItem[] {
+  const updated = loadPocket(uid).filter(p => p.id !== id);
+  safeSetItem(pocketKey(uid), JSON.stringify(updated));
+  return updated;
+}
+
 export function deleteAllSessionData(uid: string, setFlag = true): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));

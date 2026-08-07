@@ -1056,6 +1056,20 @@ img {
 .table-modal-body table { font-size: inherit; width: auto; min-width: 100%; }
 .table-modal-body th, .table-modal-body td { white-space: nowrap; }
 
+/* ── Saku viewer ── */
+.pocket-modal-inner { max-width: 720px; margin: 0 auto; }
+.pocket-question {
+  font-family: var(--font-sans);
+  font-size: 13px; line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--bg-card-hover);
+  border-radius: 14px;
+  padding: 9px 13px;
+  margin-bottom: 16px;
+  width: fit-content;
+}
+.pocket-delete-btn:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
+
 /* Scroll-to-bottom FAB — fixed position, hovers above input bar */
 .scroll-fab {
   position: fixed;

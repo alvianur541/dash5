@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
@@ -16,7 +16,7 @@ const ReactMarkdown = lazy(() => import('react-markdown'));
 // Hapus LaTeX math notation yang bocor dari AI ($P_{LS}$, $$...$$, dll).
 // Renderer tidak support LaTeX — tampil sebagai raw text yang membingungkan user.
 // Convert: inline $...$ → `backtick`, display $$...$$ → plain text.
-function stripLatex(text: string): string {
+export function stripLatex(text: string): string {
   const clean = (s: string) =>
     s.replace(/_\{([^}]+)\}/g, '_$1')
      .replace(/\^\{([^}]+)\}/g, '^$1')
@@ -29,7 +29,7 @@ function stripLatex(text: string): string {
 
 // Strict markdown sanitize schema — block iframe, embed, object, form, dll.
 // Whitelist explicit tag yang aman untuk teknis content (table, code, dll).
-const SANITIZE_SCHEMA = {
+export const SANITIZE_SCHEMA = {
   ...defaultSchema,
   tagNames: [
     'p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
@@ -66,6 +66,8 @@ interface ChatWindowProps {
   hasHistory?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
   agentEvents?: AgentEvent[];
+  pocketIds?: Set<string>;
+  onTogglePocket?: (messageId: string) => void;
 }
 
 function formatTime(timestamp: number) {
@@ -166,7 +168,7 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote, onExpandTable,
+  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote, onExpandTable, inPocket = false, onTogglePocket,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
@@ -174,6 +176,8 @@ const MessageItem = memo(function MessageItem({
   isStreaming?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
   onExpandTable?: (table: ReactNode) => void;
+  inPocket?: boolean;
+  onTogglePocket?: (messageId: string) => void;
 }) {
 
   if (message.role === 'user') {
@@ -293,6 +297,16 @@ const MessageItem = memo(function MessageItem({
               <ThumbsDown size={14}
                 style={feedback === 'down' ? { fill: 'currentColor', color: 'var(--status-danger)' } : {}} />
             </button>
+            {/* Saku — simpan jawaban untuk dibaca offline. Disembunyikan saat streaming
+                (jangan simpan jawaban setengah jadi). */}
+            {onTogglePocket && !isStreaming && (
+              <button className="action-btn" title={inPocket ? 'Hapus dari Saku' : 'Simpan ke Saku (bisa dibaca offline)'}
+                onClick={() => onTogglePocket(message.id)}>
+                {inPocket
+                  ? <BookmarkCheck size={14} style={{ color: 'var(--accent-main)' }} />
+                  : <Bookmark size={14} />}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -301,7 +315,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, onOpenFieldNote, agentEvents = [], pocketIds, onTogglePocket,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -450,6 +464,8 @@ export function ChatWindow({
                 isStreaming={showCursor}
                 onOpenFieldNote={onOpenFieldNote}
                 onExpandTable={openTable}
+                inPocket={pocketIds?.has(message.id) ?? false}
+                onTogglePocket={onTogglePocket}
               />
             );
           })}
