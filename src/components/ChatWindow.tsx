@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus } from 'lucide-react';
+import type { ReactNode } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
@@ -165,13 +166,14 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote,
+  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote, onExpandTable,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
   onFeedback: (id: string, type: 'up' | 'down') => void;
   isStreaming?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
+  onExpandTable?: (table: ReactNode) => void;
 }) {
 
   if (message.role === 'user') {
@@ -208,8 +210,22 @@ const MessageItem = memo(function MessageItem({
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}
                 components={{
+                  // Tombol ekspansi di LUAR container scroll (absolute di outer) supaya
+                  // tidak ikut tergeser saat tabel di-scroll horizontal.
                   table: ({ children }) => (
-                    <div className="markdown-table-wrap"><table>{children}</table></div>
+                    <div className="table-wrap-outer">
+                      <div className="markdown-table-wrap"><table>{children}</table></div>
+                      {onExpandTable && !isStreaming && (
+                        <button
+                          className="table-expand-btn"
+                          onClick={() => onExpandTable(<table>{children}</table>)}
+                          aria-label="Buka tabel layar penuh"
+                          title="Layar penuh"
+                        >
+                          <Maximize2 size={13} />
+                        </button>
+                      )}
+                    </div>
                   ),
                   // Blockquote yang berisi "catatan lapangan" → callout shaded (ilmu
                   // teknisi, belum resmi) supaya beda jelas dari data manual resmi.
@@ -291,6 +307,19 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  // Tabel layar penuh — simpan node tabel yang diperbesar + ukuran font (kontrol A−/A+,
+  // lebih andal utk sarung tangan daripada pinch yang diblokir viewport maximum-scale=1).
+  const [expandedTable, setExpandedTable] = useState<ReactNode | null>(null);
+  const [tableFont, setTableFont] = useState(15);
+  const openTable = useCallback((table: ReactNode) => { setTableFont(15); setExpandedTable(table); }, []);
+  const closeTable = useCallback(() => setExpandedTable(null), []);
+
+  useEffect(() => {
+    if (!expandedTable) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedTable(null); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [expandedTable]);
   // "Menempel di bawah" — auto-scroll HANYA saat user memang di dasar chat.
   // Kalau user scroll ke atas (baca awal jawaban saat streaming), jangan diseret turun.
   const pinnedRef = useRef(true);
@@ -420,6 +449,7 @@ export function ChatWindow({
                 onFeedback={handleFeedback}
                 isStreaming={showCursor}
                 onOpenFieldNote={onOpenFieldNote}
+                onExpandTable={openTable}
               />
             );
           })}
@@ -448,6 +478,43 @@ export function ChatWindow({
           </AnimatePresence>
         </div>
       )}
+
+      {/* Tabel layar penuh — overlay solid, scroll 2 arah, kontrol ukuran font */}
+      <AnimatePresence>
+        {expandedTable && (
+          <m.div
+            key="table-modal"
+            className="table-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Tabel layar penuh"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+          >
+            <div className="table-modal-bar">
+              <span className="table-modal-title">Tabel</span>
+              <div className="table-modal-actions">
+                <button className="table-modal-btn" onClick={() => setTableFont(f => Math.max(12, f - 1.5))} aria-label="Perkecil teks">
+                  <Minus size={16} />
+                </button>
+                <button className="table-modal-btn" onClick={() => setTableFont(f => Math.min(21, f + 1.5))} aria-label="Perbesar teks">
+                  <Plus size={16} />
+                </button>
+                <button className="table-modal-btn" onClick={closeTable} aria-label="Tutup">
+                  <X size={17} />
+                </button>
+              </div>
+            </div>
+            <div className="table-modal-scroll">
+              <div className="markdown-body table-modal-body" style={{ fontSize: `${tableFont}px` }}>
+                {expandedTable}
+              </div>
+            </div>
+          </m.div>
+        )}
+      </AnimatePresence>
 
       {showScrollBtn && (
         <button

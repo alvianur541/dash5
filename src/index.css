@@ -1006,6 +1006,56 @@ img {
 
 }
 
+/* ── Tabel layar penuh ─────────────────────────────────────────────────── */
+.table-wrap-outer { position: relative; }
+.table-expand-btn {
+  position: absolute; top: 5px; right: 5px;
+  width: 30px; height: 30px; border-radius: 8px;
+  border: 1px solid var(--border-main);
+  background: color-mix(in srgb, var(--bg-app) 85%, transparent);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; opacity: 0.8;
+  transition: opacity 0.15s, color 0.15s, transform 0.12s;
+}
+.table-expand-btn:hover { opacity: 1; color: var(--text-primary); }
+.table-expand-btn:active { transform: scale(0.9); }
+
+.table-modal {
+  position: fixed; inset: 0; z-index: 60;
+  background: var(--bg-app);
+  display: flex; flex-direction: column;
+}
+.table-modal-bar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; border-bottom: 1px solid var(--border-main);
+  flex-shrink: 0;
+}
+@media all and (display-mode: standalone) and (max-width: 767px) {
+  .table-modal-bar { padding-top: max(10px, env(safe-area-inset-top)); }
+}
+.table-modal-title {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+}
+.table-modal-actions { display: flex; align-items: center; gap: 4px; }
+.table-modal-btn {
+  width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border-main);
+  background: var(--bg-card); color: var(--text-primary);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background 0.15s, transform 0.12s;
+}
+.table-modal-btn:hover { background: var(--bg-card-hover); }
+.table-modal-btn:active { transform: scale(0.92); }
+.table-modal-scroll {
+  flex: 1; overflow: auto; overscroll-behavior: contain;
+  padding: 14px 14px 28px;
+}
+/* Tabel di modal: lebar natural (boleh melebihi layar, scroll 2 arah), font ikut kontrol A−/A+ */
+.table-modal-body table { font-size: inherit; width: auto; min-width: 100%; }
+.table-modal-body th, .table-modal-body td { white-space: nowrap; }
+
 /* Scroll-to-bottom FAB — fixed position, hovers above input bar */
 .scroll-fab {
   position: fixed;
