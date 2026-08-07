@@ -1106,10 +1106,10 @@ export async function generateResponseStream(
   // lebih cepat). Technical/web butuh reasoning tipis (low); fault code (medium); casual (minimal).
   const isPartsAnswer    = dataLabel === RAG_LABEL.parts;
   const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical) ? 'low' : 'minimal';
-  // RAG 3072 · web-teknis 2048 · casual 512. RAG turun dari 4096: jawaban terpanjang yang sah
-  // (tabel CPM+promo / multi-aspek) tetap muat jauh di bawah 3072 — cap lebih rendah memutus
-  // ekor jawaban bertele-tele lebih cepat (streaming tidak berlarut).
-  const maxOutputTokens  = ragContent ? 3072 : gsTechnical ? 2048 : 512;
+  // RAG 4096 · web-teknis 2048 · casual 512. RAG dikembalikan ke 4096 (sempat 3072): diagnosis
+  // multi-cabang + thinking butuh ruang — cap ketat terbukti bikin model membuang cabang
+  // diagnosa/spec demi muat. Kontrol panjang sekarang di prompt (Disiplin panjang), bukan cap.
+  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
     ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
