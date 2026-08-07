@@ -197,7 +197,9 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
              ALSO meta questions about the ASSISTANT itself or the USER ("kamu itu apa", "kamu siapa",
              "kamu bisa apa aja", "siapa saya", "cara pakai aplikasi ini", "fitur kamu apa") — these are
              NOT off_topic; the assistant answers them itself. Return shouldSearch=false.
-"off_topic" → Questions clearly about an UNRELATED domain: recipes, sports, politics, news, weather, cooking, entertainment, general internet trivia. NOT for questions about the assistant/user/app. Return shouldSearch=false.
+             ALSO current time/date questions ("sekarang jam berapa", "hari ini tanggal berapa") — the
+             assistant HAS the current timestamp and answers directly. NOT off_topic.
+"off_topic" → Questions clearly about an UNRELATED domain: recipes, sports, politics, news, weather, cooking, entertainment, general internet trivia. NOT for questions about the assistant/user/app/current time. Return shouldSearch=false.
 
 ═══ STEP 2: BUILD optimizedQuery (parts/technical only) ═══
 
@@ -267,6 +269,8 @@ General:
 "kamu bisa apa aja" → general, ""
 "siapa saya"        → general, ""
 "cara pakai app ini"→ general, ""
+"sekarang jam berapa"      → general, ""
+"hari ini tanggal berapa"  → general, ""
 
 Off-topic (redirect, do NOT answer) — culinary, sports, politics, news, weather, entertainment, general trivia:
 "cara bikin sate padang"  → off_topic, ""
@@ -575,7 +579,7 @@ const KIT_HINT =
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
-  return `Waduh, kalau itu di luar bidangku 😅 Aku spesialisnya alat berat Hitachi — fault code, troubleshooting, spec, sama parts.
+  return `Waduh, pertanyaan kamu out of topic 😅 Aku spesialisnya alat berat Hitachi — fault code, troubleshooting, spec, sama parts.
 
 Yuk balik ke unit kamu — ada yang mau dicek?`;
 }
