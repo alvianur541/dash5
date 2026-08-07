@@ -7,7 +7,7 @@ import { LoginPage } from './components/LoginPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { FieldNoteModal } from './components/FieldNoteModal';
 import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
-import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, type AgentEvent } from './services/ai';
+import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, warmupProxy, type AgentEvent } from './services/ai';
 import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
@@ -74,6 +74,7 @@ export default function App() {
 
   useEffect(() => {
     mountedRef.current = true;
+    warmupProxy(); // bangunkan proxy Cloud Run — pertanyaan pertama tidak kena cold start
     return () => { mountedRef.current = false; };
   }, []);
 

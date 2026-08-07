@@ -639,9 +639,26 @@ export async function searchTechnicalManualMulti(
   const embeddingQuery = stripped.split(/\s+/).filter(Boolean).length >= 2
     ? stripped
     : primaryQuery;
-  const [kwSettled, embeddingResult] = await Promise.allSettled([
+
+  // Vector search DIRANTAI langsung ke promise embedding → jalan paralel penuh dgn keyword
+  // search. Dulu: tunggu keyword+embed selesai dulu, BARU rpc (+0.3-0.8s serial tiap query).
+  const vectorPromise: Promise<SearchResult[]> = getEmbedding(embeddingQuery).then(async emb => {
+    let { data: vecData } = await supabase!.rpc('match_documents', {
+      query_embedding: emb, match_count: 20, filter: strictFilter,
+    });
+    if (faultCode && (!Array.isArray(vecData) || vecData.length === 0)) {
+      const { data: vecFallback } = await supabase!.rpc('match_documents', {
+        query_embedding: emb, match_count: 20, filter: looseFilter,
+      });
+      vecData = vecFallback;
+    }
+    return (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
+      .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
+  });
+
+  const [kwSettled, vectorSettled] = await Promise.allSettled([
     Promise.allSettled([...kwPromises, ...specPromises]),
-    getEmbedding(embeddingQuery),
+    vectorPromise,
   ]);
 
   // Collect keyword hits
@@ -675,24 +692,9 @@ export async function searchTechnicalManualMulti(
     }
   }
 
-  // ONE vector search — match_count 20 (wide net: 10 terlalu sempit utk parts/spec) → rerank.
-  if (embeddingResult.status === 'fulfilled') {
-    const emb = embeddingResult.value;
-    let { data: vecData } = await supabase.rpc('match_documents', {
-      query_embedding: emb, match_count: 20, filter: strictFilter,
-    });
-
-    if (faultCode && (!Array.isArray(vecData) || vecData.length === 0)) {
-      const { data: vecFallback } = await supabase.rpc('match_documents', {
-        query_embedding: emb, match_count: 20, filter: looseFilter,
-      });
-      vecData = vecFallback;
-    }
-
-    const vecDocs = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
-      .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
-
-    for (const d of vecDocs) {
+  // Hasil vector search (sudah selesai paralel di atas) — urutan tetap: keyword dulu, lalu vector.
+  if (vectorSettled.status === 'fulfilled') {
+    for (const d of vectorSettled.value) {
       if (d.content && !seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); }
     }
   }
@@ -717,10 +719,10 @@ export async function searchTechnicalManualMulti(
   }
 
   if (filteredDocs.length === 0) {
-    // Kalau embedding gagal DAN keyword juga tidak ada hasil → RAG pipeline error
-    const embedFailed = embeddingResult.status === 'rejected';
+    // Kalau embedding/vector gagal DAN keyword juga tidak ada hasil → RAG pipeline error
+    const embedFailed = vectorSettled.status === 'rejected';
     if (embedFailed && allDocs.length === 0) {
-      const reason = (embeddingResult.reason as Error)?.message ?? 'Embedding service error';
+      const reason = (vectorSettled.reason as Error)?.message ?? 'Embedding service error';
       return { content: '', hasResults: false, ragError: reason };
     }
     return { content: '', hasResults: false };

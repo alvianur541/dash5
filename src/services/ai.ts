@@ -71,6 +71,13 @@ function fileToInlineData(file: File): Promise<InlineDataPart> {
   });
 }
 
+/** Warm-up proxy saat app dibuka — bangunkan instance Cloud Run (cold start bisa 2-5s)
+ *  + buka koneksi TLS keep-alive, supaya pertanyaan PERTAMA tidak menanggung biaya itu.
+ *  Fire-and-forget; /health tanpa auth & tanpa efek samping. */
+export function warmupProxy(): void {
+  fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
+}
+
 /** Fetch dengan hard timeout — mencegah hang forever pada koneksi buruk */
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
   const ctrl = new AbortController();
@@ -808,6 +815,10 @@ async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
+  // HyDE disiapkan SPEKULATIF, paralel dgn search pertama — hanya DIPAKAI kalau hasil miss/low
+  // (lihat blok retry di bawah). Dulu serial: tunggu miss dulu baru generate (~1s tambahan di
+  // jalur retry). Kalau hasil pertama bagus, promise ini diabaikan (biaya 1 call flash-lite kecil).
+  const hydePromise = hydeExpand(trimmed).catch(() => null);
   let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
@@ -820,7 +831,7 @@ async function resolveNaturalLanguageQuery(
   // Miss/low → coba lagi pakai embedding "kalimat jawaban hipotetis" (query pendek embed-nya noisy;
   // kalimat teknis penuh lebih dekat ke frasa manual). AMAN: HyDE hanya utk embedding, tak masuk jawaban.
   if (!ragResult.hasResults || ragResult.confidence === 'low') {
-    const hyde = await hydeExpand(trimmed);
+    const hyde = await hydePromise;
     if (hyde) {
       emit({ type: 'thinking', message: 'Memperluas cakupan pencarian…' });
       emit({ type: 'tool_call', tool: 'search_technical_manual' });
