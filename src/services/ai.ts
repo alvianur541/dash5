@@ -586,7 +586,7 @@ const KIT_HINT =
 
 function offTopicTemplate(): string {
   return `Waduh, pertanyaan kamu out of topic 😅
-Kalau soal beginian aku angkat tangan, kamu bisa tanya seputar unit: fault code, troubleshooting, spec, parts.
+Kalau soal beginian aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshooting, spec, atau parts.
 
 Apa ada yang bisa aku bantu cek?`;
 }
