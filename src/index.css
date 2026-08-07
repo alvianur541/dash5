@@ -963,11 +963,15 @@ img {
   /* Message group — lebih wide di mobile */
   .msg-user-group { max-width: 85%; }
 
-  /* AI response — slight reduction on mobile */
-  .ai-msg-wrap .markdown-body { font-size: 13px; line-height: 1.65; }
+  /* AI response — 14px di mobile: teknisi baca di lapangan (outdoor, silau, sarung
+     tangan) — lebih besar dari desktop justru benar, bukan dikecilkan. */
+  .ai-msg-wrap .markdown-body { font-size: 14px; line-height: 1.7; }
 
   /* Action buttons — lebih mudah di-tap */
-  .action-btn { width: 32px; height: 32px; border-radius: 10px; }
+  .action-btn { width: 36px; height: 36px; border-radius: 10px; }
+
+  /* Scroll-FAB — touch target lebih besar di mobile (guideline ≥44px area efektif) */
+  .scroll-fab { width: 42px; height: 42px; }
 
   /* Suggestion chips — taller touch target (selaras tile ikon) */
   .suggestion-chip {
@@ -1039,4 +1043,17 @@ img {
 /* Light theme mobile topbar */
 .light-theme .topbar-center {
   background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
+}
+
+/* ── Aksesibilitas: hormati preferensi reduce-motion (juga hemat baterai di mobile).
+   CSS animation dekoratif (kursor kedip, pulse, dot bounce) dimatikan; layout tetap utuh. */
+@media (prefers-reduced-motion: reduce) {
+  .typewriter-cursor,
+  .status-pulse,
+  .typing-dot {
+    animation: none !important;
+  }
+  * {
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -5,7 +5,10 @@
     <!-- Viewport POLOS (= baseline stabil 665826d). JANGAN tambah viewport-fit=cover:
          itu menghidupkan env(safe-area-inset-bottom) yg di iPhone tertentu return
          bogus ~83px → input bar menggantung. Semua jarak bawah pakai nilai tetap. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+    <!-- interactive-widget=resizes-content: Android Chrome 108+ default-nya resizes-visual →
+         input bar bisa KETUTUP keyboard. resizes-content = layout viewport menyusut saat
+         keyboard muncul → input bar selalu naik di atas keyboard. iOS mengabaikan flag ini. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, interactive-widget=resizes-content" />
 
     <!-- PWA -->
     <meta name="theme-color" content="#1A1915" />
