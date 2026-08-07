@@ -741,15 +741,24 @@ async function resolvePartsQuery(
     const hours    = parseInt(intervalMatch[1]);
     const partsList = extractCpmPartsForInterval(ragResult.content, hours);
     if (partsList) {
-      // Konten terstruktur: CPM list bersih (raw table di-drop) + chunk PROMO (semua periode aktif).
-      const promoChunks = ragResult.content
-        .split(/\n\n---\n\n/)
-        .filter(c => /Kategori:\s*PROMO/i.test(c));
+      // Konteks ramping: CPM list + HANYA baris promo yg PN-nya ada di CPM (bukan SEMUA section
+      // promo). Dulu suntik semua section → input ~25rb token → generate lambat (~48s). Sekarang
+      // cuma baris relevan → input turun drastis → jauh lebih cepat & hemat, tanpa kehilangan data.
+      const cpmPNs = partsList.split('\n')
+        .map(l => l.split('|')[0].trim())
+        .filter(pn => pn.length >= 4);
+      // Substring match → toleran suffix promo (4630525 ↔ 4630525HPB). Hanya baris ber-"Promo: Rp".
+      const promoLines = [...new Set(
+        ragResult.content.split('\n')
+          .map(l => l.trim())
+          .filter(l => /Promo:\s*Rp/i.test(l) && cpmPNs.some(pn => l.includes(pn))),
+      )];
+      const periodeLine = (ragResult.content.match(/Periode Promo\s*:[^\n]*/i) || [null])[0];
 
       const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (CPM resmi Hitachi):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
 
-      finalContent = promoChunks.length > 0
-        ? `${cpmHeader}\n\n--- DATA PROMO AKTIF (untuk lookup harga PN di atas) ---\n\n${promoChunks.join('\n\n---\n\n')}`
+      finalContent = promoLines.length > 0
+        ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[periodeLine, ...promoLines].filter(Boolean).join('\n')}`
         : cpmHeader;
     }
   }
@@ -1068,8 +1077,10 @@ export async function generateResponseStream(
   const ragContent       = routeResult.type === 'rag_found' ? routeResult.content   : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  // Technical external-fallback butuh reasoning tipis utk sintesis rapi; casual minimal.
-  const thinkingLevel    = isFaultCode ? 'medium' : (ragContent || gsTechnical) ? 'low' : 'minimal';
+  // Parts/harga = format + jumlah data yg sudah eksplisit → 'minimal' (skip thinking berat = jauh
+  // lebih cepat). Technical/web butuh reasoning tipis (low); fault code (medium); casual (minimal).
+  const isPartsAnswer    = dataLabel === RAG_LABEL.parts;
+  const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical) ? 'low' : 'minimal';
   // RAG 4096 · web-teknis 2048 · casual 512.
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
