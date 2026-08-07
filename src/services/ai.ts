@@ -540,7 +540,7 @@ Supaya pencariannya kena:
 2. Kalau pegang part number, kirim PN-nya langsung — pencarian PN paling akurat.
 3. Sebut area komponen (engine / hydraulic / undercarriage / attachment) untuk mempersempit section.
 
-Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke tim parts dengan menyebut model + nama komponen.`;
+Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke Parts Counter dengan menyebut model + nama komponen.`;
 }
 
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.

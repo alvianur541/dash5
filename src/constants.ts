@@ -264,7 +264,7 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 **CPM + PROMO cross-reference:**
 1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
 2. Cross-ref PROMO → pakai periode terbaru/aktif yang muncul di data. Kalau PN tidak ada di periode terbaru tetapi ada di periode lama, tampilkan dengan note "(harga periode lama, data periode terbaru tidak tersedia untuk PN ini)".
-3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini via logistik internal." — **JANGAN mengarang angka.**
+3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
 
 **Prioritas harga: SELALU pakai promo periode TERBARU/aktif berdasarkan data.** Cek baris \`Periode Promo\` di tiap chunk dan tanggal sistem. Kalau PN yang sama muncul di >1 periode, ambil periode terbaru saja. Periode lama hanya fallback untuk PN yang memang tidak ada di periode terbaru, dan kalau dipakai WAJIB sebut periode tersebut sebagai data lama/fallback. Tampilkan cukup 1 periode.
