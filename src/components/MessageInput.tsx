@@ -1,6 +1,6 @@
 
 import { useState, useRef, useLayoutEffect } from 'react';
-import { ArrowUp, Paperclip, Mic, MicOff, Loader2, WifiOff } from 'lucide-react';
+import { ArrowUp, Paperclip, Mic, MicOff, Loader2, WifiOff, Square } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -11,6 +11,8 @@ interface MessageInputProps {
   disabled?: boolean;
   selectedModel: UnitModel;
   isOffline?: boolean;
+  isStreaming?: boolean;      // jawaban sedang streaming → tombol kirim jadi tombol Stop
+  onStop?: () => void;        // hentikan streaming yang sedang berjalan
 }
 
 type RecordingState = 'idle' | 'recording' | 'transcribing';
@@ -88,7 +90,7 @@ async function compressImage(file: File): Promise<CompressResult> {
 }
 
 export function MessageInput({
-  onSendMessage, disabled, selectedModel, isOffline = false,
+  onSendMessage, disabled, selectedModel, isOffline = false, isStreaming = false, onStop,
 }: MessageInputProps) {
   const [input, setInput] = useState('');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -119,7 +121,8 @@ export function MessageInput({
   const buzz = () => { try { navigator.vibrate?.(8); } catch { /* unsupported */ } };
 
   const handleSend = () => {
-    if (!input.trim() || isOffline) return;
+    // Blokir kirim saat streaming — cegah 2 stream paralel menulis ke sesi yang sama.
+    if (!input.trim() || isOffline || isStreaming) return;
     buzz();
     onSendMessage(input.trim());
     setInput('');
@@ -334,21 +337,32 @@ export function MessageInput({
 
             <div className="flex-1" />
 
-            {/* Send button: compact square control */}
-            <button
-              onClick={handleSend}
-              disabled={!canSend}
-              className={cn(
-                // Mobile: 36×36 (touch-friendly), desktop: 30×30 (compact)
-                "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
-                canSend
-                  ? "bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
-                  : "send-btn-inactive cursor-not-allowed"
-              )}
-              title="Kirim"
-            >
-              <ArrowUp size={15} />
-            </button>
+            {/* Send button: compact square control. Saat streaming → tombol Stop. */}
+            {isStreaming && onStop ? (
+              <button
+                onClick={onStop}
+                className="w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0 bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
+                title="Hentikan jawaban"
+                aria-label="Hentikan jawaban"
+              >
+                <Square size={11} fill="currentColor" />
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!canSend}
+                className={cn(
+                  // Mobile: 36×36 (touch-friendly), desktop: 30×30 (compact)
+                  "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
+                  canSend
+                    ? "bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
+                    : "send-btn-inactive cursor-not-allowed"
+                )}
+                title="Kirim"
+              >
+                <ArrowUp size={15} />
+              </button>
+            )}
           </div>
         </div>
 

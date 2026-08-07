@@ -349,6 +349,10 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
+  // "Menempel di bawah" — auto-scroll HANYA saat user memang di dasar chat.
+  // Kalau user scroll ke atas (baca awal jawaban saat streaming), jangan diseret turun.
+  const pinnedRef = useRef(true);
+  const prevLenRef = useRef(0);
 
   const handleFeedback = (id: string, type: 'up' | 'down') => {
     setFeedback(prev => {
@@ -370,12 +374,24 @@ export function ChatWindow({
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el) return;
-    setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
+    const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+    pinnedRef.current = dist < 120;
+    setShowScrollBtn(dist > 120);
   }, []);
 
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    const el = scrollRef.current;
+    if (!el) return;
+    // Pesan baru dari user → selalu pin ke bawah (user pasti mau lihat pesannya terkirim).
+    const lengthGrew = messages.length > prevLenRef.current;
+    prevLenRef.current = messages.length;
+    if (lengthGrew && messages[messages.length - 1]?.role === 'user') pinnedRef.current = true;
+
+    if (pinnedRef.current) {
+      el.scrollTop = el.scrollHeight;
+    } else {
+      // Konten tumbuh saat user di atas → pastikan tombol "ke bawah" tampil.
+      setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
     }
   }, [messages, isTyping]);
 
@@ -491,7 +507,7 @@ export function ChatWindow({
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
                 onRetry={onRetry}
-                isTyping={isTyping}
+                isTyping={isTyping || isStreaming} // blokir Ulangi juga SAAT streaming — cegah 2 stream paralel
                 isStreaming={showCursor}
                 onOpenFieldNote={onOpenFieldNote}
               />
@@ -526,7 +542,10 @@ export function ChatWindow({
       {showScrollBtn && (
         <button
           className="scroll-fab"
-          onClick={() => scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })}
+          onClick={() => {
+            pinnedRef.current = true; // kembali menempel — auto-scroll aktif lagi
+            scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
+          }}
           aria-label="Scroll ke bawah"
         >
           <ChevronDown size={18} />

@@ -102,6 +102,15 @@ export default function App() {
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
+  // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
+  // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend/handleRetry).
+  const stopStreaming = useCallback(() => {
+    abortStreamRef.current?.abort();
+    setIsTyping(false);
+    setIsStreaming(false);
+    setAgentEvents([]);
+  }, []);
+
   const startNewSession = useCallback(() => {
     // Abort in-flight stream — abortStreamRef adalah ref, tidak masuk deps
     abortStreamRef.current?.abort();
@@ -361,6 +370,10 @@ export default function App() {
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
+      // Tombol Stop ditekan → pakai teks yang SUDAH TAMPIL (partial), jangan timpa dengan
+      // hasil penuh yang datang belakangan — layar & riwayat konsisten dgn yang dilihat user.
+      if (streamCtrl.signal.aborted) fullText = displayed + buffered;
+      if (!fullText.trim()) return; // stop sebelum ada teks → tak ada yang perlu disimpan
       setMessages(prev => {
         const exists = prev.some(m => m.id === assistantId);
         if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
@@ -477,6 +490,9 @@ export default function App() {
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return;
+      // Stop ditekan saat retry → pertahankan teks yang sudah tampil (sama seperti handleSend).
+      if (retryCtrl.signal.aborted) fullText = displayed + buffered;
+      if (!fullText.trim()) return;
       setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m));
 
       if (userMsg.content.trim()) {
@@ -692,6 +708,8 @@ export default function App() {
             disabled={isTyping}
             selectedModel={selectedModel}
             isOffline={!isOnline}
+            isStreaming={isTyping || isStreaming}
+            onStop={stopStreaming}
           />
         </div>
 
