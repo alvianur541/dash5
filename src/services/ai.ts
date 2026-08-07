@@ -567,7 +567,7 @@ const KIT_HINT =
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
 function offTopicTemplate(): string {
-  return `Scope saya khusus technical support alat berat Hitachi/KCM — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
+  return `Scope saya khusus technical support alat berat Hitachi — fault code, troubleshooting, spec, parts, dan jadwal maintenance.
 
 Untuk pertanyaan tadi, saya bukan sumber yang tepat. Ada yang perlu dicek di unit kamu?`;
 }
