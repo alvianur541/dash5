@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, RotateCcw, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight } from 'lucide-react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
@@ -61,7 +61,6 @@ interface ChatWindowProps {
   isTyping: boolean;
   isStreaming: boolean;
   selectedModel: UnitModel;
-  onRetry: (assistantMessageId: string) => void;
   userName?: string;
   hasHistory?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
@@ -166,13 +165,11 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, onRetry, isTyping, isStreaming = false, onOpenFieldNote,
+  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
   onFeedback: (id: string, type: 'up' | 'down') => void;
-  onRetry: (id: string) => void;
-  isTyping: boolean;
   isStreaming?: boolean;
   onOpenFieldNote?: (messageId: string) => void;
 }) {
@@ -280,10 +277,6 @@ const MessageItem = memo(function MessageItem({
               <ThumbsDown size={14}
                 style={feedback === 'down' ? { fill: 'currentColor', color: 'var(--status-danger)' } : {}} />
             </button>
-            <button className="action-btn" title="Ulangi" disabled={isTyping}
-              onClick={() => !isTyping && onRetry(message.id)}>
-              <RotateCcw size={14} />
-            </button>
           </div>
         </div>
       </div>
@@ -292,7 +285,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, onRetry, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, onOpenFieldNote, agentEvents = [],
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -425,8 +418,6 @@ export function ChatWindow({
                 message={message}
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
-                onRetry={onRetry}
-                isTyping={isTyping || isStreaming} // blokir Ulangi juga SAAT streaming — cegah 2 stream paralel
                 isStreaming={showCursor}
                 onOpenFieldNote={onOpenFieldNote}
               />

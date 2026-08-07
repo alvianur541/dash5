@@ -103,7 +103,7 @@ export default function App() {
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
   // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
-  // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend/handleRetry).
+  // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend).
   const stopStreaming = useCallback(() => {
     abortStreamRef.current?.abort();
     setIsTyping(false);
@@ -401,133 +401,6 @@ export default function App() {
     }
   }, [user, selectedModel, logCost]);
 
-  const handleRetry = useCallback(async (assistantMessageId: string) => {
-    if (!user) return;
-    const currentMessages = messagesRef.current;
-    const idx = currentMessages.findIndex(m => m.id === assistantMessageId);
-    if (idx < 1) return;
-    const userMsg = currentMessages[idx - 1];
-    if (userMsg?.role !== 'user') return;
-
-    const historyBefore = currentMessages.slice(0, idx - 1);
-    setMessages([...historyBefore, userMsg]);
-    setIsTyping(true);
-    setIsStreaming(true);
-    setError(null);
-    setAgentEvents([]);
-
-    const userName = (user.displayName || 'Operator').split(' ')[0];
-    const assistantId = crypto.randomUUID();
-    const assistantTs = Date.now();
-
-    const sessionSnapshot = sessionIdRef.current; // capture untuk ghost guard
-    const retryCtrl = new AbortController();
-    abortStreamRef.current = retryCtrl;
-
-    try {
-      let displayed = '';
-      let buffered = '';
-      let timerId: ReturnType<typeof setTimeout> | null = null;
-      const FLUSH_INTERVAL = 40;
-      const FLUSH_BATCH = 200;
-      const drip = () => {
-        timerId = null;
-        if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return;
-        if (retryCtrl.signal.aborted) return;
-        if (!buffered.length) return;
-        // Adaptif — sama seperti handleSend: buffer besar → flush besar, tampilan tak menyeret.
-        const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
-        const batch = buffered.slice(0, size);
-        buffered = buffered.slice(size);
-        displayed += batch;
-        const snap = displayed;
-        setMessages(prev => {
-          const exists = prev.some(m => m.id === assistantId);
-          if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: snap, timestamp: assistantTs }];
-          return prev.map(m => m.id === assistantId ? { ...m, content: snap } : m);
-        });
-        if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
-      };
-      const toolsUsed = new Set<string>();
-      let streamedAny = false;
-      const onChunkCb = (chunk: string) => {
-        if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return;
-        if (retryCtrl.signal.aborted) return;
-        setIsTyping(false);
-        streamedAny = true;
-        buffered += chunk;
-        if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
-      };
-      const onAgentEventCb = (event: AgentEvent) => {
-        if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return;
-        if (event.type === 'tool_call' && event.tool) toolsUsed.add(event.tool);
-        setAgentEvents(prev => [...prev, event]);
-      };
-      const useAgentic = shouldUseAgentic(userMsg.content);
-      let fullText: string;
-      try {
-        fullText = useAgentic
-          ? await generateResponseAgentic(
-              selectedModel, userName, historyBefore, userMsg.content,
-              onChunkCb, onAgentEventCb,
-            )
-          : await generateResponseStream(
-              selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
-            );
-      } catch (agErr) {
-        // Fallback: agentic gagal sebelum streaming → diam-diam single-pass (jangan error ke user).
-        const aborted = (agErr as Error)?.name === 'AbortError' || (agErr as Error)?.message?.includes('abort');
-        if (!useAgentic || streamedAny || aborted) throw agErr;
-        console.warn('[agentic] retry gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
-        setAgentEvents([]);
-        fullText = await generateResponseStream(
-          selectedModel, userName, historyBefore, userMsg.content, onChunkCb, onAgentEventCb,
-        );
-      }
-      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
-      if (!mountedRef.current) return;
-      if (sessionIdRef.current !== sessionSnapshot) return;
-      // Stop ditekan saat retry → pertahankan teks yang sudah tampil (sama seperti handleSend).
-      if (retryCtrl.signal.aborted) fullText = displayed + buffered;
-      if (!fullText.trim()) return;
-      setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m));
-
-      if (userMsg.content.trim()) {
-        detectFieldKnowledge(userMsg.content, selectedModel).then(candidate => {
-          if (!candidate) return;
-          if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
-        }).catch(() => {});
-      }
-
-      const sessionId = sessionIdRef.current;
-      if (sessionId) {
-        const newUserMsg: Message = { ...userMsg, id: crypto.randomUUID(), timestamp: Date.now() };
-        const assistantMsg: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs };
-        const newMessages = [...historyBefore, newUserMsg, assistantMsg];
-        const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
-        const rawTitle = userMsg.content.trim() || '[Gambar]';
-        const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
-        saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
-        const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
-        setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
-        saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
-        logCost(sessionId, [...toolsUsed]);
-      }
-    } catch (err: any) {
-      if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
-      console.error('Retry error:', err.message);
-      setError('Gagal mengulang respons. Coba lagi.');
-      setMessages([...historyBefore, userMsg]);
-    } finally {
-      setIsTyping(false);
-      setIsStreaming(false);
-    }
-  }, [user, selectedModel, logCost]);
-
   if (authLoading) {
     return (
       <div className="h-dvh w-screen flex items-center justify-center bg-[var(--bg-app)]">
@@ -686,7 +559,6 @@ export default function App() {
           isTyping={isTyping}
           isStreaming={isStreaming}
           selectedModel={selectedModel}
-          onRetry={handleRetry}
           userName={(user?.displayName || 'Operator').split(' ')[0]}
           hasHistory={sessionList.length > 0}
           onOpenFieldNote={(id) => {
