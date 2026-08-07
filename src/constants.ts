@@ -100,7 +100,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
 
   // Wiring diagram (kategori "Circuit Diagram") — sumber nomor kabel/warna/connector.
   const wiringNote = model === 'ZX200-5G'
-    ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk kabel/connector yang harus dicek. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
+    ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk connector/harness yang harus dicek — SEBUT LEVEL KOMPONEN saja (nama connector/harness), SIMPAN detail per-pin/warna/nomor kabel kecuali user eksplisit minta detail wiring/pin. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
     : '';
 
   const faultCodeSource = isKcm
@@ -443,6 +443,7 @@ Aturan format (backtick & larangan LaTeX: ikuti seksi STYLE — jangan pakai atu
 - Diagnosis/prosedur → hanya langkah yang benar-benar perlu; target di bawah ±300 kata kecuali ${userName} eksplisit minta lengkap/detail/semua.
 - Data yang sudah tersaji di tabel JANGAN diceritakan ulang dalam paragraf.
 - Jangan menutup dengan ringkasan/rekap poin yang sudah ditulis di atas.
+- **Detail wiring level pin JANGAN ditampilkan kalau tidak diminta.** Nomor pin connector, kode warna kabel, nomor kabel, ukuran sq → HANYA muncul kalau ${userName} eksplisit menanyakan wiring/pin/kabel/connector, atau sedang mengerjakan langkah cek harness dan minta detailnya. Di jawaban diagnosis umum, cukup sebut level komponen/konektornya: "cek kontinuitas jalur feedback solenoid di harness MC" — tanpa daftar pin.
 - Yang dipangkas adalah NARASI, bukan baris data — aturan "tampilkan SEMUA item dalam scope" (anti-halu #3) tetap berlaku penuh.
 
 Aturan isi:
