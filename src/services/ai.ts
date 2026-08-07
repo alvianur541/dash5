@@ -1132,10 +1132,11 @@ export async function generateResponseStream(
   // lebih cepat). Technical/web butuh reasoning tipis (low); fault code (medium); casual (minimal).
   const isPartsAnswer    = dataLabel === RAG_LABEL.parts;
   const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical) ? 'low' : 'minimal';
-  // RAG 4096 · web-teknis 2048 · casual 512. RAG dikembalikan ke 4096 (sempat 3072):
+  // RAG 4096 · web-teknis 2048 · casual 1536. RAG dikembalikan ke 4096 (sempat 3072):
   // diagnosis multi-cabang + thinking butuh ruang — cap ketat terbukti bikin model membuang
-  // cabang diagnosa/spec demi muat. Kontrol panjang sekarang di prompt (Disiplin panjang).
-  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
+  // cabang diagnosa/spec demi muat. Casual 1536 (naik dari 512): jalur ini juga melayani
+  // permintaan terjemahan jawaban sebelumnya ("in japanese") — 512 bikin terjemahan terpotong.
+  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
     ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
