@@ -194,7 +194,10 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
               NOTE: "harga promo" / "promo Q4" without interval → "parts". With procedure context → "technical".
 
 "general"  → Greetings, acknowledgments, short casual chat directly related to the work context ("halo", "oke", "thanks", "lanjut", "siap", "mantap").
-"off_topic" → Questions completely unrelated to heavy equipment, engineering, or technician work context. Examples: recipes, sports, general internet questions, news, weather, cooking, entertainment. Return shouldSearch=false.
+             ALSO meta questions about the ASSISTANT itself or the USER ("kamu itu apa", "kamu siapa",
+             "kamu bisa apa aja", "siapa saya", "cara pakai aplikasi ini", "fitur kamu apa") — these are
+             NOT off_topic; the assistant answers them itself. Return shouldSearch=false.
+"off_topic" → Questions clearly about an UNRELATED domain: recipes, sports, politics, news, weather, cooking, entertainment, general internet trivia. NOT for questions about the assistant/user/app. Return shouldSearch=false.
 
 ═══ STEP 2: BUILD optimizedQuery (parts/technical only) ═══
 
@@ -256,9 +259,14 @@ Parts — service interval (ALWAYS "parts", ALWAYS ≥3 words with "hour mainten
 "service 500 jam dengan promo"    → parts, "500 hour maintenance parts promo"
 
 General:
-"halo mas"  → general, ""
-"oke siap"  → general, ""
-"thanks"    → general, ""
+"halo mas"          → general, ""
+"oke siap"          → general, ""
+"thanks"            → general, ""
+"kamu itu apa"      → general, ""
+"kau itu apa sih"   → general, ""
+"kamu bisa apa aja" → general, ""
+"siapa saya"        → general, ""
+"cara pakai app ini"→ general, ""
 
 Off-topic (redirect, do NOT answer) — culinary, sports, politics, news, weather, entertainment, general trivia:
 "cara bikin sate padang"  → off_topic, ""
