@@ -26,6 +26,7 @@ const DOC_DESC: Record<string, string> = {
   'OPERATIONAL PRINCIPLE':     'cara kerja sistem (hydraulic/electrical flow)',
   'OPERATOR MANUAL':           'prosedur operasi, interval, kapasitas fluida',
   'HYDRAULIC CIRCUIT DIAGRAM': 'tekanan/setting/displacement hidrolik',
+  'Circuit Diagram':           'wiring & electrical circuit diagram — nomor kabel, kode warna (JASO D607), ukuran sq, tipe kabel (AVSS/AVS/CAVS/AVSSCS), connector, harness, plus hydraulic circuit diagram',
   'PARTS CATALOG':             'PN body, per section',
   'ENGINE PARTS CATALOG':      'PN internal engine',
   'CPM':                       'PN wajib ganti per interval jam',
@@ -42,11 +43,11 @@ const DOC_DESC: Record<string, string> = {
  */
 const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
   'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
-  'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'PROMO', 'CPM'],
+  'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
   'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO', 'CPM'],
-  'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO', 'CPM'],
+  'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'PROMO', 'CPM'],
   'KCM 60ZV':   ['WORKSHOP MANUAL', 'PARTS CATALOG', 'OPERATOR MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO'],
-  'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL'],
+  'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO'],
 };
 
 /** Sumber yang TIDAK dimiliki model — supaya AI tidak merujuk dokumen kosong. */
@@ -56,7 +57,7 @@ const ABSENT_SOURCES: Record<UnitModel, string> = {
   'ZX138MF-5G': 'Parts Catalog, Engine Parts Catalog & Operator Manual',
   'ZX200-5G':   '',
   'KCM 60ZV':   'Technical Manual, Troubleshooting Manual, Engine Manual & CPM',
-  'ZW140':      'Engine Manual, Engine Parts Catalog, Operator Manual, CPM & data PROMO',
+  'ZW140':      'Engine Manual, Engine Parts Catalog, Operator Manual & CPM',
 };
 
 export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
@@ -83,6 +84,24 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
       : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
         ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
         : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
+
+  // Bulletin TSD-CE yang benar-benar ada per model (census Supabase). Disebut ringkas supaya AI
+  // tahu topiknya ada dan tidak menyuruh teknisi cari ke tempat lain.
+  const bulletins: string[] = [];
+  if (model === 'ZX48U-5A') {
+    bulletins.push('**No.13/2026 — ZX48U-5A SE (Super Economy)**: engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor) vs standard \`4TNV88-ZPHB\`, serial prefix \`HCMAEA10\` (standard \`HCMAEA90\`), brand LANDCROS');
+  }
+  if (model === 'ZX48U-5A' || model === 'ZX65USB-5A') {
+    bulletins.push('**No.06/2021 — Penggantian & Update Software ECU ZX-5A**: prosedur reprogram ECU 5 tahap memakai tool **Smart Assist** (download software → input serial number ECU baru → copy data value dari ECU lama → flash & verifikasi → upload log ke Service Center)');
+  }
+  const newsNote = bulletins.length > 0
+    ? `\nBulletin TECHNICAL NEWS yang tersedia untuk ${model}: ${bulletins.join('; ')}.`
+    : '';
+
+  // Wiring diagram (kategori "Circuit Diagram") — sumber nomor kabel/warna/connector.
+  const wiringNote = model === 'ZX200-5G'
+    ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk kabel/connector yang harus dicek. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
+    : '';
 
   const faultCodeSource = isKcm
     ? 'WORKSHOP MANUAL'
@@ -242,8 +261,7 @@ Pivot ke: (1) sumber yang bisa langsung dicek (manual fisik, MPDr), (2) escalati
 Dokumen yang BENAR-BENAR ada untuk **${model}** (hanya ini — jangan rujuk selainnya):
 ${sourceList}
 
-Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${model === 'ZX48U-5A' ? `
-Catatan TECHNICAL NEWS: ada bulletin **ZX48U-5A SE (Super Economy)** — variant engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor), serial prefix \`HCMAEA10\` (vs standard \`HCMAEA90\`), brand LANDCROS.` : ''}
+Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${newsNote}${wiringNote}
 ${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai periode terbaru/aktif dari data yang disisipkan; jangan memakai harga periode lama kalau PN yang sama ada di periode terbaru.\n' : ''}
 **Format chunk:** header \`Section: ...\` / \`Document: ...\` boleh dipakai untuk grouping, **jangan disalin verbatim**.
 **Label section tidak selalu bermakna.** Sebagian katalog memakai kode internal (mis. \`AICA (7)\`, \`BICA (8)\`) yang tidak berarti apa pun bagi teknisi. JANGAN sebut kode section semacam itu sebagai petunjuk lokasi — sebut nama komponennya saja.
@@ -276,7 +294,9 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
 
-**Prioritas harga: SELALU pakai promo periode TERBARU/aktif berdasarkan data.** Cek baris \`Periode Promo\` di tiap chunk dan tanggal sistem. Kalau PN yang sama muncul di >1 periode, ambil periode terbaru saja. Periode lama hanya fallback untuk PN yang memang tidak ada di periode terbaru, dan kalau dipakai WAJIB sebut periode tersebut sebagai data lama/fallback. Tampilkan cukup 1 periode.
+**Prioritas harga: SELALU pakai promo periode TERBARU/aktif berdasarkan data.** Cek baris \`Periode Promo\` di tiap chunk dan tanggal sistem. Kalau PN yang sama muncul di >1 periode, ambil periode terbaru saja. Periode lama hanya fallback untuk PN yang memang tidak ada di periode terbaru, dan kalau dipakai WAJIB sebut periode tersebut sebagai data lama/fallback.
+
+⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. FILTER PARTS mulai 15 Juli, LUBRICANT & COOLANT mulai 5 Agustus, sama-sama berakhir 30 September). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
 
 **Section PROMO** (scan SEMUA, jangan asumsi 1 section):
 ATTACHMENT / COOLANT / ELECTRICAL / FILTER / G.E.T. (bucket teeth) / INNERPART HYDRAULIC / LUBRICANT (oli) / REMAN COMPONENT (suffix PI) / UNDERCARRIAGE / ZX MINI PARTS.
