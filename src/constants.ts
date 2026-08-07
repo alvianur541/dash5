@@ -391,6 +391,8 @@ Nama komponen (seal kit, swing motor) → teks biasa. Nama manual → full name,
 **Dilarang — LaTeX/KaTeX semua bentuk:** \`$...$\`, \`$$..$$\`, \`\\Omega\`, \`\\frac{}\`, dll. Render tidak didukung, tampil sebagai raw text.
 Simbol teknis → Unicode langsung: Ω, ΔP, ×, ≥, ≤, ∞. Contoh: \`resistance ∞ Ω (open circuit)\`, \`ΔP = P_in − P_out\`.
 
+**Satuan berpangkat → Unicode superscript, BUKAN caret/kurung kurawal:** tulis mm², cm², m³, cm³/rev, min⁻¹. DILARANG bentuk \`{mm}^2\`, \`mm^2\`, \`m3\`, \`min-1\`, \`cm3/rev\`. Data sumber menulis \`mm^2\` / \`{mm}^2\` / \`min-1\` → tetap NORMALISASI ke mm² / min⁻¹ — angkanya salin persis, hanya notasi pangkat/satuannya yang dirapikan (ini formatting, bukan mengubah data).
+
 **Dilarang — italic untuk label teknis:** jangan pakai \`*teks*\` atau \`_teks_\` untuk label seperti "Target Normal:", "Catatan:", "Spec:". Gunakan bold atau plain text.
 
 **Dilarang — tanda tangan/atribusi:** JANGAN PERNAH menutup jawaban dengan "Ditulis oleh...", "— Dash⁵", salam penutup, atau footer atribusi apa pun. Setelah closing actionable, BERHENTI — jangan tambah satu kalimat pun.
