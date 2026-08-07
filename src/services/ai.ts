@@ -586,7 +586,25 @@ const KIT_HINT =
 
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
-function offTopicTemplate(): string {
+// Template ikut bahasa user — canned bypass AI, jadi deteksi bahasa dilakukan di sini.
+// Heuristik ringan: aksara Jepang → JP; kata fungsi English tanpa kata Indonesia → EN; sisanya ID.
+const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
+const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
+const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
+
+function offTopicTemplate(query = ''): string {
+  if (JP_CHARS_RE.test(query)) {
+    return `すみません、その質問は対応範囲外です😅
+ユニットに関すること — フォルトコード、トラブルシューティング、スペック、パーツ — ならお答えできます。
+
+何かユニットで確認したいことはありますか？`;
+  }
+  if (EN_HINT_RE.test(query) && !ID_HINT_RE.test(query)) {
+    return `Sorry, that one's out of my lane 😅
+I can help with anything about your unit — fault codes, troubleshooting, specs, or parts.
+
+Anything on the unit I can check for you?`;
+  }
   return `Waduh, pertanyaan kamu out of topic 😅
 Kalau soal beginian aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshooting, spec, atau parts.
 
@@ -819,7 +837,7 @@ async function resolveNaturalLanguageQuery(
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
   const intent = await analyzeIntent(trimmed, history, model);
-  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate() };
+  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
