@@ -796,11 +796,10 @@ export async function searchEngineManual(
   };
 }
 
-// Active PROMO kategori — semua periode yang masih active di Supabase.
-// URUTAN PENTING: lama → baru (paling kanan = paling baru/aktif).
-// Tambah periode baru di AKHIR array (mis. ..., 'PROMO Q2 FY2026').
-// Semua di-search paralel, tapi harga period TERBARU diprioritaskan (preferNewestPromo).
-const ACTIVE_PROMO_KATEGORI = ['PROMO Q4 FY2025', 'PROMO Q1 FY2026'] as const;
+// Active PROMO kategori — HANYA periode terbaru/aktif (period lama dihapus dari DB).
+// Saat ganti periode: ingest yang baru → hapus period lama dari DB → update array ini,
+// biar acuan harga selalu yang terkini (tak ada harga kadaluarsa yang ikut ke-retrieve).
+const ACTIVE_PROMO_KATEGORI = ['PROMO Q2 FY2026'] as const;
 
 // Prefer harga period TERBARU. Ambil semua chunk period terbaru, lalu tambah chunk period
 // lama HANYA untuk section-type yang belum terwakili. Cegah AI lihat harga lama + baru
@@ -857,7 +856,7 @@ export const MODELS_WITHOUT_PARTS_CATALOG = new Set(['ZX65USB-5A', 'ZX138MF-5G']
  * Tidak include PARTS CATALOG/ENGINE PARTS CATALOG karena ratusan PN tak relevan
  * untuk service interval = source of hallucination buat model.
  *
- * Coverage: CPM (1 chunk per model, full schedule) + semua ACTIVE_PROMO_KATEGORI (Q4 FY2025 + Q1 FY2026)
+ * Coverage: CPM (1 chunk per model, full schedule) + ACTIVE_PROMO_KATEGORI (Q2 FY2026)
  */
 export async function searchServiceIntervalParts(
   query: string,
@@ -879,8 +878,7 @@ export async function searchServiceIntervalParts(
 
   const queryText = stripModelFromQuery(query.trim());
 
-  // Search CPM + SEMUA active promo periods paralel.
-  // Sebelumnya cuma Q4 FY2025 → MISS Q1 FY2026 yg sudah ter-ingest (39 chunks total).
+  // Search CPM + promo aktif (Q2 FY2026) paralel.
   const cpmPromise = supabase.rpc('match_documents_hybrid', {
     query_text: queryText,
     query_embedding: embedding,

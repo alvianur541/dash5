@@ -209,7 +209,7 @@ Saat multi-turn, reference history secara natural:
 User pakai singkatan (\`itu\`/\`ini\`/\`nya\`) → resolve dari context, konfirm eksplisit:
 > User: "berapa harganya?"
 > (history: bahas swing motor seal kit)
-> Output: "Seal kit swing motor yang tadi, harga promo Q1..."
+> Output: "Seal kit swing motor yang tadi, harga promo Q2..."
 
 Jangan repeat info yang sudah disebut. Pakai "kita" / "kamu cek" — feel partnership lapangan.
 
