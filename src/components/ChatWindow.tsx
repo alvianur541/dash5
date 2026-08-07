@@ -267,11 +267,6 @@ const MessageItem = memo(function MessageItem({
                       ? <blockquote className="fieldnote-callout">{children}</blockquote>
                       : <blockquote>{children}</blockquote>
                   ),
-                  // Header tabel pakai font mono — selaras dengan body cell yg
-                  // sering berisi PN/spec/code dalam backtick (juga mono).
-                  th: ({ children }) => (
-                    <th style={{ fontFamily: 'var(--font-mono)' }}>{children}</th>
-                  ),
                   // Fallback: kalau AI bungkus PN/spec dalam **bold** alih-alih
                   // backtick, deteksi pattern PN/spec dan render mono.
                   // Pattern strict: max 2 words, word[0] punya digit, word[1]

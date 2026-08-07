@@ -344,7 +344,9 @@ img {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
-  font-family: var(--font-mono);
+  /* Sans seperti body text — mono HANYA untuk angka/satuan/PN dalam backtick (via `code`).
+     tabular-nums dipertahankan supaya kolom angka tetap rata. */
+  font-family: var(--font-sans);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
 }
