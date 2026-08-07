@@ -277,6 +277,8 @@ General:
 "hexindo itu perusahaan apa"     → general, ""
 "ZX330 itu kelas berapa ton"     → general, ""
 "bedanya ZX200-5G sama ZX210"    → general, ""
+"katanya hitachi mau ganti nama" → general, ""
+"cek di google sekarang"         → general, ""
 
 Off-topic (redirect, do NOT answer) — culinary, sports, politics, news, weather, entertainment, general trivia:
 "cara bikin sate padang"  → off_topic, ""
@@ -620,8 +622,23 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low' }
   | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
-  // google_search: 'casual' (obrolan ringan) | 'technical' (teknis tanpa data manual → web + guardrail)
-  | { type: 'google_search'; mode: 'casual' | 'technical' };
+  // google_search: 'casual' (obrolan ringan, tanpa grounding) | 'technical' (teknis tanpa data
+  // manual → web + guardrail) | 'news' (kabar/isu/berita → WAJIB grounding web, no stale training)
+  | { type: 'google_search'; mode: 'casual' | 'technical' | 'news' };
+
+// Deteksi pertanyaan kabar/berita/isu → rute 'news' dgn Google Search AKTIF. Tanpa ini,
+// jalur casual (grounding off demi latency) menjawab berita dari training lama = salah fatal
+// (kasus nyata: "Hitachi ganti nama LANDCROS" dijawab "tidak benar" padahal resmi 2027).
+const NEWS_QUERY_RE = /\b(berita|news|kabar|isu|rumor|katanya|viral|gosip|rebrand(ing)?|ganti\s+nama|merger|akuisisi|diakuisisi|bangkrut|launching|rilis|cek\s+(di\s+)?google|googling|google\s+(dulu|sekarang)|terbaru)\b/i;
+
+// Directive rute 'news' — di user-turn (bukan system prompt, jaga prompt-cache).
+const NEWS_DIRECTIVE =
+  `[CEK BERITA] Pertanyaan menyangkut kabar/isu/berita terkini. ATURAN WAJIB:
+- Gunakan hasil penelusuran web (Google Search) sebagai dasar jawaban — BUKAN ingatan training yang bisa kadaluarsa.
+- Sampaikan status faktanya tegas di kalimat pertama (benar / tidak benar / belum ada info resmi) + ringkasan temuan.
+- Kalau hasil pencarian tidak meyakinkan, katakan belum bisa dikonfirmasi — JANGAN menyimpulkan dari ingatan lama.
+- Sebut sumber ringkas ("per rilis resmi Hitachi", "diberitakan media industri") tanpa URL panjang.
+- Ringkas, register rekan teknisi. Tutup dgn ajakan balik ke konteks unit kalau relevan.`;
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
 
@@ -816,8 +833,13 @@ async function resolveNaturalLanguageQuery(
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
   const intent = await analyzeIntent(trimmed, history, model);
-  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate() };
-  if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
+  // Kabar/berita/isu ("katanya hitachi ganti nama", "cek di google") → rute news ber-grounding.
+  // Dicek SEBELUM canned off_topic — classifier kadang salah lempar "cek google" ke off_topic.
+  const isNewsQuery = NEWS_QUERY_RE.test(trimmed);
+  if (intent.searchType === 'off_topic') {
+    return isNewsQuery ? { type: 'google_search', mode: 'news' } : { type: 'rag_canned', text: offTopicTemplate() };
+  }
+  if (!intent.shouldSearch) return { type: 'google_search', mode: isNewsQuery ? 'news' : 'casual' };
 
   if (intent.searchType === 'parts') {
     // Guard: optimizedQuery <3 kata ("2000") → embed tak bermakna → hasil acak → halu.
@@ -1122,17 +1144,18 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
+  const gsNews           = routeResult.type === 'google_search' && routeResult.mode === 'news';
   const ragContent       = routeResult.type === 'rag_found' ? routeResult.content   : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   // Parts/harga = format + jumlah data yg sudah eksplisit → 'minimal' (skip thinking berat = jauh
   // lebih cepat). Technical/web butuh reasoning tipis (low); fault code (medium); casual (minimal).
   const isPartsAnswer    = dataLabel === RAG_LABEL.parts;
-  const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical) ? 'low' : 'minimal';
-  // RAG 4096 · web-teknis 2048 · casual 512. RAG dikembalikan ke 4096 (sempat 3072): diagnosis
-  // multi-cabang + thinking butuh ruang — cap ketat terbukti bikin model membuang cabang
-  // diagnosa/spec demi muat. Kontrol panjang sekarang di prompt (Disiplin panjang), bukan cap.
-  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 512;
+  const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical || gsNews) ? 'low' : 'minimal';
+  // RAG 4096 · web-teknis 2048 · news 1024 · casual 512. RAG dikembalikan ke 4096 (sempat 3072):
+  // diagnosis multi-cabang + thinking butuh ruang — cap ketat terbukti bikin model membuang
+  // cabang diagnosa/spec demi muat. Kontrol panjang sekarang di prompt (Disiplin panjang).
+  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : gsNews ? 1024 : 512;
   // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
     ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
@@ -1141,18 +1164,20 @@ export async function generateResponseStream(
     ? `${trimmed || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
     : gsTechnical
       ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
-      : (trimmed || 'Halo');
+      : gsNews
+        ? `${trimmed}\n\n${NEWS_DIRECTIVE}`
+        : (trimmed || 'Halo');
 
   // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
-  // Google Search grounding HANYA untuk fallback web-teknis. Casual (sapaan/ack) dulu ikut
-  // grounding → +1-2s latency tanpa manfaat; sekarang jalur casual murni LLM → respon instan.
+  // Google Search grounding untuk web-teknis & news. Casual (sapaan/ack) murni LLM → instan;
+  // news WAJIB grounding — jawaban berita dari training lama = salah fatal.
   const fullText = await callProxyStream({
     contents,
     systemInstruction: { parts: [{ text: SYSTEM_PROMPT(model, userName) }] },
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical);
+  }, onChunk, gsTechnical || gsNews);
 
   // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
   if (cacheKey && routeResult.type === 'rag_found' && fullText) {
