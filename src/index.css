@@ -359,9 +359,10 @@ img {
   padding: 0.45rem 0.85rem;
   text-align: left;
   font-weight: 600;
-  font-size: 11px;
-  font-family: var(--font-sans);
-  letter-spacing: 0.05em;
+  font-size: 12px;
+  /* Serif (Lora) — seragam dengan isi tabel & body jawaban AI */
+  font-family: var(--font-serif);
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   color: var(--text-muted);
   border-bottom: 1px solid var(--border-main);
