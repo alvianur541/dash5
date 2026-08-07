@@ -262,7 +262,7 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
     return { docs: ranked };
   } catch (err) {
     const msg = (err as Error)?.message ?? 'Unknown error';
-    const errMsg = msg.includes('abort') ? 'Rerank timeout (5s)' : `Rerank error: ${msg}`;
+    const errMsg = msg.includes('abort') ? 'Rerank timeout (8s)' : `Rerank error: ${msg}`;
     console.warn('Cohere rerank failed:', errMsg);
     // Fallback: pakai vector order, score=0.5 neutral (tidak trigger LOW tier)
     return { docs: docs.slice(0, topN).map(content => ({ content, score: 0.5 })), error: errMsg };
@@ -439,8 +439,12 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
     });
     if (!res.ok) throw new Error(`Embed proxy ${res.status}`);
     const data   = await res.json() as { values?: unknown };
-    const values = Array.isArray(data.values) ? (data.values as number[]) : null;
+    let values = Array.isArray(data.values) ? (data.values as number[]) : null;
     if (!values || values.length === 0) throw new Error('Embed returned no values');
+    // Bulatkan ke 6 desimal — payload RPC vector turun ±45% (3072 dim × float panjang → pendek).
+    // Efek ke cosine similarity ~1e-6 (jauh di bawah noise antar-query) — hasil ranking identik.
+    // Penting di koneksi lapangan: parts search kirim vector ini 3-4× paralel per pertanyaan.
+    values = values.map(v => Math.round(v * 1e6) / 1e6);
     setCached(cacheKey, values);
     return values;
   } finally {
@@ -471,8 +475,16 @@ async function getEmbedding(query: string): Promise<number[]> {
 
 export interface CatalogEntry { model: string; kategori: string; count: number }
 
+// Memo 10 menit — census dokumen nyaris statis, tapi query-nya berat (paging metadata SEMUA
+// dokumen, bisa >10 halaman × 1000 baris). Buka-tutup dashboard berulang jangan mengunduh ulang.
+let _catalogCache: { data: CatalogEntry[]; expiresAt: number } | null = null;
+const CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
+
 export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
   if (!supabase) return [];
+  if (_catalogCache && Date.now() < _catalogCache.expiresAt && _catalogCache.data.length > 0) {
+    return _catalogCache.data;
+  }
 
   // PostgREST hardcode max 1000 row per request (meski .limit(10000) di-set).
   // Pakai pagination ADAPTIF — fetch 4 pages paralel batch pertama, lalu lanjut
@@ -539,10 +551,12 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
     counts.set(key, (counts.get(key) ?? 0) + 1);
   }
 
-  return Array.from(counts.entries()).map(([key, count]) => {
+  const result = Array.from(counts.entries()).map(([key, count]) => {
     const [model, kategori] = key.split('||');
     return { model, kategori, count };
   });
+  _catalogCache = { data: result, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS };
+  return result;
 }
 
 interface RAGResult {
