@@ -1036,7 +1036,9 @@ async function resolveMultiAspectQuery(
 //   - HANYA rag_found (web/canned/casual TIDAK di-cache) — jaga anti-halu.
 //   - Query dgn rujukan konteks (itu/nya/tadi) di-skip (jawaban context-dependent).
 //   - Scope per userName (jawaban ber-nama tak bocor antar user), TTL 3 hari.
-const ANSWER_CACHE_PREFIX = 'dash-ans:';
+// v2: rotasi prefix (dulu 'dash-ans:') — invalidasi cache lama yang masih memuat
+// "Hitachi Astrea" sebelum scrub diterapkan. Entri lama kadaluarsa sendiri via TTL.
+const ANSWER_CACHE_PREFIX = 'dash-ans2:';
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
