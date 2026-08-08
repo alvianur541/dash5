@@ -17,6 +17,17 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS ?? 'alvianur@gmail.com')
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
+/** Cuplikan jawaban AI untuk daftar Bookmark — markdown dilucuti supaya preview bersih. */
+function pocketPreview(answer: string): string {
+  return answer
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/^[#>\-*\s|:]+/gm, '')
+    .replace(/[*_`#|]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140);
+}
+
 const MODEL_GROUPS: { type: string; models: UnitModel[] }[] = [
   { type: 'Mini Excavator', models: ['ZX48U-5A', 'ZX65USB-5A'] },
   { type: 'Medium Excavator', models: ['ZX138MF-5G', 'ZX200-5G'] },
@@ -73,7 +84,8 @@ export function Sidebar({
     return group?.type ?? MODEL_GROUPS[0].type;
   });
   const [showHistory, setShowHistory] = useState(true);
-  const [showBookmarks, setShowBookmarks] = useState(true);
+  // Bookmark auto-hide: tertutup default — buka saat diketuk
+  const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes((user?.email ?? '').toLowerCase());
@@ -282,9 +294,12 @@ export function Sidebar({
                         <div key={item.id} className="relative group/pocket">
                           <button
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
-                            className="w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] active:bg-white/8"
+                            className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-8 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
-                            <span className="block truncate">{item.question || '(tanpa judul)'}</span>
+                            {/* Cuplikan JAWABAN AI (2 baris) — isi yang disimpan itulah yang dicari */}
+                            <span className="block text-[12px] leading-[1.45] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] line-clamp-2 transition-colors">
+                              {pocketPreview(item.answer) || '(kosong)'}
+                            </span>
                           </button>
                           <button
                             onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
