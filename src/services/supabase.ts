@@ -107,6 +107,41 @@ export async function deleteAllChatSessions(userId: string): Promise<void> {
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
 }
 
+// ── Bookmark sinkron lintas perangkat ────────────────────────────────────────
+// Tabel `bookmarks` (RLS per-user). Client tetap menulis localStorage sebagai cache
+// offline; fungsi-fungsi ini fail-silent — offline berarti pakai cache lokal saja.
+export interface RemoteBookmark { message_id: string; model: string; question: string; answer: string; saved_at: string }
+
+export async function fetchBookmarksRemote(userId: string): Promise<RemoteBookmark[] | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.from('bookmarks')
+    .select('message_id, model, question, answer, saved_at')
+    .eq('user_id', userId)
+    .order('saved_at', { ascending: false })
+    .limit(30);
+  if (error) { console.warn('[bookmark] fetch remote gagal (offline?):', error.message); return null; }
+  return data ?? [];
+}
+
+export async function upsertBookmarkRemote(
+  userId: string,
+  b: { id: string; model: string; question: string; answer: string; savedAt: number },
+): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.from('bookmarks').upsert({
+    user_id: userId, message_id: b.id, model: b.model, question: b.question,
+    answer: b.answer, saved_at: new Date(b.savedAt).toISOString(),
+  }, { onConflict: 'user_id,message_id' });
+  if (error) console.warn('[bookmark] simpan remote gagal (offline?):', error.message);
+}
+
+export async function deleteBookmarkRemote(userId: string, messageId: string): Promise<void> {
+  if (!supabase) return;
+  const { error } = await supabase.from('bookmarks').delete()
+    .eq('user_id', userId).eq('message_id', messageId);
+  if (error) console.warn('[bookmark] hapus remote gagal (offline?):', error.message);
+}
+
 // ── Feedback learning loop ──────────────────────────────
 // Persist rating 👍/👎 + Q/A → sinyal audit jawaban buruk. Fire-and-forget, fail-silent.
 export async function saveFeedback(payload: {

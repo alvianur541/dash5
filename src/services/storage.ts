@@ -153,6 +153,11 @@ export function removePocketItem(uid: string, id: string): PocketItem[] {
   return updated;
 }
 
+/** Timpa seluruh cache lokal dengan hasil merge sinkron (remote ∪ lokal). */
+export function replacePocket(uid: string, items: PocketItem[]): void {
+  safeSetItem(pocketKey(uid), JSON.stringify(items.slice(0, MAX_POCKET_ITEMS)));
+}
+
 export function deleteAllSessionData(uid: string, setFlag = true): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));

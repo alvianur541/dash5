@@ -10,8 +10,8 @@ import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
 import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, warmupProxy, type AgentEvent } from './services/ai';
 import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
-import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
-import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, type PocketItem } from './services/storage';
+import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
+import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
@@ -107,10 +107,28 @@ export default function App() {
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Muat Saku saat login (per-user)
+  // Muat Bookmark saat login — offline-first: cache lokal tampil instan, lalu sinkron
+  // dgn cloud (remote ∪ lokal; item lokal yg belum ada di remote di-push). Offline →
+  // fetch gagal diam-diam, cache lokal tetap dipakai.
   useEffect(() => {
     if (!user) { setPocket([]); setPocketView(null); return; }
-    setPocket(loadPocket(user.uid));
+    const local = loadPocket(user.uid);
+    setPocket(local);
+    fetchBookmarksRemote(user.uid).then(remote => {
+      if (!remote || !mountedRef.current) return;
+      const remoteItems: PocketItem[] = remote.map(r => ({
+        id: r.message_id, model: r.model, question: r.question ?? '',
+        answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(),
+      }));
+      const remoteIds = new Set(remoteItems.map(i => i.id));
+      const localOnly = local.filter(i => !remoteIds.has(i.id));
+      localOnly.forEach(i => { upsertBookmarkRemote(user.uid, i).catch(() => {}); });
+      const merged = [...localOnly, ...remoteItems]
+        .sort((a, b) => b.savedAt - a.savedAt)
+        .slice(0, 30);
+      setPocket(merged);
+      replacePocket(user.uid, merged);
+    }).catch(() => {});
   }, [user]);
 
   const togglePocket = useCallback((messageId: string) => {
@@ -122,23 +140,28 @@ export default function App() {
     if (asst.role !== 'assistant' || !asst.content?.trim()) return;
     if (loadPocket(user.uid).some(p => p.id === messageId)) {
       setPocket(removePocketItem(user.uid, messageId));
+      deleteBookmarkRemote(user.uid, messageId).catch(() => {});
       return;
     }
     let question = '';
     for (let i = idx - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') { question = msgs[i].content; break; }
     }
-    setPocket(savePocketItem(user.uid, {
+    const item: PocketItem = {
       id: messageId,
       model: selectedModel,
       question: question.slice(0, 300),
       answer: asst.content.slice(0, 20000),
       savedAt: Date.now(),
-    }));
+    };
+    setPocket(savePocketItem(user.uid, item));
+    upsertBookmarkRemote(user.uid, item).catch(() => {});
   }, [user, selectedModel]);
 
   const deletePocketItem = useCallback((id: string) => {
-    if (user) setPocket(removePocketItem(user.uid, id));
+    if (!user) return;
+    setPocket(removePocketItem(user.uid, id));
+    deleteBookmarkRemote(user.uid, id).catch(() => {});
   }, [user]);
 
   // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
