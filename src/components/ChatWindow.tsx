@@ -424,7 +424,7 @@ export function ChatWindow({
                 >
                   {getGreeting({ name: userName || 'Operator' })}
                 </m.h1>
-                <m.p
+                <m.div
                   className="welcome-subtitle"
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -435,13 +435,25 @@ export function ChatWindow({
                     letterSpacing: '-0.003em',
                     lineHeight: 1.6,
                     maxWidth: '380px',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '9px',
                   }}
                 >
-                  {hasHistory
-                    ? <>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>? Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</>
-                    : <>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>? Ketik aja langsung di bawah — fault code, part number, atau spec teknis. Ada kode error di monitor? Foto aja layarnya, saya bacakan.</>
-                  }
-                </m.p>
+                  {hasHistory ? (
+                    <>
+                      <span>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
+                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
+                      <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
+                    </>
+                  ) : (
+                    <>
+                      <span>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
+                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
+                      <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
+                    </>
+                  )}
+                </m.div>
               </div>
 
             </div>
