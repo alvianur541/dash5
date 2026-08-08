@@ -73,6 +73,7 @@ export function Sidebar({
     return group?.type ?? MODEL_GROUPS[0].type;
   });
   const [showHistory, setShowHistory] = useState(true);
+  const [showBookmarks, setShowBookmarks] = useState(true);
   const [showSupport, setShowSupport] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes((user?.email ?? '').toLowerCase());
@@ -177,7 +178,7 @@ export function Sidebar({
 
           {/* ── Model Unit ── */}
           <div className="shrink-0 px-3 pb-1">
-            <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)] px-3 pt-4 pb-2">
+            <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
               Model Unit
             </p>
             {MODEL_GROUPS.map(({ type, models }) => {
@@ -244,39 +245,70 @@ export function Sidebar({
             })}
           </div>
 
-          {/* ── Saku — jawaban tersimpan, bisa dibaca offline. Hilang kalau kosong (quiet). ── */}
+          {/* ── Bookmark — jawaban tersimpan, bisa dibaca offline. Hilang kalau kosong (quiet). ── */}
           {pocketItems.length > 0 && (
             <div className="shrink-0 px-3">
-              <p className="flex items-center gap-1.5 px-3 pt-4 pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                <Bookmark size={11} /> Bookmark
-              </p>
-              <div className="space-y-0.5">
-                {pocketItems.map(item => (
-                  <div key={item.id} className="relative group/pocket">
-                    <button
-                      onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
-                      className="w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] active:bg-white/8"
-                    >
-                      <span className="block truncate">{item.question || '(tanpa judul)'}</span>
-                    </button>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
-                      className={cn(
-                        "absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all",
-                        isMobile ? "opacity-100" : "opacity-0 group-hover/pocket:opacity-100"
-                      )}
-                      title="Hapus dari Bookmark"
-                    >
-                      <Trash2 size={11} />
-                    </button>
-                  </div>
-                ))}
+              {/* Divider — pemisah tegas antar section */}
+              <div className="border-t border-[var(--border-main)] mt-3" />
+              <div
+                role="button"
+                tabIndex={0}
+                onClick={() => setShowBookmarks(v => !v)}
+                onKeyDown={e => e.key === 'Enter' && setShowBookmarks(v => !v)}
+                className="flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
+              >
+                <p className="flex items-center gap-1.5 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
+                  <Bookmark size={11} /> Bookmark
+                </p>
+                <ChevronRight
+                  size={11}
+                  className={cn(
+                    "text-[var(--text-muted)] group-hover/bm:text-[var(--text-secondary)] transition-all duration-200 mt-0.5",
+                    showBookmarks ? "rotate-90" : ""
+                  )}
+                />
               </div>
+              <AnimatePresence initial={false}>
+                {showBookmarks && (
+                  <m.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-0.5 pb-1">
+                      {pocketItems.map(item => (
+                        <div key={item.id} className="relative group/pocket">
+                          <button
+                            onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
+                            className="w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)] active:bg-white/8"
+                          >
+                            <span className="block truncate">{item.question || '(tanpa judul)'}</span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
+                            className={cn(
+                              "absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all",
+                              isMobile ? "opacity-100" : "opacity-0 group-hover/pocket:opacity-100"
+                            )}
+                            title="Hapus dari Bookmark"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </m.div>
+                )}
+              </AnimatePresence>
             </div>
           )}
 
-          {/* ── Riwayat header ── */}
+          {/* ── History header ── */}
           <div className="shrink-0 px-3">
+            {/* Divider — pemisah tegas antar section */}
+            <div className="border-t border-[var(--border-main)] mt-3" />
             <div
               role="button"
               tabIndex={0}
@@ -284,7 +316,7 @@ export function Sidebar({
               onKeyDown={e => e.key === 'Enter' && setShowHistory(v => !v)}
               className="flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
-              <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)] group-hover/hist:text-[var(--text-secondary)] transition-colors pt-4 pb-2">
+              <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
                 History
               </p>
               <ChevronRight
