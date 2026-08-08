@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react
 import { m, AnimatePresence } from 'motion/react';
 import {
   X, RefreshCw, Loader2, BarChart3, ShieldAlert, Clock, PieChart, BookOpen, User,
-  TrendingUp, TrendingDown, FilterX, Package, Wrench, Zap, Split,
+  TrendingUp, TrendingDown, FilterX, Package, Wrench, Zap, Split, Download,
 } from 'lucide-react';
 import { getAuthToken } from '../services/supabase';
 import { cn } from '../lib/utils';
@@ -364,6 +364,9 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [selTeknisi, setSelTeknisi] = useState<string | null>(null);
+  const [selModel, setSelModel] = useState<string | null>(null);
+  // Live mode — refresh otomatis tiap 60 dtk selama modal terbuka
+  const [live, setLive] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -382,7 +385,14 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
     }
   }, []);
 
-  useEffect(() => { if (open) { setSelTeknisi(null); load(); } }, [open, load]);
+  useEffect(() => { if (open) { setSelTeknisi(null); setSelModel(null); load(); } }, [open, load]);
+
+  // Live refresh — hanya saat modal terbuka & toggle aktif; interval dibersihkan otomatis
+  useEffect(() => {
+    if (!open || !live) return;
+    const id = setInterval(load, 60_000);
+    return () => clearInterval(id);
+  }, [open, live, load]);
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -462,10 +472,31 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
     return { inIdr, outIdr, hourlyB, dailyB, sparkPts, delta, insights };
   }, [snap, pricing]);
 
+  // Drill-down ganda: filter teknisi & model bisa aktif bersamaan
   const filteredRecent = useMemo(() => {
     if (!snap) return [];
-    return selTeknisi ? snap.recent.filter(r => r.teknisi === selTeknisi) : snap.recent;
-  }, [snap, selTeknisi]);
+    return snap.recent.filter(r =>
+      (!selTeknisi || r.teknisi === selTeknisi) && (!selModel || r.model === selModel));
+  }, [snap, selTeknisi, selModel]);
+
+  // Export CSV — aktivitas sesuai filter aktif, langsung terunduh (client-side, tanpa server)
+  const exportCsv = useCallback(() => {
+    const rows = [
+      ['waktu', 'teknisi', 'model', 'sumber', 'token', 'llm_calls', 'biaya_idr'],
+      ...filteredRecent.map(r => [
+        r.created_at, r.teknisi, r.model, (r.tools_used ?? []).join('|'),
+        String(r.tokens), String(r.llm_calls), (r.idr ?? 0).toFixed(2),
+      ]),
+    ];
+    const csv = rows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
+    const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `dash5-aktivitas-${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filteredRecent]);
 
   return (
     <AnimatePresence>
@@ -516,6 +547,18 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                 </div>
               </div>
               <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => setLive(v => !v)}
+                  title={live ? 'Live aktif — refresh otomatis 60 detik' : 'Aktifkan refresh otomatis'}
+                  aria-pressed={live}
+                  className={cn(
+                    'h-7 px-2 rounded-lg text-[10px] font-semibold uppercase tracking-[0.06em] transition-colors flex items-center gap-1.5',
+                    live ? 'bg-emerald-500/15 text-emerald-500' : 'hover:bg-white/8 text-[var(--text-muted)]',
+                  )}
+                >
+                  <span className={cn('w-1.5 h-1.5 rounded-full', live ? 'bg-emerald-500 animate-pulse' : 'bg-[var(--text-muted)]/50')} />
+                  Live
+                </button>
                 <button onClick={load} disabled={loading} title="Muat ulang"
                   className="p-1.5 rounded-lg hover:bg-white/8 text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors disabled:opacity-50">
                   <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
@@ -642,6 +685,43 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     </Panel>
                   </div>
 
+                  {/* ── Biaya per Model Unit (drill-down — data per_model akhirnya tampil) ── */}
+                  {snap.per_model.length > 0 && (
+                    <Panel title="Biaya per Model Unit" aside="diurutkan dari tertinggi" hint="Pilih model untuk menyaring tabel Aktivitas Terbaru — bisa digabung dengan filter teknisi." delay={0.2}>
+                      <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1">
+                        {[...snap.per_model].sort((a, b) => b.idr - a.idr).map(mo => {
+                          const maxIdr = Math.max(1, ...snap.per_model.map(x => x.idr));
+                          const isSel = selModel === mo.model;
+                          return (
+                            <button
+                              key={mo.model}
+                              type="button"
+                              onClick={() => setSelModel(isSel ? null : mo.model)}
+                              aria-pressed={isSel}
+                              className={cn(
+                                'block text-left rounded-xl px-2.5 py-2 -mx-1 transition-colors',
+                                isSel ? 'bg-[var(--accent-main)]/[0.08]' : 'hover:bg-[var(--accent-main)]/[0.04]',
+                              )}
+                            >
+                              <div className="flex items-baseline justify-between gap-3 mb-1.5">
+                                <span className={cn('text-[13px] truncate', isSel ? 'font-semibold text-[var(--accent-main)]' : 'text-[var(--text-primary)]')}>
+                                  {mo.model}
+                                </span>
+                                <span className="text-[12.5px] font-semibold text-[var(--text-primary)] tabular-nums shrink-0">
+                                  {rp0(mo.idr)}<span className="text-[var(--text-muted)] font-normal"> · {num(mo.pertanyaan)} query</span>
+                                </span>
+                              </div>
+                              <div className="h-1.5 rounded-full bg-[var(--border-main)]/45 overflow-hidden">
+                                <div className="h-full rounded-full transition-[width] duration-700 ease-out"
+                                  style={{ width: `${Math.max((mo.idr / maxIdr) * 100, 2)}%`, background: 'var(--accent-main)' }} />
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </Panel>
+                  )}
+
                   {/* ── Sumber data + cakupan ── */}
                   <div className="grid sm:grid-cols-2 gap-4">
                     <Panel title="Sumber Data Terpakai" aside="frekuensi · biaya" delay={0.22}>
@@ -697,18 +777,25 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                     title="Aktivitas Terbaru"
                     delay={0.3}
                     aside={
-                      selTeknisi ? (
-                        <button
-                          type="button"
-                          onClick={() => setSelTeknisi(null)}
-                          className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--accent-main)]/[0.08] text-[var(--accent-main)] font-medium hover:bg-[var(--accent-main)]/[0.14] transition-colors"
-                        >
-                          {selTeknisi}
-                          <FilterX size={11} />
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        {selTeknisi && (
+                          <button type="button" onClick={() => setSelTeknisi(null)}
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--accent-main)]/[0.08] text-[var(--accent-main)] font-medium hover:bg-[var(--accent-main)]/[0.14] transition-colors">
+                            {selTeknisi}<FilterX size={11} />
+                          </button>
+                        )}
+                        {selModel && (
+                          <button type="button" onClick={() => setSelModel(null)}
+                            className="flex items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--accent-main)]/[0.08] text-[var(--accent-main)] font-medium hover:bg-[var(--accent-main)]/[0.14] transition-colors">
+                            {selModel}<FilterX size={11} />
+                          </button>
+                        )}
+                        {!selTeknisi && !selModel && <span>{snap.recent.length} query terakhir</span>}
+                        <button type="button" onClick={exportCsv} title="Unduh CSV (sesuai filter aktif)"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-white/5 font-medium transition-colors">
+                          <Download size={11} /> CSV
                         </button>
-                      ) : (
-                        `${snap.recent.length} query terakhir`
-                      )
+                      </div>
                     }
                   >
                     <div className="overflow-x-auto scrollbar-hide -mx-1">
