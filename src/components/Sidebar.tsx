@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3, Bookmark } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3, Bookmark, Tractor, History as HistoryIcon } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
@@ -178,8 +178,8 @@ export function Sidebar({
 
           {/* ── Model Unit ── */}
           <div className="shrink-0 px-3 pb-1">
-            <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
-              Model Unit
+            <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
+              <Tractor size={12} /> Model Unit
             </p>
             {MODEL_GROUPS.map(({ type, models }) => {
               const isOpen = expandedType === type;
@@ -316,8 +316,8 @@ export function Sidebar({
               onKeyDown={e => e.key === 'Enter' && setShowHistory(v => !v)}
               className="flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
-              <p className="text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
-                History
+              <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
+                <HistoryIcon size={12} /> History
               </p>
               <ChevronRight
                 size={11}
