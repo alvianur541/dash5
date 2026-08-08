@@ -802,25 +802,53 @@ async function resolvePartsQuery(
     const hours    = parseInt(intervalMatch[1]);
     const partsList = extractCpmPartsForInterval(ragResult.content, hours);
     if (partsList) {
-      // Konteks ramping: CPM list + HANYA baris promo yg PN-nya ada di CPM (bukan SEMUA section
-      // promo). Dulu suntik semua section → input ~25rb token → generate lambat (~48s). Sekarang
-      // cuma baris relevan → input turun drastis → jauh lebih cepat & hemat, tanpa kehilangan data.
-      const cpmPNs = partsList.split('\n')
-        .map(l => l.split('|')[0].trim())
-        .filter(pn => pn.length >= 4);
-      // Substring match → toleran suffix promo (4630525 ↔ 4630525HPB). Hanya baris ber-"Promo: Rp".
-      const promoLines = [...new Set(
-        ragResult.content.split('\n')
-          .map(l => l.trim())
-          .filter(l => /Promo:\s*Rp/i.test(l) && cpmPNs.some(pn => l.includes(pn))),
+      // ── Pairing harga DETERMINISTIK di kode — insiden nyata: model pernah MENGARANG
+      // semua harga + total padahal data promo tersedia. Sekarang sistem yang mencocokkan
+      // PN CPM ↔ baris promo & menghitung total; model tinggal memformat, nol ruang halu.
+      // Format baris promo: "PN | Desc | Normal: Rp x | Disc: y% | Promo: Rp z"
+      const promoPrice = new Map<string, { pn: string; price: string }>();
+      for (const line of ragResult.content.split('\n')) {
+        const m = line.match(/^\s*([A-Z0-9][A-Z0-9 ./-]*?)\s*\|.*\bPromo:\s*Rp\s*([\d.,]+)/i);
+        if (m) {
+          const key = m[1].trim().toUpperCase();
+          if (!promoPrice.has(key)) promoPrice.set(key, { pn: m[1].trim(), price: m[2].trim() });
+        }
+      }
+      const toNum = (rp: string) => parseInt(rp.replace(/[.,]/g, ''), 10) || 0;
+      let total = 0, priced = 0, unpriced = 0;
+      const rows: string[] = [];
+      for (const row of partsList.split('\n')) {
+        const [pnRaw, desc, qtyRaw] = row.split('|').map(s => (s ?? '').trim());
+        if (!pnRaw) continue;
+        const qty = parseInt((qtyRaw ?? '').replace(/^qty:/i, ''), 10) || 1;
+        const key = pnRaw.toUpperCase();
+        // Exact match dulu; kalau tidak ada, cari varian bersuffix (4630525 → 4630525HPB)
+        let hit = promoPrice.get(key);
+        let viaVariant = '';
+        if (!hit) {
+          for (const [k, v] of promoPrice) {
+            if (k.startsWith(key) && k !== key) { hit = v; viaVariant = v.pn; break; }
+          }
+        }
+        if (hit) {
+          priced++; total += toNum(hit.price) * qty;
+          rows.push(`${pnRaw} | ${desc} | qty:${qty} | Harga promo: Rp ${hit.price}${viaVariant ? ` (varian ${viaVariant})` : ''}`);
+        } else {
+          unpriced++;
+          rows.push(`${pnRaw} | ${desc} | qty:${qty} | TIDAK ADA DI PROMO — tampilkan tanpa harga, arahkan konfirmasi ke Parts Counter. JANGAN isi angka.`);
+        }
+      }
+      const periodeLines = [...new Set(
+        ragResult.content.split('\n').map(l => l.trim()).filter(l => /^Periode Promo/i.test(l)),
       )];
-      const periodeLine = (ragResult.content.match(/Periode Promo\s*:[^\n]*/i) || [null])[0];
 
-      const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (CPM resmi Hitachi):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
-
-      finalContent = promoLines.length > 0
-        ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[periodeLine, ...promoLines].filter(Boolean).join('\n')}`
-        : cpmHeader;
+      finalContent =
+        `⚠️ PARTS WAJIB GANTI ${hours} JAM — TABEL FINAL hasil pencocokan SISTEM (CPM resmi + harga promo).\n` +
+        `Gunakan PERSIS PN di atas — SALIN SEMUA ANGKA PERSIS, DILARANG mengubah, menghitung ulang, atau mengisi harga dari ingatan.\n\n` +
+        rows.join('\n') +
+        `\n\nTOTAL harga promo (SUDAH dihitung sistem — salin persis, jangan hitung ulang; ${priced} item ber-harga${unpriced ? `, ${unpriced} item tanpa harga TIDAK termasuk total` : ''}): Rp ${total.toLocaleString('id-ID')}` +
+        (periodeLines.length ? `\n${periodeLines.join('\n')}` : '') +
+        `\nCatatan wajib: harga belum termasuk PPN.`;
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
     // Kit-query & data punya komponen svc:K → injeksi petunjuk deterministik (lihat KIT_HINT).
