@@ -17,7 +17,7 @@ const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS ?? 'alvianur@gmail.com')
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
-/** Cuplikan jawaban AI untuk daftar Bookmark — markdown dilucuti supaya preview bersih. */
+/** Label Bookmark — 2 kata pertama jawaban AI (markdown dilucuti), ringkas & rapi di sidebar. */
 function pocketPreview(answer: string): string {
   return answer
     .replace(/```[\s\S]*?```/g, ' ')
@@ -25,7 +25,9 @@ function pocketPreview(answer: string): string {
     .replace(/[*_`#|]/g, '')
     .replace(/\s+/g, ' ')
     .trim()
-    .slice(0, 140);
+    .split(' ')
+    .slice(0, 2)
+    .join(' ');
 }
 
 const MODEL_GROUPS: { type: string; models: UnitModel[] }[] = [
@@ -296,8 +298,8 @@ export function Sidebar({
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
                             className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-8 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
-                            {/* Cuplikan JAWABAN AI (2 baris) — isi yang disimpan itulah yang dicari */}
-                            <span className="block text-[12px] leading-[1.45] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] line-clamp-2 transition-colors">
+                            {/* Label ringkas: 2 kata pertama jawaban AI */}
+                            <span className="block truncate text-[12.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
                             </span>
                           </button>
