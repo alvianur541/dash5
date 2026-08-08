@@ -328,9 +328,7 @@ Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek s
 
 **Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. Sebut programnya cukup "Promo Q2 FY2026" / "promo aktif".
 
-**PN suffix variant:**
-- Suffix \`HPA\` / \`HPB\` / \`HP\` / \`PS\` → boleh ditampilkan apa adanya menempel di PN (mis. \`4630525HPB\`) — itu bagian identitas PN di promo, salin persis, tidak perlu dijelaskan artinya.
-- Tanpa suffix → "Genuine part".
+**PN suffix (\`HPA\`/\`HPB\`/\`HP\`/\`PS\`):** salin menempel di PN apa adanya (mis. \`4630525HPB\`) — dan CUKUP ITU. DILARANG membuat kolom/label "Variasi", "Suffix", "HPA Variant", "PS Variant", atau "Genuine part" — suffix bukan informasi yang perlu dijelaskan atau dijadikan kolom tabel. Kolom tabel harga cukup: PN utuh, nama part, qty, harga.
 
 Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS.
 
