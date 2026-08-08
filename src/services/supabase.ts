@@ -869,70 +869,48 @@ const ENGINE_CATALOG_MODELS = new Set(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
 export const MODELS_WITHOUT_PARTS_CATALOG = new Set(['ZX65USB-5A', 'ZX138MF-5G']);
 
 /**
- * Search HANYA CPM + PROMO untuk service interval queries (mis. "service 2000 jam").
- * Tidak include PARTS CATALOG/ENGINE PARTS CATALOG karena ratusan PN tak relevan
- * untuk service interval = source of hallucination buat model.
+ * Service interval ("service 2000 jam") → CPM + SEMUA section PROMO aktif, DETERMINISTIK
+ * (fetch langsung by metadata, TANPA embedding/relevance ranking).
  *
- * Coverage: CPM (1 chunk per model, full schedule) + ACTIVE_PROMO_KATEGORI (Q2 FY2026)
+ * Dulu: hybrid search ambil 5 chunk promo "paling relevan" — section LUBRICANT (oli) sering
+ * kalah ranking dari FILTER → harga oli hilang dari jawaban padahal ADA di database.
+ * Semua section promo per model ≤ ~11 chunk, dan ai.ts menyaring jadi hanya baris promo
+ * yang PN-nya ada di CPM — konteks final tetap ramping. Bonus: tanpa embed call → lebih cepat.
  */
 export async function searchServiceIntervalParts(
-  query: string,
+  _query: string,   // dipertahankan utk kompatibilitas caller — fetch kini metadata-only
   model: string,
 ): Promise<RAGResult> {
   if (!supabase) return { content: '', hasResults: false };
 
-  const stripped = stripModelFromQuery(query.trim());
-  let embedding: number[] | null = null;
-  try {
-    embedding = await getEmbedding(stripped);
-  } catch (err) {
-    console.warn('Embed failed for interval parts search:', err);
-    return { content: '', hasResults: false };
-  }
-  if (!embedding) return { content: '', hasResults: false };
+  type Row = { content: string };
+  const fetchKategori = (kategori: string, limit: number) =>
+    supabase!.from('documents').select('content')
+      .contains('metadata', { Model: model, Kategori: kategori })
+      .limit(limit);
 
-  type HybridResult = { content: string; similarity?: number; match_type?: string };
+  const [cpmRes, ...promoSettled] = await Promise.allSettled([
+    fetchKategori('CPM', 2),
+    ...ACTIVE_PROMO_KATEGORI.map(kat => fetchKategori(kat, 25)),
+  ]);
 
-  const queryText = stripModelFromQuery(query.trim());
+  const rows = (r: PromiseSettledResult<{ data: unknown }>): Row[] =>
+    r.status === 'fulfilled' && Array.isArray(r.value.data)
+      ? (r.value.data as Row[]).filter(d => typeof d?.content === 'string')
+      : [];
 
-  // Search CPM + promo aktif (Q2 FY2026) paralel.
-  const cpmPromise = supabase.rpc('match_documents_hybrid', {
-    query_text: queryText,
-    query_embedding: embedding,
-    match_count: 1,
-    filter: { Model: model, Kategori: 'CPM' },
-    similarity_threshold: 0.20,  // Threshold longgar — CPM 1 chunk only, harus selalu masuk
-  }) as unknown as Promise<{ data: HybridResult[] | null }>;
-
-  const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
-    supabase.rpc('match_documents_hybrid', {
-      query_text: queryText,
-      query_embedding: embedding,
-      match_count: 5,
-      filter: { Model: model, Kategori: kat },
-      similarity_threshold: 0.25,
-    }) as unknown as Promise<{ data: HybridResult[] | null }>,
-  );
-
-  const [cpmRes, ...promoSettled] = await Promise.allSettled([cpmPromise, ...promoPromises]);
-
-  const cpmData = cpmRes.status === 'fulfilled' && Array.isArray(cpmRes.value.data) ? cpmRes.value.data : [];
+  const cpmData = rows(cpmRes);
   // promoSettled urutannya = ACTIVE_PROMO_KATEGORI (lama → baru). Prefer harga period terbaru.
-  const promoByPeriod: HybridResult[][] = promoSettled.map(r =>
-    r.status === 'fulfilled' && Array.isArray(r.value.data) ? r.value.data : [],
-  );
-  const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
+  const promoByPeriod: PromoChunk[][] = promoSettled.map(r => rows(r).map(d => ({ content: d.content })));
+  const promoData = preferNewestPromo(promoByPeriod);
 
   if (cpmData.length === 0 && promoData.length === 0) {
     return { content: '', hasResults: false };
   }
 
-  // Format: CPM dulu (primary source PN), lalu PROMO (untuk lookup harga)
-  const all = [...cpmData, ...promoData];
-  return {
-    content: all.map(d => d.content).join('\n\n---\n\n'),
-    hasResults: true,
-  };
+  // Format: CPM dulu (primary source PN), lalu SEMUA section PROMO (lookup harga lengkap)
+  const all = [...cpmData.map(d => d.content), ...promoData.map(d => d.content)];
+  return { content: all.join('\n\n---\n\n'), hasResults: true };
 }
 
 /**
