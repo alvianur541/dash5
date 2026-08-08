@@ -45,13 +45,13 @@ export function PocketModal({ item, onClose, onDelete }: {
           transition={{ duration: 0.15 }}
         >
           <div className="table-modal-bar">
-            <span className="table-modal-title">Saku · {item.model} · {formatSavedAt(item.savedAt)}</span>
+            <span className="table-modal-title">Bookmark · {item.model} · {formatSavedAt(item.savedAt)}</span>
             <div className="table-modal-actions">
               <button
                 className="table-modal-btn pocket-delete-btn"
                 onClick={() => { onDelete(item.id); onClose(); }}
-                aria-label="Hapus dari Saku"
-                title="Hapus dari Saku"
+                aria-label="Hapus dari Bookmark"
+                title="Hapus dari Bookmark"
               >
                 <Trash2 size={15} />
               </button>

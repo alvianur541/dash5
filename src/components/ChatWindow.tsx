@@ -300,7 +300,7 @@ const MessageItem = memo(function MessageItem({
             {/* Saku — simpan jawaban untuk dibaca offline. Disembunyikan saat streaming
                 (jangan simpan jawaban setengah jadi). */}
             {onTogglePocket && !isStreaming && (
-              <button className="action-btn" title={inPocket ? 'Hapus dari Saku' : 'Simpan ke Saku (bisa dibaca offline)'}
+              <button className="action-btn" title={inPocket ? 'Hapus dari Bookmark' : 'Simpan ke Bookmark (bisa dibaca offline)'}
                 onClick={() => onTogglePocket(message.id)}>
                 {inPocket
                   ? <BookmarkCheck size={14} style={{ color: 'var(--accent-main)' }} />

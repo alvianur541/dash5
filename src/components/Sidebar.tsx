@@ -248,7 +248,7 @@ export function Sidebar({
           {pocketItems.length > 0 && (
             <div className="shrink-0 px-3">
               <p className="flex items-center gap-1.5 px-3 pt-4 pb-2 text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)]">
-                <Bookmark size={11} /> Saku
+                <Bookmark size={11} /> Bookmark
               </p>
               <div className="space-y-0.5">
                 {pocketItems.map(item => (
@@ -265,7 +265,7 @@ export function Sidebar({
                         "absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all",
                         isMobile ? "opacity-100" : "opacity-0 group-hover/pocket:opacity-100"
                       )}
-                      title="Hapus dari Saku"
+                      title="Hapus dari Bookmark"
                     >
                       <Trash2 size={11} />
                     </button>
@@ -285,7 +285,7 @@ export function Sidebar({
               className="flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
               <p className="text-[11px] font-medium uppercase tracking-[0.05em] text-[var(--text-muted)] group-hover/hist:text-[var(--text-secondary)] transition-colors pt-4 pb-2">
-                Riwayat
+                History
               </p>
               <ChevronRight
                 size={11}
@@ -310,7 +310,7 @@ export function Sidebar({
                 >
                   {sessions.length === 0 ? (
                     <div className="px-2 py-3 text-center">
-                      <p className="text-[11px] text-[var(--text-muted)]">Belum ada riwayat chat</p>
+                      <p className="text-[11px] text-[var(--text-muted)]">Belum ada history chat</p>
                     </div>
                   ) : (
                     <div className="space-y-0.5">
