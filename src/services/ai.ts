@@ -1145,10 +1145,14 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
-  // Scrub "Hitachi Astrea" (brand distribusi di header dokumen promo) SEBELUM sampai ke model —
-  // deterministik, tak bergantung kepatuhan prompt. Nama ini tidak boleh muncul di jawaban.
+  // Scrub deterministik SEBELUM data sampai ke model (tak bergantung kepatuhan prompt):
+  // 1. "Hitachi Astrea" (brand distribusi di header dokumen promo) — dilarang muncul.
+  // 2. Notasi pangkat mentah dari scan PDF ({mm}^2, mm^2, cm^3) → mm²/cm³ — model menyalin
+  //    verbatim dari data, jadi datanya yang dirapikan (kasus nyata: "{mm}^2" tampil ke user).
   const ragContent       = routeResult.type === 'rag_found'
-    ? routeResult.content.replace(/Hitachi\s+Astrea\s*/gi, '')
+    ? routeResult.content
+        .replace(/Hitachi\s+Astrea\s*/gi, '')
+        .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'))
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;

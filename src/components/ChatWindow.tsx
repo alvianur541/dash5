@@ -24,7 +24,10 @@ export function stripLatex(text: string): string {
      .trim();
   return text
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, inner) => clean(inner))
-    .replace(/\$([^$\n]+?)\$/g,     (_, inner) => '`' + clean(inner) + '`');
+    .replace(/\$([^$\n]+?)\$/g,     (_, inner) => '`' + clean(inner) + '`')
+    // Notasi pangkat satuan bocor dari data ({mm}^2, mm^2, cm^3) → Unicode superscript.
+    // Deterministik di renderer — menutup juga jawaban lama yang sudah ter-cache.
+    .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
 
 // Strict markdown sanitize schema — block iframe, embed, object, form, dll.
