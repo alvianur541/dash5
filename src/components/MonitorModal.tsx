@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import {
   X, RefreshCw, Loader2, BarChart3, ShieldAlert, Clock, PieChart, BookOpen, User,
@@ -232,6 +232,7 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
   const [gran, setGran] = useState<'jam' | 'hari'>('jam');
   const [metric, setMetric] = useState<Metric>('idr');
   const [hover, setHover] = useState<number | null>(null);
+  const barsRef = useRef<HTMLDivElement>(null);
   useEffect(() => { setHover(null); }, [gran]);
 
   const buckets = gran === 'jam' ? hourly : daily;
@@ -247,6 +248,24 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
   const activeVals = buckets.map(mval).filter(v => v > 0);
   const avg = activeVals.length >= 2 ? activeVals.reduce((a, v) => a + v, 0) / activeVals.length : 0;
 
+  // Perbandingan bucket aktif: vs periode sebelumnya & vs rata-rata (chip di readout)
+  const prevB = active > 0 ? buckets[active - 1] : null;
+  const dPrev = ab && prevB && mval(prevB) > 0 ? ((mval(ab) - mval(prevB)) / mval(prevB)) * 100 : null;
+  const dAvg  = ab && avg > 0 && mval(ab) > 0 ? ((mval(ab) - avg) / avg) * 100 : null;
+
+  // Scrub: geser jari/kursor di area grafik → bucket aktif mengikuti posisi (ala app saham).
+  // Getar 5ms tiap pindah bucket — feedback taktil halus di mobile.
+  const scrub = (clientX: number) => {
+    const el = barsRef.current;
+    if (!el || buckets.length === 0) return;
+    const rect = el.getBoundingClientRect();
+    const idx = Math.min(buckets.length - 1, Math.max(0, Math.floor(((clientX - rect.left) / rect.width) * buckets.length)));
+    setHover(prev => {
+      if (prev !== idx) { try { navigator.vibrate?.(5); } catch { /* unsupported */ } }
+      return idx;
+    });
+  };
+
   return (
     <m.section
       initial={{ opacity: 0, y: 10 }}
@@ -257,7 +276,7 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h3 className="font-editorial text-[16.5px] text-[var(--text-primary)]">Tren Aktivitas</h3>
-          <p className="text-[11px] text-[var(--text-muted)] mt-1">Sentuh atau arahkan kursor pada batang untuk melihat rincian.</p>
+          <p className="text-[11px] text-[var(--text-muted)] mt-1">Geser jari menyusuri grafik untuk menelusuri nilai per periode.</p>
         </div>
         <div className="flex items-center gap-2">
           <Segmented<Metric> id="metric" value={metric} onChange={setMetric} options={[{ v: 'idr', label: 'Biaya' }, { v: 'query', label: 'Query' }, { v: 'token', label: 'Token' }]} />
@@ -265,12 +284,26 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
         </div>
       </div>
 
-      {/* Readout bucket aktif */}
-      <div className="flex items-baseline gap-2 mt-4 mb-3">
+      {/* Readout bucket aktif + chip perbandingan */}
+      <div className="flex items-baseline gap-2 mt-4 flex-wrap">
         <span className="text-[22px] font-semibold text-[var(--text-primary)] tabular-nums leading-none">{ab ? mfmt(ab) : '—'}</span>
         <span className="text-[12px] text-[var(--text-muted)]">
           {ab ? `${ab.label}${hover == null && !emptyDay ? ' · tertinggi' : ''}` : ''}
         </span>
+      </div>
+      <div className="flex items-center gap-1.5 mt-2 mb-3 min-h-[20px]">
+        {dPrev != null && (
+          <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--text-secondary)] tabular-nums px-1.5 py-0.5 rounded-md border border-[var(--border-main)] bg-[var(--bg-card)]/60">
+            {dPrev >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {Math.abs(dPrev).toFixed(0)}% vs sebelumnya
+          </span>
+        )}
+        {dAvg != null && (
+          <span className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--text-secondary)] tabular-nums px-1.5 py-0.5 rounded-md border border-[var(--border-main)] bg-[var(--bg-card)]/60">
+            {dAvg >= 0 ? <TrendingUp size={10} /> : <TrendingDown size={10} />}
+            {Math.abs(dAvg).toFixed(0)}% vs rata-rata
+          </span>
+        )}
       </div>
 
       {/* Plot */}
@@ -308,8 +341,14 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
           </div>
           );
         })()}
-        {/* Bars */}
-        <div className="flex items-end gap-[2px] h-[136px]">
+        {/* Bars — scrub: geser jari/kursor menyusuri grafik (pan-y biarkan scroll vertikal jalan) */}
+        <div
+          ref={barsRef}
+          className="flex items-end gap-[2px] h-[136px]"
+          style={{ touchAction: 'pan-y' }}
+          onPointerDown={e => { e.currentTarget.setPointerCapture(e.pointerId); scrub(e.clientX); }}
+          onPointerMove={e => { if (e.buttons > 0) scrub(e.clientX); }}
+        >
           {buckets.map((b, i) => {
             const v = mval(b);
             const h = v > 0 ? Math.max((v / maxV) * 100, 4) : 0;
