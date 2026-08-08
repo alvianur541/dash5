@@ -1143,7 +1143,11 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
-  const ragContent       = routeResult.type === 'rag_found' ? routeResult.content   : '';
+  // Scrub "Hitachi Astrea" (brand distribusi di header dokumen promo) SEBELUM sampai ke model —
+  // deterministik, tak bergantung kepatuhan prompt. Nama ini tidak boleh muncul di jawaban.
+  const ragContent       = routeResult.type === 'rag_found'
+    ? routeResult.content.replace(/Hitachi\s+Astrea\s*/gi, '')
+    : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   // Parts/harga = format + jumlah data yg sudah eksplisit → 'minimal' (skip thinking berat = jauh

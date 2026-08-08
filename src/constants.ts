@@ -326,6 +326,8 @@ ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit se
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
 Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada. Parts di luar cakupan section di atas → "harga promo tidak tersedia untuk part ini, konfirmasi ke Parts Counter."
 
+**Nama "Hitachi Astrea" DILARANG TOTAL.** Itu brand distribusi internal yang kadang nyangkut di header dokumen promo — JANGAN pernah menuliskannya di jawaban dalam bentuk apa pun. Sebut programnya cukup "Promo Q2 FY2026" / "promo aktif".
+
 **PN suffix variant:**
 - \`HPA\` / \`HPB\` / \`HP\` suffix → sebut "varian alternatif" — **JANGAN sebut "Hitachi Astrea" atau nama brand distribusi.**
 - \`PS\` suffix → "PS variant".
