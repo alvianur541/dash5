@@ -1097,6 +1097,30 @@ function writeAnswerCache(key: string, text: string): void {
   } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
 }
 
+// ─── Anti-halu: PENEGAKAN grounding harga (bukan sekadar telemetri) ─────────────
+// Insiden nyata: model mengarang 10 harga + total utk "service 2000 jam" meski dilarang
+// prompt. Cek deterministik: SETIAP "Rp <angka>" di jawaban wajib ada di data yang
+// disisipkan giliran ini. Ada yang tidak? → tempel koreksi tegas di akhir jawaban
+// (menimpa tampilan stream) + jawaban tidak di-cache.
+const RUPIAH_RE = /Rp\s?\.?\s?([\d][\d.,]{2,})/gi;
+function enforcePriceGrounding(answer: string, context: string): { text: string; violated: boolean } {
+  const digits = (s: string) => s.replace(/\D/g, '');
+  const ctxNums = new Set<string>();
+  for (const m of context.matchAll(/[\d][\d.,]*/g)) {
+    const d = digits(m[0]);
+    if (d.length >= 4) ctxNums.add(d);
+  }
+  const bad: string[] = [];
+  for (const m of answer.matchAll(RUPIAH_RE)) {
+    const d = digits(m[1]);
+    if (d.length >= 4 && !ctxNums.has(d)) bad.push(m[0].trim());
+  }
+  if (bad.length === 0) return { text: answer, violated: false };
+  const shown = [...new Set(bad)].slice(0, 6).join(', ');
+  const warn = `\n\n---\n⚠️ **Koreksi sistem:** angka harga berikut TIDAK ditemukan di data promo resmi dan harus dianggap KELIRU: ${shown}${bad.length > 6 ? ', …' : ''}. Jangan pakai angka tersebut — tanya ulang dengan menyebut interval service (mis. "service 2000 jam") atau nama part-nya supaya harga resmi ditarik ulang dari data.`;
+  return { text: answer + warn, violated: true };
+}
+
 // ─── Anti-halu: telemetri grounding angka spec ──────────────────────────────────
 // Cek deterministik: angka spec (dgn unit) yg DIKUTIP AI benar ada di DATA yg disisipkan.
 // Wajib ada unit → step number/qty tak ke-flag. Telemetri console dulu (basis eskalasi nanti).
@@ -1161,13 +1185,28 @@ export async function generateResponseStream(
   // lolos ke NLP → analyzeIntent return "2000" → embed kabur.
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
+  // Follow-up harga TANPA kata kunci interval ("tampilkan harganya + total") — insiden nyata:
+  // lolos ke jalur casual tanpa data → model mengarang harga dari ingatan history. Kalau
+  // history dekat memuat interval service, rute ulang ke jalur CPM+promo deterministik.
+  const PRICE_FOLLOWUP_RE = /\b(harga|price|total|biaya|tabel)\w*/i;
+  let effectiveQuery = trimmed;
+  let forceParts = false;
+  if (!isFaultCode && !hasServiceInterval && !isPartsQuery(trimmed) && PRICE_FOLLOWUP_RE.test(trimmed)) {
+    const histInterval = history.slice(-8).map(m => m.content).join('\n').match(SERVICE_INTERVAL_RE);
+    if (histInterval) {
+      effectiveQuery = `service ${histInterval[1]} jam — ${trimmed}`;
+      forceParts = true;
+      console.info('[route] follow-up harga → re-route ke interval %s jam', histInterval[1]);
+    }
+  }
+
   // Multi-aspek dicek SEBELUM parts-routing — cegah "diameter X dan PN Y" nyangkut di parts saja.
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
-    : isMultiAspectQuery(trimmed)
+    : (!forceParts && isMultiAspectQuery(trimmed))
       ? await resolveMultiAspectQuery(trimmed, history, model, emit)
-      : (isPartsQuery(trimmed) || hasServiceInterval)
-        ? await resolvePartsQuery(trimmed, history, model, emit)
+      : (isPartsQuery(trimmed) || hasServiceInterval || forceParts)
+        ? await resolvePartsQuery(effectiveQuery, history, model, emit)
         : await resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
@@ -1209,15 +1248,27 @@ export async function generateResponseStream(
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
-  // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
-  if (cacheKey && routeResult.type === 'rag_found' && fullText) {
-    writeAnswerCache(cacheKey, fullText);
+  // ── PENEGAKAN harga: semua "Rp x" di jawaban wajib ada di data giliran ini.
+  // Melanggar → koreksi tegas ditempel di akhir (menimpa tampilan stream saat final render)
+  // + TIDAK di-cache. Berlaku semua jalur — jalur tanpa data (casual) berarti Rp apa pun = karangan.
+  let safeText = fullText;
+  let priceViolated = false;
+  if (fullText) {
+    const enforced = enforcePriceGrounding(fullText, ragContent);
+    safeText = enforced.text;
+    priceViolated = enforced.violated;
+    if (priceViolated) console.warn('[grounding] HARGA karangan terdeteksi — koreksi ditempel, cache di-skip');
+  }
+
+  // Cache HANYA jawaban rag_found yang lolos penegakan harga.
+  if (cacheKey && routeResult.type === 'rag_found' && safeText && !priceViolated) {
+    writeAnswerCache(cacheKey, safeText);
   }
 
   // Anti-halu telemetri — cek angka spec di jawaban benar bersumber dari data.
   if (ragContent && fullText) verifyGrounding(fullText, ragContent);
 
-  return fullText || FALLBACK_RESPONSE;
+  return safeText || FALLBACK_RESPONSE;
 }
 
 // ─── Agentic API (Sprint 2) ──────────────────────────────────────────────────
