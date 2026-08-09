@@ -487,7 +487,8 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
   }
 }
 
-async function getEmbedding(query: string): Promise<number[]> {
+/** Diexport utk semantic cache — LRU + in-flight dedup di dalamnya cegah embed ganda. */
+export async function getEmbedding(query: string): Promise<number[]> {
   // Normalisasi cache key — "Seal Kit", "seal kit", "seal  kit" → 1 entry yang sama.
   // Penting agar tidak duplicate embed call & vector tetap konsisten.
   const cacheKey = query.toLowerCase().replace(/\s+/g, ' ').trim();

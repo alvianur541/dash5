@@ -1,6 +1,7 @@
 import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, getEmbedding, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
+import { isSemanticEligible, hasSemanticEntries, readSemanticCache, writeSemanticCache } from './semanticCache';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
@@ -1123,6 +1124,26 @@ export async function generateResponseStream(
     }
   }
 
+  // ── Semantic cache: exact meleset, tapi mungkin ada pertanyaan BERMAKNA SAMA ──
+  // Gate berlapis supaya nol overhead & nol risiko:
+  //   - cacheKey null (query ber-rujukan konteks/terlalu pendek) → skip
+  //   - query ber-ANGKA (fault code/PN/interval) → skip (isSemanticEligible) — beda digit = beda jawaban
+  //   - cache masih kosong → skip, jadi pertanyaan pertama TIDAK bayar embed call
+  // Embedding yang dihitung di sini masuk LRU getEmbedding → tak terbuang percuma.
+  let semEmbedding: number[] | null = null;
+  if (cacheKey && isSemanticEligible(trimmed) && hasSemanticEntries(model, userName)) {
+    try {
+      semEmbedding = await getEmbedding(stripModelFromQuery(trimmed));
+      const hit = readSemanticCache(model, userName, trimmed, semEmbedding);
+      if (hit) {
+        console.info('[semantic-cache] HIT score=%s ← "%s"', hit.score.toFixed(3), hit.matchedQuery);
+        return streamCanned(hit.text, onChunk);
+      }
+    } catch (err) {
+      console.warn('[semantic-cache] lookup dilewati:', (err as Error)?.message);
+    }
+  }
+
   const contents = historyToContents(history, 20);
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
@@ -1188,6 +1209,15 @@ export async function generateResponseStream(
   // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
   if (cacheKey && routeResult.type === 'rag_found' && fullText) {
     writeAnswerCache(cacheKey, fullText);
+    // Semantic cache: butuh embedding query. Kalau lookup di atas tak jalan (cache kosong /
+    // belum pernah embed), hitung sekarang — sekali, dan hasilnya melayani parafrase berikutnya.
+    if (isSemanticEligible(trimmed)) {
+      (semEmbedding
+        ? Promise.resolve(semEmbedding)
+        : getEmbedding(stripModelFromQuery(trimmed))
+      ).then(vec => writeSemanticCache(model, userName, trimmed, vec, fullText))
+       .catch(err => console.warn('[semantic-cache] simpan dilewati:', (err as Error)?.message));
+    }
   }
 
   // Anti-halu telemetri — cek angka spec di jawaban benar bersumber dari data.
