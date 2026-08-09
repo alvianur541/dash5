@@ -2,7 +2,13 @@ const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 
 const app = express();
-app.use(express.json({ limit: '20mb' }));
+// Parser default RAMPING (1mb) & berlaku utk SEMUA route. Dulu 20mb global dan jalan
+// SEBELUM verifyToken → penyerang tanpa token bisa memaksa server mem-parse 20mb per
+// request (CPU/memori terbakar tanpa pernah kena rate limit). Route yang memang butuh
+// payload besar (transcribe audio, chat multimodal/foto) memasang parser besar SENDIRI
+// setelah verifyToken — lihat bigJson di bawah.
+app.use(express.json({ limit: '1mb' }));
+const bigJson = express.json({ limit: '20mb' });
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
@@ -211,7 +217,7 @@ app.get('/v1/dashboard', verifyToken, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/v1/chat', verifyToken, rateLimit, async (req, res) => {
+app.post('/v1/chat', verifyToken, rateLimit, bigJson, async (req, res) => {
   const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
   if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
   if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
@@ -237,7 +243,7 @@ app.post('/v1/chat', verifyToken, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/v1/chat/stream', verifyToken, rateLimit, async (req, res) => {
+app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) => {
   const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
   if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
   if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
@@ -286,7 +292,7 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, async (req, res) => {
   }
 });
 
-app.post('/v1/transcribe', verifyToken, rateLimit, async (req, res) => {
+app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) return res.status(400).json({ error: 'audio and mimeType are required' });

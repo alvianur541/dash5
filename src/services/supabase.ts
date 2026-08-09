@@ -350,6 +350,13 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
 // vektor bias ke chunk yg literal mention model, bukan konten relevan.
 const MODEL_NAMES_RE = /\b(ZX48U-5A|ZX65USB-5A|ZX138MF-5G|ZX200-5G|KCM\s+60ZV|ZW140(?:-\w+)?)\b\s*/gi;
 
+/** Escape wildcard LIKE (`%`, `_`, `\`) dari input user sebelum masuk pola ilike.
+ *  Bukan SQL injection (PostgREST tetap parameterisasi), tapi tanpa ini user bisa
+ *  mengirim `%` → pola liar → full scan berat / hasil kacau. */
+function escapeLike(s: string): string {
+  return s.replace(/[\\%_]/g, m => `\\${m}`);
+}
+
 export function stripModelFromQuery(query: string): string {
   return query.replace(MODEL_NAMES_RE, '').replace(/\s+/g, ' ').trim();
 }
@@ -656,7 +663,7 @@ export async function searchTechnicalManualMulti(
   // ── 1. Keyword searches — ALL variants in parallel, NO embed cost ──
   const kwPromises = normalizedQueries.map(sq =>
     supabase!.from('documents').select('content, metadata')
-      .ilike('content', `%${sq}%`)
+      .ilike('content', `%${escapeLike(sq)}%`)
       .contains('metadata', strictFilter)
       .limit(5),
   );
@@ -673,8 +680,8 @@ export async function searchTechnicalManualMulti(
       for (const comp of components) {
         specPromises.push(
           supabase!.from('documents').select('content, metadata')
-            .ilike('content', `%${comp}%`)
-            .ilike('content', `%${specWord}%`)
+            .ilike('content', `%${escapeLike(comp)}%`)
+            .ilike('content', `%${escapeLike(specWord)}%`)
             .contains('metadata', strictFilter)
             .limit(5),
         );
@@ -730,7 +737,7 @@ export async function searchTechnicalManualMulti(
   if (faultCode && allDocs.length === 0) {
     const fbPromises = normalizedQueries.map(sq =>
       supabase!.from('documents').select('content, metadata')
-        .ilike('content', `%${sq}%`)
+        .ilike('content', `%${escapeLike(sq)}%`)
         .contains('metadata', looseFilter)
         .limit(5),
     );
@@ -821,7 +828,7 @@ export async function searchEngineManual(
   const kwSettled = await Promise.allSettled(
     pCodes.map(pCode =>
       supabase!.from('documents').select('content')
-        .ilike('content', `%${pCode}%`)
+        .ilike('content', `%${escapeLike(pCode)}%`)
         .contains('metadata', filter)
         .limit(4),
     ),

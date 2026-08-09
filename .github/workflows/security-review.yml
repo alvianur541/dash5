@@ -1,0 +1,39 @@
+name: Security Review
+
+# Review keamanan bertenaga Claude (anthropics/claude-code-security-review).
+# Menganalisa DIFF pull request: injection, auth/authz gap, kebocoran data & secret,
+# kripto lemah, validasi input, header/CORS, XSS, dependency rawan.
+#
+# CATATAN: repo ini biasa commit langsung ke main, jadi workflow ini hanya jalan kalau
+# ada PR. Untuk perubahan besar/sensitif (auth, proxy, RLS), buka PR dulu supaya
+# review otomatis ini ikut memeriksa sebelum di-merge.
+#
+# PRASYARAT: tambahkan secret CLAUDE_API_KEY di repo
+#   Settings → Secrets and variables → Actions → New repository secret
+#
+# ⚠️ Tool ini tidak dikeraskan terhadap prompt injection — jalankan hanya pada PR
+# tepercaya. Aktifkan "Require approval for all external contributors" di
+# Settings → Actions → General bila repo dibuka ke publik.
+
+permissions:
+  pull-requests: write   # untuk menempel komentar temuan di PR
+  contents: read
+
+on:
+  pull_request:
+
+jobs:
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 2
+
+      - uses: anthropics/claude-code-security-review@main
+        with:
+          comment-pr: true
+          claude-api-key: ${{ secrets.CLAUDE_API_KEY }}
+          # dist/ = artefak build, node_modules = dependency — bukan kode kita.
+          exclude-directories: dist,node_modules,public

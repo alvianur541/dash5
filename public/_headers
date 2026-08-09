@@ -1,0 +1,28 @@
+# Security headers — dibaca Cloudflare Workers Assets dari dist/_headers.
+# File di public/ otomatis disalin Vite ke dist/ saat build.
+#
+# Prinsip: ketat di hal yang tidak dipakai app (frame, plugin, base-uri), longgar
+# terkendali di connect-src karena host proxy/Supabase datang dari env var saat build
+# (mengunci host di sini berisiko memutus app kalau URL berubah).
+
+/*
+  # Clickjacking — app tidak pernah di-embed di mana pun.
+  X-Frame-Options: DENY
+  # MIME sniffing — cegah file di-eksekusi sebagai tipe lain.
+  X-Content-Type-Options: nosniff
+  # Jangan bocorkan path/query ke situs lain (URL bisa memuat konteks kerja).
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Matikan API perangkat yang tidak dipakai; microphone dipertahankan (voice input).
+  Permissions-Policy: camera=(), geolocation=(), payment=(), usb=(), midi=(), magnetometer=(), gyroscope=(), microphone=(self)
+  # Isolasi cross-origin dasar
+  Cross-Origin-Opener-Policy: same-origin
+  X-DNS-Prefetch-Control: off
+  # CSP: frame-ancestors/object-src/base-uri/form-action dikunci penuh.
+  # 'unsafe-inline' pada script diperlukan untuk theme-init inline di index.html
+  # (mencegah flash tema); permukaan XSS sendiri sudah ditutup rehype-sanitize
+  # dengan whitelist tag/atribut ketat di ChatWindow.
+  Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https: wss:; worker-src 'self'; manifest-src 'self'; frame-src 'none'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests
+
+# Aset ber-hash (immutable) — cache panjang aman karena nama file berubah tiap build.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
