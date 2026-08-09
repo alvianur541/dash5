@@ -186,6 +186,14 @@ export default function App() {
     deleteBookmarkRemote(user.uid, id).catch(() => {});
   }, [user]);
 
+  // Aksesibilitas keyboard: Escape menutup dialog konfirmasi "hapus semua" (anti-slop R-32)
+  useEffect(() => {
+    if (!deleteAllConfirm) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDeleteAllConfirm(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [deleteAllConfirm]);
+
   // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
   // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend).
   const stopStreaming = useCallback(() => {

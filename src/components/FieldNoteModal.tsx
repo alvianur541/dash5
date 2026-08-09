@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { m, AnimatePresence } from 'motion/react';
-import { X, Send, Sparkles, Check, Lightbulb, Loader2 } from 'lucide-react';
+import { X, Send, PenLine, Check, Lightbulb, Loader2 } from 'lucide-react';
 import { UnitModel, KnowledgeCandidate } from '../types';
 import { polishFieldNote, submitFieldNote } from '../services/fieldNotes';
 
@@ -34,6 +34,14 @@ export function FieldNoteModal({
     setNote(candidate?.note ?? '');
     setPhase('edit'); setError(null); setRejectReason(null); setPolishing(false);
   }, [isOpen, candidate]);
+
+  // Aksesibilitas keyboard: Escape menutup modal (WCAG / anti-slop R-32)
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [isOpen, onClose]);
 
   const handlePolish = async () => {
     if (!note.trim() || polishing) return;
@@ -160,7 +168,7 @@ export function FieldNoteModal({
                         className="flex items-center gap-1 text-[10.5px] font-medium text-[var(--accent-main)] disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition"
                         title="Rapikan tulisan dengan AI (tanpa mengubah fakta)"
                       >
-                        {polishing ? <Loader2 size={11} className="animate-spin" /> : <Sparkles size={11} />}
+                        {polishing ? <Loader2 size={11} className="animate-spin" /> : <PenLine size={11} />}
                         {polishing ? 'Merapikan…' : 'Rapikan AI'}
                       </button>
                     </span>
@@ -174,7 +182,7 @@ export function FieldNoteModal({
                   </label>
 
                   <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed">
-                    Kalau lolos kurasi AI, langsung aktif sebagai <span className="text-[var(--text-primary)]">kontribusi teknisi (belum resmi)</span> — takkan menimpa spesifikasi manual.
+                    Kalau lolos kurasi AI, langsung aktif sebagai <span className="text-[var(--text-primary)]">kontribusi teknisi (belum resmi)</span>, takkan menimpa spesifikasi manual.
                   </p>
 
                   {rejectReason && (

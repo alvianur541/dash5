@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Loader2, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
@@ -145,7 +145,7 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
         >
           {label.icon === 'search' && <Search size={12} className="text-[var(--accent-main)]" />}
           {label.icon === 'check'  && <Check  size={12} style={{ color: current.found ? 'var(--status-success, #22c55e)' : 'var(--text-muted)' }} />}
-          {label.icon === 'spark'  && <Sparkles size={12} className="text-[var(--accent-main)]" />}
+          {label.icon === 'spark'  && <Loader2 size={12} className="animate-spin text-[var(--accent-main)]" />}
           <span>{label.text}</span>
         </m.div>
       </AnimatePresence>
@@ -446,13 +446,13 @@ export function ChatWindow({
                   {hasHistory ? (
                     <>
                       <span>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
-                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
+                      <span>Ketik aja langsung di bawah: fault code, part number, atau spec teknis.</span>
                       <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
                     </>
                   ) : (
                     <>
                       <span>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
-                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
+                      <span>Ketik aja langsung di bawah: fault code, part number, atau spec teknis.</span>
                       <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
                     </>
                   )}
