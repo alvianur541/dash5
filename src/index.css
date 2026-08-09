@@ -672,14 +672,11 @@ img {
 .action-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.10); color: var(--text-primary); }
 .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-/* Desktop: action row appears on hover */
+/* Action row SELALU tampil (desktop & mobile) — dulu desktop sembunyi sampai di-hover,
+   bikin tombol copy/rating/bookmark tak ketahuan ada. Subtle saat diam, penuh saat hover. */
+.ai-actions { opacity: 0.6; }
 @media (hover: hover) {
-  .ai-actions { opacity: 0; }
   .ai-msg-wrap:hover .ai-actions { opacity: 1; }
-}
-/* Mobile: selalu visible tapi subtle */
-@media (hover: none) {
-  .ai-actions { opacity: 0.6; }
 }
 
 /* Catatan Lapangan CTA — kartu ajakan kontribusi saat KB tak punya data */
