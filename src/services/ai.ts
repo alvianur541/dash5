@@ -593,6 +593,35 @@ const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
 const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
 const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
 
+// ── Pagar unit: pertanyaan tentang model LAIN ditolak deterministik di kode ──
+// Cakupan Dash⁵ = HANYA unit yang dipilih di sidebar, karena jawaban wajib bersumber
+// dari manual yang sudah di-ingest untuk unit itu. Menyebut model lain (ZX350-7G,
+// PC200, dsb) → tolak & arahkan ganti unit; JANGAN tawarkan bantuan umum.
+const SUPPORTED_MODELS = ['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140'] as const;
+// Pola model alat berat generik: ZX350-7G, ZX210LC, PC200-8, EX1200, SK200, CAT320, WA380…
+const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
+
+/** Model lain yang disebut user (bukan unit aktif & bukan model yang didukung). */
+function detectForeignModel(query: string, activeModel: string): string | null {
+  const norm = (s: string) => s.toUpperCase().replace(/[\s-]/g, '');
+  const active = norm(activeModel);
+  for (const m of query.matchAll(new RegExp(OTHER_MODEL_RE.source, 'gi'))) {
+    const hit = m[0].trim();
+    const n = norm(hit);
+    if (n === active || active.includes(n) || n.includes(active)) continue;   // unit aktif
+    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;                 // didukung, tapi belum dipilih
+    if (/\d{2,}/.test(n)) return hit;                                          // model lain sama sekali
+  }
+  return null;
+}
+
+function foreignModelTemplate(foreign: string, activeModel: string): string {
+  const supported = SUPPORTED_MODELS.some(s => s.toUpperCase().replace(/[\s-]/g, '') === foreign.toUpperCase().replace(/[\s-]/g, ''));
+  return supported
+    ? `Pertanyaan kamu soal **${foreign}**, tapi chat ini di-set ke **${activeModel}** 😅\n\nGanti dulu unitnya di menu sebelah kiri ke ${foreign}, baru aku bisa jawab dari manual unit itu.\n\nAda yang mau dicek di ${activeModel}?`
+    : `Waduh, manual **${foreign}** belum ada di sistemku 😅 Aku cuma pegang data unit: ${SUPPORTED_MODELS.join(', ')}.\n\nAku ngga bisa bantu diagnosa unit itu — jawabanku harus dari manual resmi, bukan kira-kira.\n\nAda yang mau dicek di **${activeModel}**?`;
+}
+
 function offTopicTemplate(query = ''): string {
   if (JP_CHARS_RE.test(query)) {
     return `すみません、その質問は対応範囲外です😅
@@ -1147,6 +1176,14 @@ export async function generateResponseStream(
   const contents = historyToContents(history, 20);
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
+
+  // Pagar unit — dicek PALING AWAL, sebelum routing/LLM. Pertanyaan yang menyebut model
+  // lain langsung ditolak: cakupan Dash⁵ hanya unit terpilih & hanya dari data ter-ingest.
+  const foreignModel = detectForeignModel(trimmed, model);
+  if (foreignModel) {
+    console.info('[scope] model asing terdeteksi: %s (aktif: %s)', foreignModel, model);
+    return streamCanned(foreignModelTemplate(foreignModel, model), onChunk);
+  }
 
   const { isFaultCode, faultQuery } = detectFaultCodeInQuery(trimmed);
 
