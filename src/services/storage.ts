@@ -158,6 +158,46 @@ export function replacePocket(uid: string, items: PocketItem[]): void {
   safeSetItem(pocketKey(uid), JSON.stringify(items.slice(0, MAX_POCKET_ITEMS)));
 }
 
+// ── Tombstone penghapusan ────────────────────────────────────────────────────
+// Tanpa ini, merge sinkron tidak bisa membedakan "dibuat offline" dari "sudah
+// dihapus di perangkat lain" → item yang dihapus HIDUP LAGI (bahkan terunggah ulang
+// ke cloud). Tombstone = catatan "id ini sengaja dihapus", dipakai merge untuk
+// menyaring & untuk mengulang perintah hapus ke server bila sempat gagal.
+// Dipangkas otomatis setelah 30 hari (jauh melewati TTL entri mana pun).
+
+const tombKey = (uid: string) => `dash-pocket-del-${uid}`;
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/** map id → waktu hapus (ms). Entri kedaluwarsa dibuang saat dibaca. */
+export function loadPocketTombstones(uid: string): Record<string, number> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(tombKey(uid)) || '{}');
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const cutoff = Date.now() - TOMBSTONE_TTL_MS;
+    const fresh: Record<string, number> = {};
+    for (const [id, ts] of Object.entries(parsed)) {
+      if (typeof ts === 'number' && ts > cutoff) fresh[id] = ts;
+    }
+    return fresh;
+  } catch {
+    return {};
+  }
+}
+
+export function addPocketTombstone(uid: string, id: string): void {
+  const t = loadPocketTombstones(uid);
+  t[id] = Date.now();
+  safeSetItem(tombKey(uid), JSON.stringify(t));
+}
+
+/** Dipanggil saat user MENYIMPAN ulang id yang pernah dihapus — batalkan tombstone-nya. */
+export function clearPocketTombstone(uid: string, id: string): void {
+  const t = loadPocketTombstones(uid);
+  if (!(id in t)) return;
+  delete t[id];
+  safeSetItem(tombKey(uid), JSON.stringify(t));
+}
+
 export function deleteAllSessionData(uid: string, setFlag = true): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));

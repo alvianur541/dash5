@@ -11,7 +11,7 @@ import { generateResponse, generateResponseStream, generateResponseAgentic, getQ
 import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
-import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, type PocketItem } from './services/storage';
+import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, loadPocketTombstones, addPocketTombstone, clearPocketTombstone, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
@@ -107,29 +107,48 @@ export default function App() {
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Muat Bookmark saat login — offline-first: cache lokal tampil instan, lalu sinkron
-  // dgn cloud (remote ∪ lokal; item lokal yg belum ada di remote di-push). Offline →
-  // fetch gagal diam-diam, cache lokal tetap dipakai.
+  // Muat Bookmark — offline-first: cache lokal tampil instan, lalu sinkron dgn cloud.
+  // Deps sengaja `user?.uid` (string stabil), BUKAN objek `user`: AuthProvider membuat
+  // objek user BARU tiap event auth (refresh token / fokus tab), dan itu dulu memicu
+  // sinkron berulang yang membangkitkan lagi bookmark yang baru dihapus.
+  const uid = user?.uid ?? null;
   useEffect(() => {
-    if (!user) { setPocket([]); setPocketView(null); return; }
-    const local = loadPocket(user.uid);
+    if (!uid) { setPocket([]); setPocketView(null); return; }
+    const tombAtStart = loadPocketTombstones(uid);
+    const local = loadPocket(uid).filter(i => !tombAtStart[i.id]);
     setPocket(local);
-    fetchBookmarksRemote(user.uid).then(remote => {
+
+    fetchBookmarksRemote(uid).then(remote => {
       if (!remote || !mountedRef.current) return;
-      const remoteItems: PocketItem[] = remote.map(r => ({
-        id: r.message_id, model: r.model, question: r.question ?? '',
-        answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(),
-      }));
+      // Baca ULANG tombstone & cache lokal — user bisa menghapus SELAMA fetch berjalan.
+      // Tanpa ini, hasil fetch yang sudah basi menimpa penghapusan barusan.
+      const tomb = loadPocketTombstones(uid);
+      const freshLocal = loadPocket(uid).filter(i => !tomb[i.id]);
+
+      const remoteItems: PocketItem[] = remote
+        .filter(r => !tomb[r.message_id])          // dihapus lokal → JANGAN dihidupkan lagi
+        .map(r => ({
+          id: r.message_id, model: r.model, question: r.question ?? '',
+          answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(),
+        }));
+
+      // Bereskan sisa di server: id ber-tombstone yang masih ada di remote = perintah
+      // hapus sebelumnya gagal/offline → ulangi sekarang (self-healing).
+      remote.filter(r => tomb[r.message_id])
+        .forEach(r => { deleteBookmarkRemote(uid, r.message_id).catch(() => {}); });
+
+      // Sisa lokal yang belum ada di remote = benar-benar dibuat saat offline → push.
       const remoteIds = new Set(remoteItems.map(i => i.id));
-      const localOnly = local.filter(i => !remoteIds.has(i.id));
-      localOnly.forEach(i => { upsertBookmarkRemote(user.uid, i).catch(() => {}); });
+      const localOnly = freshLocal.filter(i => !remoteIds.has(i.id));
+      localOnly.forEach(i => { upsertBookmarkRemote(uid, i).catch(() => {}); });
+
       const merged = [...localOnly, ...remoteItems]
         .sort((a, b) => b.savedAt - a.savedAt)
         .slice(0, 30);
       setPocket(merged);
-      replacePocket(user.uid, merged);
+      replacePocket(uid, merged);
     }).catch(() => {});
-  }, [user]);
+  }, [uid]);
 
   const togglePocket = useCallback((messageId: string) => {
     if (!user) return;
@@ -139,10 +158,12 @@ export default function App() {
     const asst = msgs[idx];
     if (asst.role !== 'assistant' || !asst.content?.trim()) return;
     if (loadPocket(user.uid).some(p => p.id === messageId)) {
+      addPocketTombstone(user.uid, messageId);   // catat SEBELUM async — merge tak bisa menghidupkan lagi
       setPocket(removePocketItem(user.uid, messageId));
       deleteBookmarkRemote(user.uid, messageId).catch(() => {});
       return;
     }
+    clearPocketTombstone(user.uid, messageId);   // disimpan ulang → batalkan tombstone lama
     let question = '';
     for (let i = idx - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') { question = msgs[i].content; break; }
@@ -160,6 +181,7 @@ export default function App() {
 
   const deletePocketItem = useCallback((id: string) => {
     if (!user) return;
+    addPocketTombstone(user.uid, id);            // tombstone dulu, baru hapus (urutan penting)
     setPocket(removePocketItem(user.uid, id));
     deleteBookmarkRemote(user.uid, id).catch(() => {});
   }, [user]);
