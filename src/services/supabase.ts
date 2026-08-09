@@ -426,6 +426,10 @@ const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
+// Pertanyaan yang MENUNTUT NILAI terukur walau tanpa kata spec baku ("berapa minimum…",
+// "standar normalnya berapa"). Memicu bonus ANGKA+SATUAN di retrieval ber-peringkat.
+const NUMERIC_INTENT_RE = /\b(berapa|nilai|standar|standard|spesifikasi|spec|minimum|minimal|maksimum|maksimal|normal|batas|limit|toleransi|range)\b/i;
+
 // Kata SPEC TERUKUR — dipakai keyword-boost (komponen + spec word) agar angka spec terkubur di
 // chunk prosedur ketangkap (mis. "Swing device weight: 220 kg"). English + Indo.
 const SPEC_TERMS = new Set([
@@ -661,33 +665,57 @@ export async function searchTechnicalManualMulti(
   );
 
   // ── 1. Keyword searches — ALL variants in parallel, NO embed cost ──
-  const kwPromises = normalizedQueries.map(sq =>
-    supabase!.from('documents').select('content, metadata')
-      .ilike('content', `%${escapeLike(sq)}%`)
-      .contains('metadata', strictFilter)
-      .limit(5),
-  );
+  // Fault code: WAJIB exact-substring (kode harus muncul literal). Non-fault-code pakai
+  // jalur ber-peringkat di bawah, jadi ilike arbitrer ini hanya untuk fault code.
+  const kwPromises = faultCode
+    ? normalizedQueries.map(sq =>
+        supabase!.from('documents').select('content, metadata')
+          .ilike('content', `%${escapeLike(sq)}%`)
+          .contains('metadata', strictFilter)
+          .limit(5),
+      )
+    : [];
 
-  // ── 1b. Spec-aware keyword boost (non-fault-code) ──
-  // Query spec terukur sering MISS (angka terkubur di chunk prosedur + istilah beda). Fix: pasangkan
-  // tiap kata komponen × kata spec via ilike AND (%swing% AND %weight%) → "Swing device weight: 220 kg" kena.
-  const specPromises: typeof kwPromises = [];
-  if (!faultCode) {
+  // ── 1b. Keyword BER-PERINGKAT (non-fault-code) ──
+  // Dulu: `ilike %kata% limit 5` TANPA ORDER BY. Untuk "main pump pressure" ada 166 chunk
+  // cocok → 5 yang terambil ARBITRER (peluang chunk jawaban ikut ≈3%; kasus nyata: nilai
+  // P-Q Diagram tak pernah ketemu). Sekarang ranking dikerjakan RPC di database:
+  // cocok-berapa-kata + bonus ANGKA+SATUAN (khusus pertanyaan nilai) + bonus tabel spec
+  // resmi − penalti materi marketing. Fallback ke cara lama kalau RPC belum ter-deploy.
+  const rankedPromise: Promise<string[]> = (async () => {
+    if (faultCode) return [];
+    const words = primaryQuery.toLowerCase().split(/\s+/)
+      .map(w => w.replace(/[^\w°·/-]/g, ''))
+      .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
+    if (words.length === 0) return [];
+    // Frasa penuh ikut jadi term → chunk yang memuat frasa utuh dapat skor ekstra.
+    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...words])].slice(0, 6);
+    // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
+    const wantsNumber = words.some(w => SPEC_TERMS.has(w)) || NUMERIC_INTENT_RE.test(primaryQuery);
+
+    const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 6,
+    });
+    if (error) throw new Error(error.message);
+    return (Array.isArray(data) ? data : [])
+      .map((d: { content?: string }) => d?.content)
+      .filter((c): c is string => typeof c === 'string');
+  })().catch(async err => {
+    console.warn('[rank] RPC gagal, fallback keyword lama:', (err as Error)?.message);
     const words = primaryQuery.toLowerCase().split(/\s+/).filter(w => w.length >= 3);
     const specWord = words.find(w => SPEC_TERMS.has(w));
-    if (specWord) {
-      const components = words.filter(w => w !== specWord && !STOP_WORDS.has(w)).slice(0, 3);
-      for (const comp of components) {
-        specPromises.push(
-          supabase!.from('documents').select('content, metadata')
-            .ilike('content', `%${escapeLike(comp)}%`)
-            .ilike('content', `%${escapeLike(specWord)}%`)
-            .contains('metadata', strictFilter)
-            .limit(5),
-        );
-      }
-    }
-  }
+    if (!specWord) return [];
+    const comps = words.filter(w => w !== specWord && !STOP_WORDS.has(w)).slice(0, 3);
+    const res = await Promise.allSettled(comps.map(comp =>
+      supabase!.from('documents').select('content')
+        .ilike('content', `%${escapeLike(comp)}%`)
+        .ilike('content', `%${escapeLike(specWord)}%`)
+        .contains('metadata', strictFilter)
+        .limit(5)));
+    return res.flatMap(r => r.status === 'fulfilled'
+      ? (r.value.data ?? []).map((d: { content?: string }) => d?.content).filter((c): c is string => !!c)
+      : []);
+  });
 
   // ── 2. ONE embedding for vector search ──
   // JANGAN expandQuery di sini (query analyzeIntent sudah English → expandQuery malah bikin duplikat).
@@ -714,14 +742,22 @@ export async function searchTechnicalManualMulti(
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
   });
 
-  const [kwSettled, vectorSettled] = await Promise.allSettled([
-    Promise.allSettled([...kwPromises, ...specPromises]),
+  const [kwSettled, rankedSettled, vectorSettled] = await Promise.allSettled([
+    Promise.allSettled(kwPromises),
+    rankedPromise,
     vectorPromise,
   ]);
 
-  // Collect keyword hits
+  // Collect keyword hits. Urutan penting: hasil BER-PERINGKAT duluan supaya slot
+  // RERANK_INPUT_CAP diisi kandidat terbaik, bukan sisa acak.
   const seen  = new Set<string>();
   const allDocs: string[] = [];
+
+  if (rankedSettled.status === 'fulfilled') {
+    for (const c of rankedSettled.value) {
+      if (c && !seen.has(c)) { seen.add(c); allDocs.push(c); }
+    }
+  }
 
   if (kwSettled.status === 'fulfilled') {
     for (const r of kwSettled.value) {
