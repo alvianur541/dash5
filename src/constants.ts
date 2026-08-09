@@ -331,6 +331,9 @@ Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek s
 
 **PN suffix (\`HPA\`/\`HPB\`/\`HP\`/\`PS\`):** salin menempel di PN apa adanya (mis. \`4630525HPB\`) — dan CUKUP ITU. DILARANG membuat kolom/label "Variasi", "Suffix", "HPA Variant", "PS Variant", atau "Genuine part" — suffix bukan informasi yang perlu dijelaskan atau dijadikan kolom tabel. Kolom tabel harga cukup: PN utuh, nama part, qty, harga.
 
+**Suffix \`-F\` (section HYDRAULIC HOSE):** artinya hose **lokal merek Fukoku** — bukan "factory-made", bukan "siap pakai". Kalau perlu menyebut artinya, sebut itu; kalau tidak ditanya, cukup tampilkan PN-nya apa adanya.
+**DILARANG MENGARANG ARTI SUFFIX/KODE.** Suffix atau kode yang artinya tidak tertulis di data dan tidak disebut di prompt ini → tampilkan apa adanya TANPA penjelasan. Jangan menebak kepanjangannya (kesalahan nyata: \`-F\` ditafsirkan "factory-made" padahal Fukoku). Menebak arti kode = menyesatkan saat teknisi memesan part.
+
 Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS.
 
 ---
