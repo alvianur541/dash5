@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { X, Mail, MessageCircleQuestion, BookOpen, Wrench, ExternalLink, Database, Loader2 } from 'lucide-react';
 import { fetchDocumentCatalog, CatalogEntry } from '../services/supabase';
@@ -123,14 +123,6 @@ function CatalogPanel() {
 }
 
 export function SupportModal({ open, onClose }: SupportModalProps) {
-  // Aksesibilitas keyboard: Escape menutup modal (anti-slop R-32)
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [open, onClose]);
-
   return (
     <AnimatePresence>
       {open && (

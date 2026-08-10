@@ -57,7 +57,7 @@ export default defineConfig(() => {
         manifest: {
           name: 'Dash⁵ — Heavy Equipment Diagnostic',
           short_name: 'Dash⁵',
-          description: 'Asisten teknis alat berat Hitachi: fault code, troubleshooting, spec, dan parts dari manual resmi',
+          description: 'AI-powered heavy equipment troubleshooting assistant for field technicians',
           lang: 'id',
           // theme_color WAJIB match --bg-app dark (#1A1915, palet Claude) — kalau
           // meleset, title bar / task switcher Android salah warna
