@@ -485,8 +485,12 @@ img {
 }
 
 /* Chat content bottom padding agar pesan terakhir tidak tertutup input bar */
+/* Clearance daftar chat terhadap input bar yang mengambang di atasnya.
+   --input-bar-h diisi ResizeObserver di App.tsx (tinggi bar sebenarnya); 140px hanya
+   fallback untuk render pertama sebelum observer jalan. +20px = napas antara pesan
+   terakhir/indikator loading dengan tepi atas bar. */
 .chat-messages-list {
-  padding-bottom: 140px !important;
+  padding-bottom: calc(var(--input-bar-h, 140px) + 20px) !important;
 }
 
 .message-input-bar {

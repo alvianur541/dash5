@@ -75,6 +75,9 @@ export default function App() {
   const mountedRef = useRef(true);
   // AbortController untuk in-flight stream — plain ref, tidak masuk deps chain
   const abortStreamRef = useRef<AbortController | null>(null);
+  // Dipakai mengukur tinggi input bar → --input-bar-h (lihat effect ResizeObserver)
+  const mainRef = useRef<HTMLElement | null>(null);
+  const inputBarRef = useRef<HTMLDivElement | null>(null);
 
 
   useEffect(() => {
@@ -184,6 +187,21 @@ export default function App() {
     addPocketTombstone(user.uid, id);            // tombstone dulu, baru hapus (urutan penting)
     setPocket(removePocketItem(user.uid, id));
     deleteBookmarkRemote(user.uid, id).catch(() => {});
+  }, [user]);
+
+  // Tinggi input bar diukur nyata, bukan ditebak. Bar-nya position:absolute di atas
+  // daftar chat, jadi daftar butuh padding-bottom setinggi bar. Angka mati 140px meleset
+  // saat tinggi bar berubah: mode standalone (safe-area-spacer 6px→24px), textarea
+  // multiline, atau chip lampiran. Hasil ukur dikirim ke CSS via --input-bar-h.
+  useEffect(() => {
+    const bar = inputBarRef.current;
+    const host = mainRef.current;
+    if (!bar || !host) return;
+    const apply = () => host.style.setProperty('--input-bar-h', `${Math.ceil(bar.offsetHeight)}px`);
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(bar);
+    return () => ro.disconnect();
   }, [user]);
 
   // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
@@ -520,7 +538,7 @@ export default function App() {
         onDeletePocketItem={deletePocketItem}
       />
 
-      <main className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+      <main ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
 
         {/* Top bar — shown when sidebar is collapsed */}
         <AnimatePresence>
@@ -662,7 +680,7 @@ export default function App() {
         />
 
         {/* Input bar absolute floating di bottom — scroll konten ke baliknya */}
-        <div className="input-bar-float">
+        <div ref={inputBarRef} className="input-bar-float">
           <MessageInput
             onSendMessage={handleSendMessage}
             disabled={isTyping}

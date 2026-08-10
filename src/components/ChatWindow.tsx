@@ -487,8 +487,11 @@ export function ChatWindow({
           {/* Agent thinking — show progress saat ReAct loop jalan, hilang saat answer streaming */}
           {isTyping && agentEvents.length > 0 && <AgentThinkingIndicator events={agentEvents} />}
 
+          {/* Titik-titik hanya saat BELUM ada progres agent. Kalau indikator di atas sudah
+              tampil, dua indikator loading sekaligus = redundan & menambah tinggi konten
+              sampai menabrak input bar. Satu status loading pada satu waktu. */}
           <AnimatePresence>
-            {isTyping && (
+            {isTyping && agentEvents.length === 0 && (
               <m.div
                 key="typing"
                 className="typing-dots"
