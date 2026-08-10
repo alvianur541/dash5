@@ -729,6 +729,9 @@ img {
 
 /* Typing indicator — 3 dot bounce (sebelum chunk pertama datang) */
 .typing-dots { display: flex; align-items: center; gap: 5px; padding: 10px 0 6px; }
+/* Varian sebaris untuk indikator agent — tanpa padding vertikal agar tinggi baris tetap. */
+.typing-dots-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; }
+.typing-dots-inline .typing-dot { width: 4px; height: 4px; }
 .typing-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: color-mix(in srgb, var(--accent-main) 70%, var(--text-muted));

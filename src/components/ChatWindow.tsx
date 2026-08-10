@@ -147,6 +147,21 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
           {label.icon === 'check'  && <Check  size={12} style={{ color: current.found ? 'var(--status-success, #22c55e)' : 'var(--text-muted)' }} />}
           {label.icon === 'spark'  && <Sparkles size={12} className="text-[var(--accent-main)]" />}
           <span>{label.text}</span>
+          {/* Titik berdenyut ikut di BARIS yang sama — animasi loading tetap hidup tanpa
+              menambah tinggi konten (penyebab tabrakan dgn input bar). Tahap 'check'
+              artinya langkah selesai, jadi tak perlu denyut. */}
+          {label.icon !== 'check' && (
+            <span className="typing-dots-inline">
+              {[0, 1, 2].map(i => (
+                <m.span
+                  key={i}
+                  className="typing-dot"
+                  animate={{ opacity: [0.3, 1, 0.3], y: [0, -3, 0] }}
+                  transition={{ duration: 1.2, repeat: Infinity, delay: i * 0.2 }}
+                />
+              ))}
+            </span>
+          )}
         </m.div>
       </AnimatePresence>
     </div>
