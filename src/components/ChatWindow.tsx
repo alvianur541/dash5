@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, Loader2, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
@@ -120,13 +120,29 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
     const l = eventLabel(events[i]);
     if (l) { current = events[i]; label = l; break; }
   }
+
+  // Jeda antara pencarian selesai dan teks jawaban mulai mengalir bisa beberapa detik
+  // (model sedang menyusun jawaban). Tanpa ini indikator berhenti di centang & app
+  // terlihat menggantung. Centang ditahan sebentar sebagai konfirmasi, lalu berganti
+  // ke status menyusun jawaban yang beranimasi sampai chunk pertama datang.
+  const settled = label?.icon === 'check';
+  const [composing, setComposing] = useState(false);
+  useEffect(() => {
+    if (!settled) { setComposing(false); return; }
+    const t = setTimeout(() => setComposing(true), 650);
+    return () => clearTimeout(t);
+  }, [settled, events.length]);
+
   if (!current || !label) return null;
+  const view = composing
+    ? { icon: 'compose' as const, text: 'Menyiapkan jawaban…' }
+    : { icon: label.icon, text: label.text };
 
   return (
     <div className="agent-thinking-list">
       <AnimatePresence mode="wait" initial={false}>
         <m.div
-          key={label.text}
+          key={view.text}
           initial={{ opacity: 0, y: 4 }}
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: -4 }}
@@ -143,14 +159,15 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
             padding: '3px 0',
           }}
         >
-          {label.icon === 'search' && <Search size={12} className="text-[var(--accent-main)]" />}
-          {label.icon === 'check'  && <Check  size={12} style={{ color: current.found ? 'var(--status-success, #22c55e)' : 'var(--text-muted)' }} />}
-          {label.icon === 'spark'  && <Sparkles size={12} className="text-[var(--accent-main)]" />}
-          <span>{label.text}</span>
+          {view.icon === 'search'  && <Search size={12} className="text-[var(--accent-main)]" />}
+          {view.icon === 'check'   && <Check  size={12} style={{ color: current.found ? 'var(--status-success, #22c55e)' : 'var(--text-muted)' }} />}
+          {view.icon === 'spark'   && <Sparkles size={12} className="text-[var(--accent-main)]" />}
+          {view.icon === 'compose' && <Loader2 size={12} className="animate-spin text-[var(--accent-main)]" />}
+          <span>{view.text}</span>
           {/* Titik berdenyut ikut di BARIS yang sama — animasi loading tetap hidup tanpa
-              menambah tinggi konten (penyebab tabrakan dgn input bar). Tahap 'check'
-              artinya langkah selesai, jadi tak perlu denyut. */}
-          {label.icon !== 'check' && (
+              menambah tinggi konten (penyebab tabrakan dgn input bar). Hanya jeda singkat
+              di centang yang diam, karena langkah itu memang sudah selesai. */}
+          {view.icon !== 'check' && (
             <span className="typing-dots-inline">
               {[0, 1, 2].map(i => (
                 <m.span
