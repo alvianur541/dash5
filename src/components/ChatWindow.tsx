@@ -479,13 +479,11 @@ export function ChatWindow({
                     <>
                       <span>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
                       <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
-                      <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
                     </>
                   ) : (
                     <>
                       <span>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
                       <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
-                      <span>Ada kode error di monitor? Kirim aja fotonya, nanti aku bantu analisa.</span>
                     </>
                   )}
                 </m.div>
