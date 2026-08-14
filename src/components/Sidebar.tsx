@@ -375,13 +375,18 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                "w-full text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
+                                // Penanda "kamu di sini" memakai bahasa visual yang SAMA dengan
+                                // daftar model unit (titik + latar tipis), bukan garis tepi sendiri.
+                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
                                 isActive
-                                  // Aksen 2px tepi kiri (inset — tanpa geser layout): penanda "kamu di sini"
-                                  ? "bg-[var(--accent-main)]/8 text-[var(--text-primary)] font-medium shadow-[inset_2px_0_0_var(--accent-main)]"
+                                  ? "bg-[var(--accent-active)]/8 text-[var(--text-primary)] font-medium"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                               )}
                             >
+                              <span className={cn(
+                                "w-1.5 h-1.5 rounded-full shrink-0",
+                                isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
+                              )} />
                               <span className="block truncate">{session.title}</span>
                             </button>
                             <AnimatePresence>
