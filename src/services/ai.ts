@@ -1428,7 +1428,18 @@ export async function generateResponse(
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
       .map(r => r.value);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-    currentParts.push(...imageParts);
+    // Foto SENGAJA belum dimasukkan ke currentParts di sini.
+    // Dulu: `currentParts.push(...imageParts)` — akibatnya foto dikirim DUA KALI ke Gemini,
+    // sekali untuk OCR (extractFaultCodes) dan sekali lagi saat menyusun jawaban. Satu foto
+    // monitor ≈ 1.064 token, dan giliran kedua itu MURNI pemborosan kalau kodenya sudah
+    // terbaca dan datanya sudah ketemu di manual — jawaban bersumber dari teks manual,
+    // bukan dari piksel. Ini penyebab utama stream jalur foto ~50 detik.
+    // Foto tetap dikirim kalau OCR gagal / tak ada kode terbaca (lihat cabang di bawah),
+    // karena di situ model memang harus melihat gambarnya.
+    // Konsekuensi yang diterima sadar: kalau kode terbaca DAN ketemu di manual, pertanyaan
+    // yang menyinggung tampilan layar dijawab dari teks manual saja. Untuk diagnosa fault
+    // code itu justru lebih benar — manual adalah sumber otoritatifnya.
+    let sendImageToModel = true;
 
     try {
       emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
@@ -1500,6 +1511,8 @@ export async function generateResponse(
           injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
         }
 
+        // Kode terbaca DAN datanya ketemu di manual → foto tidak perlu dikirim ulang.
+        sendImageToModel = false;
         currentParts.push({ text: `${note}\n\n${injection}` });
       } else {
         emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
@@ -1511,17 +1524,30 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
+    // Foto ditaruh PALING DEPAN (unshift) — urutan gambar-lalu-teks penting supaya model
+    // membaca instruksi sebagai rujukan ke gambar, bukan sebaliknya.
+    if (sendImageToModel) currentParts.unshift(...imageParts);
+
     // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
-    // 8192 (turun dari 16384): multi-code image analysis tetap muat — jalur fault
-    // code teks pakai 4096 & cukup. Cap lebih rendah = latency & biaya turun.
+    // Anggaran menyesuaikan beban nyata:
+    //  - foto IKUT dikirim (OCR gagal / tak ada kode) → model harus benar-benar "melihat":
+    //    thinking 'medium', ruang keluaran 8192.
+    //  - foto TIDAK dikirim (kode terbaca & data manual ketemu) → tugasnya tinggal menyusun
+    //    diagnosis dari teks manual, persis seperti jalur fault code teks yang sudah terbukti
+    //    cukup dengan 4096 + thinking 'low'. Menurunkan keduanya di sini memangkas waktu
+    //    tunggu tanpa mengurangi isi jawaban.
     const body: VRequest = {
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.3, thinkingConfig: { thinkingLevel: 'medium' } },
+      generationConfig: {
+        maxOutputTokens: sendImageToModel ? 8192 : 4096,
+        temperature: 0.3,
+        thinkingConfig: { thinkingLevel: sendImageToModel ? 'medium' : 'low' },
+      },
     };
 
     // Streaming kalau caller kasih onChunk — jawaban muncul bertahap seperti jalur
