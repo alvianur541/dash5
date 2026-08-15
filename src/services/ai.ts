@@ -459,6 +459,20 @@ export async function callProxyStream(
     body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
   }, 60_000);
 
+  // ── Percobaan ulang otomatis ────────────────────────────────────────────────
+  // Kegagalan upstream (Vertex menolak / koneksi putus) sebagian besar TRANSIEN, dan
+  // terbukti frekuensinya mengikuti volume pemakaian, bukan isi pertanyaan. Selama
+  // BELUM ada satu pun teks yang tampil di layar, mengulang request itu aman: teknisi
+  // tidak melihat apa pun kecuali indikator loading yang berjalan sedikit lebih lama.
+  // Setelah teks mulai mengalir, JANGAN diulang — hasilnya akan dobel/kacau.
+  const MAX_ATTEMPT = 3;
+  let attempt = 0;
+  let fullText = '';
+  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
+
+  while (true) {
+  attempt++;
+  fullText = '';
   let res = await doFetch();
   // 401/503 dari verifyToken proxy kerap transien: verifikasi token itu round-trip
   // jaringan Cloud Run → Supabase /auth/v1/user, dan satu hiccup di situ dulu langsung
@@ -473,10 +487,9 @@ export async function callProxyStream(
 
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
-  let fullText = '';
   let buffer = '';
-  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
   let upstreamError: string | null = null;
+  let retryNeeded = false;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -502,15 +515,22 @@ export async function callProxyStream(
     }
     if (upstreamError) {
       reader.cancel().catch(() => {});
-      // Belum ada teks sama sekali → lempar error eksplisit supaya App menampilkan pesan
-      // yang benar ("koneksi terputus, kirim ulang"), bukan menyalahkan API key.
-      if (!fullText.trim()) throw new Error(`Stream terputus: ${upstreamError}`);
-      // Sudah sebagian tampil → jangan berlagak utuh. Diagnosis buntung yang terlihat
-      // selesai jauh lebih berbahaya daripada error yang jujur.
-      console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
-      fullText += STREAM_CUT_NOTE;
-      onChunk(STREAM_CUT_NOTE);
-      break;
+      // Sudah sebagian tampil → JANGAN diulang (teks akan dobel). Tandai terpotong:
+      // diagnosis buntung yang terlihat selesai jauh lebih berbahaya daripada error jujur.
+      if (fullText.trim()) {
+        console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
+        fullText += STREAM_CUT_NOTE;
+        onChunk(STREAM_CUT_NOTE);
+        break;
+      }
+      // Belum ada teks → aman diulang, teknisi tak melihat apa pun.
+      if (attempt < MAX_ATTEMPT) {
+        console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
+        await new Promise(r => setTimeout(r, attempt * 900));   // backoff 0,9s lalu 1,8s
+        retryNeeded = true;
+        break;                                                   // keluar loop baca → percobaan baru
+      }
+      throw new Error(`Stream terputus: ${upstreamError}`);
     }
     // Loop degeneratif terdeteksi di tail → stop baca (hemat token), teks
     // dibersihkan sebelum return; UI final di-overwrite dgn hasil bersih.
@@ -520,6 +540,11 @@ export async function callProxyStream(
       break;
     }
   }
+
+  if (retryNeeded) continue;   // percobaan baru — fullText di-reset di awal iterasi
+  break;
+  }
+
   addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
   return collapseDegenerateLoops(fullText);
 }

@@ -504,6 +504,11 @@ export default function App() {
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
+      // Catat juga saat GAGAL. Sebelumnya logCost hanya jalan di jalur sukses, jadi
+      // kegagalan tidak meninggalkan jejak apa pun di usage_logs — mustahil mengukur
+      // seberapa sering ini terjadi. Token yang terlanjur terpakai (intent/HyDE/OCR)
+      // juga tetap dibayar, jadi memang layak masuk ledger.
+      logCost(sessionId, [...toolsUsed]);
       // Stream putus di upstream bukan salah teknisi maupun API key — pesannya harus
       // menuntun ke aksi yang benar (kirim ulang), bukan menyuruh mengecek kredensial.
       setError(err.message?.includes('Stream terputus')
