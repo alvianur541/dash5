@@ -1,9 +1,0 @@
-# Dash5
-
-> Dash5 adalah asisten diagnostik AI (PWA) untuk teknisi alat berat Hitachi dan KCM di PT Hexindo Adiperkasa. Fitur: pencarian fault code, part number, spesifikasi teknis, jadwal maintenance, dan harga promo parts — berbasis manual resmi per model unit.
-
-Aplikasi memerlukan login internal (NIK karyawan). Konten chat tidak untuk diindeks.
-
-## Aplikasi
-
-- [Dash5 App](https://dash5.my.id/): Antarmuka chat diagnostik untuk teknisi lapangan.

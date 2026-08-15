@@ -97,21 +97,11 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          // Pemetaan by-path, bukan by-package-name. Bentuk objek lama
-          // (`{'react-core': ['react','react-dom']}`) hanya mencocokkan modul ENTRY
-          // paket, sedangkan app mengimpor `react-dom/client` — beda modul, jadi
-          // react-dom (177 KB) malah ikut jatuh ke chunk index dan `react-core`
-          // cuma terisi 3,9 KB.
-          manualChunks(id: string) {
-            if (!id.includes('node_modules')) return undefined;
-            const p = id.replace(/\\/g, '/');
-            if (/node_modules\/(react|react-dom|scheduler)\//.test(p)) return 'react-core';
-            if (/node_modules\/(motion|framer-motion|motion-dom|motion-utils)\//.test(p)) return 'motion';
-            if (/node_modules\/@supabase\//.test(p)) return 'supabase';
-            // Seluruh rantai parser markdown (react-markdown, remark/rehype, micromark,
-            // mdast/hast, unist) → satu chunk lazy yang ditarik MarkdownView.
-            if (/node_modules\/(react-markdown|remark-.*|rehype-.*|micromark.*|mdast-.*|hast-.*|unist-.*|unified|vfile.*|property-information|character-entities.*|decode-named-character-reference|stringify-entities|comma-separated-tokens|space-separated-tokens|html-url-attributes|html-void-elements|web-namespaces|zwitch|longest-streak|markdown-table|ccount|trim-lines|escape-string-regexp|is-plain-obj|trough|bail|devlop|extend|style-to-js|style-to-object|inline-style-parser|estree-util-is-identifier-name)\//.test(p)) return 'markdown';
-            return undefined;
+          manualChunks: {
+            'react-core': ['react', 'react-dom'],
+            'motion':     ['motion'],
+            'supabase':   ['@supabase/supabase-js'],
+            'markdown':   ['react-markdown'],
           },
         },
       },

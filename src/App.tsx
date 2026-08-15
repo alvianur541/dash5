@@ -1,21 +1,15 @@
 
-import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { ResetPasswordPage } from './components/ResetPasswordPage';
+import { FieldNoteModal } from './components/FieldNoteModal';
 import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
-// ai.ts menyeret constants.ts (SYSTEM_PROMPT ~38 KB) + seluruh pipeline RAG, dan tak
-// satu pun dibutuhkan untuk menggambar layar. Diimpor dinamis saat pertanyaan pertama
-// dikirim; chunk-nya di-prefetch saat browser idle (lihat effect di bawah) supaya
-// pertanyaan pertama tetap tidak menunggu unduhan.
-import type { AgentEvent } from './services/ai';
-import { warmupProxy } from './services/proxy';
+import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, warmupProxy, type AgentEvent } from './services/ai';
+import { detectFieldKnowledge } from './services/fieldNotes';
 import { logQuestionUsage } from './services/usage';
-// FieldNoteModal ikut menyeret fieldNotes → ai.ts. Lazy + latch mount (lihat
-// fieldNoteMounted) supaya animasi keluarnya tetap jalan setelah ditutup.
-const FieldNoteModal = lazy(() => import('./components/FieldNoteModal').then(mod => ({ default: mod.FieldNoteModal })));
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, loadPocketTombstones, addPocketTombstone, clearPocketTombstone, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
@@ -61,8 +55,6 @@ export default function App() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; candidate?: KnowledgeCandidate; question: string; answer: string } | null>(null);
-  // Latch: sekali dibuka tetap ter-mount, supaya animasi keluar modal tetap jalan.
-  const [fieldNoteMounted, setFieldNoteMounted] = useState(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   // Saku — jawaban tersimpan offline (localStorage per-user)
   const [pocket, setPocket] = useState<PocketItem[]>([]);
@@ -91,19 +83,7 @@ export default function App() {
   useEffect(() => {
     mountedRef.current = true;
     warmupProxy(); // bangunkan proxy Cloud Run — pertanyaan pertama tidak kena cold start
-    // Prefetch chunk mesin AI setelah browser lengang. Tidak ikut jalur render awal
-    // (tak menambah beban paint pertama), tapi sudah siap sebelum teknisi selesai
-    // mengetik — jadi code-splitting ini tidak menambah jeda di pertanyaan pertama.
-    const prefetch = () => { import('./services/ai').catch(() => {}); };
-    const ric = (window as unknown as {
-      requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
-    }).requestIdleCallback;
-    const idleId = ric ? ric(prefetch, { timeout: 3000 }) : window.setTimeout(prefetch, 1500);
-    return () => {
-      mountedRef.current = false;
-      const cic = (window as unknown as { cancelIdleCallback?: (id: number) => void }).cancelIdleCallback;
-      if (ric && cic) cic(idleId); else clearTimeout(idleId);
-    };
+    return () => { mountedRef.current = false; };
   }, []);
 
 
@@ -323,10 +303,9 @@ export default function App() {
 
   // Cost ledger: kirim total token 1 pertanyaan ke /v1/usage (fire-and-forget).
   // Dibaca dari accumulator ai.ts setelah jawaban selesai. tools = dari agent events.
-  // `u` dioper dari pemanggil (bukan diambil sendiri lewat getQuestionUsage) supaya
-  // App tidak perlu mengimpor ai.ts secara statis hanya demi satu pembacaan ledger.
-  const logCost = useCallback((sid: string | null, tools: string[], u: { model: string; input: number; output: number; calls: number }) => {
+  const logCost = useCallback((sid: string | null, tools: string[]) => {
     if (!user) return;
+    const u = getQuestionUsage();
     logQuestionUsage({
       sessionId: sid,
       model: u.model,
@@ -362,11 +341,6 @@ export default function App() {
 
   const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
     if (!user) return;
-
-    // Mulai muat mesin AI SEKARANG tapi jangan ditunggu di sini — biasanya sudah
-    // ter-prefetch saat idle, tapi kalau belum, menunggunya di titik ini menunda
-    // munculnya bubble pesan teknisi sendiri. Di-await tepat sebelum dipakai.
-    const aiPromise = import('./services/ai');
 
     let sessionId = sessionIdRef.current;
     if (!sessionId) {
@@ -408,24 +382,15 @@ export default function App() {
     const persist = (fullText: string) => {
       const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
       const newMessages = [...currentMessages, userMessage, assistantMessage];
-      // Base64 foto DIBUANG sebelum disimpan — ke localStorage MAUPUN ke Supabase.
-      // Dulu Supabase menerima `newMessages` yang masih utuh, dan karena penyimpanannya
-      // upsert SELURUH array (bukan append), tiap giliran berikutnya mengunggah ulang
-      // semua foto yang sudah ada: foto ke-2 mengirim A+B, ke-3 mengirim A+B+C. Dari
-      // uplink HP itu berebut bandwidth dengan request foto baru → stream terasa macet.
-      // Terukur: sesi berfoto rata-rata 187 kB vs 3 kB untuk sesi teks (62×).
-      // Foto tetap tampil di layar selama sesi berjalan (state React), yang tidak
-      // disimpan hanyalah salinan permanennya.
       const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
       setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
-      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
+      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
     };
 
     const toolsUsed = new Set<string>();
     try {
-      const ai = await aiPromise;
       // Mesin streaming dipakai SEMUA jalur (teks & foto) — dulu jalur foto
       // non-stream tanpa progress: user lihat layar diam lalu jawaban muncul
       // sekaligus, padahal foto paling lambat (OCR → search → 2nd-pass).
@@ -480,7 +445,7 @@ export default function App() {
       let fullText: string;
       if (attachments && attachments.length > 0) {
         // Jalur foto: sekarang streaming + progress event (OCR → cocokkan manual → diagnosis)
-        fullText = await ai.generateResponse(
+        fullText = await generateResponse(
           selectedModel, userName, currentMessages, content, attachments,
           onChunkCb, onAgentEventCb,
         );
@@ -488,11 +453,11 @@ export default function App() {
         const useAgentic = shouldUseAgentic(content);
         try {
           fullText = useAgentic
-            ? await ai.generateResponseAgentic(
+            ? await generateResponseAgentic(
                 selectedModel, userName, currentMessages, content,
                 onChunkCb, onAgentEventCb,
               )
-            : await ai.generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         } catch (agErr) {
           // Fallback: agentic gagal SEBELUM streaming jawaban → diam-diam pakai single-pass
           // supaya tidak tampil error ke user. Kalau sudah terlanjur streaming, lempar ulang.
@@ -500,7 +465,7 @@ export default function App() {
           if (!useAgentic || streamedAny || aborted) throw agErr;
           console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
           setAgentEvents([]);
-          fullText = await ai.generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         }
       }
 
@@ -517,27 +482,21 @@ export default function App() {
         return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
       });
       persist(fullText);
-      logCost(sessionSnapshot, [...toolsUsed], ai.getQuestionUsage());
+      logCost(sessionSnapshot, [...toolsUsed]);
 
       // Deteksi ilmu lapangan DARI pesan teknisi (async, non-blocking pasca-jawaban).
       // Kalau AI menangkap ada ilmu reusable → tempel candidate ke pesan → kartu muncul.
       if (content.trim()) {
-        import('./services/fieldNotes')
-          .then(fn => fn.detectFieldKnowledge(content, selectedModel))
-          .then(candidate => {
-            if (!candidate) return;
-            if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
-            setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
-          }).catch(() => {});
+        detectFieldKnowledge(content, selectedModel).then(candidate => {
+          if (!candidate) return;
+          if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
+          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
+        }).catch(() => {});
       }
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
-      // Stream putus di upstream bukan salah teknisi maupun API key — pesannya harus
-      // menuntun ke aksi yang benar (kirim ulang), bukan menyuruh mengecek kredensial.
-      setError(err.message?.includes('Stream terputus')
-        ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
-        : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
+      setError('Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
     } finally {
       setIsTyping(false);
       setIsStreaming(false);
@@ -715,7 +674,6 @@ export default function App() {
             if (idx < 0) return;
             const asst = msgs[idx];
             const q = idx > 0 && msgs[idx - 1].role === 'user' ? msgs[idx - 1].content : '';
-            setFieldNoteMounted(true);
             setFieldNoteState({ messageId: id, candidate: asst.knowledgeCandidate, question: q, answer: asst.content });
           }}
           agentEvents={agentEvents}
@@ -743,23 +701,19 @@ export default function App() {
       />
 
       {/* ── Catatan Lapangan Modal ── */}
-      {fieldNoteMounted && (
-        <Suspense fallback={null}>
-          <FieldNoteModal
-            isOpen={fieldNoteState !== null}
-            onClose={() => setFieldNoteState(null)}
-            onSaved={() => {
-              const id = fieldNoteState?.messageId;
-              if (id) setMessages(prev => prev.map(m => m.id === id ? { ...m, knowledgeCandidate: undefined } : m));
-            }}
-            model={selectedModel}
-            candidate={fieldNoteState?.candidate}
-            sourceMessageId={fieldNoteState?.messageId}
-            sourceQuestion={fieldNoteState?.question}
-            sourceAnswer={fieldNoteState?.answer}
-          />
-        </Suspense>
-      )}
+      <FieldNoteModal
+        isOpen={fieldNoteState !== null}
+        onClose={() => setFieldNoteState(null)}
+        onSaved={() => {
+          const id = fieldNoteState?.messageId;
+          if (id) setMessages(prev => prev.map(m => m.id === id ? { ...m, knowledgeCandidate: undefined } : m));
+        }}
+        model={selectedModel}
+        candidate={fieldNoteState?.candidate}
+        sourceMessageId={fieldNoteState?.messageId}
+        sourceQuestion={fieldNoteState?.question}
+        sourceAnswer={fieldNoteState?.answer}
+      />
 
       {/* ── Delete All Confirmation Dialog ── */}
       <AnimatePresence>

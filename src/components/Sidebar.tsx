@@ -1,15 +1,12 @@
 
-import { useState, useEffect, lazy, Suspense } from 'react';
+import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
 import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3, Bookmark, Tractor, History as HistoryIcon } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { PocketItem } from '../services/storage';
-// Dua modal terberat di app (MonitorModal sendirian ~52 KB sumber, dan cuma bisa
-// dibuka owner). Keduanya dimuat saat tombolnya benar-benar ditekan — bukan ikut
-// bundle awal yang harus diunduh setiap teknisi tiap buka app.
-const SupportModal = lazy(() => import('./SupportModal').then(mod => ({ default: mod.SupportModal })));
-const MonitorModal = lazy(() => import('./MonitorModal').then(mod => ({ default: mod.MonitorModal })));
+import { SupportModal } from './SupportModal';
+import { MonitorModal } from './MonitorModal';
 
 // Panel Monitoring khusus owner. HANYA untuk menyembunyikan tombolnya — gerbang
 // sebenarnya ada di server (/v1/dashboard cek ADMIN_EMAILS terhadap token), jadi
@@ -93,11 +90,6 @@ export function Sidebar({
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const [showMonitor, setShowMonitor] = useState(false);
-  // Latch — sekali dibuka, komponennya tetap ter-mount walau ditutup. Penting karena
-  // animasi keluar (AnimatePresence di dalam modal) butuh komponennya masih hidup;
-  // kalau di-unmount begitu open=false, modal hilang mendadak tanpa transisi.
-  const [supportMounted, setSupportMounted] = useState(false);
-  const [monitorMounted, setMonitorMounted] = useState(false);
   const isAdmin = ADMIN_EMAILS.includes((user?.email ?? '').toLowerCase());
 
   useEffect(() => {
@@ -460,7 +452,7 @@ export function Sidebar({
                     </button>
                     {isAdmin && (
                       <button
-                        onClick={() => { setShowUserMenu(false); setMonitorMounted(true); setShowMonitor(true); }}
+                        onClick={() => { setShowUserMenu(false); setShowMonitor(true); }}
                         className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
                       >
                         <BarChart3 size={14} className="text-[var(--accent-main)]" />
@@ -468,7 +460,7 @@ export function Sidebar({
                       </button>
                     )}
                     <button
-                      onClick={() => { setShowUserMenu(false); setSupportMounted(true); setShowSupport(true); }}
+                      onClick={() => { setShowUserMenu(false); setShowSupport(true); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
                     >
                       <HelpCircle size={14} className="text-[var(--text-muted)]" />
@@ -564,16 +556,8 @@ export function Sidebar({
         </div>
       </m.div>
 
-      {supportMounted && (
-        <Suspense fallback={null}>
-          <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
-        </Suspense>
-      )}
-      {isAdmin && monitorMounted && (
-        <Suspense fallback={null}>
-          <MonitorModal open={showMonitor} onClose={() => setShowMonitor(false)} />
-        </Suspense>
-      )}
+      <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
+      {isAdmin && <MonitorModal open={showMonitor} onClose={() => setShowMonitor(false)} />}
     </>
   );
 }

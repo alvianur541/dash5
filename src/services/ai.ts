@@ -2,8 +2,8 @@ import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, getEmbedding, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 import { isSemanticEligible, hasSemanticEntries, readSemanticCache, writeSemanticCache } from './semanticCache';
-import { PROXY_URL } from './proxy';
 
+const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
@@ -72,6 +72,13 @@ function fileToInlineData(file: File): Promise<InlineDataPart> {
   });
 }
 
+/** Warm-up proxy saat app dibuka — bangunkan instance Cloud Run (cold start bisa 2-5s)
+ *  + buka koneksi TLS keep-alive, supaya pertanyaan PERTAMA tidak menanggung biaya itu.
+ *  Fire-and-forget; /health tanpa auth & tanpa efek samping. */
+export function warmupProxy(): void {
+  fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
+}
+
 /** Fetch dengan hard timeout — mencegah hang forever pada koneksi buruk */
 async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Promise<Response> {
   const ctrl = new AbortController();
@@ -89,19 +96,15 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
 // ── Token usage accumulator (per pertanyaan) ────────────────────────────────
 // resetUsage() di awal tiap entry publik; getQuestionUsage() dibaca App.tsx utk ledger.
 // Single-active-question → accumulator module-level aman.
-let _usage = { input: 0, output: 0, thinking: 0, calls: 0 };
-export function resetUsage(): void { _usage = { input: 0, output: 0, thinking: 0, calls: 0 }; }
-export function getQuestionUsage(): { input: number; output: number; thinking: number; calls: number; model: string } {
+let _usage = { input: 0, output: 0, calls: 0 };
+export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0 }; }
+export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
   return { ..._usage, model: MODEL };
 }
-// thoughts = token "thinking" model. Ditagih sebagai OUTPUT oleh Gemini tapi dulu tidak
-// dihitung sama sekali → ledger biaya under-report DAN penyebab lambat terbesar tak terlihat
-// di log (jawaban pendek tapi stream lama = thinking, bukan panjang jawaban).
-function addUsage(input?: number, output?: number, thoughts?: number): void {
-  _usage.input   += input || 0;
-  _usage.output  += (output || 0) + (thoughts || 0);
-  _usage.thinking += thoughts || 0;
-  _usage.calls   += 1;
+function addUsage(input?: number, output?: number): void {
+  _usage.input += input || 0;
+  _usage.output += output || 0;
+  _usage.calls += 1;
 }
 
 export async function callProxy(body: VRequest, enableGoogleSearch = false, modelOverride?: string): Promise<VResponse> {
@@ -119,7 +122,7 @@ export async function callProxy(body: VRequest, enableGoogleSearch = false, mode
   }
   const json = await res.json();
   const u = json?.usageMetadata ?? {};
-  addUsage(u.promptTokenCount, u.candidatesTokenCount, u.thoughtsTokenCount);
+  addUsage(u.promptTokenCount, u.candidatesTokenCount);
   return json as VResponse;
 }
 
@@ -436,11 +439,6 @@ function collapseDegenerateLoops(text: string): string {
 // sudah pasti macet; hentikan baca supaya tidak bayar token sampah sampai cap.
 const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
 
-// Penanda jawaban terpotong (upstream putus di tengah stream). Dipakai juga sebagai gerbang
-// agar jawaban buntung TIDAK masuk answer-cache / semantic-cache selama 3 hari.
-export const STREAM_CUT_NOTE =
-  '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
-
 export async function callProxyStream(
   body: VRequest,
   onChunk: (text: string) => void,
@@ -450,21 +448,11 @@ export async function callProxyStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const doFetch = () => fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
+  const res = await fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
   }, 60_000);
-
-  let res = await doFetch();
-  // 401/503 dari verifyToken proxy kerap transien: verifikasi token itu round-trip
-  // jaringan Cloud Run → Supabase /auth/v1/user, dan satu hiccup di situ dulu langsung
-  // jadi banner merah walau token teknisi sah. Satu percobaan ulang menutup kasus itu.
-  if (!res.ok && (res.status === 401 || res.status === 503)) {
-    console.warn('[stream] %d dari proxy — retry sekali (kemungkinan auth transien)', res.status);
-    await new Promise(r => setTimeout(r, 800));
-    res = await doFetch();
-  }
   if (!res.ok) throw new Error(`Stream error ${res.status}`);
   if (!res.body) throw new Error('Stream response has no body');
 
@@ -472,9 +460,7 @@ export async function callProxyStream(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
-  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } | null = null;
-
-  let upstreamError: string | null = null;
+  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -488,27 +474,10 @@ export async function callProxyStream(
       if (!jsonStr || jsonStr === '[DONE]') continue;
       try {
         const json = JSON.parse(jsonStr);
-        // Proxy mengirim {"error":"Stream failed"} / {"error":"Upstream request failed"}
-        // saat Vertex menolak atau koneksi putus. Event itu tak punya `candidates`, jadi
-        // dulu DIBUANG diam-diam — akibatnya jawaban terpotong tampil seolah utuh, atau
-        // kosong sama sekali lalu jatuh ke template "sistem tidak bisa memproses".
-        if (json.error) { upstreamError = String(json.error); break; }
         if (json.usageMetadata) lastUsage = json.usageMetadata; // kumulatif; chunk terakhir menang
         const text = getText(json.candidates?.[0]?.content?.parts ?? []);
         if (text) { fullText += text; onChunk(text); }
       } catch { /* ignore malformed chunk */ }
-    }
-    if (upstreamError) {
-      reader.cancel().catch(() => {});
-      // Belum ada teks sama sekali → lempar error eksplisit supaya App bisa menampilkan
-      // pesan yang benar ("koneksi terputus, kirim ulang"), bukan menyalahkan API key.
-      if (!fullText.trim()) throw new Error(`Stream terputus: ${upstreamError}`);
-      // Sudah sebagian tampil → jangan berlagak utuh. Diagnosis yang buntung tapi
-      // terlihat selesai jauh lebih berbahaya daripada error yang jujur.
-      console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
-      fullText += STREAM_CUT_NOTE;
-      onChunk(STREAM_CUT_NOTE);
-      break;
     }
     // Loop degeneratif terdeteksi di tail → stop baca (hemat token), teks
     // dibersihkan sebelum return; UI final di-overwrite dgn hasil bersih.
@@ -518,7 +487,7 @@ export async function callProxyStream(
       break;
     }
   }
-  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount, lastUsage?.thoughtsTokenCount);
+  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
   return collapseDegenerateLoops(fullText);
 }
 
@@ -1288,9 +1257,7 @@ export async function generateResponseStream(
   }, onChunk, gsTechnical);
 
   // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
-  // Jawaban TERPOTONG tidak boleh masuk cache — kalau lolos, versi buntung itu yang
-  // dilayani ke pertanyaan identik/parafrase selama TTL 3 hari.
-  if (cacheKey && routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
+  if (cacheKey && routeResult.type === 'rag_found' && fullText) {
     writeAnswerCache(cacheKey, fullText);
     // Semantic cache: butuh embedding query. Kalau lookup di atas tak jalan (cache kosong /
     // belum pernah embed), hitung sekarang — sekali, dan hasilnya melayani parafrase berikutnya.
@@ -1366,13 +1333,7 @@ export async function generateResponse(
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
       .map(r => r.value);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-
-    // Foto SENGAJA belum dimasukkan ke currentParts. Kalau OCR berhasil baca kode DAN
-    // data manual ketemu, foto tak perlu dikirim ULANG ke model utama: jawabannya wajib
-    // bersumber dari chunk manual (aturan anti-halu), bukan dari piksel. Mengirim ulang =
-    // ~1000 token gambar + memaksa jalur multimodal yang jauh lebih lambat. Foto tetap
-    // dikirim kalau OCR gagal / tak ada kode — di situ visualnya memang satu-satunya sumber.
-    let sendImageToModel = true;
+    currentParts.push(...imageParts);
 
     try {
       emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
@@ -1445,7 +1406,6 @@ export async function generateResponse(
         }
 
         currentParts.push({ text: `${note}\n\n${injection}` });
-        sendImageToModel = false;   // kode + data manual sudah lengkap → foto tidak perlu diulang
       } else {
         emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
         currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
@@ -1456,27 +1416,17 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
-    // Foto hanya disertakan kalau memang masih dibutuhkan (OCR gagal / tak ada kode).
-    if (sendImageToModel) currentParts.unshift(...imageParts);
-
     // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
-    // Disamakan dengan jalur fault code TEKS (4096 / 'low'). Sebelumnya 8192 + 'medium' —
-    // paling berat di seluruh app dan jadi penyumbang utama stream ~50 dtk. Reasoning berat
-    // tak diperlukan: chunk manual sudah disuntik terstruktur, tugas model = menjelaskan &
-    // merapikan, bukan menyimpulkan dari nol. Kalau OCR gagal (foto ikut dikirim), pakai
-    // 'medium' — di situ model memang harus membaca sendiri dari gambar.
+    // 8192 (turun dari 16384): multi-code image analysis tetap muat — jalur fault
+    // code teks pakai 4096 & cukup. Cap lebih rendah = latency & biaya turun.
     const body: VRequest = {
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: {
-        maxOutputTokens: 4096,
-        temperature: 0.3,
-        thinkingConfig: { thinkingLevel: sendImageToModel ? 'medium' : 'low' },
-      },
+      generationConfig: { maxOutputTokens: 8192, temperature: 0.3, thinkingConfig: { thinkingLevel: 'medium' } },
     };
 
     // Streaming kalau caller kasih onChunk — jawaban muncul bertahap seperti jalur

@@ -5,11 +5,12 @@
 import { Suspense, lazy, useEffect } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { X, Trash2 } from 'lucide-react';
+import rehypeSanitize from 'rehype-sanitize';
+import remarkGfm from 'remark-gfm';
 import { PocketItem } from '../services/storage';
-import { stripLatex } from './ChatWindow';
+import { stripLatex, SANITIZE_SCHEMA } from './ChatWindow';
 
-// Sama seperti ChatWindow: parser markdown baru diunduh saat isi Saku dibuka.
-const MarkdownView = lazy(() => import('./MarkdownView'));
+const ReactMarkdown = lazy(() => import('react-markdown'));
 
 function formatSavedAt(ts: number): string {
   return new Date(ts).toLocaleString('id-ID', {
@@ -64,13 +65,15 @@ export function PocketModal({ item, onClose, onDelete }: {
               <div className="pocket-question">{item.question || '(tanpa pertanyaan)'}</div>
               <div className="markdown-body">
                 <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
-                  <MarkdownView
+                  <ReactMarkdown
+                    remarkPlugins={[remarkGfm]}
+                    rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}
                     components={{
                       table: ({ children }) => (
                         <div className="markdown-table-wrap"><table>{children}</table></div>
                       ),
                     }}
-                  >{stripLatex(item.answer)}</MarkdownView>
+                  >{stripLatex(item.answer)}</ReactMarkdown>
                 </Suspense>
               </div>
             </div>
