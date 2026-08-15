@@ -14,7 +14,8 @@
 //
 // Riwayat: 1 = 'dash-ans:' · 2 = 'dash-ans2:' (scrub "Hitachi Astrea")
 //          3 = perbaikan mutu retrieval + skoring keyword RPC (15 Agu 2026)
-export const CACHE_GEN = 3;
+//          4 = penyetelan latensi: topN 5→4, rerank cap 45→24, term 10→7 (15 Agu 2026)
+export const CACHE_GEN = 4;
 
 /** Prefix ber-generasi. Ganti CACHE_GEN → semua kunci lama otomatis tidak cocok lagi. */
 export const ANSWER_CACHE_PREFIX   = `dash-ans-g${CACHE_GEN}:`;

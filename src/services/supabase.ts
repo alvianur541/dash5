@@ -185,25 +185,32 @@ export async function saveFeedback(payload: {
 // sesungguhnya adalah Cohere rerank (cross-encoder — membaca query + dokumen bersamaan,
 // jadi SANGGUP menemukan angka di tengah chunk panjang). Ambang ini cuma jaring kasar.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Cap dokumen yang dikirim ke Cohere rerank.
-// Dulu 15, dan itu bottleneck utama kualitas jawaban: 6 slot teratas selalu dihabiskan
-// hasil keyword RPC, menyisakan cuma ~9 slot untuk vector — jendela recall 0.7% dari
-// 1.259 chunk, dengan urutan vector yang nyaris tanpa sinyal (lihat catatan di atas).
-// Kasus nyata: "berapa berat swing motor" → chunk jawaban (WM Disassembly of Swing Motor,
-// "swing motor assembly weight: 48 kg") tak pernah masuk kandidat, AI menjawab 220 kg
-// (itu berat swing DEVICE) sambil bilang datanya tidak ada.
-// 45 = beri reranker bahan yang cukup. Aman untuk rerank-v4.0-fast (default server);
-// kalau nanti pindah ke rerank-v4.0-pro yang jauh lebih lambat, turunkan lagi ke ~20.
-const RERANK_INPUT_CAP = 45;
-// Kandidat vector yang diambil sebelum cap di atas. Naik 20→40 supaya slot rerank yang
-// bertambah benar-benar terisi kandidat baru, bukan cuma padding.
-const VECTOR_MATCH_COUNT = 40;
-// Pagar ukuran badan request rerank. WAJIB ADA sejak RERANK_INPUT_CAP naik ke 45:
-// proxy Cloud Run memakai `express.json({ limit: '1mb' })` untuk /v1/rerank, sedangkan
-// chunk TERBESAR di DB 27.812 char → 45 × 27.812 = 1,25 MB = **413 Payload Too Large**
-// dan pencarian mati total untuk query itu. (Cap lama 15 kebetulan aman: 417 KB.)
-// 500 KB memberi ruang untuk escaping JSON + query + overhead HTTP di bawah batas 1 MB.
-// Dokumen sudah urut terbaik-dulu, jadi yang terpotong adalah ekor yang paling tidak relevan.
+// Cap dokumen yang dikirim ke Cohere rerank — INI PENYUMBANG LATENSI TERBESAR di
+// rantai pencarian, karena biaya rerank naik seiring jumlah dokumen.
+//
+// Riwayat penyetelan (jangan diulang dari nol):
+//   15 → bottleneck MUTU. 6 slot teratas selalu dihabiskan keyword RPC, menyisakan ~9
+//        slot vector = jendela recall 0,7% dari 1.259 chunk. Kasus nyata: "berapa berat
+//        swing motor" → chunk jawaban ("swing motor assembly weight: 48 kg") tak pernah
+//        masuk kandidat, AI menjawab 220 kg (itu swing DEVICE) sambil bilang data tak ada.
+//   45 → mutu beres tapi LATENSI TERASA BERAT oleh Alvian di produksi.
+//   24 → titik tengah yang dipakai sekarang: 10 slot keyword + ~14 vector. Masih 60%
+//        lebih lapang dari 15 (chunk jawaban kasus di atas ada di peringkat keyword #7,
+//        jadi tetap tertangkap), tapi beban rerank hampir separuh dari 45.
+// Kalau masih terasa lambat, turunkan ke 18 SEBELUM menyentuh yang lain — ini pengungkit
+// latensi paling besar per satu angka.
+const RERANK_INPUT_CAP = 24;
+// Kandidat vector sebelum cap di atas. Disamakan dengan RERANK_INPUT_CAP — mengambil
+// lebih banyak dari yang bisa dipakai cuma menambah payload tanpa menambah pilihan.
+// DIUKUR: match_count 20 vs 40 sama-sama ~25 ms (top-N heapsort, 27 kB memory), jadi
+// angka ini BUKAN sumber latensi. Sempat terbaca 269 ms — itu cold cache, bukan biaya nyata.
+const VECTOR_MATCH_COUNT = 24;
+// Pagar ukuran badan request rerank.
+// ⚠️ KOREKSI: pagar ini semula dipasang karena dikira 45 × 27.812 char (chunk terbesar)
+// akan menjebol `express.json({ limit: '1mb' })` di /v1/rerank. ITU KELIRU — `rerankWithCohere`
+// sudah memotong tiap dokumen ke RERANK_DOC_CAP (2.500 char) sebelum dikirim, jadi payload
+// maksimal sebenarnya 24 × 2.500 ≈ 60 KB. Budget di bawah ini TIDAK PERNAH tersentuh.
+// Tetap dipertahankan sebagai jaring pengaman kalau RERANK_DOC_CAP dinaikkan/dihapus nanti.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
 /** Ambil dokumen sebanyak mungkin untuk rerank, dibatasi JUMLAH dan TOTAL UKURAN.
@@ -696,8 +703,12 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 5,   // 5 chunk (naik dari 4): diagnosa gejala sering melibatkan >1 tabel troubleshooting
-              // (mis. E-8 Travel HP Mode + E-13 overload) + prosedur + spec — 4 kadang buang 1 cabang
+  topN = 4,   // 4 chunk final. Sempat 5, diturunkan lagi karena latensi terasa berat di
+              // produksi (Alvian, 15 Agu 2026). Efeknya ganda: rerankPool ikut turun
+              // (max(topN*2, 8) = 8) DAN konteks yang dikirim ke Gemini ~20% lebih kecil,
+              // jadi input token turun → stream mulai lebih cepat.
+              // ⚠️ Kalau diagnosa gejala mulai kehilangan cabang (mis. E-8 Travel HP Mode
+              // + E-13 overload perlu 2 tabel troubleshooting sekaligus), naikkan lagi ke 5.
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };
@@ -748,20 +759,23 @@ export async function searchTechnicalManualMulti(
     //   ("swing motor weight" tak pernah muncul — yang tertulis "swing motor ASSEMBLY weight"),
     //   jadi frasa penuh sering menyumbang NOL. Bigram "swing motor" tetap kena → term
     //   paling diskriminatif akhirnya ikut menyumbang skor.
-    // BIAYA TERUKUR (EXPLAIN ANALYZE, ZX200-5G): 5 term 245 ms → 10 term 381 ms.
-    // Tambahan ~136 ms ini SEBAGIAN BESAR TERTUTUPI karena rankedPromise berjalan
-    // paralel dengan vectorPromise (embed + match_documents) yang sekelas waktunya.
-    // Jangan naikkan slice(0, 10) tanpa mengukur ulang — biayanya linear per term.
+    // BIAYA TERUKUR (EXPLAIN ANALYZE ×4, ZX200-5G) — JUMLAH TERM adalah SATU-SATUNYA
+    // variabel mahal di RPC ini, sekitar +35 ms per term:
+    //     6 term 240 ms · 7 term 283 ms · 10 term 387 ms
+    // Sebaliknya p_match_count TIDAK berbiaya: ambil 6/8/10/12 sama-sama ~240 ms
+    // (LIMIT tidak mengubah pemindaian). Jadi: hemat di TERM, jangan di recall.
+    // 7 = cukup untuk frasa penuh + semua bigram query pendek. Query pendek seperti
+    // "swing motor weight" cuma menghasilkan 6 term, jadi tak tersentuh batas ini.
     const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
-    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 10);
+    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 7);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
     const wantsNumber = words.some(w => SPEC_TERMS.has(w)) || NUMERIC_INTENT_RE.test(primaryQuery);
 
     const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
-      // 6 → 12: slot rerank sudah dinaikkan ke 45, jadi keyword tak perlu lagi berebut
-      // sempit dengan vector. Lebih banyak kandidat keyword = lebih besar peluang chunk
-      // ber-angka ikut, dan Cohere yang memutuskan mana yang benar.
-      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 12,
+      // 10 (dari 6). Sengaja TIDAK ikut diturunkan saat latensi dipangkas: sudah diukur
+      // bahwa p_match_count tidak berbiaya sama sekali (6/8/10/12 → sama ~240 ms).
+      // Menurunkannya cuma mengorbankan recall tanpa menghemat waktu sedetik pun.
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
