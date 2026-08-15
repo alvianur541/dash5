@@ -408,11 +408,19 @@ export default function App() {
     const persist = (fullText: string) => {
       const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
       const newMessages = [...currentMessages, userMessage, assistantMessage];
+      // Base64 foto DIBUANG sebelum disimpan — ke localStorage MAUPUN ke Supabase.
+      // Dulu Supabase menerima `newMessages` yang masih utuh, dan karena penyimpanannya
+      // upsert SELURUH array (bukan append), tiap giliran berikutnya mengunggah ulang
+      // semua foto yang sudah ada: foto ke-2 mengirim A+B, ke-3 mengirim A+B+C. Dari
+      // uplink HP itu berebut bandwidth dengan request foto baru → stream terasa macet.
+      // Terukur: sesi berfoto rata-rata 187 kB vs 3 kB untuk sesi teks (62×).
+      // Foto tetap tampil di layar selama sesi berjalan (state React), yang tidak
+      // disimpan hanyalah salinan permanennya.
       const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
       setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
-      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, newMessages);
+      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
     };
 
     const toolsUsed = new Set<string>();
@@ -525,7 +533,11 @@ export default function App() {
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
-      setError('Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
+      // Stream putus di upstream bukan salah teknisi maupun API key — pesannya harus
+      // menuntun ke aksi yang benar (kirim ulang), bukan menyuruh mengecek kredensial.
+      setError(err.message?.includes('Stream terputus')
+        ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
+        : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
     } finally {
       setIsTyping(false);
       setIsStreaming(false);
