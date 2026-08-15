@@ -2,8 +2,8 @@ import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, getEmbedding, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 import { isSemanticEligible, hasSemanticEntries, readSemanticCache, writeSemanticCache } from './semanticCache';
+import { PROXY_URL } from './proxy';
 
-const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
@@ -70,13 +70,6 @@ function fileToInlineData(file: File): Promise<InlineDataPart> {
     reader.onerror = reject;
     reader.readAsDataURL(file);
   });
-}
-
-/** Warm-up proxy saat app dibuka — bangunkan instance Cloud Run (cold start bisa 2-5s)
- *  + buka koneksi TLS keep-alive, supaya pertanyaan PERTAMA tidak menanggung biaya itu.
- *  Fire-and-forget; /health tanpa auth & tanpa efek samping. */
-export function warmupProxy(): void {
-  fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
 }
 
 /** Fetch dengan hard timeout — mencegah hang forever pada koneksi buruk */

@@ -4,14 +4,14 @@ import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
 import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, Loader2, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
 import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../services/ai';
 
-const ReactMarkdown = lazy(() => import('react-markdown'));
+// Seluruh parser markdown (react-markdown + remark-gfm + rehype-sanitize, ~163 KB)
+// hidup di MarkdownView dan HANYA diunduh saat jawaban AI pertama dirender.
+const MarkdownView = lazy(() => import('./MarkdownView'));
 
 // Hapus LaTeX math notation yang bocor dari AI ($P_{LS}$, $$...$$, dll).
 // Renderer tidak support LaTeX — tampil sebagai raw text yang membingungkan user.
@@ -29,26 +29,6 @@ export function stripLatex(text: string): string {
     // Deterministik di renderer — menutup juga jawaban lama yang sudah ter-cache.
     .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
-
-// Strict markdown sanitize schema — block iframe, embed, object, form, dll.
-// Whitelist explicit tag yang aman untuk teknis content (table, code, dll).
-export const SANITIZE_SCHEMA = {
-  ...defaultSchema,
-  tagNames: [
-    'p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
-    'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'a', 'span', 'div', 'hr',
-  ],
-  attributes: {
-    ...defaultSchema.attributes,
-    a: [['href', /^(https?:\/\/|mailto:|tel:)/i], 'title'],
-    code: ['className'],
-    span: ['className'],
-    div: ['className'],
-  },
-  protocols: { href: ['http', 'https', 'mailto', 'tel'] },
-};
 
 // Ekstrak teks polos dari node hast — untuk deteksi blockquote "catatan lapangan"
 // (biar bisa dikasih shading beda dari data manual resmi).
@@ -245,9 +225,7 @@ const MessageItem = memo(function MessageItem({
         <div className="ai-msg-wrap">
           <div className="markdown-body">
             <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}
+              <MarkdownView
                 components={{
                   // Tombol ekspansi di LUAR container scroll (absolute di outer) supaya
                   // tidak ikut tergeser saat tabel di-scroll horizontal.
@@ -297,7 +275,7 @@ const MessageItem = memo(function MessageItem({
                       : <strong>{children}</strong>;
                   },
                 }}
-              >{stripLatex(message.content)}</ReactMarkdown>
+              >{stripLatex(message.content)}</MarkdownView>
             </Suspense>
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
