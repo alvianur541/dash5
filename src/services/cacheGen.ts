@@ -1,0 +1,46 @@
+// Generasi cache jawaban — SATU angka yang membatalkan SEMUA cache sisi-klien.
+//
+// KENAPA ADA: cache jawaban disimpan di localStorage per-browser dengan TTL 3 hari.
+// Setiap kali pipeline retrieval / SYSTEM_PROMPT diperbaiki, jawaban lama yang SALAH
+// tetap tersaji dari cache sampai TTL habis — perbaikannya seolah tidak berpengaruh.
+// Kejadian nyata (15 Agu 2026): retrieval diperbaiki sampai chunk jawaban "berat swing
+// motor" naik #27→#7, tapi user tetap menerima jawaban lama "220 kg" dari cache.
+//
+// 🔴 NAIKKAN ANGKA INI setiap kali mengubah hal yang MENGUBAH ISI JAWABAN:
+//    - tuning retrieval (RERANK_INPUT_CAP, ambang, skoring RPC, chunking)
+//    - SYSTEM_PROMPT
+//    - scrub/format output
+//    Tidak perlu dinaikkan untuk perubahan UI/CSS/telemetri.
+//
+// Riwayat: 1 = 'dash-ans:' · 2 = 'dash-ans2:' (scrub "Hitachi Astrea")
+//          3 = perbaikan mutu retrieval + skoring keyword RPC (15 Agu 2026)
+export const CACHE_GEN = 3;
+
+/** Prefix ber-generasi. Ganti CACHE_GEN → semua kunci lama otomatis tidak cocok lagi. */
+export const ANSWER_CACHE_PREFIX   = `dash-ans-g${CACHE_GEN}:`;
+export const SEMANTIC_CACHE_PREFIX = `dash-sem-g${CACHE_GEN}:`;
+
+/**
+ * Hapus entri cache dari generasi LAMA (termasuk nama prefix sebelum skema ini ada).
+ * Tanpa ini entri basi menumpuk di localStorage sampai TTL-nya habis — memakan kuota,
+ * dan (yang lebih penting) untuk cache semantik entri lama tetap bisa TER-MATCH.
+ * Dipanggil sekali saat app start. Aman kalau localStorage mati/penuh.
+ */
+export function purgeStaleAnswerCaches(): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const hidup = [ANSWER_CACHE_PREFIX, SEMANTIC_CACHE_PREFIX];
+    // Semua kunci cache jawaban memakai salah satu dari dua akar ini.
+    const akar  = ['dash-ans', 'dash-sem'];
+    const buang: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (!akar.some(a => k.startsWith(a))) continue;      // bukan cache jawaban → jangan sentuh
+      if (hidup.some(p => k.startsWith(p))) continue;      // generasi sekarang → pertahankan
+      buang.push(k);
+    }
+    for (const k of buang) localStorage.removeItem(k);
+    if (buang.length) console.info('[cache] %d entri generasi lama dihapus', buang.length);
+  } catch { /* localStorage mati/penuh — cache opsional, jangan ganggu app */ }
+}

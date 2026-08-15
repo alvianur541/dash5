@@ -2,6 +2,7 @@ import { SYSTEM_PROMPT, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, getEmbedding, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 import { isSemanticEligible, hasSemanticEntries, readSemanticCache, writeSemanticCache } from './semanticCache';
+import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
@@ -1172,9 +1173,8 @@ async function resolveMultiAspectQuery(
 //   - HANYA rag_found (web/canned/casual TIDAK di-cache) — jaga anti-halu.
 //   - Query dgn rujukan konteks (itu/nya/tadi) di-skip (jawaban context-dependent).
 //   - Scope per userName (jawaban ber-nama tak bocor antar user), TTL 3 hari.
-// v2: rotasi prefix (dulu 'dash-ans:') — invalidasi cache lama yang masih memuat
-// "Hitachi Astrea" sebelum scrub diterapkan. Entri lama kadaluarsa sendiri via TTL.
-const ANSWER_CACHE_PREFIX = 'dash-ans2:';
+// Prefix-nya BER-GENERASI (lihat cacheGen.ts). Perbaikan retrieval/prompt tidak terasa
+// oleh user selama cache lama masih tersaji → naikkan CACHE_GEN saat mengubah isi jawaban.
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 

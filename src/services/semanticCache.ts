@@ -9,7 +9,8 @@
 // ≈4KB/entri; mentah ~55KB akan menjebol localStorage. Error kuantisasi ~0.4%,
 // jauh di bawah margin ambang 0.93.
 
-const PREFIX   = 'dash-sem:';
+import { SEMANTIC_CACHE_PREFIX as PREFIX } from './cacheGen';
+
 const MAX_ITEMS = 20;
 const TTL_MS   = 3 * 24 * 60 * 60 * 1000;
 /** Ambang cosine — konservatif. Parafrase asli biasanya 0.95+; beda komponen jatuh <0.90. */
