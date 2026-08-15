@@ -469,13 +469,56 @@ monitoring sendiri.
 
 **Prinsip:** `pg_dump` itu read-only — Supabase cloud tetap hidup dan dipakai teknisi selama proses ini.
 
-1. Jalankan di **subdomain testing** dulu (`staging.dash5.my.id`); produksi tidak disentuh.
-2. Test pakai akun sendiri — §7 nomor 1-7.
+### ⚠️ Staging butuh Cloud Run KEDUA — kalau tidak, chat tak bisa diuji
+
+Proxy Cloud Run cuma **satu** dan dipakai produksi. `verifyToken` di `server.js` memvalidasi token ke
+`SUPABASE_URL` miliknya sendiri. Jadi kalau frontend staging (pakai Supabase baru) memanggil proxy
+produksi (masih menunjuk Supabase lama), **setiap token ditolak 401** dan chat mati.
+
+Tanpa proxy kedua, yang bisa diuji di staging **hanya** §7 nomor 1–4 (login, search, riwayat chat —
+semuanya memanggil Supabase langsung dari browser). Nomor 5–6 **dan chat itu sendiri** lewat proxy,
+jadi tidak teruji sama sekali — padahal chat adalah inti aplikasinya.
+
+**Deploy proxy staging** (sekali jalan, hapus setelah cutover):
+
+```bash
+cd ~/dash5
+gcloud run deploy dash5-proxy-staging \
+  --source=cloudrun --region=us-central1 \
+  --project=project-1acf3a67-7f0a-48a3-822 --allow-unauthenticated \
+  --set-env-vars GOOGLE_CLOUD_PROJECT=project-1acf3a67-7f0a-48a3-822,\
+SUPABASE_URL=<URL-supabase-baru>,SUPABASE_ANON_KEY=<anon-baru>,SUPABASE_SERVICE_KEY=<service-role-baru>,\
+COHERE_API_KEY=<sama-dgn-produksi>,ALLOWED_ORIGIN=https://staging.dash5.my.id
+```
+
+⚠️ Di sini `--set-env-vars` **memang benar** — service baru, masih kosong. Untuk service produksi
+tetap `--update-env-vars`.
+
+⚠️ `ALLOWED_ORIGIN` **wajib** diisi origin staging, kalau tidak CORS menolak semua request.
+
+Lalu build frontend staging dengan proxy itu (bukan `/api`):
+
+```bash
+VITE_SUPABASE_URL=<URL-supabase-baru> \
+VITE_SUPABASE_ANON_KEY=<anon-baru> \
+VITE_VERTEX_PROXY_URL=https://dash5-proxy-staging-xxxx.us-central1.run.app \
+VITE_SITE_URL=https://staging.dash5.my.id \
+npm run build
+```
+
+Produksi **tidak tersentuh sama sekali** selama ini: Supabase cloud, Cloud Run produksi, dan
+`dash5.my.id` semuanya jalan seperti biasa.
+
+### Urutan
+
+1. Deploy **proxy staging** + build frontend staging → `staging.dash5.my.id`.
+2. Test sendiri — §7 nomor **1–7 lengkap**.
 3. Kalau yakin, ajak 1-2 teknisi coba di staging.
-4. Setelah stabil beberapa hari, arahkan domain produksi ke server baru (ganti target Tunnel —
-   hitungan menit).
-5. **Supabase cloud standby 1-2 minggu** setelah cutover sebagai jalur mundur.
-6. Setelah stabil 1-2 minggu, **baru** Okta (§8).
+4. Setelah stabil beberapa hari → **cutover produksi**: update env Cloud Run produksi
+   (`--update-env-vars`), build ulang frontend produksi, deploy.
+5. **Supabase cloud standby 1-2 minggu** sebagai jalur mundur. Jangan hapus.
+6. Hapus `dash5-proxy-staging` setelah cutover mulus.
+7. Setelah stabil 1-2 minggu, **baru** Okta (§8).
 
 ---
 
