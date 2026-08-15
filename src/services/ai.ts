@@ -467,11 +467,21 @@ export async function callProxyStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  // 40 dtk = standar tunggu Dash⁵ (Alvian, 15 Agu 2026). Turun dari 60 dtk yang dulu
+  // PERSIS SAMA dengan UPSTREAM_TIMEOUT_MS proxy — akibatnya keduanya menyerah bersamaan
+  // dan klien tak pernah tahu apakah proxy sempat mengirim pesan error yang berguna.
+  const STREAM_TIMEOUT_MS = 40_000;
+  // Watchdog TOKEN PERTAMA. Stream yang sehat mengeluarkan teks dalam hitungan detik;
+  // yang belum mengeluarkan SATU karakter pun setelah 22 dtk hampir pasti sudah mati.
+  // Tanpa ini, kegagalan baru ketahuan di detik ke-40 — kasus nyata dari waterfall
+  // Alvian: percobaan pertama menggantung 60 dtk (balas 662 B), percobaan kedua sukses
+  // 16 dtk → total tunggu ~76 dtk padahal jawabannya cuma butuh 16 dtk.
+  const FIRST_TOKEN_TIMEOUT_MS = 22_000;
   const doFetch = () => fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
-  }, 60_000);
+  }, STREAM_TIMEOUT_MS);
 
   // ── Percobaan ulang otomatis ────────────────────────────────────────────────
   // Kegagalan upstream (Vertex menolak / koneksi putus) sebagian besar TRANSIEN, dan
@@ -508,6 +518,16 @@ export async function callProxyStream(
   let upstreamError: string | null = null;
   let retryNeeded = false;
 
+  // Watchdog token pertama — dibatalkan begitu karakter pertama sampai ke layar.
+  let firstTokenSeen = false;
+  const watchdog = setTimeout(() => {
+    if (!firstTokenSeen) {
+      console.warn('[stream] %d dtk tanpa token pertama — batalkan & ulang', FIRST_TOKEN_TIMEOUT_MS / 1000);
+      reader.cancel().catch(() => {});
+    }
+  }, FIRST_TOKEN_TIMEOUT_MS);
+
+  try {
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -534,7 +554,10 @@ export async function callProxyStream(
         }
         if (json.usageMetadata) lastUsage = json.usageMetadata; // kumulatif; chunk terakhir menang
         const text = getText(json.candidates?.[0]?.content?.parts ?? []);
-        if (text) { fullText += text; onChunk(text); }
+        if (text) {
+          if (!firstTokenSeen) { firstTokenSeen = true; clearTimeout(watchdog); }
+          fullText += text; onChunk(text);
+        }
       } catch { /* ignore malformed chunk */ }
     }
     if (upstreamError) {
@@ -563,6 +586,17 @@ export async function callProxyStream(
       reader.cancel().catch(() => {});
       break;
     }
+  }
+  } finally {
+    clearTimeout(watchdog);
+  }
+
+  // Watchdog memutus stream sebelum satu token pun keluar → perlakukan seperti kegagalan
+  // upstream yang aman diulang (layar teknisi masih kosong, tak ada risiko teks dobel).
+  if (!firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT) {
+    console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
+    await new Promise(r => setTimeout(r, attempt * 900));
+    continue;
   }
 
   if (retryNeeded) continue;   // percobaan baru — fullText di-reset di awal iterasi
@@ -1453,12 +1487,18 @@ export async function generateResponse(
             : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
         });
         emit({ type: 'tool_call', tool: 'search_technical_manual' });
+        // Chunk per kode DIKECILKAN saat kodenya banyak — konteks tumbuh PERKALIAN, bukan
+        // penjumlahan: 4 kode × 3 chunk = 12 chunk (~11rb token) hanya dari fault code,
+        // dan itu langsung memperlambat token pertama. Untuk 3 kode ke atas, 2 chunk per
+        // kode sudah memuat tabel penyebab + tindakan — cukup untuk diagnosa per kode.
+        // (Alvian, 15 Agu 2026.)
+        const perCodeTopN = faultCodes.length >= 3 ? 2 : 3;
         // Search per code + 2nd-pass Engine Manual (sama seperti text path) — tanpa 2nd-pass,
         // P-code diagnosis tak ter-inject → AI ngarang dari training.
         const settled = await Promise.allSettled(
           faultCodes.map(async code => {
             const terms = extractSearchTerms(code);
-            let result = await searchTechnicalManualMulti(terms, model);
+            let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
             let content = result.content;
 
             // 2nd-pass: P-code hanya dari baris relevan (extractRelatedPCodes) — cegah 20+ embed calls.

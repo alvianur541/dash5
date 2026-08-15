@@ -20,7 +20,12 @@ if (ALLOWED_ORIGINS.length === 0) {
   console.error('ALLOWED_ORIGIN kosong / hanya "*" — CORS ditutup total. Set origin eksplisit.');
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
-const UPSTREAM_TIMEOUT_MS = 60_000;
+// 35 dtk — SENGAJA LEBIH PENDEK dari batas 40 dtk di klien (STREAM_TIMEOUT_MS di
+// src/services/ai.ts). Dulu keduanya sama-sama 60 dtk, jadi menyerah bersamaan dan klien
+// tak pernah menerima pesan error terstruktur dari sini — yang terlihat cuma "menggantung".
+// Dengan 35 < 40, proxy selalu sempat membalas alasan gagalnya sebelum klien menyerah.
+// ⚠️ Kalau angka klien diubah, angka ini harus tetap di bawahnya.
+const UPSTREAM_TIMEOUT_MS = 35_000;
 // Retry khusus 429 (kuota Vertex habis). Jeda tumbuh: 1,5s → 4s → 8s. Total tunggu
 // terburuk 13,5s, masih di dalam UPSTREAM_TIMEOUT_MS dan jauh lebih baik daripada
 // teknisi harus mengetik ulang pertanyaan. Angka kecil-dulu karena kuota Vertex

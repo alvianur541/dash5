@@ -194,12 +194,13 @@ const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 //        swing motor" → chunk jawaban ("swing motor assembly weight: 48 kg") tak pernah
 //        masuk kandidat, AI menjawab 220 kg (itu swing DEVICE) sambil bilang data tak ada.
 //   45 → mutu beres tapi LATENSI TERASA BERAT oleh Alvian di produksi.
-//   24 → titik tengah yang dipakai sekarang: 10 slot keyword + ~14 vector. Masih 60%
-//        lebih lapang dari 15 (chunk jawaban kasus di atas ada di peringkat keyword #7,
-//        jadi tetap tertangkap), tapi beban rerank hampir separuh dari 45.
-// Kalau masih terasa lambat, turunkan ke 18 SEBELUM menyentuh yang lain — ini pengungkit
-// latensi paling besar per satu angka.
-const RERANK_INPUT_CAP = 24;
+//   24 → latensi turun, mutu masih terjaga.
+//   12 → dipakai sekarang atas permintaan Alvian (latensi jadi prioritas, 15 Agu 2026).
+//        ⚠️ Angka ini di BAWAH cap awal (15), jadi HANYA aman karena kandidat sekarang
+//        DISILANG keyword/vector (lihat blok penggabungan di searchTechnicalManualMulti).
+//        Tanpa penyilangan, 12 slot akan dimakan 10 keyword dan vector cuma sisa 2.
+//        JANGAN kembalikan urutan "keyword dulu semua" selama cap masih serendah ini.
+const RERANK_INPUT_CAP = 12;
 // Kandidat vector sebelum cap di atas. Disamakan dengan RERANK_INPUT_CAP — mengambil
 // lebih banyak dari yang bisa dipakai cuma menambah payload tanpa menambah pilihan.
 // DIUKUR: match_count 20 vs 40 sama-sama ~25 ms (top-N heapsort, 27 kB memory), jadi
@@ -703,12 +704,12 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 4,   // 4 chunk final. Sempat 5, diturunkan lagi karena latensi terasa berat di
-              // produksi (Alvian, 15 Agu 2026). Efeknya ganda: rerankPool ikut turun
-              // (max(topN*2, 8) = 8) DAN konteks yang dikirim ke Gemini ~20% lebih kecil,
-              // jadi input token turun → stream mulai lebih cepat.
-              // ⚠️ Kalau diagnosa gejala mulai kehilangan cabang (mis. E-8 Travel HP Mode
-              // + E-13 overload perlu 2 tabel troubleshooting sekaligus), naikkan lagi ke 5.
+  topN = 3,   // 3 chunk final (5 → 4 → 3, diturunkan bertahap atas permintaan Alvian karena
+              // latensi jadi prioritas, 15 Agu 2026). Konteks ke Gemini ~40% lebih kecil
+              // dibanding 5 → input token turun → token pertama muncul lebih cepat.
+              // ⚠️ Ini angka paling sensitif ke MUTU jawaban. Kalau diagnosa gejala mulai
+              // kehilangan cabang (mis. E-8 Travel HP Mode + E-13 overload butuh 2 tabel
+              // troubleshooting sekaligus), inilah yang pertama harus dinaikkan lagi.
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };
@@ -829,24 +830,42 @@ export async function searchTechnicalManualMulti(
     vectorPromise,
   ]);
 
-  // Collect keyword hits. Urutan penting: hasil BER-PERINGKAT duluan supaya slot
-  // RERANK_INPUT_CAP diisi kandidat terbaik, bukan sisa acak.
-  const seen  = new Set<string>();
-  const allDocs: string[] = [];
+  // Kandidat dikumpulkan ke DUA daftar terpisah dulu, lalu DISILANG.
+  //
+  // ⚠️ KENAPA DISILANG, JANGAN DIKEMBALIKAN KE "KEYWORD DULU SEMUA":
+  // dulu keyword diisi semua lebih dulu, baru vector. Itu aman waktu cap masih besar,
+  // tapi RERANK_INPUT_CAP sekarang 12 — dengan p_match_count 10, keyword akan memakan
+  // 10 dari 12 slot dan menyisakan HANYA 2 untuk vector. Itu lebih buruk daripada
+  // kondisi awal (cap 15 = 6 keyword + 9 vector) dan membatalkan perbaikan recall.
+  // Dengan silang, cap memotong ADIL: 12 slot ≈ 6 keyword + 6 vector.
+  // Slot pertama tetap milik keyword, jadi fault code (yang butuh kecocokan literal)
+  // tidak dirugikan.
+  const kwDocs:  string[] = [];
+  const vecDocs: string[] = [];
 
   if (rankedSettled.status === 'fulfilled') {
-    for (const c of rankedSettled.value) {
-      if (c && !seen.has(c)) { seen.add(c); allDocs.push(c); }
-    }
+    for (const c of rankedSettled.value) if (c) kwDocs.push(c);
   }
 
   if (kwSettled.status === 'fulfilled') {
     for (const r of kwSettled.value) {
       if (r.status !== 'fulfilled') continue;
-      for (const d of r.value.data ?? []) {
-        if (d?.content && !seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); }
-      }
+      for (const d of r.value.data ?? []) if (d?.content) kwDocs.push(d.content);
     }
+  }
+
+  if (vectorSettled.status === 'fulfilled') {
+    for (const d of vectorSettled.value) if (d.content) vecDocs.push(d.content);
+  }
+
+  const seen  = new Set<string>();
+  const allDocs: string[] = [];
+  const pushUnik = (c?: string) => {
+    if (c && !seen.has(c)) { seen.add(c); allDocs.push(c); }
+  };
+  for (let i = 0; i < Math.max(kwDocs.length, vecDocs.length); i++) {
+    pushUnik(kwDocs[i]);
+    pushUnik(vecDocs[i]);
   }
 
   // Fallback keyword ke loose filter kalau strict Kategori kosong. Ditandai → inject caveat confidence.
@@ -864,13 +883,6 @@ export async function searchTechnicalManualMulti(
       for (const d of r.value.data ?? []) {
         if (d?.content && !seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); usedLooseFallback = true; }
       }
-    }
-  }
-
-  // Hasil vector search (sudah selesai paralel di atas) — urutan tetap: keyword dulu, lalu vector.
-  if (vectorSettled.status === 'fulfilled') {
-    for (const d of vectorSettled.value) {
-      if (d.content && !seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); }
     }
   }
 
