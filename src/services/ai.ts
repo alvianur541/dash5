@@ -360,13 +360,25 @@ async function hydeExpand(query: string): Promise<string | null> {
   }
 }
 
+// 6 pesan terakhir dikirim UTUH (follow-up merujuk tabel/PN dari jawaban barusan);
+// yang lebih lama dipangkas ke 2500 char. Di sesi panjang, jawaban teknis 4rb+ char
+// menumpuk → input membengkak → TTFB lambat + biaya naik, padahal rujukan ke jawaban
+// >6 giliran lalu praktis selalu ke bagian awalnya (kesimpulan/tabel utama di atas).
+const HISTORY_FULL_TAIL = 6;
+const HISTORY_OLD_CAP   = 2500;
+
 function historyToContents(history: Message[], window = 20): VContent[] {
-  return history.slice(-window)
-    .filter(m => m.content?.trim())
-    .map(m => ({
+  const recent = history.slice(-window).filter(m => m.content?.trim());
+  return recent.map((m, i) => {
+    const isOld = i < recent.length - HISTORY_FULL_TAIL;
+    const text = isOld && m.content.length > HISTORY_OLD_CAP
+      ? m.content.slice(0, HISTORY_OLD_CAP) + '\n…[sisa pesan lama dipangkas]'
+      : m.content;
+    return {
       role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text: m.content }] as Part[],
-    }));
+      parts: [{ text }] as Part[],
+    };
+  });
 }
 
 async function extractFaultCodes(imageParts: InlineDataPart[]): Promise<string[]> {
@@ -788,21 +800,29 @@ async function resolvePartsQuery(
   history: Message[],
   model: UnitModel,
   emit: AgentEventEmit = () => {},
+  // Jalur NL sudah bayar analyzeIntent — hasilnya dioper ke sini supaya tidak dipanggil
+  // dua kali (hemat ~0.5-1s) DAN cabang NL-parts ikut menikmati fallback WM + KIT hint
+  // + ekstraksi CPM yang dulu hanya ada di jalur regex-parts.
+  precomputedOpt?: string,
 ): Promise<RagRouteResult> {
   const hasLiteralPN = !!extractPartNumber(trimmed);
   const isLongQuery  = trimmed.split(/\s+/).length >= 4;
   let searchQuery    = trimmed;
+  let usedOptimized  = false;
 
   // Fast-path service interval ("service 2000 jam") → embed query langsung, bypass analyzeIntent
   // (yg sering return "2000" saja).
   const intervalMatch = !hasLiteralPN && trimmed.match(SERVICE_INTERVAL_RE);
   if (intervalMatch) {
     searchQuery = `${intervalMatch[1]} hour service maintenance schedule parts`;
-  } else if (!hasLiteralPN && isLongQuery) {
-    const intent = await analyzeIntent(trimmed, history, model);
-    const optWords = intent.optimizedQuery?.trim().split(/\s+/).length ?? 0;
-    if (intent.optimizedQuery && intent.optimizedQuery !== trimmed && optWords >= 3) {
-      searchQuery = intent.optimizedQuery;
+  } else if (!hasLiteralPN && (precomputedOpt !== undefined || isLongQuery)) {
+    const opt = precomputedOpt !== undefined
+      ? precomputedOpt
+      : (await analyzeIntent(trimmed, history, model)).optimizedQuery;
+    const optWords = opt?.trim().split(/\s+/).length ?? 0;
+    if (opt && opt !== trimmed && optWords >= 3) {
+      searchQuery = opt;
+      usedOptimized = true;   // → skipExpand: query sudah English, expandQuery malah distorsi
     }
   }
 
@@ -811,7 +831,7 @@ async function resolvePartsQuery(
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
   const ragResult = intervalMatch
     ? await searchServiceIntervalParts(searchQuery, model)
-    : await searchPartsCatalog(searchQuery, model);
+    : await searchPartsCatalog(searchQuery, model, usedOptimized);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
 
   if (!ragResult.hasResults) {
@@ -871,16 +891,9 @@ async function resolveNaturalLanguageQuery(
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
-    // Guard: optimizedQuery <3 kata ("2000") → embed tak bermakna → hasil acak → halu.
-    const optWords = intent.optimizedQuery?.trim().split(/\s+/).length ?? 0;
-    const useOpt   = optWords >= 3;
-    const searchQ  = useOpt ? intent.optimizedQuery : trimmed;
-    emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-    const ragResult = await searchPartsCatalog(searchQ, model, useOpt);
-    emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
-    return ragResult.hasResults
-      ? { type: 'rag_found', content: ragResult.content, dataLabel: RAG_LABEL.parts }
-      : { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model) };
+    // Delegasi ke jalur parts utama dgn intent yang SUDAH dihitung (tanpa panggilan kedua).
+    // Cabang ini dulu duplikat mini tanpa fallback WM/KIT hint/CPM — sekarang satu jalur.
+    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
   }
 
   // Technical: guard juga untuk query pendek

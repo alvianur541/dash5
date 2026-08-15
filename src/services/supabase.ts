@@ -270,6 +270,13 @@ export function extractSearchTerms(query: string): string[] {
 interface RerankedDoc { content: string; score: number }
 interface RerankResult { docs: RerankedDoc[]; error?: string }
 
+// Cap per-dokumen KHUSUS payload skoring rerank. Sinyal relevansi ada di header chunk
+// (Section:/Model:/Kategori:) + baris-baris awal; chunk tipikal 1-2rb char tidak tersentuh,
+// hanya outlier jumbo (sampai 8rb) yang dipangkas. Konten UTUH tetap dipakai untuk jawaban —
+// mapping via index ke array asli. Efek: upload dari HP lapangan & token Cohere turun drastis
+// di kasus terburuk → tail-latency rerank terpangkas tanpa mengubah pemilihan chunk tipikal.
+const RERANK_DOC_CAP = 2500;
+
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
 
@@ -282,12 +289,14 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
+  const scoringDocs = docs.map(d => d.length > RERANK_DOC_CAP ? d.slice(0, RERANK_DOC_CAP) : d);
+
   try {
     const res = await fetch(`${proxyUrl}/v1/rerank`, {
       method: 'POST',
       signal: controller.signal,
       headers,
-      body: JSON.stringify({ query, documents: docs, topN }),
+      body: JSON.stringify({ query, documents: scoringDocs, topN }),
     });
     if (!res.ok) throw new Error(`Rerank proxy ${res.status}`);
     const data = await res.json();
