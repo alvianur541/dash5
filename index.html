@@ -22,13 +22,19 @@
     <!-- SEO / Social -->
     <meta name="description" content="Dash5 - AI Diagnostic Assistant" />
 
-    <!-- Fonts: Sora (display hero, AndalAI-style) + Inter (body sans) + Lora (markdown serif) via Google Fonts -->
+    <!-- Fonts: Inter (UI) + Lora (body jawaban AI) + DM Serif Display (heading & greeting).
+         Diselaraskan dgn pemakaian NYATA di index.css (diverifikasi via grep):
+         - Sora DIHAPUS — var(--font-display) tidak pernah dipakai di seluruh src/.
+         - Inter 300 DIHAPUS — tidak ada font-light / font-weight:300 di mana pun.
+         - Lora italic DIHAPUS — .markdown-body em di-set font-style:normal (italic dimatikan).
+         - Lora 700 DITAMBAH — .markdown-body strong pakai 700 tapi dulu tidak dimuat,
+           sehingga tiap **bold** di jawaban AI di-fake-bold browser (tampak kasar). -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <!-- Async load (media=print → all saat selesai): CSS font TIDAK memblokir first paint
          (~784ms lebih cepat di mobile). display=swap → teks tampil pakai fallback dulu. -->
-    <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
-    <noscript><link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=DM+Serif+Display&display=swap" rel="stylesheet" /></noscript>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" media="print" onload="this.media='all'" />
+    <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:wght@400;500;600;700&family=DM+Serif+Display&display=swap" rel="stylesheet" /></noscript>
 
     <title>Dash5</title>
     <!-- Theme init: apply before React renders to prevent flash -->
