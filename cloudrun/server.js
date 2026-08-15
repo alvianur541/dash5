@@ -36,7 +36,13 @@ const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
 // Cost ledger (usage_logs) — service_role key HANYA di server (jangan pernah ke client).
-const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY;
+// DUA NAMA diterima dengan sengaja. Supabase sendiri menyebutnya "service_role key", dan
+// panduan migrasi self-host memakai SUPABASE_SERVICE_ROLE_KEY, sedangkan env Cloud Run yang
+// sudah berjalan memakai SUPABASE_SERVICE_KEY. Kalau hanya salah satu yang dikenali, salah
+// menamai saat cutover bikin TIGA endpoint mati DIAM-DIAM (bukan error keras, cuma 503 yang
+// tak terlihat dari UI): /v1/dashboard (panel monitoring kosong), /v1/usage (ledger biaya
+// berhenti mencatat), /v1/field-note. Menerima keduanya menghapus seluruh kelas kesalahan itu.
+const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.6-flash: $1.50 / 1M input
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '7.50'); // gemini-3.6-flash: $7.50 / 1M output (turun dari $9 di 3.5)
 const USD_TO_IDR              = parseFloat(process.env.USD_TO_IDR || '17000');

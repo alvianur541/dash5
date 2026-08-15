@@ -23,7 +23,19 @@ export default defineConfig(() => {
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             {
-              // Supabase: NetworkOnly — jangan pernah cache, selalu fresh
+              // Supabase: NetworkOnly — jangan pernah cache, selalu fresh.
+              // Dicocokkan lewat POLA PATH, bukan nama host, supaya tetap benar saat
+              // Supabase pindah ke self-host (mis. db.dash5.my.id atau dash5.my.id/rest/v1).
+              // Self-hosted Supabase selalu mengekspos /rest/v1, /auth/v1, /storage/v1,
+              // /realtime/v1 — sama seperti cloud.
+              // ⚠️ Anchor `^https://[^/]+` WAJIB: Workbox hanya menerapkan regex ke request
+              // lintas-origin kalau kecocokannya dimulai dari AWAL URL. Pola path telanjang
+              // (mis. /\/rest\/v1\//) akan diam-diam tidak berlaku untuk host lain.
+              urlPattern: /^https:\/\/[^/]+\/(rest|auth|storage|realtime)\/v1\//i,
+              handler: 'NetworkOnly',
+            },
+            {
+              // Jaring pengaman: host Supabase cloud apa pun path-nya.
               urlPattern: /^https:\/\/.*\.supabase\.co\/.*/i,
               handler: 'NetworkOnly',
             },
@@ -43,8 +55,14 @@ export default defineConfig(() => {
               },
             },
             {
-              // App shell: hanya static assets (JS/CSS/HTML), bukan API
-              urlPattern: /^https:\/\/dash5\.my\.id\/(?!api\/|v1\/).*/i,
+              // App shell: hanya static assets (JS/CSS/HTML), bukan API.
+              // Pengecualian rest/auth/storage/realtime DITAMBAHKAN sebagai lapis kedua:
+              // kalau Supabase self-host suatu saat dilayani di PATH domain yang sama
+              // (dash5.my.id/rest/v1/...), tanpa ini respons auth & data akan ter-cache
+              // StaleWhileRevalidate di service worker — teknisi bisa melihat data basi
+              // atau sesi milik orang lain. Aturan NetworkOnly di atas sudah menangkapnya
+              // lebih dulu, ini pengaman kalau urutan aturan berubah.
+              urlPattern: /^https:\/\/dash5\.my\.id\/(?!api\/|v1\/|rest\/|auth\/|storage\/|realtime\/).*/i,
               handler: 'StaleWhileRevalidate',
               options: {
                 cacheName: 'app-shell',
