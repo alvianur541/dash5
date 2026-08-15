@@ -17,11 +17,15 @@
 //          4 = penyetelan latensi: topN 5→4, rerank cap 45→24, term 10→7 (15 Agu 2026)
 //          5 = latensi tahap 2: topN 3, rerank cap 12 + kandidat disilang kw/vector,
 //              fault code multi-kode 2 chunk/kode (15 Agu 2026)
-export const CACHE_GEN = 5;
+//          6 = cache semantik dihapus; keyword 10 / vector 20 / cohere 15 (15 Agu 2026)
+export const CACHE_GEN = 6;
 
 /** Prefix ber-generasi. Ganti CACHE_GEN → semua kunci lama otomatis tidak cocok lagi. */
-export const ANSWER_CACHE_PREFIX   = `dash-ans-g${CACHE_GEN}:`;
-export const SEMANTIC_CACHE_PREFIX = `dash-sem-g${CACHE_GEN}:`;
+export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
+// Cache semantik DIHAPUS 15 Agu 2026 — tidak ada prefix 'hidup' untuk 'dash-sem' lagi,
+// jadi purge di bawah akan MENGHAPUS SEMUA sisa entrinya dari localStorage teknisi.
+// Akar 'dash-sem' sengaja dipertahankan di daftar sapuan supaya sisa lama benar-benar
+// terbuang (entri ~4 KB/buah, sampai 20 entri per model per user — sayang kalau menetap).
 
 /**
  * Hapus entri cache dari generasi LAMA (termasuk nama prefix sebelum skema ini ada).
@@ -32,7 +36,7 @@ export const SEMANTIC_CACHE_PREFIX = `dash-sem-g${CACHE_GEN}:`;
 export function purgeStaleAnswerCaches(): void {
   try {
     if (typeof localStorage === 'undefined') return;
-    const hidup = [ANSWER_CACHE_PREFIX, SEMANTIC_CACHE_PREFIX];
+    const hidup = [ANSWER_CACHE_PREFIX];
     // Semua kunci cache jawaban memakai salah satu dari dua akar ini.
     const akar  = ['dash-ans', 'dash-sem'];
     const buang: string[] = [];

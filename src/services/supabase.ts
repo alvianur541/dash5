@@ -195,17 +195,19 @@ const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 //        masuk kandidat, AI menjawab 220 kg (itu swing DEVICE) sambil bilang data tak ada.
 //   45 → mutu beres tapi LATENSI TERASA BERAT oleh Alvian di produksi.
 //   24 → latensi turun, mutu masih terjaga.
-//   12 → dipakai sekarang atas permintaan Alvian (latensi jadi prioritas, 15 Agu 2026).
-//        ⚠️ Angka ini di BAWAH cap awal (15), jadi HANYA aman karena kandidat sekarang
-//        DISILANG keyword/vector (lihat blok penggabungan di searchTechnicalManualMulti).
-//        Tanpa penyilangan, 12 slot akan dimakan 10 keyword dan vector cuma sisa 2.
-//        JANGAN kembalikan urutan "keyword dulu semua" selama cap masih serendah ini.
-const RERANK_INPUT_CAP = 12;
-// Kandidat vector sebelum cap di atas. Disamakan dengan RERANK_INPUT_CAP — mengambil
-// lebih banyak dari yang bisa dipakai cuma menambah payload tanpa menambah pilihan.
-// DIUKUR: match_count 20 vs 40 sama-sama ~25 ms (top-N heapsort, 27 kB memory), jadi
-// angka ini BUKAN sumber latensi. Sempat terbaca 269 ms — itu cold cache, bukan biaya nyata.
-const VECTOR_MATCH_COUNT = 24;
+//   12 → sempat dipakai, lalu dinaikkan sedikit karena terlalu sempit.
+//   15 → dipakai sekarang (Alvian, 15 Agu 2026). Dengan penyilangan → ~7 keyword + 8 vector.
+//        ⚠️ HANYA aman karena kandidat DISILANG keyword/vector (lihat blok penggabungan di
+//        searchTechnicalManualMulti). Tanpa penyilangan, keyword akan memakan 10 dari 15
+//        slot dan vector cuma sisa 5. JANGAN kembalikan urutan "keyword dulu semua".
+const RERANK_INPUT_CAP = 15;
+// Kandidat vector sebelum cap di atas. 20 (Alvian, 15 Agu 2026).
+// DIUKUR: match_count 20 vs 40 sama-sama ~25 ms di database (top-N heapsort, 27 kB memory),
+// jadi angka ini BUKAN sumber latensi — biayanya ada di round-trip jaringan, bukan query.
+// (Sempat terbaca 269 ms; itu cold cache, bukan biaya nyata.)
+// Sengaja lebih besar dari jatah vector di rerank (~8) supaya penyilangan punya cadangan
+// saat banyak kandidat vector bertabrakan/duplikat dengan hasil keyword.
+const VECTOR_MATCH_COUNT = 20;
 // Pagar ukuran badan request rerank.
 // ⚠️ KOREKSI: pagar ini semula dipasang karena dikira 45 × 27.812 char (chunk terbesar)
 // akan menjebol `express.json({ limit: '1mb' })` di /v1/rerank. ITU KELIRU — `rerankWithCohere`
