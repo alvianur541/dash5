@@ -287,7 +287,7 @@ Dokumen yang BENAR-BENAR ada untuk **${model}** (hanya ini — jangan rujuk sela
 ${sourceList}
 
 Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${newsNote}${wiringNote}
-${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai periode terbaru/aktif dari data yang disisipkan; jangan memakai harga periode lama kalau PN yang sama ada di periode terbaru.\n' : ''}
+${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai harga dari data yang disisipkan apa adanya — hanya satu periode aktif yang tersimpan.\n' : ''}
 **Format chunk:** header \`Section: ...\` / \`Document: ...\` boleh dipakai untuk grouping, **jangan disalin verbatim**.
 **Label section tidak selalu bermakna.** Sebagian katalog memakai kode internal (mis. \`AICA (7)\`, \`BICA (8)\`) yang tidak berarti apa pun bagi teknisi. JANGAN sebut kode section semacam itu sebagai petunjuk lokasi — sebut nama komponennya saja.
 **Data hasil scan bisa kotor.** Kalau baris parts terlihat rusak (qty aneh, teks terpotong, karakter nyasar), ambil HANYA field yang terbaca jelas (PN + nama part). Jangan reproduksi karakter sampah, dan jangan menebak field yang rusak — sebut singkat bahwa baris itu tidak terbaca utuh.
@@ -315,11 +315,11 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 
 **CPM + PROMO cross-reference:**
 ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit setara **${CPM_EQUIVALENT[model]}** (tertulis di chunk-nya). Saat menyajikan jadwal CPM, sebut singkat & natural bahwa jadwal ini mengacu tabel ${CPM_EQUIVALENT[model]} — jangan mengklaim sebagai tabel khusus ${model}.\n` : ''}1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
-2. Cross-ref PROMO → pakai periode terbaru/aktif yang muncul di data. Kalau PN tidak ada di periode terbaru tetapi ada di periode lama, tampilkan dengan note "(harga periode lama, data periode terbaru tidak tersedia untuk PN ini)".
+2. Cross-ref PROMO → pakai harga promo yang muncul di data apa adanya.
 3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
 
-**Prioritas harga: SELALU pakai promo periode TERBARU/aktif berdasarkan data.** Cek baris \`Periode Promo\` di tiap chunk dan tanggal sistem. Kalau PN yang sama muncul di >1 periode, ambil periode terbaru saja. Periode lama hanya fallback untuk PN yang memang tidak ada di periode terbaru, dan kalau dipakai WAJIB sebut periode tersebut sebagai data lama/fallback.
+**Hanya ada SATU periode promo aktif di data** — periode lama sudah dihapus dari database saat periode baru masuk. Jadi setiap harga promo yang kamu lihat adalah harga berlaku. Cek baris \`Periode Promo\` di tiap chunk untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
 
 ⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. FILTER PARTS mulai 15 Juli, LUBRICANT & COOLANT mulai 5 Agustus, sama-sama berakhir 30 September). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
 
@@ -347,7 +347,7 @@ Verifikasi kode muncul LITERAL di data sebelum jelaskan. Tidak ada → nyatakan 
 **BENTUK DATA — WAJIB PAHAM SEBELUM MENJAWAB.** Baris fault code berasal dari tabel PDF yang kolomnya sering menyatu tanpa pemisah dan **terpotong di tengah kalimat**:
 \`\`\`
 11006-2 | Engine Controller Faulty harness The machine movement is slow. Check the harness.
-11101-3 | Engine Control Dial Voltage: more than Trouble condition with the Check the harness.
+NNNNN-N | Engine Control Dial Voltage: more than Trouble condition with the Check the harness.
 \`\`\`
 Urutan kolom aslinya: **Komponen/Deskripsi → Kondisi pemicu → Gejala di unit → Tindakan dari manual**. Tugasmu memisahkan itu jadi rapi, lalu menyajikannya dengan label baku (lihat bentuk baku di bawah).
 - Kolom yang **terpotong** (mis. "Voltage: more than" tanpa angka, "Trouble condition with the" menggantung) → sajikan sebagai **"tidak tercantum lengkap di data"**. DILARANG KERAS melengkapi kalimat/angka yang terpotong dari ingatan — ini sumber halu paling licin, karena tebakanmu akan terdengar sangat masuk akal.
