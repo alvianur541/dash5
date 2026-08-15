@@ -153,21 +153,56 @@ async function resolveUpstream(model, { stream }) {
 
 // Verifikasi token ke Supabase + cache object user (bukan cuma boolean) supaya endpoint pakai
 // identitas asli tanpa round-trip. TTL 60s: token dicabut berhenti diterima ≤1 menit.
+//
+// Tahan gangguan transien: hiccup jaringan / 5xx dari GoTrue dulu langsung jadi 401 ke user
+// ("Dash⁵ gagal merespon") padahal tokennya valid. Sekarang:
+//   1. Kegagalan transien di-retry sekali (300ms).
+//   2. Masih gagal → pakai identitas dari verifikasi sukses terakhir, maksimal 10 menit
+//      (stale-if-error). HANYA aktif saat GoTrue tak terjangkau; token yang DITOLAK GoTrue
+//      (401/403) tetap langsung dibuang — jendela pencabutan token normal tetap ≤1 menit.
 const AUTH_CACHE_TTL_MS = parseInt(process.env.AUTH_CACHE_TTL_MS || '60000', 10);
+const AUTH_STALE_GRACE_MS = 10 * 60_000;
 const _userCache = new Map();
 
-async function fetchAuthUser(token) {
-  const hit = _userCache.get(token);
-  if (hit && Date.now() < hit.expiresAt) return hit.user;
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+// ok=true → user valid · definitive=true → GoTrue MENOLAK token (bukan gangguan)
+async function gotrueUser(token) {
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
   });
-  if (!r.ok) { _userCache.delete(token); return null; }
-  const user = await r.json();
-  if (_userCache.size >= 200) _userCache.delete(_userCache.keys().next().value);
-  _userCache.set(token, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
-  return user;
+  if (r.ok) return { ok: true, user: await r.json() };
+  return { ok: false, definitive: r.status === 401 || r.status === 403 };
+}
+
+async function fetchAuthUser(token) {
+  const now = Date.now();
+  const hit = _userCache.get(token);
+  if (hit && now < hit.expiresAt) return hit.user;
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+
+  let res = null;
+  try { res = await gotrueUser(token); } catch { /* network error → transien */ }
+  if (!res || (!res.ok && !res.definitive)) {
+    await new Promise(r => setTimeout(r, 300));
+    try { res = await gotrueUser(token); } catch { res = null; }
+  }
+
+  if (res && res.ok) {
+    if (_userCache.size >= 200) _userCache.delete(_userCache.keys().next().value);
+    _userCache.set(token, {
+      user: res.user,
+      expiresAt: now + AUTH_CACHE_TTL_MS,
+      staleUntil: now + AUTH_STALE_GRACE_MS,
+    });
+    return res.user;
+  }
+  if (res && res.definitive) { _userCache.delete(token); return null; }
+  // Transien setelah retry → identitas basi dalam masa tenggang (lebih baik layani user
+  // yang 1 menit lalu terbukti valid daripada menolak semua trafik saat Supabase hiccup).
+  if (hit && now < hit.staleUntil) {
+    console.warn('Auth verify transient failure — serving stale identity (grace window)');
+    return hit.user;
+  }
+  return null;
 }
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

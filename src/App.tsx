@@ -496,7 +496,10 @@ export default function App() {
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
-      setError('Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
+      // Stream putus di upstream (bukan salah user/API key) → pesan yang jujur + actionable.
+      setError(err.message?.includes('Stream terputus')
+        ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
+        : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
     } finally {
       setIsTyping(false);
       setIsStreaming(false);

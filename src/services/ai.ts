@@ -439,6 +439,11 @@ function collapseDegenerateLoops(text: string): string {
 // sudah pasti macet; hentikan baca supaya tidak bayar token sampah sampai cap.
 const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
 
+// Penanda jawaban terpotong (upstream putus di tengah stream). Dipakai juga oleh
+// generateResponseStream untuk MENOLAK menyimpan jawaban terpotong ke answer/semantic cache.
+export const STREAM_CUT_NOTE =
+  '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
+
 export async function callProxyStream(
   body: VRequest,
   onChunk: (text: string) => void,
@@ -448,11 +453,20 @@ export async function callProxyStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  const res = await fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
+  const doFetch = () => fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
   }, 60_000);
+
+  let res = await doFetch();
+  // 401/503 dari verifyToken proxy sering transien (hiccup Cloud Run → Supabase /auth/v1/user).
+  // Satu retry singkat menyelamatkan kasus ini tanpa user melihat banner error.
+  if (!res.ok && (res.status === 401 || res.status === 503)) {
+    console.warn('[stream] %d dari proxy — retry sekali (kemungkinan auth transien)', res.status);
+    await new Promise(r => setTimeout(r, 800));
+    res = await doFetch();
+  }
   if (!res.ok) throw new Error(`Stream error ${res.status}`);
   if (!res.body) throw new Error('Stream response has no body');
 
@@ -461,6 +475,8 @@ export async function callProxyStream(
   let fullText = '';
   let buffer = '';
   let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
+
+  let upstreamError: string | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -474,10 +490,24 @@ export async function callProxyStream(
       if (!jsonStr || jsonStr === '[DONE]') continue;
       try {
         const json = JSON.parse(jsonStr);
+        // Proxy mengirim {"error":"Stream failed"} saat upstream putus (mis. timeout 60s /
+        // Vertex error). Dulu event ini DIBUANG diam-diam → jawaban terpotong tampil seolah
+        // utuh, atau kosong → template "tidak bisa memproses" yang menyesatkan.
+        if (json.error) { upstreamError = String(json.error); break; }
         if (json.usageMetadata) lastUsage = json.usageMetadata; // kumulatif; chunk terakhir menang
         const text = getText(json.candidates?.[0]?.content?.parts ?? []);
         if (text) { fullText += text; onChunk(text); }
       } catch { /* ignore malformed chunk */ }
+    }
+    if (upstreamError) {
+      reader.cancel().catch(() => {});
+      // Belum ada teks sama sekali → error eksplisit (App tampilkan pesan retry yang jelas).
+      if (!fullText.trim()) throw new Error(`Stream terputus: ${upstreamError}`);
+      // Sudah sebagian → jangan berlagak utuh: tandai terpotong, minta kirim ulang.
+      console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
+      fullText += STREAM_CUT_NOTE;
+      onChunk(STREAM_CUT_NOTE);
+      break;
     }
     // Loop degeneratif terdeteksi di tail → stop baca (hemat token), teks
     // dibersihkan sebelum return; UI final di-overwrite dgn hasil bersih.
@@ -1257,7 +1287,9 @@ export async function generateResponseStream(
   }, onChunk, gsTechnical);
 
   // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
-  if (cacheKey && routeResult.type === 'rag_found' && fullText) {
+  // Jawaban TERPOTONG (stream putus di tengah) tidak boleh masuk cache — kalau tidak,
+  // parafrase berikutnya dilayani versi buntung selama TTL 3 hari.
+  if (cacheKey && routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
     writeAnswerCache(cacheKey, fullText);
     // Semantic cache: butuh embedding query. Kalau lookup di atas tak jalan (cache kosong /
     // belum pernah embed), hitung sekarang — sekali, dan hasilnya melayani parafrase berikutnya.
