@@ -21,6 +21,12 @@ if (ALLOWED_ORIGINS.length === 0) {
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
 const UPSTREAM_TIMEOUT_MS = 60_000;
+// Retry khusus 429 (kuota Vertex habis). Jeda tumbuh: 1,5s → 4s → 8s. Total tunggu
+// terburuk 13,5s, masih di dalam UPSTREAM_TIMEOUT_MS dan jauh lebih baik daripada
+// teknisi harus mengetik ulang pertanyaan. Angka kecil-dulu karena kuota Vertex
+// jendela geser per menit — sering pulih hanya dalam hitungan detik.
+const UPSTREAM_429_BACKOFF_MS = [1_500, 4_000, 8_000];
+const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
@@ -226,9 +232,21 @@ app.post('/v1/chat', verifyToken, rateLimit, bigJson, async (req, res) => {
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const { url, headers } = await resolveUpstream(model, { stream: false });
-    const upstream = await fetch(url, {
+    // Endpoint ini melayani intent-classifier, HyDE, OCR foto, dan compression —
+    // panggilan terbanyak per pertanyaan, jadi paling sering kena 429 duluan.
+    // Retry sama seperti jalur stream (lihat UPSTREAM_429_BACKOFF_MS).
+    let upstream = await fetch(url, {
       method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
+    for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
+      const waitMs = UPSTREAM_429_BACKOFF_MS[i];
+      console.warn(`Vertex 429 (/v1/chat) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
+      await new Promise(r => setTimeout(r, waitMs));
+      if (ctrl.signal.aborted) break;
+      upstream = await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
+      });
+    }
     const data = await upstream.json();
     if (!upstream.ok) {
       console.error('Vertex AI error:', JSON.stringify(data));
@@ -259,14 +277,30 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
 
   try {
     const { url, headers } = await resolveUpstream(model, { stream: true });
-    const upstream = await fetch(url, {
+    // 429 RESOURCE_EXHAUSTED = kuota Vertex per-menit habis, dan itu penyebab nyata
+    // "koneksi terputus" yang dilihat teknisi. Kuotanya jendela geser, jadi menunggu
+    // beberapa detik sering sudah cukup. Retry dilakukan DI SINI (bukan di browser)
+    // karena di sini belum ada satu byte pun terkirim ke client — aman diulang, dan
+    // satu hop lebih dekat ke Vertex sehingga jedanya tidak terasa di HP teknisi.
+    let upstream = await fetch(url, {
       method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
+    for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
+      const waitMs = UPSTREAM_429_BACKOFF_MS[i];
+      console.warn(`Vertex 429 — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
+      await new Promise(r => setTimeout(r, waitMs));
+      if (ctrl.signal.aborted) break;
+      upstream = await fetch(url, {
+        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
+      });
+    }
 
     if (!upstream.ok) {
       const errText = await upstream.text();
       console.error('Vertex stream error:', errText);
-      res.write(`data: ${JSON.stringify({ error: 'Upstream request failed' })}\n\n`);
+      // Kirim status aslinya supaya client bisa membedakan kuota habis (429) dari
+      // gangguan lain, dan menampilkan pesan yang benar tanpa menghajar ulang server.
+      res.write(`data: ${JSON.stringify({ error: 'Upstream request failed', code: upstream.status })}\n\n`);
       return res.end();
     }
 

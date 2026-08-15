@@ -511,9 +511,12 @@ export default function App() {
       logCost(sessionId, [...toolsUsed]);
       // Stream putus di upstream bukan salah teknisi maupun API key — pesannya harus
       // menuntun ke aksi yang benar (kirim ulang), bukan menyuruh mengecek kredensial.
-      setError(err.message?.includes('Stream terputus')
-        ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
-        : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
+      setError(
+        err.message?.includes('KUOTA_PENUH')
+          ? 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.'
+          : err.message?.includes('Stream terputus')
+            ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
+            : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
     } finally {
       setIsTyping(false);
       setIsStreaming(false);

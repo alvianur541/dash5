@@ -507,7 +507,14 @@ export async function callProxyStream(
         // saat Vertex menolak atau koneksi putus. Event itu tak punya `candidates`, jadi
         // dulu DIBUANG diam-diam — akibatnya jawaban terpotong tampil seolah utuh, atau
         // kosong sama sekali lalu jatuh ke template "sistem tidak bisa memproses".
-        if (json.error) { upstreamError = String(json.error); break; }
+        if (json.error) {
+          // code 429 = kuota Vertex habis. Proxy SUDAH mencoba ulang dengan backoff
+          // sampai 13,5 detik; mengulang lagi dari browser cuma menambah beban ke
+          // kuota yang sedang penuh dan memperpanjang pemulihannya.
+          if (json.code === 429) throw new Error('KUOTA_PENUH');
+          upstreamError = String(json.error);
+          break;
+        }
         if (json.usageMetadata) lastUsage = json.usageMetadata; // kumulatif; chunk terakhir menang
         const text = getText(json.candidates?.[0]?.content?.parts ?? []);
         if (text) { fullText += text; onChunk(text); }
