@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT, jakartaTime } from '../constants';
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from '../constants';
 import { UnitModel, Message } from '../types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, getAuthToken, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, getEmbedding, MODELS_WITHOUT_PARTS_CATALOG } from './supabase';
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
@@ -1363,10 +1363,20 @@ export async function generateResponseStream(
   // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
+  // Jalur CASUAL (sapaan/ack/meta/jam/terjemahan) TIDAK menerima data manual sama sekali,
+  // jadi tak ada gunanya mengirim aturan PARTS & PROMO, FAULT CODE, cara baca blok data,
+  // format tabel parts, dsb. Prompt ringkas khusus dipakai di sini: ~9.850 → ~1.400 token.
+  // Keduanya tetap byte-identical per varian, jadi prompt-cache tetap kena (cek persentase
+  // cache di log [tokens] kalau curiga meleset).
+  const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
+  const systemText = isCasual
+    ? SYSTEM_PROMPT_CASUAL(model, userName)
+    : SYSTEM_PROMPT(model, userName);
+
   // Google Search grounding HANYA untuk fallback web-teknis. Casual (sapaan/ack) murni LLM → instan.
   const fullText = await callProxyStream({
     contents,
-    systemInstruction: { parts: [{ text: SYSTEM_PROMPT(model, userName) }] },
+    systemInstruction: { parts: [{ text: systemText }] },
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
