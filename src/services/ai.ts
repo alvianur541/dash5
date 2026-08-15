@@ -1333,7 +1333,13 @@ export async function generateResponse(
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
       .map(r => r.value);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-    currentParts.push(...imageParts);
+
+    // Foto SENGAJA belum dimasukkan ke currentParts. Kalau OCR berhasil baca kode DAN
+    // data manual ketemu, foto tak perlu dikirim ULANG ke model utama: jawabannya wajib
+    // bersumber dari chunk manual (aturan anti-halu), bukan dari piksel. Mengirim ulang =
+    // ~1000 token gambar + memaksa jalur multimodal yang jauh lebih lambat. Foto tetap
+    // dikirim kalau OCR gagal / tak ada kode — di situ visualnya memang satu-satunya sumber.
+    let sendImageToModel = true;
 
     try {
       emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
@@ -1406,6 +1412,7 @@ export async function generateResponse(
         }
 
         currentParts.push({ text: `${note}\n\n${injection}` });
+        sendImageToModel = false;   // kode + data manual sudah lengkap → foto tidak perlu diulang
       } else {
         emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
         currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
@@ -1416,17 +1423,27 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
+    // Foto hanya disertakan kalau memang masih dibutuhkan (OCR gagal / tak ada kode).
+    if (sendImageToModel) currentParts.unshift(...imageParts);
+
     // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
-    // 8192 (turun dari 16384): multi-code image analysis tetap muat — jalur fault
-    // code teks pakai 4096 & cukup. Cap lebih rendah = latency & biaya turun.
+    // Disamakan dengan jalur fault code TEKS (4096 / 'low'). Sebelumnya 8192 + 'medium' —
+    // paling berat di seluruh app dan jadi penyumbang utama stream ~50 dtk. Reasoning berat
+    // tak diperlukan: chunk manual sudah disuntik terstruktur, tugas model = menjelaskan &
+    // merapikan, bukan menyimpulkan dari nol. Kalau OCR gagal (foto ikut dikirim), pakai
+    // 'medium' — di situ model memang harus membaca sendiri dari gambar.
     const body: VRequest = {
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 8192, temperature: 0.3, thinkingConfig: { thinkingLevel: 'medium' } },
+      generationConfig: {
+        maxOutputTokens: 4096,
+        temperature: 0.3,
+        thinkingConfig: { thinkingLevel: sendImageToModel ? 'medium' : 'low' },
+      },
     };
 
     // Streaming kalau caller kasih onChunk — jawaban muncul bertahap seperti jalur
