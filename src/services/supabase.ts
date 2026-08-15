@@ -169,15 +169,61 @@ export async function saveFeedback(payload: {
   }
 }
 
-// Pre-filter recall gate sebelum rerank. Longgar (0.30): chunk beda-istilah sering cosine 0.30-0.35
-// — reranker + computeConfidence yang jadi penyaring final, jadi loloskan lebih banyak kandidat.
+// Pre-filter recall gate sebelum rerank.
+// ⚠️ ANGKA 0.30 DULU **TIDAK MENYARING APA PUN** — diukur langsung di DB (Agu 2026):
+// chunk PALING TIDAK MIRIP se-ZX200-5G masih cosine 0.648, dan 1.259 dari 1.259 chunk
+// lolos ambang 0.30. Ruang embedding korpus ini sangat padat: dua chunk ACAK beda
+// kategori rata-rata 0.734 (rentang 0.67-0.82), dan sebaran 20 tetangga terdekat cuma
+// 0.966→0.890. Penyebabnya chunk kepanjangan (rata-rata 2.802 char) — satu kalimat
+// fakta ("weight: 48 kg") cuma ~1% dari vektor, jadi jarak cosine tak bisa membedakannya.
+// ⚠️ SENGAJA DIBIARKAN 0.30 — jangan dinaikkan tanpa mengukur ulang dengan BENAR.
+// Angka 0.648/0.734 di atas diukur DOKUMEN-ke-DOKUMEN. Similarity QUERY-ke-dokumen
+// (query pendek, task_type RETRIEVAL_QUERY) bisa duduk jauh lebih rendah, dan itu
+// BELUM pernah diukur — tak ada cara meng-embed query dari sesi analisis.
+// Menaikkan ambang = risiko membuang kandidat sah, tanpa manfaat yang terbukti:
+// jumlah kandidat sudah dibatasi VECTOR_MATCH_COUNT + RERANK_INPUT_CAP, dan penyaring
+// sesungguhnya adalah Cohere rerank (cross-encoder — membaca query + dokumen bersamaan,
+// jadi SANGGUP menemukan angka di tengah chunk panjang). Ambang ini cuma jaring kasar.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Cap jumlah dokumen yang dikirim ke Cohere rerank. Threshold 0.30 + keyword +
-// spec-boost bisa hasilkan 25-30 kandidat → rerank-v4.0-pro lambat & bisa timeout.
-// 15 = keseimbangan: cukup ruang untuk keyword-exact + top vektor by similarity
-// (chunk jawaban hampir selalu di sini), tapi pro selesai ~2.5-4s (aman di bawah 8s).
-// Turunkan ke 12 kalau mau lebih cepat; jangan < 10 (reranker kurang bahan).
-const RERANK_INPUT_CAP = 15;
+// Cap dokumen yang dikirim ke Cohere rerank.
+// Dulu 15, dan itu bottleneck utama kualitas jawaban: 6 slot teratas selalu dihabiskan
+// hasil keyword RPC, menyisakan cuma ~9 slot untuk vector — jendela recall 0.7% dari
+// 1.259 chunk, dengan urutan vector yang nyaris tanpa sinyal (lihat catatan di atas).
+// Kasus nyata: "berapa berat swing motor" → chunk jawaban (WM Disassembly of Swing Motor,
+// "swing motor assembly weight: 48 kg") tak pernah masuk kandidat, AI menjawab 220 kg
+// (itu berat swing DEVICE) sambil bilang datanya tidak ada.
+// 45 = beri reranker bahan yang cukup. Aman untuk rerank-v4.0-fast (default server);
+// kalau nanti pindah ke rerank-v4.0-pro yang jauh lebih lambat, turunkan lagi ke ~20.
+const RERANK_INPUT_CAP = 45;
+// Kandidat vector yang diambil sebelum cap di atas. Naik 20→40 supaya slot rerank yang
+// bertambah benar-benar terisi kandidat baru, bukan cuma padding.
+const VECTOR_MATCH_COUNT = 40;
+// Pagar ukuran badan request rerank. WAJIB ADA sejak RERANK_INPUT_CAP naik ke 45:
+// proxy Cloud Run memakai `express.json({ limit: '1mb' })` untuk /v1/rerank, sedangkan
+// chunk TERBESAR di DB 27.812 char → 45 × 27.812 = 1,25 MB = **413 Payload Too Large**
+// dan pencarian mati total untuk query itu. (Cap lama 15 kebetulan aman: 417 KB.)
+// 500 KB memberi ruang untuk escaping JSON + query + overhead HTTP di bawah batas 1 MB.
+// Dokumen sudah urut terbaik-dulu, jadi yang terpotong adalah ekor yang paling tidak relevan.
+const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
+
+/** Ambil dokumen sebanyak mungkin untuk rerank, dibatasi JUMLAH dan TOTAL UKURAN.
+ *  Selalu kembalikan minimal 1 dokumen — kalau chunk pertama sendiri melebihi budget,
+ *  tetap kirim (Cohere yang memotong), sebab mengirim nol dokumen = rerank pasti gagal. */
+function capRerankPayload(docs: string[]): string[] {
+  const out: string[] = [];
+  let total = 0;
+  for (const d of docs) {
+    if (out.length >= RERANK_INPUT_CAP) break;
+    if (out.length > 0 && total + d.length > RERANK_PAYLOAD_BUDGET_CHARS) break;
+    out.push(d);
+    total += d.length;
+  }
+  if (out.length < docs.length) {
+    console.info('[rerank] payload dipangkas: %d→%d dokumen (%d KB)',
+      docs.length, out.length, Math.round(total / 1024));
+  }
+  return out;
+}
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
@@ -698,12 +744,24 @@ export async function searchTechnicalManualMulti(
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
     // Frasa penuh ikut jadi term → chunk yang memuat frasa utuh dapat skor ekstra.
-    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...words])].slice(0, 6);
+    // + PASANGAN BERURUTAN (bigram): manual jarang menulis frasa query persis apa adanya
+    //   ("swing motor weight" tak pernah muncul — yang tertulis "swing motor ASSEMBLY weight"),
+    //   jadi frasa penuh sering menyumbang NOL. Bigram "swing motor" tetap kena → term
+    //   paling diskriminatif akhirnya ikut menyumbang skor.
+    // BIAYA TERUKUR (EXPLAIN ANALYZE, ZX200-5G): 5 term 245 ms → 10 term 381 ms.
+    // Tambahan ~136 ms ini SEBAGIAN BESAR TERTUTUPI karena rankedPromise berjalan
+    // paralel dengan vectorPromise (embed + match_documents) yang sekelas waktunya.
+    // Jangan naikkan slice(0, 10) tanpa mengukur ulang — biayanya linear per term.
+    const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
+    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 10);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
     const wantsNumber = words.some(w => SPEC_TERMS.has(w)) || NUMERIC_INTENT_RE.test(primaryQuery);
 
     const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
-      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 6,
+      // 6 → 12: slot rerank sudah dinaikkan ke 45, jadi keyword tak perlu lagi berebut
+      // sempit dengan vector. Lebih banyak kandidat keyword = lebih besar peluang chunk
+      // ber-angka ikut, dan Cohere yang memutuskan mana yang benar.
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 12,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
@@ -739,11 +797,11 @@ export async function searchTechnicalManualMulti(
   // search. Dulu: tunggu keyword+embed selesai dulu, BARU rpc (+0.3-0.8s serial tiap query).
   const vectorPromise: Promise<SearchResult[]> = getEmbedding(embeddingQuery).then(async emb => {
     let { data: vecData } = await supabase!.rpc('match_documents', {
-      query_embedding: emb, match_count: 20, filter: strictFilter,
+      query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
     });
     if (faultCode && (!Array.isArray(vecData) || vecData.length === 0)) {
       const { data: vecFallback } = await supabase!.rpc('match_documents', {
-        query_embedding: emb, match_count: 20, filter: looseFilter,
+        query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: looseFilter,
       });
       vecData = vecFallback;
     }
@@ -831,8 +889,8 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
-  // Cap input rerank → bounded latency untuk rerank-v4.0-pro (cegah timeout).
-  const rerankInput = filteredDocs.slice(0, RERANK_INPUT_CAP);
+  // Cap input rerank → bounded latency + bounded PAYLOAD.
+  const rerankInput = capRerankPayload(filteredDocs);
   // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
   const rerankPool = Math.min(rerankInput.length, Math.max(topN * 2, 8));
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
@@ -890,7 +948,9 @@ export async function searchEngineManual(
 
   if (allDocs.length === 0) return { content: '', hasResults: false };
 
-  const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], allDocs, topN);
+  // Pagar payload juga di sini. Sebelumnya allDocs TANPA batas ukuran sama sekali
+  // (maks 3 P-code × 4 hasil = 12 chunk, tapi chunk bisa 27 rb char → bisa lewat 1 MB).
+  const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
   const { confidence, topScore } = computeConfidence(top);
   return {
     content: top.map(t => t.content).join('\n\n---\n\n'),  // strip [Rank N] prefix
@@ -1194,11 +1254,14 @@ export async function searchPartsCatalog(
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
     if (rest.length > 3) {
-      // Cap input rerank (rest sudah tersortir by similarity) → bounded latency pro.
-      const rerankRest = rest.slice(0, RERANK_INPUT_CAP);
+      // Cap input rerank (rest sudah tersortir by similarity) → bounded latency + payload.
+      // Pakai capRerankPayload, bukan slice(0, RERANK_INPUT_CAP): jalur ini ikut naik ke 45
+      // saat konstanta itu dinaikkan, jadi butuh pagar ukuran yang sama.
+      const rerankDocs = capRerankPayload(rest.map(d => d.content));
+      const rerankRest = rest.slice(0, rerankDocs.length);
       const { docs: reranked, error } = await rerankWithCohere(
         queryText,
-        rerankRest.map(d => d.content),
+        rerankDocs,
         Math.min(rerankRest.length, 12),
       );
       if (!error && reranked.length > 0) {

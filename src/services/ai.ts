@@ -96,15 +96,28 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
 // ── Token usage accumulator (per pertanyaan) ────────────────────────────────
 // resetUsage() di awal tiap entry publik; getQuestionUsage() dibaca App.tsx utk ledger.
 // Single-active-question → accumulator module-level aman.
-let _usage = { input: 0, output: 0, calls: 0 };
-export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0 }; }
+let _usage = { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 };
+export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }
 export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
   return { ..._usage, model: MODEL };
 }
-function addUsage(input?: number, output?: number): void {
-  _usage.input += input || 0;
-  _usage.output += output || 0;
-  _usage.calls += 1;
+/**
+ * thoughts → DIHITUNG SEBAGAI OUTPUT. Gemini menagih thinking token dengan tarif
+ * output, jadi tanpa ini ledger biaya UNDER-REPORT. Angka biaya setelah perubahan
+ * ini akan terlihat lebih tinggi dari sebelumnya — itu koreksi, bukan pemborosan baru.
+ * Disimpan juga terpisah (_usage.thinking) supaya bisa dilihat berapa porsinya.
+ *
+ * cached = prompt token yang kena cache Gemini. SYSTEM_PROMPT ~9.800 token = >55%
+ * dari input tiap query, dan kode sengaja menjaga string-nya byte-identical supaya
+ * cache kena (timestamp ditaruh di user-turn, bukan system prompt). Sebelumnya
+ * angka ini tak pernah dibaca sama sekali → kita buta apakah usaha itu berhasil.
+ */
+function addUsage(input?: number, output?: number, thoughts?: number, cached?: number): void {
+  _usage.input    += input || 0;
+  _usage.output   += (output || 0) + (thoughts || 0);
+  _usage.thinking += thoughts || 0;
+  _usage.cached   += cached || 0;
+  _usage.calls    += 1;
 }
 
 export async function callProxy(body: VRequest, enableGoogleSearch = false, modelOverride?: string): Promise<VResponse> {
@@ -122,7 +135,7 @@ export async function callProxy(body: VRequest, enableGoogleSearch = false, mode
   }
   const json = await res.json();
   const u = json?.usageMetadata ?? {};
-  addUsage(u.promptTokenCount, u.candidatesTokenCount);
+  addUsage(u.promptTokenCount, u.candidatesTokenCount, u.thoughtsTokenCount, u.cachedContentTokenCount);
   return json as VResponse;
 }
 
@@ -468,7 +481,10 @@ export async function callProxyStream(
   const MAX_ATTEMPT = 3;
   let attempt = 0;
   let fullText = '';
-  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
+  let lastUsage: {
+    promptTokenCount?: number; candidatesTokenCount?: number;
+    thoughtsTokenCount?: number; cachedContentTokenCount?: number;
+  } | null = null;
 
   while (true) {
   attempt++;
@@ -552,7 +568,19 @@ export async function callProxyStream(
   break;
   }
 
-  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
+  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount,
+           lastUsage?.thoughtsTokenCount, lastUsage?.cachedContentTokenCount);
+  // Telemetri prompt-cache & thinking. Dua angka ini dulu tak pernah terlihat:
+  // cache% rendah terus → SYSTEM_PROMPT tidak byte-identical (cek jangan ada
+  // timestamp/nilai berubah di dalamnya). thinking besar → kandidat pemangkasan
+  // thinkingLevel kalau stream terasa lama padahal jawabannya pendek.
+  {
+    const inp = lastUsage?.promptTokenCount ?? 0;
+    const cache = lastUsage?.cachedContentTokenCount ?? 0;
+    console.info('[tokens] in=%d (cache %d%%) out=%d thinking=%d',
+      inp, inp ? Math.round((cache / inp) * 100) : 0,
+      lastUsage?.candidatesTokenCount ?? 0, lastUsage?.thoughtsTokenCount ?? 0);
+  }
   return collapseDegenerateLoops(fullText);
 }
 
