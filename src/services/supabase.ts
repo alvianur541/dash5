@@ -195,12 +195,18 @@ const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 //        masuk kandidat, AI menjawab 220 kg (itu swing DEVICE) sambil bilang data tak ada.
 //   45 → mutu beres tapi LATENSI TERASA BERAT oleh Alvian di produksi.
 //   24 → latensi turun, mutu masih terjaga.
-//   12 → sempat dipakai, lalu dinaikkan sedikit karena terlalu sempit.
-//   15 → dipakai sekarang (Alvian, 15 Agu 2026). Dengan penyilangan → ~7 keyword + 8 vector.
+//   12 → sempat dipakai, lalu dinaikkan karena terlalu sempit.
+//   15 → sempat dipakai.
+//   20 → dipakai sekarang (Alvian, 15 Agu 2026). Dengan penyilangan → ~10 keyword + 10 vector.
 //        ⚠️ HANYA aman karena kandidat DISILANG keyword/vector (lihat blok penggabungan di
-//        searchTechnicalManualMulti). Tanpa penyilangan, keyword akan memakan 10 dari 15
+//        searchTechnicalManualMulti). Tanpa penyilangan, keyword akan memakan 15 dari 20
 //        slot dan vector cuma sisa 5. JANGAN kembalikan urutan "keyword dulu semua".
-const RERANK_INPUT_CAP = 15;
+const RERANK_INPUT_CAP = 20;
+/** Berapa dokumen yang DIKEMBALIKAN Cohere. Dulu dihitung `max(topN*2, 8)` — terikat ke
+ *  topN sehingga tak bisa disetel sendiri. Sekarang eksplisit: 10 kandidat masuk MMR,
+ *  MMR memilih `topN` yang relevan TAPI saling melengkapi. Pool lebih besar dari topN
+ *  itu WAJIB — kalau sama, MMR tak punya apa pun untuk dipilih. */
+const RERANK_RETURN_N = 10;
 // Kandidat vector sebelum cap di atas. 20 (Alvian, 15 Agu 2026).
 // DIUKUR: match_count 20 vs 40 sama-sama ~25 ms di database (top-N heapsort, 27 kB memory),
 // jadi angka ini BUKAN sumber latensi — biayanya ada di round-trip jaringan, bukan query.
@@ -706,12 +712,10 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 3,   // 3 chunk final (5 → 4 → 3, diturunkan bertahap atas permintaan Alvian karena
-              // latensi jadi prioritas, 15 Agu 2026). Konteks ke Gemini ~40% lebih kecil
-              // dibanding 5 → input token turun → token pertama muncul lebih cepat.
-              // ⚠️ Ini angka paling sensitif ke MUTU jawaban. Kalau diagnosa gejala mulai
+  topN = 4,   // 4 chunk final yang benar-benar dibaca Gemini (riwayat: 5 → 4 → 3 → 4).
+              // ⚠️ Ini angka paling sensitif ke MUTU jawaban: terlalu kecil → diagnosa
               // kehilangan cabang (mis. E-8 Travel HP Mode + E-13 overload butuh 2 tabel
-              // troubleshooting sekaligus), inilah yang pertama harus dinaikkan lagi.
+              // troubleshooting sekaligus); terlalu besar → input membengkak & stream lambat.
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };
@@ -784,10 +788,10 @@ export async function searchTechnicalManualMulti(
     const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
-      // 10 (dari 6). Sengaja TIDAK ikut diturunkan saat latensi dipangkas: sudah diukur
-      // bahwa p_match_count tidak berbiaya sama sekali (6/8/10/12 → sama ~240 ms).
-      // Menurunkannya cuma mengorbankan recall tanpa menghemat waktu sedetik pun.
-      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
+      // 15 (riwayat 6 → 10 → 15). GRATIS: sudah diukur EXPLAIN ANALYZE bahwa p_match_count
+      // tidak berbiaya sama sekali (6/8/10/12 → sama ~240 ms; LIMIT tak mengubah pemindaian).
+      // Yang berbiaya adalah JUMLAH TERM (~35 ms per term), bukan angka ini.
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 15,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
@@ -929,7 +933,7 @@ export async function searchTechnicalManualMulti(
   // Cap input rerank → bounded latency + bounded PAYLOAD.
   const rerankInput = capRerankPayload(filteredDocs);
   // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
-  const rerankPool = Math.min(rerankInput.length, Math.max(topN * 2, 8));
+  const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   let top = mmrSelect(reranked, topN, 0.7);

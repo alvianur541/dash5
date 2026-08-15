@@ -354,6 +354,10 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
  * paling buruk cuma retrieval kurang pas → fallback web (perilaku lama).
  * Larangan angka spesifik = jaga-jaga supaya vektor tidak bias ke angka karangan.
  */
+/** ⚠️ TIDAK DIPANGGIL sejak 15 Agu 2026 — HyDE dinonaktifkan (alasan lengkap di
+ *  resolveNaturalLanguageQuery). Sengaja DISIMPAN, bukan dihapus, supaya gampang
+ *  dihidupkan lagi kalau nanti chunk dipecah lebih kecil dan ruang embedding jadi
+ *  lebih diskriminatif. Tree-shaking membuangnya dari bundle selama tak dipanggil. */
 async function hydeExpand(query: string): Promise<string | null> {
   const SYS = 'Tulis SATU kalimat teknis singkat dalam bahasa Inggris, seolah kutipan dari service manual alat berat, yang menjawab pertanyaan user. Fokus: nama komponen + gejala/fungsi/sistem terkait. DILARANG menyebut angka spesifik (torque/tekanan/RPM/PN — jangan mengarang). DILARANG menyebut nama/merek model. Output HANYA satu kalimat itu, tanpa kutip, tanpa preamble.';
   try {
@@ -1027,31 +1031,26 @@ async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  // HyDE disiapkan SPEKULATIF, paralel dgn search pertama — hanya DIPAKAI kalau hasil miss/low
-  // (lihat blok retry di bawah). Dulu serial: tunggu miss dulu baru generate (~1s tambahan di
-  // jalur retry). Kalau hasil pertama bagus, promise ini diabaikan (biaya 1 call flash-lite kecil).
-  const hydePromise = hydeExpand(trimmed).catch(() => null);
+  // ── HyDE DINONAKTIFKAN (Alvian, 15 Agu 2026) ──────────────────────────────
+  // Dulu: hydeExpand() dilepas spekulatif paralel dgn search pertama, lalu DIPAKAI kalau
+  // hasil pertama miss/low untuk memicu pencarian KEDUA secara penuh.
+  // Dimatikan karena dua alasan terukur:
+  //  1. Satu panggilan Flash Lite (~874 ms) dibayar di SETIAP pertanyaan teknis, padahal
+  //     mayoritas tidak terpakai — hasil pertama sudah cukup baik.
+  //  2. Saat terpakai, dia memicu pencarian kedua PENUH (embed + keyword + vector + rerank,
+  //     ~3,2 dtk). Itu ongkos besar untuk manfaat yang belum pernah terbukti di korpus ini —
+  //     HyDE bekerja dengan memperbaiki vektor query, sedangkan ruang embedding korpus ini
+  //     terukur sangat padat (chunk tak berhubungan pun cosine 0,67-0,82), jadi vektor query
+  //     yang lebih baik pun sulit membedakan.
+  // Miss/low sekarang langsung jatuh ke fallback web di bawah — satu langkah, bukan dua.
+  // Kalau mau dihidupkan lagi: fungsi hydeExpand() masih ada di file ini, tinggal panggil
+  // sebelum baris di bawah dan pasang kembali blok second-pass (lihat git history 669ebd4).
   let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
     const errMsg = ragErrorTemplate(ragResult.ragError);
     if (errMsg) return { type: 'rag_canned', text: errMsg };
-  }
-
-  // ── HyDE second-pass adaptif ──────────────────────────────────────────────
-  // Miss/low → coba lagi pakai embedding "kalimat jawaban hipotetis" (query pendek embed-nya noisy;
-  // kalimat teknis penuh lebih dekat ke frasa manual). AMAN: HyDE hanya utk embedding, tak masuk jawaban.
-  if (!ragResult.hasResults || ragResult.confidence === 'low') {
-    const hyde = await hydePromise;
-    if (hyde) {
-      emit({ type: 'thinking', message: 'Memperluas cakupan pencarian…' });
-      emit({ type: 'tool_call', tool: 'search_technical_manual' });
-      const retry = await searchTechnicalManualMulti([hyde], model);
-      emit({ type: 'tool_result', tool: 'search_technical_manual', found: retry.hasResults });
-      // Pakai hasil retry hanya kalau BENAR lebih baik (ada isi & bukan low).
-      if (retry.hasResults && retry.confidence !== 'low') ragResult = retry;
-    }
   }
 
   // Manual internal kosong/nyerempet (low) → JANGAN buntu, fallback web (mode 'technical' + guardrail

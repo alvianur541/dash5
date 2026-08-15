@@ -19,7 +19,8 @@
 //              fault code multi-kode 2 chunk/kode (15 Agu 2026)
 //          6 = cache semantik dihapus; keyword 10 / vector 20 / cohere 15 (15 Agu 2026)
 //          7 = jaminan slot untuk juara kata kunci pada pertanyaan bernilai (15 Agu 2026)
-export const CACHE_GEN = 7;
+//          8 = HyDE nonaktif; keyword 15 / vector 20 / rerank 20→10 / Gemini 4 (15 Agu 2026)
+export const CACHE_GEN = 8;
 
 /** Prefix ber-generasi. Ganti CACHE_GEN → semua kunci lama otomatis tidak cocok lagi. */
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
