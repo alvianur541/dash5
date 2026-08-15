@@ -1011,12 +1011,57 @@ async function resolvePartsQuery(
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
 }
 
+/**
+ * Sapaan & ucapan singkat yang PASTI tidak butuh pencarian — dicocokkan pada SELURUH
+ * pesan (bukan awalan), setelah dinormalisasi. Kalau cocok, `analyzeIntent` dilewati
+ * sepenuhnya: hemat satu round-trip Flash Lite penuh (~1,1 detik terukur di waterfall).
+ *
+ * Sejak HyDE dimatikan, analyzeIntent adalah SATU-SATUNYA panggilan yang memblokir —
+ * jalur kata kunci maupun similarity dua-duanya menunggu keluarannya. Jadi melewatinya
+ * untuk "oke" atau "makasih" memangkas hampir seluruh waktu tunggu sapaan.
+ *
+ * ⚠️ SENGAJA KONSERVATIF. Aturan menambah entri:
+ *   - Hanya kata/frasa yang MUSTAHIL jadi pertanyaan teknis, apa pun konteksnya.
+ *   - Cocok SELURUH pesan. "oke tapi kenapa swing lambat" TIDAK boleh kena — makanya
+ *     dipakai Set + kecocokan penuh, bukan startsWith/includes.
+ *   - JANGAN masukkan kata yang bisa berarti "lanjutkan penjelasan tadi" (mis. "lanjut",
+ *     "terus", "next") — itu follow-up yang butuh konteks, bukan sapaan.
+ * Salah memasukkan entri = pertanyaan teknis dijawab tanpa data sama sekali.
+ */
+const CASUAL_EXACT = new Set([
+  'halo', 'hallo', 'hai', 'hi', 'hei', 'hey', 'helo',
+  'pagi', 'siang', 'sore', 'malam',
+  'selamat pagi', 'selamat siang', 'selamat sore', 'selamat malam',
+  'assalamualaikum', 'salam',
+  'ok', 'oke', 'okay', 'okey', 'oks', 'sip', 'siap', 'oke siap', 'siap komandan',
+  'mantap', 'mantul', 'keren', 'bagus', 'nice', 'good',
+  'makasih', 'makasi', 'terima kasih', 'terimakasih', 'trims', 'tengkyu',
+  'thanks', 'thank you', 'thx', 'tq',
+  'ya', 'iya', 'yoi', 'betul', 'benar', 'baik', 'noted', 'paham', 'ngerti',
+  'oke makasih', 'ok thanks', 'oke terima kasih', 'siap makasih',
+  'bye', 'dadah', 'sampai jumpa',
+]);
+
+/** Normalisasi untuk pencocokan sapaan: huruf kecil, buang tanda baca & emoji, rapikan spasi. */
+function normalizeCasual(s: string): string {
+  return s.toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')   // tanda baca & emoji → spasi
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 async function resolveNaturalLanguageQuery(
   trimmed: string,
   history: Message[],
   model: UnitModel,
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
+  // Jalan pintas deterministik — nol panggilan LLM untuk sapaan/ucapan singkat.
+  if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
+    console.info('[intent] sapaan terdeteksi deterministik — analyzeIntent dilewati');
+    return { type: 'google_search', mode: 'casual' };
+  }
+
   const intent = await analyzeIntent(trimmed, history, model);
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
