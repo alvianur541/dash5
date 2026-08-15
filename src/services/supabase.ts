@@ -745,6 +745,15 @@ export async function searchTechnicalManualMulti(
       )
     : [];
 
+  // Pertanyaan MENANYAKAN NILAI TERUKUR? Dihitung di luar promise karena dipakai dua kali:
+  // (1) mengaktifkan bonus angka+satuan di RPC, (2) mengaktifkan JAMINAN KATA KUNCI di
+  // penyaringan akhir (lihat blok setelah MMR).
+  const wantsNumericAnswer =
+    primaryQuery.toLowerCase().split(/\s+/)
+      .map(w => w.replace(/[^\w°·/-]/g, ''))
+      .some(w => SPEC_TERMS.has(w))
+    || NUMERIC_INTENT_RE.test(primaryQuery);
+
   // ── 1b. Keyword BER-PERINGKAT (non-fault-code) ──
   // Dulu: `ilike %kata% limit 5` TANPA ORDER BY. Untuk "main pump pressure" ada 166 chunk
   // cocok → 5 yang terambil ARBITRER (peluang chunk jawaban ikut ≈3%; kasus nyata: nilai
@@ -772,7 +781,7 @@ export async function searchTechnicalManualMulti(
     const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
     const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 7);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
-    const wantsNumber = words.some(w => SPEC_TERMS.has(w)) || NUMERIC_INTENT_RE.test(primaryQuery);
+    const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
       // 10 (dari 6). Sengaja TIDAK ikut diturunkan saat latensi dipangkas: sudah diukur
@@ -923,7 +932,31 @@ export async function searchTechnicalManualMulti(
   const rerankPool = Math.min(rerankInput.length, Math.max(topN * 2, 8));
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
-  const top = mmrSelect(reranked, topN, 0.7);
+  let top = mmrSelect(reranked, topN, 0.7);
+
+  // ── JAMINAN KATA KUNCI (deterministik) ────────────────────────────────────
+  // Cross-encoder seperti Cohere memberi skor tinggi pada chunk yang FOKUS TOPIKNYA,
+  // bukan yang MEMUAT ANGKANYA. Kasus nyata (15 Agu 2026): "berapa kapasitas oli mesin"
+  // ZX200-5G — chunk jawaban (tabel Maintenance Guide, "ZX200-5 class 25 L") ada di
+  // peringkat kata kunci #1-2 dan utuh terbaca reranker, TAPI kalah oleh chunk prosedur
+  // "Change Engine Oil" yang terbaca jauh lebih "engine oil". Hasilnya jawaban penuh
+  // detail prosedur (torsi plug, ukuran kunci, interval) tapi ANGKANYA HILANG — dan AI
+  // dengan jujur bilang datanya tidak ada, padahal ada.
+  //
+  // Jadi satu slot dijamin untuk juara jalur kata kunci saat pertanyaannya MENANYAKAN
+  // NILAI (wantsNumber). Kata kunci menang justru di kasus ini: dia mencocokkan istilah
+  // + satuan secara harfiah, persis yang dibutuhkan pertanyaan angka.
+  // Tidak menambah slot — menggeser yang terakhir. Jadi konteks ke Gemini tetap sama
+  // besar, latensi tidak bertambah sama sekali.
+  const juaraKeyword = rankedSettled.status === 'fulfilled' ? rankedSettled.value[0] : undefined;
+  if (wantsNumericAnswer && juaraKeyword && top.length > 0
+      && !top.some(t => t.content === juaraKeyword)) {
+    // Sisipkan di posisi KEDUA, bukan pertama: top[0] menentukan confidence tier
+    // (computeConfidence) dan itu harus tetap skor rerank tertinggi yang sah.
+    top = [top[0], { content: juaraKeyword, score: top[0].score }, ...top.slice(1)].slice(0, topN);
+    console.info('[jaminan-keyword] chunk juara kata kunci disisipkan (query menanyakan nilai)');
+  }
+
   const { confidence, topScore } = computeConfidence(top);
 
   console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR)',
