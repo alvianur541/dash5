@@ -96,15 +96,19 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
 // ── Token usage accumulator (per pertanyaan) ────────────────────────────────
 // resetUsage() di awal tiap entry publik; getQuestionUsage() dibaca App.tsx utk ledger.
 // Single-active-question → accumulator module-level aman.
-let _usage = { input: 0, output: 0, calls: 0 };
-export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0 }; }
-export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
+let _usage = { input: 0, output: 0, thinking: 0, calls: 0 };
+export function resetUsage(): void { _usage = { input: 0, output: 0, thinking: 0, calls: 0 }; }
+export function getQuestionUsage(): { input: number; output: number; thinking: number; calls: number; model: string } {
   return { ..._usage, model: MODEL };
 }
-function addUsage(input?: number, output?: number): void {
-  _usage.input += input || 0;
-  _usage.output += output || 0;
-  _usage.calls += 1;
+// thoughts = token "thinking" model. Ditagih sebagai OUTPUT oleh Gemini tapi dulu tidak
+// dihitung sama sekali → ledger biaya under-report DAN penyebab lambat terbesar tak terlihat
+// di log (jawaban pendek tapi stream lama = thinking, bukan panjang jawaban).
+function addUsage(input?: number, output?: number, thoughts?: number): void {
+  _usage.input   += input || 0;
+  _usage.output  += (output || 0) + (thoughts || 0);
+  _usage.thinking += thoughts || 0;
+  _usage.calls   += 1;
 }
 
 export async function callProxy(body: VRequest, enableGoogleSearch = false, modelOverride?: string): Promise<VResponse> {
@@ -122,7 +126,7 @@ export async function callProxy(body: VRequest, enableGoogleSearch = false, mode
   }
   const json = await res.json();
   const u = json?.usageMetadata ?? {};
-  addUsage(u.promptTokenCount, u.candidatesTokenCount);
+  addUsage(u.promptTokenCount, u.candidatesTokenCount, u.thoughtsTokenCount);
   return json as VResponse;
 }
 
@@ -460,7 +464,7 @@ export async function callProxyStream(
   const decoder = new TextDecoder();
   let fullText = '';
   let buffer = '';
-  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number } | null = null;
+  let lastUsage: { promptTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } | null = null;
 
   while (true) {
     const { done, value } = await reader.read();
@@ -487,7 +491,7 @@ export async function callProxyStream(
       break;
     }
   }
-  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount);
+  addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount, lastUsage?.thoughtsTokenCount);
   return collapseDegenerateLoops(fullText);
 }
 
