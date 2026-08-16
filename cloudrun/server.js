@@ -2,8 +2,13 @@ const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
-const bigJson = express.json({ limit: '20mb' });
+
+// Parser global HARUS melewati route bawah ini — kalau tidak dia menelan body duluan dan
+// bigJson tak pernah kebagian, jadi foto/audio besar kena 413 walau limitnya 20mb.
+const BIG_BODY_PATHS = new Set(['/v1/chat', '/v1/chat/stream', '/v1/transcribe', '/v1/ask']);
+const smallJson = express.json({ limit: '1mb' });
+const bigJson   = express.json({ limit: '20mb' });
+app.use((req, res, next) => (BIG_BODY_PATHS.has(req.path) ? next() : smallJson(req, res, next)));
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
@@ -93,6 +98,7 @@ async function verifyToken(req, res, next) {
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
     // Identitas TERVERIFIKASI — endpoint wajib pakai ini, JANGAN percaya nama/NIK/email dari body.
     req.authUser = user;
+    req.authToken = authHeader.slice(7); // diteruskan ke klien Supabase /v1/ask supaya RLS tetap jalan
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -140,6 +146,76 @@ async function resolveUpstream(model, { stream }) {
        + `/locations/${LOCATION}/publishers/google/models/${model}:${action}${query}`,
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
   };
+}
+
+// ─── Jalur upstream terpakai-bersama ────────────────────────────────────────
+// Endpoint HTTP lama DAN orkestrasi server-side memanggil lewat sini, supaya retry 429,
+// rotasi key Cohere, dan pemilihan endpoint v1beta1/global hanya ada satu salinan.
+
+async function vertexFetch(model, body, { stream, signal, label }) {
+  const { url, headers } = await resolveUpstream(model, { stream });
+  const payload = JSON.stringify(body);
+  let upstream = await fetch(url, { method: 'POST', headers, body: payload, signal });
+  for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
+    const waitMs = UPSTREAM_429_BACKOFF_MS[i];
+    console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
+    await new Promise(r => setTimeout(r, waitMs));
+    if (signal && signal.aborted) break;
+    upstream = await fetch(url, { method: 'POST', headers, body: payload, signal });
+  }
+  return upstream;
+}
+
+async function vertexEmbed(query, taskType = 'RETRIEVAL_QUERY') {
+  if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
+  const url =
+    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
+    `/locations/${LOCATION}/publishers/google/models/gemini-embedding-001:predict`;
+  const gToken = await getAccessToken();
+  const upstream = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gToken}` },
+    body: JSON.stringify({
+      instances: [{ content: query, task_type: taskType }],
+      parameters: { outputDimensionality: 3072 },
+    }),
+  });
+  const data = await upstream.json();
+  if (!upstream.ok) {
+    console.error('Vertex embed error:', JSON.stringify(data));
+    const e = new Error('Embedding gagal');
+    e.status = upstream.status; e.data = data;
+    throw e;
+  }
+  return (data && data.predictions && data.predictions[0] &&
+          data.predictions[0].embeddings && data.predictions[0].embeddings.values) || [];
+}
+
+async function cohereRerank(query, documents, topN) {
+  if (COHERE_KEYS.length === 0) { const e = new Error('COHERE_API_KEY not configured'); e.status = 500; throw e; }
+  for (const key of COHERE_KEYS) {
+    try {
+      const upstream = await fetch('https://api.cohere.com/v2/rerank', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+        body: JSON.stringify({ model: COHERE_RERANK_MODEL, query, documents, top_n: topN }),
+      });
+      if (upstream.status === 429 || upstream.status === 401 || upstream.status === 403) {
+        console.warn('Cohere key gagal (status %d), coba key berikutnya...', upstream.status);
+        continue;
+      }
+      const data = await upstream.json();
+      if (!upstream.ok) { const e = new Error('Rerank gagal'); e.status = upstream.status; e.data = data; throw e; }
+      return data;
+    } catch (err) {
+      if (err.status) throw err;
+      console.warn('Cohere key error, trying next:', err);
+    }
+  }
+  console.error('All Cohere keys rate limited');
+  const e = new Error('Rerank rate limit reached. Coba lagi dalam 1 menit.');
+  e.status = 429;
+  throw e;
 }
 
 const AUTH_CACHE_TTL_MS = parseInt(process.env.AUTH_CACHE_TTL_MS || '60000', 10);
@@ -211,19 +287,7 @@ app.post('/v1/chat', verifyToken, rateLimit, bigJson, async (req, res) => {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
   try {
-    const { url, headers } = await resolveUpstream(model, { stream: false });
-    let upstream = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
-    });
-    for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
-      const waitMs = UPSTREAM_429_BACKOFF_MS[i];
-      console.warn(`Vertex 429 (/v1/chat) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
-      await new Promise(r => setTimeout(r, waitMs));
-      if (ctrl.signal.aborted) break;
-      upstream = await fetch(url, {
-        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
-      });
-    }
+    const upstream = await vertexFetch(model, body, { stream: false, signal: ctrl.signal, label: '/v1/chat' });
     const data = await upstream.json();
     if (!upstream.ok) {
       console.error('Vertex AI error:', JSON.stringify(data));
@@ -253,19 +317,7 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
   req.on('close', () => { clearTimeout(timer); ctrl.abort(); });
 
   try {
-    const { url, headers } = await resolveUpstream(model, { stream: true });
-    let upstream = await fetch(url, {
-      method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
-    });
-    for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
-      const waitMs = UPSTREAM_429_BACKOFF_MS[i];
-      console.warn(`Vertex 429 — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
-      await new Promise(r => setTimeout(r, waitMs));
-      if (ctrl.signal.aborted) break;
-      upstream = await fetch(url, {
-        method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
-      });
-    }
+    const upstream = await vertexFetch(model, body, { stream: true, signal: ctrl.signal, label: '/v1/chat/stream' });
 
     if (!upstream.ok) {
       const errText = await upstream.text();
@@ -343,28 +395,10 @@ app.post('/v1/embed', verifyToken, rateLimit, async (req, res) => {
   const { query, task_type = 'RETRIEVAL_QUERY' } = req.body;
   if (!query) return res.status(400).json({ error: 'query is required' });
 
-  const url =
-    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
-    `/locations/${LOCATION}/publishers/google/models/gemini-embedding-001:predict`;
-
   try {
-    const gToken = await getAccessToken();
-const upstream = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gToken}` },
-      body: JSON.stringify({
-        instances: [{ content: query, task_type }],
-        parameters: { outputDimensionality: 3072 },
-      }),
-    });
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      console.error('Vertex embed error:', JSON.stringify(data));
-      return res.status(upstream.status).json(data);
-    }
-    const values = data?.predictions?.[0]?.embeddings?.values ?? [];
-    return res.json({ values });
+    return res.json({ values: await vertexEmbed(query, task_type) });
   } catch (err) {
+    if (err.status) return res.status(err.status).json(err.data || { error: 'Embedding gagal' });
     // Detail error hanya ke log — jangan bocorkan internal ke client.
     console.error('Embed error:', err);
     return res.status(500).json({ error: 'Embedding gagal. Coba lagi.' });
@@ -372,34 +406,14 @@ const upstream = await fetch(url, {
 });
 
 app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
-  if (COHERE_KEYS.length === 0) return res.status(500).json({ error: 'COHERE_API_KEY not configured' });
   const { query, documents, topN = 3 } = req.body;
   if (!query || !documents) return res.status(400).json({ error: 'query and documents are required' });
 
-  for (const key of COHERE_KEYS) {
-    try {
-      const upstream = await fetch('https://api.cohere.com/v2/rerank', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({ model: COHERE_RERANK_MODEL, query, documents, top_n: topN }),
-      });
-      if (upstream.status === 429 || upstream.status === 401 || upstream.status === 403) {
-        console.warn('Cohere key gagal (status %d), coba key berikutnya...', upstream.status);
-        continue;
-      }
-      if (!upstream.ok) {
-        const err = await upstream.json();
-        return res.status(upstream.status).json(err);
-      }
-      const data = await upstream.json();
-      return res.json(data);
-    } catch (err) {
-      console.warn('Cohere key error, trying next:', err);
-    }
+  try {
+    return res.json(await cohereRerank(query, documents, topN));
+  } catch (err) {
+    return res.status(err.status || 500).json(err.data || { error: err.message });
   }
-
-  console.error('All Cohere keys rate limited');
-  return res.status(429).json({ error: 'Rerank rate limit reached. Coba lagi dalam 1 menit.' });
 });
 
 app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
@@ -675,6 +689,149 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
   } catch (err) {
     console.error('field-note ingest error:', err && err.message);
     return res.status(500).json({ error: 'Gagal menyimpan catatan.' });
+  }
+});
+
+// ─── /v1/ask — orkestrasi RAG server-side ───────────────────────────────────
+// Seluruh pipeline (intent → search → rerank → generate) jalan di sini. Dulu di browser:
+// 5-7 round-trip Sampit↔Iowa per pertanyaan, sekarang satu.
+
+const { createClient } = require('@supabase/supabase-js');
+const orch = require('./dist/orchestrator.cjs');
+
+const ASK_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140']);
+
+function sseWrite(res, event, payload) {
+  if (res.writableEnded) return;
+  res.write(`data: ${JSON.stringify({ ev: event, ...payload })}\n\n`);
+}
+
+// SSE Vertex → chunk terstruktur. Format frame sama dengan yang dulu di-parse browser.
+async function vertexStreamParsed(model, body, onChunk, signal) {
+  const upstream = await vertexFetch(model, body, { stream: true, signal, label: '/v1/ask' });
+  if (!upstream.ok) {
+    const errText = await upstream.text();
+    console.error('Vertex stream error (/v1/ask):', errText);
+    onChunk({ error: 'Upstream request failed', code: upstream.status });
+    return;
+  }
+  const reader = upstream.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const jsonStr = line.slice(6).trim();
+        if (!jsonStr || jsonStr === '[DONE]') continue;
+        let json;
+        try { json = JSON.parse(jsonStr); } catch { continue; }
+        if (json.error) { onChunk({ error: String(json.error.message || json.error), code: json.error.code }); return; }
+        const parts = (json.candidates && json.candidates[0] && json.candidates[0].content &&
+                       json.candidates[0].content.parts) || [];
+        const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
+        onChunk({ text, usageMetadata: json.usageMetadata });
+      }
+    }
+  } finally {
+    reader.cancel().catch(() => {});
+  }
+}
+
+app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
+  const b = req.body || {};
+  const unit = typeof b.model === 'string' ? b.model : '';
+  if (!ASK_MODELS.has(unit)) return res.status(400).json({ error: 'Model unit tidak dikenal' });
+  if (typeof b.userInput !== 'string' || !b.userInput.trim()) {
+    return res.status(400).json({ error: 'userInput is required' });
+  }
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Supabase belum dikonfigurasi' });
+
+  const userName = typeof b.userName === 'string' ? b.userName.slice(0, 80) : 'Teknisi';
+  const history  = Array.isArray(b.history) ? b.history.slice(-40) : [];
+  const think    = ['low', 'medium', 'high'].includes(b.think) ? b.think : null;
+  const images   = Array.isArray(b.attachments)
+    ? b.attachments.filter(a => a && typeof a.mimeType === 'string' && typeof a.data === 'string').slice(0, 1)
+    : [];
+
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('X-Accel-Buffering', 'no');
+  res.flushHeaders();
+
+  const ctrl = new AbortController();
+  req.on('close', () => ctrl.abort());
+
+  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { headers: { Authorization: `Bearer ${req.authToken}` } },
+  });
+
+  const deps = {
+    supabase,
+    thinkOverride: think,
+    usage: orch.newUsage(),
+    meta: {},
+    embed: (text) => vertexEmbed(text, 'RETRIEVAL_QUERY'),
+    rerank: async (query, documents, topN) => {
+      try {
+        const data = await cohereRerank(query, documents, topN);
+        return { results: (data.results || []).map(r => ({ index: r.index, score: r.relevance_score })) };
+      } catch (err) {
+        return { results: [], error: err.message || 'Rerank gagal' };
+      }
+    },
+    generate: async (body, model, enableGoogleSearch) => {
+      if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
+      const payload = { ...body };
+      if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
+      const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
+      try {
+        const upstream = await vertexFetch(model, payload, { stream: false, signal: ctrl.signal, label: '/v1/ask' });
+        const data = await upstream.json();
+        if (!upstream.ok) throw new Error(`Vertex AI error ${upstream.status}: ${JSON.stringify(data)}`);
+        return data;
+      } finally { clearTimeout(timer); }
+    },
+    stream: async (body, model, onChunk, opts = {}) => {
+      if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
+      const payload = { ...body };
+      if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
+      // Sinyal orchestrator (watchdog/deteksi loop) digabung dengan putusnya koneksi klien.
+      const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
+      await vertexStreamParsed(model, payload, onChunk, signal);
+    },
+  };
+
+  const onChunk = (text) => sseWrite(res, 'text', { text });
+  const onEvent = (event) => sseWrite(res, 'agent_event', { event });
+
+  try {
+    const answer = await orch.runWithDeps(deps, async () => {
+      if (images.length > 0) {
+        return orch.generateResponse(unit, userName, history, b.userInput, images, onChunk, onEvent);
+      }
+      if (b.agentic === true) {
+        return orch.generateResponseAgentic(unit, userName, history, b.userInput, onChunk, onEvent);
+      }
+      return orch.generateResponseStream(unit, userName, history, b.userInput, onChunk, onEvent);
+    });
+    sseWrite(res, 'meta', {
+      usage: deps.usage,
+      model: orch.MODEL,
+      cacheable: deps.meta.cacheable === true,
+      full: answer,
+    });
+  } catch (err) {
+    console.error('/v1/ask error:', err && err.message);
+    sseWrite(res, 'error', { message: err && err.message === 'KUOTA_PENUH' ? 'KUOTA_PENUH' : 'Gagal memproses pertanyaan.' });
+  } finally {
+    if (!res.writableEnded) { sseWrite(res, 'done', {}); res.end(); }
   }
 });
 

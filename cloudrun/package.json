@@ -1,14 +1,22 @@
 {
   "name": "dash5-vertexai-proxy",
   "version": "1.0.0",
-  "description": "Cloud Run auth proxy for Vertex AI Gemini",
+  "description": "Cloud Run proxy + server-side RAG orchestration for Dash5",
   "main": "server.js",
   "scripts": {
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/orchestrator.cjs --external:@supabase/supabase-js --log-level=warning",
+    "typecheck": "tsc -p tsconfig.json",
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.19.2",
-    "google-auth-library": "^9.14.2"
+    "google-auth-library": "^9.14.2",
+    "@supabase/supabase-js": "^2.45.0"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0",
+    "@types/node": "^20.14.0"
   },
   "engines": {
     "node": ">=20"

@@ -1,11 +1,11 @@
 
-import { UnitModel } from '../types';
+import { UnitModel } from './types';
 import {
   searchTechnicalManualMulti,
   searchPartsCatalog,
   searchEngineManual,
-} from './supabase';
-import { callProxy, getText, INTENT_MODEL, FunctionDeclaration } from './ai';
+} from './rag';
+import { callProxy, getText, INTENT_MODEL, FunctionDeclaration } from './orchestrator';
 
 export interface ToolResult {
   toolName: string;

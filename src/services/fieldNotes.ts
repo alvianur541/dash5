@@ -1,9 +1,26 @@
 
 import { getAuthToken } from './supabase';
-import { callProxy, getText, INTENT_MODEL } from './ai';
 import { UnitModel, KnowledgeCandidate } from '../types';
 
 const proxyUrl = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
+
+const INTENT_MODEL = 'gemini-3.1-flash-lite';
+
+// Dua helper kecil di bawah tetap memanggil /v1/chat langsung — bukan bagian pipeline RAG,
+// jadi tidak ikut pindah ke orkestrasi server.
+async function chat(body: Record<string, unknown>, model: string): Promise<string> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  const res = await fetch(`${proxyUrl}/v1/chat`, {
+    method: 'POST', headers, body: JSON.stringify({ model, ...body }),
+  });
+  if (!res.ok) throw new Error(`Chat proxy ${res.status}`);
+  const json = await res.json();
+  const parts = json?.candidates?.[0]?.content?.parts ?? [];
+  return (parts as Array<{ text?: string; thought?: boolean }>)
+    .filter(p => p.text && !p.thought).map(p => p.text).join('');
+}
 
 // contributorName SENGAJA tidak ada — provenance diambil server dari token.
 export interface SubmitFieldNoteInput {
@@ -50,16 +67,11 @@ export async function detectFieldKnowledge(message: string, model: UnitModel): P
   if (words < 5) return null;
 
   try {
-    const res = await callProxy(
-      {
-        contents: [{ role: 'user', parts: [{ text: `Model unit: ${model}\n\n<<PESAN>>\n${msg.slice(0, 1500)}\n<<END>>` }] }],
-        systemInstruction: { parts: [{ text: DETECT_SYSTEM }] },
-        generationConfig: { maxOutputTokens: 300, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
-      },
-      false,
-      INTENT_MODEL,
-    );
-    const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
+    const raw = (await chat({
+      contents: [{ role: 'user', parts: [{ text: `Model unit: ${model}\n\n<<PESAN>>\n${msg.slice(0, 1500)}\n<<END>>` }] }],
+      systemInstruction: { parts: [{ text: DETECT_SYSTEM }] },
+      generationConfig: { maxOutputTokens: 300, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+    }, INTENT_MODEL)).trim();
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
     const parsed = JSON.parse(m[0]) as { present?: boolean; component?: string; note?: string };
@@ -87,16 +99,11 @@ export async function polishFieldNote(rawNote: string, _model: UnitModel): Promi
   const raw = rawNote.trim();
   if (raw.length < 15) return raw;
   try {
-    const res = await callProxy(
-      {
-        contents: [{ role: 'user', parts: [{ text: raw.slice(0, 2000) }] }],
-        systemInstruction: { parts: [{ text: POLISH_SYSTEM }] },
-        generationConfig: { maxOutputTokens: 400, temperature: 0.2, thinkingConfig: { thinkingLevel: 'minimal' } },
-      },
-      false,
-      INTENT_MODEL,
-    );
-    const out = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
+    const out = (await chat({
+      contents: [{ role: 'user', parts: [{ text: raw.slice(0, 2000) }] }],
+      systemInstruction: { parts: [{ text: POLISH_SYSTEM }] },
+      generationConfig: { maxOutputTokens: 400, temperature: 0.2, thinkingConfig: { thinkingLevel: 'minimal' } },
+    }, INTENT_MODEL)).trim();
     return out.length >= 15 ? out : raw;
   } catch {
     return raw;

@@ -1,6 +1,6 @@
 
-import { UnitModel, Message } from '../types';
-import { SYSTEM_PROMPT, jakartaTime } from '../constants';
+import { UnitModel, Message } from './types';
+import { SYSTEM_PROMPT, jakartaTime } from './constants';
 import {
   callProxy,
   callProxyStream,
@@ -8,7 +8,7 @@ import {
   VContent,
   Part,
   MODEL,
-} from './ai';
+} from './orchestrator';
 import { TOOLS, TOOL_DECLARATIONS, ToolResult } from './tools';
 
 export interface AgentEvent {
@@ -45,11 +45,6 @@ INTERPRET TOOL RESULT:
 - error → skip tool ini, synthesize dari hasil tool lain yang ada
 
 LOOP: max 4 tool calls. Duplicate args diblok. Data cukup → langsung final answer.`;
-
-interface LoopOutcome {
-  finalText: string;
-  observations: ToolResult[];
-}
 
 function buildInitialContents(history: Message[], userInput: string, window = 20): VContent[] {
   const contents: VContent[] = history
