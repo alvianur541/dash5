@@ -1224,7 +1224,9 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  const thinkingLevel: ThinkingLevel = 'medium';
+  // Casual tidak menerima data manual → prompt ringkas + thinking paling rendah yang didukung.
+  const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
+  const thinkingLevel: ThinkingLevel = isCasual ? 'low' : 'medium';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
@@ -1242,8 +1244,6 @@ export async function generateResponseStream(
   // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
-  // Casual tidak menerima data manual → prompt ringkas (~9.850 → ~700 token).
-  const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const systemText = isCasual
     ? SYSTEM_PROMPT_CASUAL(model, userName)
     : SYSTEM_PROMPT(model, userName);
