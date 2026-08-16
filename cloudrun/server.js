@@ -1,5 +1,18 @@
 const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
+const { setGlobalDispatcher, Agent } = require('undici');
+
+// Koneksi menganggur JANGAN dipakai ulang terlalu lama. Terukur 16 Agu 2026: panggilan ke
+// aiplatform.googleapis.com macet >8 dtk pada 31-67% pertanyaan, lalu koneksi BARU sembuh
+// dalam 3-5 dtk. Penyebabnya koneksi pool yang sudah mati diam-diam (egress/NAT Cloud Run
+// memutus mapping yang menganggur) tapi Node masih mengira hidup.
+// Membuangnya setelah 10 dtk menganggur berarti bayar TLS handshake ~100-300 ms sesekali —
+// jauh lebih murah daripada menggantung 8 dtk. Berlaku global: Vertex, Supabase, Cohere.
+setGlobalDispatcher(new Agent({
+  keepAliveTimeout: 10_000,
+  keepAliveMaxTimeout: 10_000,
+  connect: { timeout: 10_000 },
+}));
 
 const app = express();
 

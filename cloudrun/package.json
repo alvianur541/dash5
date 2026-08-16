@@ -11,7 +11,8 @@
   "dependencies": {
     "@supabase/postgrest-js": "^1.16.0",
     "express": "^4.19.2",
-    "google-auth-library": "^9.14.2"
+    "google-auth-library": "^9.14.2",
+    "undici": "^6.28.0"
   },
   "devDependencies": {
     "@types/node": "^20.14.0",
