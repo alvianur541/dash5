@@ -172,13 +172,13 @@ export async function saveFeedback(payload: {
 // Ambang kasar saja — terukur meloloskan 1259/1259 chunk. Penyaring nyatanya Cohere rerank.
 // Jangan dinaikkan: similarity query-ke-dokumen belum pernah diukur.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Penyumbang latensi terbesar di rantai pencarian. 40 = 30 vector + 10 keyword.
+// Penyumbang latensi terbesar di rantai pencarian. 30 = 20 vector + 10 keyword.
 // ⚠️ Kalau diturunkan di bawah jumlah kandidat, penyilangan keyword/vector di
 // searchTechnicalManualMulti yang menjaga pembagiannya adil — jangan diubah jadi urut.
-const RERANK_INPUT_CAP = 40;
+const RERANK_INPUT_CAP = 30;
 /** Dokumen yang dikembalikan Cohere → masuk MMR. Wajib > topN, kalau sama MMR tak punya pilihan. */
 const RERANK_RETURN_N = 10;
-const VECTOR_MATCH_COUNT = 30;
+const VECTOR_MATCH_COUNT = 20;
 // Jaring pengaman ukuran payload. Tak pernah tersentuh selama RERANK_DOC_CAP masih aktif.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
