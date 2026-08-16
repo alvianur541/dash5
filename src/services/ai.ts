@@ -39,6 +39,36 @@ export interface VRequest {
   toolConfig?: { functionCallingConfig: { mode: 'AUTO' | 'ANY' | 'NONE' } };
 }
 
+/**
+ * Beberapa model MENOLAK `thinkingLevel: 'minimal'` dengan **API validation error**
+ * (bukan diabaikan diam-diam — request-nya gagal total).
+ * Gemini 3.7 Flash hanya menerima LOW / MEDIUM / HIGH.
+ *
+ * Tanpa pagar ini, sekadar mengganti VITE_VERTEX_MODEL ke 3.7 akan MEMATIKAN:
+ *   - semua jawaban PARTS   (ai.ts: isPartsAnswer → 'minimal')
+ *   - semua jawaban CASUAL  (ai.ts: fallback terakhir → 'minimal')
+ *   - seluruh mode agentic  (react-agent.ts × 2)
+ * Yaitu potongan besar pemakaian harian, dan gagalnya keras (bukan degradasi halus).
+ *
+ * Diterapkan TERPUSAT di callProxy/callProxyStream — bukan di tiap pemanggil — supaya
+ * pemanggil baru otomatis ikut terlindungi tanpa harus ingat aturan ini.
+ * 'minimal' dinaikkan ke 'low' (tingkat terendah yang didukung), bukan diturunkan/dibuang,
+ * supaya perilakunya sedekat mungkin dengan maksud aslinya: berpikir seminimal mungkin.
+ */
+const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
+
+function clampThinking(body: VRequest, model: string): VRequest {
+  const lvl = body.generationConfig?.thinkingConfig?.thinkingLevel;
+  if (lvl !== 'minimal' || !NO_MINIMAL_THINKING_RE.test(model)) return body;
+  return {
+    ...body,
+    generationConfig: {
+      ...body.generationConfig,
+      thinkingConfig: { thinkingLevel: 'low' },
+    },
+  };
+}
+
 export interface VResponse {
   // Optional: Gemini bisa balas 200 tanpa candidates (safety block / MAX_TOKENS) → wajib akses `?.[0]`.
   candidates?: Array<{
@@ -124,10 +154,11 @@ export async function callProxy(body: VRequest, enableGoogleSearch = false, mode
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
+  const modelUsed = modelOverride ?? MODEL;
   const res = await fetchWithTimeout(`${PROXY_URL}/v1/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ model: modelOverride ?? MODEL, enableGoogleSearch, ...body }),
+    body: JSON.stringify({ model: modelUsed, enableGoogleSearch, ...clampThinking(body, modelUsed) }),
   }, 30_000);
   if (!res.ok) {
     const err = await res.text();
@@ -483,7 +514,7 @@ export async function callProxyStream(
   const doFetch = () => fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...body }),
+    body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...clampThinking(body, MODEL) }),
   }, STREAM_TIMEOUT_MS);
 
   // ── Percobaan ulang otomatis ────────────────────────────────────────────────

@@ -69,8 +69,15 @@ const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast
 
 // Allowlist model — `model` client diinterpolasi ke URL Vertex; tanpa ini user bisa inject model
 // arbitrer (cost abuse / path manipulation pada request yg jalan pakai service account).
+// ⚠️ Model yang TIDAK ada di daftar ini ditolak 400 "Model tidak diizinkan".
+// gemini-3.7-flash ditambahkan supaya bisa dicoba lewat VITE_VERTEX_MODEL tanpa deploy
+// ulang backend. Catatan penting untuk 3.7: model itu MENOLAK thinkingLevel 'minimal'
+// dengan API validation error — sudah ditangani terpusat di src/services/ai.ts
+// (clampThinking: 'minimal' → 'low' otomatis).
+// ⚠️ Kalau env ALLOWED_MODELS di Cloud Run sudah di-set manual, default ini TIDAK dipakai —
+// tambahkan gemini-3.7-flash ke env-nya, kalau tidak model barunya tetap ditolak.
 const ALLOWED_MODELS = new Set(
-  (process.env.ALLOWED_MODELS || 'gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
+  (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
 );
 
