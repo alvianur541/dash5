@@ -904,10 +904,7 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                   {/* Catatan tarif */}
                   {pricing && (
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed px-1">
-                      {/* Nama model diambil dari MODEL yang benar-benar dipakai, JANGAN ditulis
-                          manual — dulu di sini tertulis "gemini-3.5-flash" dan tertinggal usang
-                          saat model naik ke 3.6 lalu 3.7, jadi admin membaca tarif yang salah
-                          modelnya. Angka tarifnya sendiri sudah datang dari server. */}
+                      {/* Nama model dari MODEL, jangan ditulis manual — gampang tertinggal usang. */}
                       Perhitungan biaya mengikuti tarif resmi {MODEL} — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs IDR {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
                     </p>
                   )}

@@ -4,22 +4,11 @@ import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, get
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
-// gemini-3.7-flash — diverifikasi tersedia di project ini lewat Cloud Shell (15 Agu 2026):
-// generateContent 200 · streamGenerateContent 200 · thinkingLevel LOW 200.
-// ⚠️ Model ini MENOLAK thinkingLevel 'minimal' → 400 "Thinking level is unsupported:
-// THINKING_LEVEL_MINIMAL" (diuji langsung, bukan asumsi). Ditangani otomatis oleh
-// clampThinking() di bawah — 'minimal' dinaikkan ke 'low' khusus model 3.7.
-// Rollback: set VITE_VERTEX_MODEL=gemini-3.6-flash di Cloudflare, redeploy. 3.6 tetap
-// ada di ALLOWED_MODELS server, jadi tidak perlu sentuh backend.
+// Rollback: VITE_VERTEX_MODEL=gemini-3.6-flash di Cloudflare (masih di ALLOWED_MODELS server).
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.7-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
-// `thoughtSignature` — BARU di Gemini 3.x. Model menyertakannya pada part hasil berpikir
-// (terlihat di stream: {"text":"","thoughtSignature":"AY89a18..."}). Untuk function calling
-// MULTI-GILIRAN, signature ini WAJIB dikembalikan apa adanya bersama giliran model; kalau
-// dibuang, model kehilangan jejak penalarannya sendiri di giliran berikutnya.
-// Karena itu tipenya dideklarasikan di sini — supaya bisa diteruskan utuh, bukan hilang
-// diam-diam saat part disusun ulang.
+// thoughtSignature (Gemini 3.x) WAJIB dikembalikan utuh di function calling multi-giliran.
 interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
 interface InlineDataPart      { inlineData: { mimeType: string; data: string } }
 interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
@@ -46,49 +35,19 @@ export interface VRequest {
   generationConfig?: {
     maxOutputTokens?: number;
     temperature?: number;
-    thinkingConfig?: { thinkingLevel: 'minimal' | 'low' | 'medium' | 'high' };
+    thinkingConfig?: { thinkingLevel: ThinkingLevel };
   };
   tools?: Array<{ functionDeclarations: FunctionDeclaration[] }>;
   toolConfig?: { functionCallingConfig: { mode: 'AUTO' | 'ANY' | 'NONE' } };
 }
 
-/**
- * Beberapa model MENOLAK `thinkingLevel: 'minimal'` dengan **API validation error**
- * (bukan diabaikan diam-diam — request-nya gagal total).
- * Gemini 3.7 Flash hanya menerima LOW / MEDIUM / HIGH.
- *
- * Tanpa pagar ini, sekadar mengganti VITE_VERTEX_MODEL ke 3.7 akan MEMATIKAN:
- *   - semua jawaban PARTS   (ai.ts: isPartsAnswer → 'minimal')
- *   - semua jawaban CASUAL  (ai.ts: fallback terakhir → 'minimal')
- *   - seluruh mode agentic  (react-agent.ts × 2)
- * Yaitu potongan besar pemakaian harian, dan gagalnya keras (bukan degradasi halus).
- *
- * Diterapkan TERPUSAT di callProxy/callProxyStream — bukan di tiap pemanggil — supaya
- * pemanggil baru otomatis ikut terlindungi tanpa harus ingat aturan ini.
- * 'minimal' dinaikkan ke 'low' (tingkat terendah yang didukung), bukan diturunkan/dibuang,
- * supaya perilakunya sedekat mungkin dengan maksud aslinya: berpikir seminimal mungkin.
- */
+export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
+
+// gemini-3.7 menolak 'minimal' dengan HTTP 400 — jangan kirim, naikkan ke 'low'.
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
-/**
- * Override EKSPERIMEN lewat URL: `?think=low` / `?think=medium` / `?think=high`.
- *
- * Gunanya untuk MEMBANDINGKAN mutu jawaban vs latensi tanpa deploy ulang — cukup buka
- * dua tab dengan parameter berbeda dan tanya pertanyaan yang sama.
- *
- * Batasannya disengaja:
- *   - Hanya berlaku untuk MODEL UTAMA. Panggilan INTENT_MODEL (analyzeIntent, OCR,
- *     compress) tetap 'minimal' — menaikkannya cuma menambah biaya & latensi tanpa
- *     memengaruhi mutu jawaban yang sedang diukur, dan malah mengotori hasil tes.
- *   - 'minimal' TIDAK diterima sebagai nilai override: 3.7 menolaknya (400), dan untuk
- *     model lama itu sudah jadi default di beberapa jalur.
- *   - Saat override aktif, **cache jawaban dilewati** (lihat generateResponseStream) —
- *     kalau tidak, percobaan kedua cuma memutar ulang jawaban tersimpan dan angkanya
- *     tidak berarti apa-apa.
- *
- * Default (tanpa parameter) = perilaku produksi, tidak berubah sama sekali.
- */
-export const THINK_OVERRIDE: 'low' | 'medium' | 'high' | null = (() => {
+/** Override eksperimen: `?think=low|medium|high`. Model utama saja; cache dilewati. */
+export const THINK_OVERRIDE: Exclude<ThinkingLevel, 'minimal'> | null = (() => {
   try {
     const v = new URLSearchParams(window.location.search).get('think')?.toLowerCase();
     return v === 'low' || v === 'medium' || v === 'high' ? v : null;
@@ -99,11 +58,7 @@ function clampThinking(body: VRequest, model: string): VRequest {
   const asli = body.generationConfig?.thinkingConfig?.thinkingLevel;
   if (!asli) return body;
 
-  // 1. Override eksperimen — hanya model utama, jangan sentuh INTENT_MODEL.
-  let lvl: 'minimal' | 'low' | 'medium' | 'high' =
-    THINK_OVERRIDE && model !== INTENT_MODEL ? THINK_OVERRIDE : asli;
-
-  // 2. Pagar keamanan — 3.7 menolak 'minimal' dengan 400.
+  let lvl: ThinkingLevel = THINK_OVERRIDE && model !== INTENT_MODEL ? THINK_OVERRIDE : asli;
   if (lvl === 'minimal' && NO_MINIMAL_THINKING_RE.test(model)) lvl = 'low';
 
   if (lvl === asli) return body;
@@ -1158,20 +1113,7 @@ async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  // ── HyDE DINONAKTIFKAN (Alvian, 15 Agu 2026) ──────────────────────────────
-  // Dulu: hydeExpand() dilepas spekulatif paralel dgn search pertama, lalu DIPAKAI kalau
-  // hasil pertama miss/low untuk memicu pencarian KEDUA secara penuh.
-  // Dimatikan karena dua alasan terukur:
-  //  1. Satu panggilan Flash Lite (~874 ms) dibayar di SETIAP pertanyaan teknis, padahal
-  //     mayoritas tidak terpakai — hasil pertama sudah cukup baik.
-  //  2. Saat terpakai, dia memicu pencarian kedua PENUH (embed + keyword + vector + rerank,
-  //     ~3,2 dtk). Itu ongkos besar untuk manfaat yang belum pernah terbukti di korpus ini —
-  //     HyDE bekerja dengan memperbaiki vektor query, sedangkan ruang embedding korpus ini
-  //     terukur sangat padat (chunk tak berhubungan pun cosine 0,67-0,82), jadi vektor query
-  //     yang lebih baik pun sulit membedakan.
-  // Miss/low sekarang langsung jatuh ke fallback web di bawah — satu langkah, bukan dua.
-  // Kalau mau dihidupkan lagi: fungsi hydeExpand() masih ada di file ini, tinggal panggil
-  // sebelum baris di bawah dan pasang kembali blok second-pass (lihat git history 669ebd4).
+  // HyDE nonaktif — miss/low langsung ke fallback web. hydeExpand() masih ada kalau mau dihidupkan.
   let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
@@ -1185,20 +1127,8 @@ async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
-  // Contextual Compression — extract baris relevan saja dari setiap chunk.
-  // Drastis kurangi token input + AI tidak distracted oleh noise.
-  // TAPI: compression adalah serial step (~0.5-1s) SEBELUM first token streaming —
-  // jadi langsung terasa sebagai latency oleh user. gemini-3.5-flash handle context
-  // sedang tanpa masalah, jadi skip lebih agresif untuk respon lebih cepat.
-  // Skip untuk:
-  //   - HIGH confidence: chunks sudah top-relevant (Cohere score >0.45) — compress = noise + overhead unjustified
-  //   - Total content < 3500 chars: top-3 reranked chunk biasanya muat — compress = latency tanpa benefit nyata
+  // Compression = langkah flash-lite lossy & serial sebelum jawaban → hanya untuk konten jumbo.
   const totalBefore = ragResult.content.length;
-  // Compression = langkah flash-lite lossy + serial (~1-2s) sebelum jawaban. Skip kalau HIGH
-  // confidence ATAU total < 9000 char. Ambang 9000 (naik dari 5000): sejak topN=5, konten 5-8rb
-  // char jadi umum → ambang lama bikin compression aktif hampir tiap jawaban medium = lambat +
-  // jawaban datar (konteks terbuang). 3.6-flash handle 9rb char verbatim tanpa masalah —
-  // verbatim selalu > re-ekstraksi. Compression kini hanya utk konten benar-benar jumbo.
   const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
 
   if (skipCompress) {
@@ -1327,13 +1257,8 @@ async function resolveMultiAspectQuery(
   return { type: 'rag_found', content: blocks.join('\n\n---\n\n'), dataLabel: RAG_LABEL.manual };
 }
 
-// ─── Answer cache (sisi-klien, per-perangkat) ───────────────────────────────
-// Cache jawaban final query mandiri → re-ask identik instan & gratis. Guardrail:
-//   - HANYA rag_found (web/canned/casual TIDAK di-cache) — jaga anti-halu.
-//   - Query dgn rujukan konteks (itu/nya/tadi) di-skip (jawaban context-dependent).
-//   - Scope per userName (jawaban ber-nama tak bocor antar user), TTL 3 hari.
-// Prefix-nya BER-GENERASI (lihat cacheGen.ts). Perbaikan retrieval/prompt tidak terasa
-// oleh user selama cache lama masih tersaji → naikkan CACHE_GEN saat mengubah isi jawaban.
+// Answer cache (localStorage). Hanya rag_found, skip query ber-rujukan konteks, TTL 3 hari.
+// Prefix ber-generasi — naikkan CACHE_GEN di cacheGen.ts saat mengubah isi jawaban.
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
@@ -1408,9 +1333,7 @@ export async function generateResponseStream(
 
   // Answer-cache HIT → stream instan, lewati embed/search/LLM (token=0, tak ke-log ledger).
   // Cache hanya isi jawaban rag_found (lihat write di bawah) → hit = valid.
-  // Saat ?think= aktif, cache SENGAJA dilewati (baca & tulis). Tanpa ini, percobaan kedua
-  // dengan level berbeda cuma memutar ulang jawaban tersimpan — latensinya jadi ~0 dan
-  // angkanya tak berarti, padahal kelihatan seperti "medium ternyata sangat cepat".
+  // ?think= aktif → lewati cache, kalau tidak hasil eksperimen cuma jawaban tersimpan.
   const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, userName, trimmed);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
@@ -1421,14 +1344,6 @@ export async function generateResponseStream(
     }
   }
 
-  // ── Cache semantik DIHAPUS (Alvian, 15 Agu 2026) ──────────────────────────
-  // Dulu di sini ada pencocokan "pertanyaan bermakna sama" via embedding. Dibuang karena
-  // ongkosnya tidak sepadan: satu embed call ~2,1 detik yang MEMBLOKIR seluruh pipeline
-  // sebelum pencarian bahkan dimulai (terlihat jelas di waterfall), ditambah satu embed
-  // lagi di belakang layar untuk menyimpan hasilnya. Cache exact (dash-ans) TETAP ADA dan
-  // menangani kasus yang paling sering: pertanyaan yang persis sama diulang.
-  // Kalau suatu saat dihidupkan lagi, jalankan PARALEL dengan analyzeIntent — jangan
-  // berurutan seperti dulu.
   const contents = historyToContents(history, 20);
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
@@ -1470,16 +1385,8 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  // Parts/harga = format + jumlah data yg sudah eksplisit → 'minimal' (skip thinking berat = jauh
-  // lebih cepat). Technical/web butuh reasoning tipis (low); fault code (medium); casual (minimal).
-  const isPartsAnswer    = dataLabel === RAG_LABEL.parts;
-  const thinkingLevel    = isFaultCode ? 'medium' : isPartsAnswer ? 'minimal' : (ragContent || gsTechnical) ? 'low' : 'minimal';
-  // RAG 4096 · web-teknis 2048 · casual 1536. RAG dikembalikan ke 4096 (sempat 3072):
-  // diagnosis multi-cabang + thinking butuh ruang — cap ketat terbukti bikin model membuang
-  // cabang diagnosa/spec demi muat. Casual 1536 (naik dari 512): jalur ini juga melayani
-  // permintaan terjemahan jawaban sebelumnya ("in japanese") — 512 bikin terjemahan terpotong.
+  const thinkingLevel: ThinkingLevel = 'medium';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
-  // MEDIUM confidence caveat — shorter wording, AI baca instruksi handling-nya di SYSTEM_PROMPT
   const caveat = ragConfidence === 'medium'
     ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
     : '';
@@ -1492,11 +1399,7 @@ export async function generateResponseStream(
   // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
-  // Jalur CASUAL (sapaan/ack/meta/jam/terjemahan) TIDAK menerima data manual sama sekali,
-  // jadi tak ada gunanya mengirim aturan PARTS & PROMO, FAULT CODE, cara baca blok data,
-  // format tabel parts, dsb. Prompt ringkas khusus dipakai di sini: ~9.850 → ~1.400 token.
-  // Keduanya tetap byte-identical per varian, jadi prompt-cache tetap kena (cek persentase
-  // cache di log [tokens] kalau curiga meleset).
+  // Casual tidak menerima data manual → prompt ringkas (~9.850 → ~700 token).
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const systemText = isCasual
     ? SYSTEM_PROMPT_CASUAL(model, userName)
@@ -1581,17 +1484,8 @@ export async function generateResponse(
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
       .map(r => r.value);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-    // Foto SENGAJA belum dimasukkan ke currentParts di sini.
-    // Dulu: `currentParts.push(...imageParts)` — akibatnya foto dikirim DUA KALI ke Gemini,
-    // sekali untuk OCR (extractFaultCodes) dan sekali lagi saat menyusun jawaban. Satu foto
-    // monitor ≈ 1.064 token, dan giliran kedua itu MURNI pemborosan kalau kodenya sudah
-    // terbaca dan datanya sudah ketemu di manual — jawaban bersumber dari teks manual,
-    // bukan dari piksel. Ini penyebab utama stream jalur foto ~50 detik.
-    // Foto tetap dikirim kalau OCR gagal / tak ada kode terbaca (lihat cabang di bawah),
-    // karena di situ model memang harus melihat gambarnya.
-    // Konsekuensi yang diterima sadar: kalau kode terbaca DAN ketemu di manual, pertanyaan
-    // yang menyinggung tampilan layar dijawab dari teks manual saja. Untuk diagnosa fault
-    // code itu justru lebih benar — manual adalah sumber otoritatifnya.
+    // Foto dikirim ke model HANYA kalau OCR gagal / kode tak ketemu di manual — kalau tidak,
+    // foto terkirim dua kali (OCR + jawaban) dan itu murni pemborosan ~1.064 token.
     let sendImageToModel = true;
 
     try {
@@ -1692,25 +1586,16 @@ export async function generateResponse(
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
-    // Anggaran menyesuaikan beban nyata:
-    //  - foto IKUT dikirim (OCR gagal / tak ada kode) → model harus benar-benar "melihat":
-    //    thinking 'medium', ruang keluaran 8192.
-    //  - foto TIDAK dikirim (kode terbaca & data manual ketemu) → tugasnya tinggal menyusun
-    //    diagnosis dari teks manual, persis seperti jalur fault code teks yang sudah terbukti
-    //    cukup dengan 4096 + thinking 'low'. Menurunkan keduanya di sini memangkas waktu
-    //    tunggu tanpa mengurangi isi jawaban.
     const body: VRequest = {
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
       generationConfig: {
         maxOutputTokens: sendImageToModel ? 8192 : 4096,
         temperature: 0.3,
-        thinkingConfig: { thinkingLevel: sendImageToModel ? 'medium' : 'low' },
+        thinkingConfig: { thinkingLevel: 'medium' },
       },
     };
 
-    // Streaming kalau caller kasih onChunk — jawaban muncul bertahap seperti jalur
-    // teks (sebelumnya non-stream: user nunggu diam lalu jawaban muncul sekaligus).
     if (onChunk) {
       const streamed = await callProxyStream(body, onChunk);
       emit({ type: 'done' });

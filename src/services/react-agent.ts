@@ -192,7 +192,7 @@ async function forceFinalAnswer(
     {
       contents: finalContents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'minimal' } },
+      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'medium' } },
       toolConfig: { functionCallingConfig: { mode: 'NONE' } },
     },
     onChunk,
@@ -238,7 +238,7 @@ export async function runReActAgent(
     const res = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'minimal' } },
+      generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'medium' } },
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
     }, false, MODEL);
@@ -259,15 +259,7 @@ export async function runReActAgent(
     console.info('[react-agent] iteration=%d tool=%s args=%j', iterations, name, args);
     emit({ type: 'tool_call', tool: name });
 
-    // Append giliran model APA ADANYA — JANGAN disusun ulang jadi [{ functionCall }].
-    //
-    // Dulu baris ini menulis `parts: [{ functionCall: { name, args } }]`, yang membuang
-    // semua field lain yang dikembalikan model — termasuk `thoughtSignature` (baru di
-    // Gemini 3.x). Untuk function calling multi-giliran, signature itu harus dikembalikan
-    // utuh; tanpa itu model kehilangan jejak penalarannya di iterasi berikutnya dan bisa
-    // mengulang tool yang sama atau menolak request.
-    // Mengirim `parts` asli juga otomatis benar kalau model membalas text + functionCall
-    // sekaligus (lihat catatan di extractFunctionCall).
+    // Kirim parts APA ADANYA — menyusun ulang jadi [{ functionCall }] membuang thoughtSignature.
     contents.push({ role: 'model', parts });
 
     // Special case decompose_query — eksekusi → expand sub-queries paralel
@@ -325,12 +317,8 @@ export async function runReActAgent(
         const engineResult = await executeTool('search_engine_manual', { p_codes: pCodes }, model, callSet);
         observations.push(engineResult);
         emit({ type: 'tool_result', tool: 'search_engine_manual', found: engineResult.hasResults });
-        // Synthetic functionCall dulu — functionResponse tanpa functionCall pasangannya = Gemini 400.
-        // ⚠️ Giliran ini DIKARANG aplikasi (model tak pernah memintanya), jadi tidak ada
-        // `thoughtSignature` yang bisa disertakan — beda dari giliran asli di atas.
-        // BELUM DIUJI dengan Gemini 3.7: model 3.x bisa saja menuntut signature pada setiap
-        // giliran model saat berpikir aktif. Kalau mode agentic error di jalur 2nd-pass
-        // Engine Manual, DI SINI tempat pertama yang harus dicek.
+        // functionCall sintetis (tanpa thoughtSignature) — functionResponse tanpa pasangan = 400.
+        // Belum diuji di 3.7; kalau agentic error di jalur ini, cek sini duluan.
         contents.push({ role: 'model', parts: [{ functionCall: { name: 'search_engine_manual', args: { p_codes: pCodes } } }] });
         contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse('search_engine_manual', engineResult) }] });
       }

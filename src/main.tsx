@@ -9,9 +9,7 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 registerSW({ immediate: true });
 
-// Buang cache jawaban dari generasi lama SEBELUM app render. Tanpa ini, perbaikan
-// retrieval/prompt tidak terasa oleh user lama: localStorage masih menyajikan jawaban
-// versi sebelumnya sampai TTL 3 hari habis. Lihat CACHE_GEN di services/cacheGen.ts.
+// Buang cache generasi lama sebelum render — lihat CACHE_GEN di services/cacheGen.ts.
 import { purgeStaleAnswerCaches } from './services/cacheGen';
 purgeStaleAnswerCaches();
 

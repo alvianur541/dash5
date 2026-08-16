@@ -35,13 +35,8 @@ const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-// Cost ledger (usage_logs) — service_role key HANYA di server (jangan pernah ke client).
-// DUA NAMA diterima dengan sengaja. Supabase sendiri menyebutnya "service_role key", dan
-// panduan migrasi self-host memakai SUPABASE_SERVICE_ROLE_KEY, sedangkan env Cloud Run yang
-// sudah berjalan memakai SUPABASE_SERVICE_KEY. Kalau hanya salah satu yang dikenali, salah
-// menamai saat cutover bikin TIGA endpoint mati DIAM-DIAM (bukan error keras, cuma 503 yang
-// tak terlihat dari UI): /v1/dashboard (panel monitoring kosong), /v1/usage (ledger biaya
-// berhenti mencatat), /v1/field-note. Menerima keduanya menghapus seluruh kelas kesalahan itu.
+// service_role key — HANYA di server. Dua nama diterima: salah menamai saat cutover bikin
+// /v1/dashboard, /v1/usage, dan /v1/field-note mati diam-diam (503 yang tak terlihat di UI).
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.6-flash: $1.50 / 1M input
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '7.50'); // gemini-3.6-flash: $7.50 / 1M output (turun dari $9 di 3.5)
@@ -69,13 +64,8 @@ const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast
 
 // Allowlist model — `model` client diinterpolasi ke URL Vertex; tanpa ini user bisa inject model
 // arbitrer (cost abuse / path manipulation pada request yg jalan pakai service account).
-// ⚠️ Model yang TIDAK ada di daftar ini ditolak 400 "Model tidak diizinkan".
-// gemini-3.7-flash ditambahkan supaya bisa dicoba lewat VITE_VERTEX_MODEL tanpa deploy
-// ulang backend. Catatan penting untuk 3.7: model itu MENOLAK thinkingLevel 'minimal'
-// dengan API validation error — sudah ditangani terpusat di src/services/ai.ts
-// (clampThinking: 'minimal' → 'low' otomatis).
-// ⚠️ Kalau env ALLOWED_MODELS di Cloud Run sudah di-set manual, default ini TIDAK dipakai —
-// tambahkan gemini-3.7-flash ke env-nya, kalau tidak model barunya tetap ditolak.
+// Model di luar daftar ini ditolak 400. ⚠️ Kalau env ALLOWED_MODELS di-set manual di Cloud Run,
+// default ini TIDAK dipakai — model baru harus ditambahkan ke env-nya juga.
 const ALLOWED_MODELS = new Set(
   (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)

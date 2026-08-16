@@ -169,57 +169,17 @@ export async function saveFeedback(payload: {
   }
 }
 
-// Pre-filter recall gate sebelum rerank.
-// ⚠️ ANGKA 0.30 DULU **TIDAK MENYARING APA PUN** — diukur langsung di DB (Agu 2026):
-// chunk PALING TIDAK MIRIP se-ZX200-5G masih cosine 0.648, dan 1.259 dari 1.259 chunk
-// lolos ambang 0.30. Ruang embedding korpus ini sangat padat: dua chunk ACAK beda
-// kategori rata-rata 0.734 (rentang 0.67-0.82), dan sebaran 20 tetangga terdekat cuma
-// 0.966→0.890. Penyebabnya chunk kepanjangan (rata-rata 2.802 char) — satu kalimat
-// fakta ("weight: 48 kg") cuma ~1% dari vektor, jadi jarak cosine tak bisa membedakannya.
-// ⚠️ SENGAJA DIBIARKAN 0.30 — jangan dinaikkan tanpa mengukur ulang dengan BENAR.
-// Angka 0.648/0.734 di atas diukur DOKUMEN-ke-DOKUMEN. Similarity QUERY-ke-dokumen
-// (query pendek, task_type RETRIEVAL_QUERY) bisa duduk jauh lebih rendah, dan itu
-// BELUM pernah diukur — tak ada cara meng-embed query dari sesi analisis.
-// Menaikkan ambang = risiko membuang kandidat sah, tanpa manfaat yang terbukti:
-// jumlah kandidat sudah dibatasi VECTOR_MATCH_COUNT + RERANK_INPUT_CAP, dan penyaring
-// sesungguhnya adalah Cohere rerank (cross-encoder — membaca query + dokumen bersamaan,
-// jadi SANGGUP menemukan angka di tengah chunk panjang). Ambang ini cuma jaring kasar.
+// Ambang kasar saja — terukur meloloskan 1259/1259 chunk. Penyaring nyatanya Cohere rerank.
+// Jangan dinaikkan: similarity query-ke-dokumen belum pernah diukur.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Cap dokumen yang dikirim ke Cohere rerank — INI PENYUMBANG LATENSI TERBESAR di
-// rantai pencarian, karena biaya rerank naik seiring jumlah dokumen.
-//
-// Riwayat penyetelan (jangan diulang dari nol):
-//   15 → bottleneck MUTU. 6 slot teratas selalu dihabiskan keyword RPC, menyisakan ~9
-//        slot vector = jendela recall 0,7% dari 1.259 chunk. Kasus nyata: "berapa berat
-//        swing motor" → chunk jawaban ("swing motor assembly weight: 48 kg") tak pernah
-//        masuk kandidat, AI menjawab 220 kg (itu swing DEVICE) sambil bilang data tak ada.
-//   45 → mutu beres tapi LATENSI TERASA BERAT oleh Alvian di produksi.
-//   24 → latensi turun, mutu masih terjaga.
-//   12 → sempat dipakai, lalu dinaikkan karena terlalu sempit.
-//   15 → sempat dipakai.
-//   20 → dipakai sekarang (Alvian, 15 Agu 2026). Dengan penyilangan → ~10 keyword + 10 vector.
-//        ⚠️ HANYA aman karena kandidat DISILANG keyword/vector (lihat blok penggabungan di
-//        searchTechnicalManualMulti). Tanpa penyilangan, keyword akan memakan 15 dari 20
-//        slot dan vector cuma sisa 5. JANGAN kembalikan urutan "keyword dulu semua".
+// Penyumbang latensi terbesar di rantai pencarian.
+// ⚠️ Aman di angka ini HANYA karena kandidat disilang keyword/vector (lihat penggabungan
+// di searchTechnicalManualMulti). Tanpa penyilangan, keyword memakan 15 dari 20 slot.
 const RERANK_INPUT_CAP = 20;
-/** Berapa dokumen yang DIKEMBALIKAN Cohere. Dulu dihitung `max(topN*2, 8)` — terikat ke
- *  topN sehingga tak bisa disetel sendiri. Sekarang eksplisit: 10 kandidat masuk MMR,
- *  MMR memilih `topN` yang relevan TAPI saling melengkapi. Pool lebih besar dari topN
- *  itu WAJIB — kalau sama, MMR tak punya apa pun untuk dipilih. */
+/** Dokumen yang dikembalikan Cohere → masuk MMR. Wajib > topN, kalau sama MMR tak punya pilihan. */
 const RERANK_RETURN_N = 10;
-// Kandidat vector sebelum cap di atas. 20 (Alvian, 15 Agu 2026).
-// DIUKUR: match_count 20 vs 40 sama-sama ~25 ms di database (top-N heapsort, 27 kB memory),
-// jadi angka ini BUKAN sumber latensi — biayanya ada di round-trip jaringan, bukan query.
-// (Sempat terbaca 269 ms; itu cold cache, bukan biaya nyata.)
-// Sengaja lebih besar dari jatah vector di rerank (~8) supaya penyilangan punya cadangan
-// saat banyak kandidat vector bertabrakan/duplikat dengan hasil keyword.
 const VECTOR_MATCH_COUNT = 20;
-// Pagar ukuran badan request rerank.
-// ⚠️ KOREKSI: pagar ini semula dipasang karena dikira 45 × 27.812 char (chunk terbesar)
-// akan menjebol `express.json({ limit: '1mb' })` di /v1/rerank. ITU KELIRU — `rerankWithCohere`
-// sudah memotong tiap dokumen ke RERANK_DOC_CAP (2.500 char) sebelum dikirim, jadi payload
-// maksimal sebenarnya 24 × 2.500 ≈ 60 KB. Budget di bawah ini TIDAK PERNAH tersentuh.
-// Tetap dipertahankan sebagai jaring pengaman kalau RERANK_DOC_CAP dinaikkan/dihapus nanti.
+// Jaring pengaman ukuran payload. Tak pernah tersentuh selama RERANK_DOC_CAP masih aktif.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
 /** Ambil dokumen sebanyak mungkin untuk rerank, dibatasi JUMLAH dan TOTAL UKURAN.
@@ -758,30 +718,15 @@ export async function searchTechnicalManualMulti(
       .some(w => SPEC_TERMS.has(w))
     || NUMERIC_INTENT_RE.test(primaryQuery);
 
-  // ── 1b. Keyword BER-PERINGKAT (non-fault-code) ──
-  // Dulu: `ilike %kata% limit 5` TANPA ORDER BY. Untuk "main pump pressure" ada 166 chunk
-  // cocok → 5 yang terambil ARBITRER (peluang chunk jawaban ikut ≈3%; kasus nyata: nilai
-  // P-Q Diagram tak pernah ketemu). Sekarang ranking dikerjakan RPC di database:
-  // cocok-berapa-kata + bonus ANGKA+SATUAN (khusus pertanyaan nilai) + bonus tabel spec
-  // resmi − penalti materi marketing. Fallback ke cara lama kalau RPC belum ter-deploy.
+  // 1b. Keyword ber-peringkat (non-fault-code) — skoring dikerjakan RPC di database.
   const rankedPromise: Promise<string[]> = (async () => {
     if (faultCode) return [];
     const words = primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
-    // Frasa penuh ikut jadi term → chunk yang memuat frasa utuh dapat skor ekstra.
-    // + PASANGAN BERURUTAN (bigram): manual jarang menulis frasa query persis apa adanya
-    //   ("swing motor weight" tak pernah muncul — yang tertulis "swing motor ASSEMBLY weight"),
-    //   jadi frasa penuh sering menyumbang NOL. Bigram "swing motor" tetap kena → term
-    //   paling diskriminatif akhirnya ikut menyumbang skor.
-    // BIAYA TERUKUR (EXPLAIN ANALYZE ×4, ZX200-5G) — JUMLAH TERM adalah SATU-SATUNYA
-    // variabel mahal di RPC ini, sekitar +35 ms per term:
-    //     6 term 240 ms · 7 term 283 ms · 10 term 387 ms
-    // Sebaliknya p_match_count TIDAK berbiaya: ambil 6/8/10/12 sama-sama ~240 ms
-    // (LIMIT tidak mengubah pemindaian). Jadi: hemat di TERM, jangan di recall.
-    // 7 = cukup untuk frasa penuh + semua bigram query pendek. Query pendek seperti
-    // "swing motor weight" cuma menghasilkan 6 term, jadi tak tersentuh batas ini.
+    // Bigram wajib: manual menulis "swing motor ASSEMBLY weight", jadi frasa penuh sering nol.
+    // ⚠️ JUMLAH TERM = satu-satunya variabel mahal di RPC (~+35 ms/term). p_match_count gratis.
     const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
     const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 7);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
@@ -814,17 +759,14 @@ export async function searchTechnicalManualMulti(
       : []);
   });
 
-  // ── 2. ONE embedding for vector search ──
-  // JANGAN expandQuery di sini (query analyzeIntent sudah English → expandQuery malah bikin duplikat).
-  // Strip nama model (sudah difilter metadata; kalau ikut, vektor bias ke chunk yg literal mention model).
-  // Guard: kalau strip jadi <2 kata → fallback primaryQuery (1 kata "weight" terlalu generik).
+  // 2. Satu embedding untuk vector search. JANGAN expandQuery di sini — query sudah English.
+  // Nama model di-strip: sudah difilter metadata, kalau ikut vektornya jadi bias.
   const stripped = stripModelFromQuery(primaryQuery);
   const embeddingQuery = stripped.split(/\s+/).filter(Boolean).length >= 2
     ? stripped
     : primaryQuery;
 
-  // Vector search DIRANTAI langsung ke promise embedding → jalan paralel penuh dgn keyword
-  // search. Dulu: tunggu keyword+embed selesai dulu, BARU rpc (+0.3-0.8s serial tiap query).
+  // Dirantai ke promise embedding → paralel penuh dengan jalur keyword.
   const vectorPromise: Promise<SearchResult[]> = getEmbedding(embeddingQuery).then(async emb => {
     let { data: vecData } = await supabase!.rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
@@ -845,16 +787,8 @@ export async function searchTechnicalManualMulti(
     vectorPromise,
   ]);
 
-  // Kandidat dikumpulkan ke DUA daftar terpisah dulu, lalu DISILANG.
-  //
-  // ⚠️ KENAPA DISILANG, JANGAN DIKEMBALIKAN KE "KEYWORD DULU SEMUA":
-  // dulu keyword diisi semua lebih dulu, baru vector. Itu aman waktu cap masih besar,
-  // tapi RERANK_INPUT_CAP sekarang 12 — dengan p_match_count 10, keyword akan memakan
-  // 10 dari 12 slot dan menyisakan HANYA 2 untuk vector. Itu lebih buruk daripada
-  // kondisi awal (cap 15 = 6 keyword + 9 vector) dan membatalkan perbaikan recall.
-  // Dengan silang, cap memotong ADIL: 12 slot ≈ 6 keyword + 6 vector.
-  // Slot pertama tetap milik keyword, jadi fault code (yang butuh kecocokan literal)
-  // tidak dirugikan.
+  // Kandidat dikumpulkan terpisah lalu DISILANG, supaya RERANK_INPUT_CAP memotong adil.
+  // ⚠️ Jangan kembalikan ke "keyword dulu semua" — keyword akan menghabiskan slot vector.
   const kwDocs:  string[] = [];
   const vecDocs: string[] = [];
 
@@ -938,27 +872,15 @@ export async function searchTechnicalManualMulti(
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   let top = mmrSelect(reranked, topN, 0.7);
 
-  // ── JAMINAN KATA KUNCI (deterministik) ────────────────────────────────────
-  // Cross-encoder seperti Cohere memberi skor tinggi pada chunk yang FOKUS TOPIKNYA,
-  // bukan yang MEMUAT ANGKANYA. Kasus nyata (15 Agu 2026): "berapa kapasitas oli mesin"
-  // ZX200-5G — chunk jawaban (tabel Maintenance Guide, "ZX200-5 class 25 L") ada di
-  // peringkat kata kunci #1-2 dan utuh terbaca reranker, TAPI kalah oleh chunk prosedur
-  // "Change Engine Oil" yang terbaca jauh lebih "engine oil". Hasilnya jawaban penuh
-  // detail prosedur (torsi plug, ukuran kunci, interval) tapi ANGKANYA HILANG — dan AI
-  // dengan jujur bilang datanya tidak ada, padahal ada.
-  //
-  // Jadi satu slot dijamin untuk juara jalur kata kunci saat pertanyaannya MENANYAKAN
-  // NILAI (wantsNumber). Kata kunci menang justru di kasus ini: dia mencocokkan istilah
-  // + satuan secara harfiah, persis yang dibutuhkan pertanyaan angka.
-  // Tidak menambah slot — menggeser yang terakhir. Jadi konteks ke Gemini tetap sama
-  // besar, latensi tidak bertambah sama sekali.
+  // Jaminan slot untuk juara kata kunci saat pertanyaan menanyakan NILAI. Cohere memberi
+  // skor pada chunk yang fokus topiknya, bukan yang memuat angkanya — tanpa ini, chunk
+  // berisi angka jawaban bisa kalah oleh chunk prosedur. Tidak menambah slot.
   const juaraKeyword = rankedSettled.status === 'fulfilled' ? rankedSettled.value[0] : undefined;
   if (wantsNumericAnswer && juaraKeyword && top.length > 0
       && !top.some(t => t.content === juaraKeyword)) {
-    // Sisipkan di posisi KEDUA, bukan pertama: top[0] menentukan confidence tier
-    // (computeConfidence) dan itu harus tetap skor rerank tertinggi yang sah.
+    // Posisi KEDUA — top[0] harus tetap skor rerank tertinggi agar confidence tier valid.
     top = [top[0], { content: juaraKeyword, score: top[0].score }, ...top.slice(1)].slice(0, topN);
-    console.info('[jaminan-keyword] chunk juara kata kunci disisipkan (query menanyakan nilai)');
+    console.info('[jaminan-keyword] disisipkan');
   }
 
   const { confidence, topScore } = computeConfidence(top);
@@ -1168,11 +1090,7 @@ export async function searchPartsCatalog(
   const partNum = extractPartNumber(query);
   const isEnginePN = !!partNum && ENGINE_PN_RE.test(partNum);
 
-  // Embed query strategy:
-  // 1. Strip model name DULU (lebih bersih sebelum expand)
-  // 2. Untuk PN literal: gabungkan PN + konteks asli, jangan embed PN saja (vector kabur)
-  //    Filter exact PN tetap berjalan via match_documents_hybrid (match_type='exact_part_no')
-  // 3. expandQuery hanya untuk raw Indonesian, skip kalau AI-optimized English
+  // PN literal digabung dengan konteks aslinya — embed PN saja bikin vektor kabur.
   const stripped = stripModelFromQuery(query.trim());
   const embedQuery = partNum
     ? stripped                                  // PN tetap dalam konteks (mis. "YB60000068 itu apa")
@@ -1298,14 +1216,8 @@ export async function searchPartsCatalog(
     };
   }
 
-  // Urutan konteks (invarian — jangan diubah):
-  //   1. CPM selalu duluan (model paling perhatian ke awal prompt)
-  //   2. exact_part_no match (PN literal ketemu persis — presisi mutlak)
-  //   3. sisanya by relevance
-  //
-  // Query NAMA KOMPONEN (bukan PN literal) di-rerank Cohere + MMR — cosine pgvector lemah bedakan
-  // section bertetangga ("seal kit swing" vs section seal kit lain). PN literal TIDAK di-rerank
-  // (exact match sudah deterministik).
+  // Urutan invarian: CPM → exact_part_no → sisanya by relevance.
+  // Query nama komponen di-rerank; PN literal tidak (exact match sudah deterministik).
   const nonCpm = [...bodyData, ...engineData, ...promoData];
   nonCpm.sort((a, b) => {
     const aExact = a.match_type === 'exact_part_no' ? 1 : 0;
