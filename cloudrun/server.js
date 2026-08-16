@@ -712,7 +712,11 @@ function sseWrite(res, event, payload) {
 
 // SSE Vertex → chunk terstruktur. Format frame sama dengan yang dulu di-parse browser.
 async function vertexStreamParsed(model, body, onChunk, signal) {
+  // Pisahkan "koneksi menggantung" dari "model diam": header vs chunk data pertama.
+  const t0 = Date.now();
+  let tHeader = 0, tChunk1 = 0;
   const upstream = await vertexFetch(model, body, { stream: true, signal, label: '/v1/ask' });
+  tHeader = Date.now() - t0;
   if (!upstream.ok) {
     const errText = await upstream.text();
     console.error('Vertex stream error (/v1/ask):', errText);
@@ -726,6 +730,10 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
+      if (!tChunk1) {
+        tChunk1 = Date.now() - t0;
+        console.info('[vertex-stream] header=%dms chunk1=%dms', tHeader, tChunk1);
+      }
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
