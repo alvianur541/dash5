@@ -70,14 +70,48 @@ export interface VRequest {
  */
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
+/**
+ * Override EKSPERIMEN lewat URL: `?think=low` / `?think=medium` / `?think=high`.
+ *
+ * Gunanya untuk MEMBANDINGKAN mutu jawaban vs latensi tanpa deploy ulang — cukup buka
+ * dua tab dengan parameter berbeda dan tanya pertanyaan yang sama.
+ *
+ * Batasannya disengaja:
+ *   - Hanya berlaku untuk MODEL UTAMA. Panggilan INTENT_MODEL (analyzeIntent, OCR,
+ *     compress) tetap 'minimal' — menaikkannya cuma menambah biaya & latensi tanpa
+ *     memengaruhi mutu jawaban yang sedang diukur, dan malah mengotori hasil tes.
+ *   - 'minimal' TIDAK diterima sebagai nilai override: 3.7 menolaknya (400), dan untuk
+ *     model lama itu sudah jadi default di beberapa jalur.
+ *   - Saat override aktif, **cache jawaban dilewati** (lihat generateResponseStream) —
+ *     kalau tidak, percobaan kedua cuma memutar ulang jawaban tersimpan dan angkanya
+ *     tidak berarti apa-apa.
+ *
+ * Default (tanpa parameter) = perilaku produksi, tidak berubah sama sekali.
+ */
+export const THINK_OVERRIDE: 'low' | 'medium' | 'high' | null = (() => {
+  try {
+    const v = new URLSearchParams(window.location.search).get('think')?.toLowerCase();
+    return v === 'low' || v === 'medium' || v === 'high' ? v : null;
+  } catch { return null; }
+})();
+
 function clampThinking(body: VRequest, model: string): VRequest {
-  const lvl = body.generationConfig?.thinkingConfig?.thinkingLevel;
-  if (lvl !== 'minimal' || !NO_MINIMAL_THINKING_RE.test(model)) return body;
+  const asli = body.generationConfig?.thinkingConfig?.thinkingLevel;
+  if (!asli) return body;
+
+  // 1. Override eksperimen — hanya model utama, jangan sentuh INTENT_MODEL.
+  let lvl: 'minimal' | 'low' | 'medium' | 'high' =
+    THINK_OVERRIDE && model !== INTENT_MODEL ? THINK_OVERRIDE : asli;
+
+  // 2. Pagar keamanan — 3.7 menolak 'minimal' dengan 400.
+  if (lvl === 'minimal' && NO_MINIMAL_THINKING_RE.test(model)) lvl = 'low';
+
+  if (lvl === asli) return body;
   return {
     ...body,
     generationConfig: {
       ...body.generationConfig,
-      thinkingConfig: { thinkingLevel: 'low' },
+      thinkingConfig: { thinkingLevel: lvl },
     },
   };
 }
@@ -659,7 +693,11 @@ export async function callProxyStream(
   {
     const inp = lastUsage?.promptTokenCount ?? 0;
     const cache = lastUsage?.cachedContentTokenCount ?? 0;
-    console.info('[tokens] in=%d (cache %d%%) out=%d thinking=%d',
+    // Level yang BENAR-BENAR terkirim (sudah lewat override + clamp) ikut dicetak, supaya
+    // hasil eksperimen ?think= bisa dibaca tanpa menebak level mana yang aktif.
+    const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
+    console.info('[tokens] model=%s think=%s%s in=%d (cache %d%%) out=%d thinking=%d',
+      MODEL, lvlTerkirim, THINK_OVERRIDE ? ' (override, cache dilewati)' : '',
       inp, inp ? Math.round((cache / inp) * 100) : 0,
       lastUsage?.candidatesTokenCount ?? 0, lastUsage?.thoughtsTokenCount ?? 0);
   }
@@ -1370,7 +1408,10 @@ export async function generateResponseStream(
 
   // Answer-cache HIT → stream instan, lewati embed/search/LLM (token=0, tak ke-log ledger).
   // Cache hanya isi jawaban rag_found (lihat write di bawah) → hit = valid.
-  const cacheKey = answerCacheKey(model, userName, trimmed);
+  // Saat ?think= aktif, cache SENGAJA dilewati (baca & tulis). Tanpa ini, percobaan kedua
+  // dengan level berbeda cuma memutar ulang jawaban tersimpan — latensinya jadi ~0 dan
+  // angkanya tak berarti, padahal kelihatan seperti "medium ternyata sangat cepat".
+  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, userName, trimmed);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
     if (cached) {
