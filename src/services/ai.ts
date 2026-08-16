@@ -43,11 +43,9 @@ export interface VRequest {
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
-// gemini-3.7 menolak 'minimal' dengan HTTP 400 — jangan kirim, naikkan ke 'low'.
 // gemini-3.7 rejects thinkingLevel 'minimal' with HTTP 400 - raise it to 'low' instead.
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
-/** Override eksperimen: `?think=low|medium|high`. Model utama saja; cache dilewati. */
 /** Experiment switch: ?think=low|medium|high. Main model only; bypasses the answer cache. */
 export const THINK_OVERRIDE: Exclude<ThinkingLevel, 'minimal'> | null = (() => {
   try {

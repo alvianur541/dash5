@@ -1,7 +1,4 @@
-// Generasi cache jawaban sisi-klien. Naikkan angkanya setiap kali mengubah hal yang
-// MENGUBAH ISI JAWABAN (retrieval, SYSTEM_PROMPT, format output) — kalau tidak, user lama
-// tetap dilayani jawaban versi sebelumnya sampai TTL 3 hari habis.
-// Tidak perlu dinaikkan untuk perubahan UI/CSS/telemetri.
+// Bump on anything that CHANGES ANSWER CONTENT (retrieval, prompt, output format). Not for UI.
 export const CACHE_GEN = 8;
 
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;

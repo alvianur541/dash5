@@ -1,13 +1,25 @@
 # Panduan Migrasi Dash⁵ ke Server Hexindo
 
-**Status:** Prosedur inti sudah teruji penuh di VPS Google Cloud testing (13 Agustus 2026) — hasil
-migrasi cocok 100% dengan Supabase cloud. **Direvisi 15 Agustus 2026** setelah audit langsung ke
-database produksi + penelusuran kode: ditambahkan gerbang verifikasi, koreksi nama env var, koreksi
-rencana Okta, dan pola service worker yang tahan pindah domain.
+**Status:** Prosedur inti teruji penuh di VPS testing (13 Agu 2026) — hasil cocok 100% dengan cloud.
+**Direvisi 15 Agu 2026** setelah audit database produksi + penelusuran kode.
 
-> **Cara pakai dokumen ini di server:** `git clone https://github.com/alvianur541/dash5.git`
-> lalu `cat supabase/MIGRASI_SELF_HOST.md`. Semua file yang dirujuk (backup fungsi, harness uji)
-> ikut ter-clone.
+> **Cara pakai di server:** `git clone https://github.com/alvianur541/dash5.git`
+> lalu `cat supabase/MIGRASI_SELF_HOST.md`. Backup fungsi & harness uji ikut ter-clone.
+
+## Kondisi sistem saat dokumen ini ditulis
+
+Kalau ada yang tidak cocok dengan kenyataan, **kode yang benar** — perbarui dokumen ini.
+
+| | Nilai |
+|---|---|
+| Model utama | `gemini-3.7-flash` (rollback: `gemini-3.6-flash`) |
+| Thinking level | `medium` semua jalur utama; `INTENT_MODEL` tetap `minimal` |
+| Pipeline pencarian | keyword **10** + similarity **20** → Cohere **30** → keluar **10** → Gemini **4** |
+| Prompt | penuh ~9.850 token · casual ~700 token |
+| DB | 98 MB · 4.709 chunk · pgvector 3072 dim |
+
+⚠️ **`gemini-3*` memakai endpoint `v1beta1` + `locations/global`**, bukan `v1` + region.
+Kalau menguji ketersediaan model dengan endpoint yang salah, hasilnya menyesatkan.
 
 ---
 
@@ -373,10 +385,20 @@ sudo cloudflared service install && sudo systemctl enable --now cloudflared
 VITE_SUPABASE_URL=<URL baru>
 VITE_SUPABASE_ANON_KEY=<ANON_KEY dari .env server baru>
 VITE_SITE_URL=https://dash5.my.id
+VITE_VERTEX_MODEL=gemini-3.7-flash      # jangan ikut berubah saat migrasi
+VITE_VERTEX_PROXY_URL=/api              # tetap ke Cloud Run
 ```
 
 ⚠️ Env var ini **di-bake ke bundle JS saat build** — wajib `npm run build` + deploy ulang. Ganti env
 saja tidak cukup; bundle lama masih memuat URL & anon key lama.
+
+**Cara memastikan bundle benar-benar terbarui** (jangan percaya "sudah deploy"):
+```bash
+grep -o "gemini-3\.[0-9]-flash[a-z-]*" dist/assets/index-*.js | sort -u
+grep -o "https://[a-z0-9.-]*supabase[a-z0-9.-]*" dist/assets/index-*.js | sort -u
+```
+Harus menampilkan model & host yang BARU. Pernah kejadian: `.env.local` menimpa default kode dan
+bundle keluar dengan model lama padahal kodenya sudah benar.
 
 ⚠️ Masukkan `VITE_SITE_URL` ke allowlist **"Redirect URLs"** GoTrue self-hosted, kalau tidak reset
 password patah.
@@ -396,10 +418,42 @@ gcloud run services update dash5-vertexai-proxy \
 
 ⚠️ **JANGAN `--set-env-vars`** — itu menghapus semua env var lain (pernah kejadian, service mati total).
 
-✅ **Nama env var sudah aman** (commit `8d6dc8a`): `server.js` menerima **`SUPABASE_SERVICE_KEY`
-maupun `SUPABASE_SERVICE_ROLE_KEY`**. Sebelumnya hanya nama pertama yang dikenali — salah menamai
-membuat tiga endpoint mati **diam-diam**: `/v1/dashboard` (panel kosong), `/v1/usage` (**ledger biaya
-berhenti mencatat**), `/v1/field-note`.
+⚠️ **Nilai yang MENGANDUNG KOMA butuh awalan `^:^`.** gcloud memakai koma sebagai pemisah antar
+variabel, jadi `ALLOWED_MODELS=a,b,c` ditolak dengan *"Bad syntax for dict arg"*:
+
+```bash
+gcloud run services update dash5-vertexai-proxy \
+  --region=us-central1 --project=project-1acf3a67-7f0a-48a3-822 \
+  --update-env-vars "^:^ALLOWED_MODELS=gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash"
+```
+
+⚠️ **JANGAN `--env-vars-file`** untuk update sebagian — file itu berperilaku seperti `--set-env-vars`
+dan mengganti SELURUH env var.
+
+✅ **Nama env var sudah aman**: `server.js` menerima **`SUPABASE_SERVICE_KEY` maupun
+`SUPABASE_SERVICE_ROLE_KEY`**. Dulu hanya nama pertama yang dikenali — salah menamai membuat tiga
+endpoint mati **diam-diam**: `/v1/dashboard` (panel kosong), `/v1/usage` (**ledger biaya berhenti
+mencatat**), `/v1/field-note`.
+
+### 6.4 Cara AMAN memeriksa env var
+
+🔴 **JANGAN pernah** `--format='value(spec.template.spec.containers[0].env)'` — perintah itu
+**mencetak SEMUA nilai env**, termasuk `COHERE_API_KEY` dan service key. Ini sudah pernah
+membocorkan kunci Cohere ke transkrip chat, dan kuncinya harus dirotasi.
+
+```bash
+gcloud run services describe dash5-vertexai-proxy \
+  --region=us-central1 --project=project-1acf3a67-7f0a-48a3-822 \
+  --format="json(spec.template.spec.containers[0].env)" \
+| python3 -c "
+import sys, json
+aman = {'ALLOWED_MODELS','ALLOWED_ORIGIN','VERTEX_LOCATION','GEMINI_INPUT_PRICE_USD',
+        'GEMINI_OUTPUT_PRICE_USD','USD_TO_IDR','ADMIN_EMAILS','GOOGLE_CLOUD_PROJECT'}
+for e in json.load(sys.stdin)['spec']['template']['spec']['containers'][0]['env']:
+    n = e['name']
+    print(f\"{n} = {e.get('value')}\" if n in aman else f'{n} = <rahasia>')
+"
+```
 
 ---
 
