@@ -120,6 +120,16 @@ export function extractSearchTerms(query: string): string[] {
   return [trimmed, ...picked].slice(0, 3);
 }
 
+/** Samakan tunggal & jamak untuk pencocokan substring. <6 huruf dibiarkan (oil, tank, swing). */
+function batangKata(w: string): string {
+  if (w.length < 6) return w;
+  if (w.endsWith('ies')) return w.slice(0, -3) + 'i';
+  if (w.endsWith('y'))   return w.slice(0, -1);
+  if (w.endsWith('es'))  return w.slice(0, -2);
+  if (w.endsWith('s'))   return w.slice(0, -1);
+  return w;
+}
+
 interface RerankedDoc { content: string; score: number }
 interface RerankResult { docs: RerankedDoc[]; error?: string }
 
@@ -391,8 +401,17 @@ export async function searchTechnicalManualMulti(
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
 // Bigrams are essential: manuals write 'swing motor ASSEMBLY weight', so the full phrase scores zero.
-    const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
-    const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 7);
+    // Manual menulis JAMAK ("Service Refill Capacities"), analyzeIntent menulis TUNGGAL
+    // ("capacity"). RPC mencocokkan ILIKE substring, dan 'capacity' BUKAN substring dari
+    // 'capacities' → sumber terbersih untuk pertanyaan kapasitas tidak pernah terambil.
+    // Memotong akhiran hanya MEMPERPENDEK term, jadi hasilnya selalu superset — tidak mungkin
+    // menghilangkan kecocokan yang tadinya ada. Terukur: brosur spec di luar-10 → #2.
+    const stems = words.map(batangKata);
+    const bigrams = stems.slice(0, -1).map((w, i) => `${w} ${stems[i + 1]}`);
+    // Frasa penuh tetap SELURUH query (termasuk kata pendek spt 'kg'), cuma dibatangkan.
+    // Membuangnya bikin "operating weight kg" kehilangan peringkat — terukur, jangan diulang.
+    const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
+    const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
     const wantsNumber = wantsNumericAnswer;
 
@@ -532,13 +551,22 @@ export async function searchTechnicalManualMulti(
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   let top = mmrSelect(reranked, topN, 0.7);
 
-// Guarantee one slot for the keyword winner on numeric questions - Cohere ranks topical focus, not the chunk holding the number.
-  const juaraKeyword = rankedSettled.status === 'fulfilled' ? rankedSettled.value[0] : undefined;
-  if (wantsNumericAnswer && juaraKeyword && top.length > 0
-      && !top.some(t => t.content === juaraKeyword)) {
-    // Posisi KEDUA — top[0] harus tetap skor rerank tertinggi agar confidence tier valid.
-    top = [top[0], { content: juaraKeyword, score: top[0].score }, ...top.slice(1)].slice(0, topN);
-    console.info('[jaminan-keyword] disisipkan');
+  // Jaminan slot untuk juara KATA KUNCI pada pertanyaan bernilai. Cohere memeringkat fokus topik,
+  // bukan chunk yang memegang angkanya — chunk tabel campuran selalu kalah dari chunk prosedur.
+  // ⚠️ Dulu hanya melindungi peringkat #1 dan itu TIDAK CUKUP: terukur 16 Agu 2026, untuk
+  // "engine oil capacity" jawabannya (25 L) ada di #2 sedangkan #1 chunk lain — jadi jaminannya
+  // membuang slot untuk chunk keliru dan chunk jawaban tetap tersingkir. Sekarang 2 teratas.
+  const KW_DIJAMIN = 2;
+  if (wantsNumericAnswer && rankedSettled.status === 'fulfilled' && top.length > 0) {
+    const kandidat = rankedSettled.value
+      .slice(0, KW_DIJAMIN)
+      .filter(c => c && !top.some(t => t.content === c));
+    if (kandidat.length > 0) {
+      // top[0] WAJIB tetap di depan — skor rerank tertingginya yang menentukan tier confidence.
+      top = [top[0], ...kandidat.map(c => ({ content: c, score: top[0].score })), ...top.slice(1)]
+        .slice(0, topN);
+      console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
+    }
   }
 
   const { confidence, topScore } = computeConfidence(top);

@@ -39,7 +39,7 @@
 WITH kasus(no, model, tanya, q_en, penanda) AS (VALUES
   -- penanda sengaja longgar (alternasi) supaya menerima semua penulisan jawaban
   (1 ,'ZX200-5G'  ,'berat swing motor'              ,'swing motor weight'                    ,'swing motor assembly weight'),
-  (2 ,'ZX200-5G'  ,'berapa liter oli mesin'         ,'engine oil change capacity liters'     ,'ZX200-5 class 25 L|Engine oil : 25.0 L'),
+  (2 ,'ZX200-5G'  ,'berapa liter oli mesin'         ,'engine oil change capacity liters'     ,'ZX200-5 class:? 25 L|Engine oil +: 25.0 L'),
   (3 ,'ZX200-5G'  ,'berat swing device'             ,'swing device weight'                   ,'Swing device \(5\) weight: 220 kg'),
   (4 ,'ZX200-5G'  ,'berat counterweight'            ,'counterweight weight'                  ,'Counterweight \| 4 200 kg|[Cc]ounterweight \(4\) weight'),
   (5 ,'ZX200-5G'  ,'kapasitas tangki bahan bakar'   ,'fuel tank capacity liters'             ,'Fuel tank : 400.0 L'),
@@ -57,15 +57,36 @@ WITH kasus(no, model, tanya, q_en, penanda) AS (VALUES
   (17,'ZX200-5G'  ,'kapasitas sistem hidrolik'      ,'hydraulic system total capacity liters','Hydraulic system total : 240'),
   (18,'ZX200-5G'  ,'kapasitas swing device'         ,'swing device oil capacity liters'      ,'Swing device : 6.2 L')
 ),
--- Meniru pembentukan term di klien: frasa penuh + bigram + kata tunggal, dipotong 7.
+-- Meniru pembentukan term di klien: batang kata + frasa penuh + bigram + kata, dipotong 7.
+-- ⚠️ Batang kata WAJIB sama dengan batangKata() di cloudrun/src/rag.ts. Kalau salah satu
+-- diubah tanpa yang lain, harness berhenti mencerminkan sistem yang sebenarnya berjalan.
 w AS (
-  SELECT k.*, ARRAY(SELECT x FROM unnest(regexp_split_to_array(lower(k.q_en),'\s+')) x
-                    WHERE length(x) >= 3
-                      AND x NOT IN ('the','a','an','is','are','for','and','of','with','to')) AS words
+  SELECT k.*, ARRAY(
+    SELECT CASE
+             WHEN length(x) < 6      THEN x
+             WHEN x LIKE '%ies'      THEN left(x, length(x) - 3) || 'i'
+             WHEN x LIKE '%y'        THEN left(x, length(x) - 1)
+             WHEN x LIKE '%es'       THEN left(x, length(x) - 2)
+             WHEN x LIKE '%s'        THEN left(x, length(x) - 1)
+             ELSE x
+           END
+    FROM unnest(regexp_split_to_array(lower(k.q_en),'\s+')) x
+    WHERE length(x) >= 3
+      AND x NOT IN ('the','a','an','is','are','for','and','of','with','to')) AS words
   FROM kasus k
 ),
 tt AS (
-  SELECT w.*, (ARRAY[lower(w.q_en)]
+  SELECT w.*, (ARRAY[(
+      -- Frasa penuh = SELURUH query dibatangkan, termasuk kata pendek ('kg'). Membuangnya
+      -- menjatuhkan peringkat "operating weight kg" dari #1 ke #9 — sudah terukur.
+      SELECT string_agg(CASE
+               WHEN length(y) < 6 THEN y
+               WHEN y LIKE '%ies' THEN left(y, length(y) - 3) || 'i'
+               WHEN y LIKE '%y'   THEN left(y, length(y) - 1)
+               WHEN y LIKE '%es'  THEN left(y, length(y) - 2)
+               WHEN y LIKE '%s'   THEN left(y, length(y) - 1)
+               ELSE y END, ' ' ORDER BY o)
+      FROM unnest(regexp_split_to_array(lower(w.q_en),'\s+')) WITH ORDINALITY AS u(y, o))]
     || ARRAY(SELECT w.words[i]||' '||w.words[i+1]
              FROM generate_subscripts(w.words,1) i
              WHERE i < array_length(w.words,1))
