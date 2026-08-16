@@ -456,8 +456,16 @@ export async function searchTechnicalManualMulti(
       });
       vecData = vecFallback;
     }
-    return (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
+    const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
+    // Jalur vektor dilaporkan TERPISAH dari keyword — tanpa ini tidak ketahuan arm mana yang
+    // menyumbang kandidat dan mana yang diam saja.
+    console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
+      hasil.length,
+      hasil[0]?.similarity?.toFixed(3) ?? '-',
+      hasil[hasil.length - 1]?.similarity?.toFixed(3) ?? '-',
+      hasil.slice(0, 3).map(d => d.content.split('\n').filter(Boolean)[0]?.slice(0, 42)).join(' | '));
+    return hasil;
   });
 
   const [kwSettled, rankedSettled, vectorSettled] = await Promise.allSettled([
