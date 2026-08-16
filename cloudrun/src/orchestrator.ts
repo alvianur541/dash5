@@ -482,8 +482,10 @@ export async function callProxyStream(
     const inp = usageBox.last?.promptTokenCount ?? 0;
     const cache = usageBox.last?.cachedContentTokenCount ?? 0;
     const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
-    console.info('[tokens] model=%s think=%s%s in=%d (cache %d%%) out=%d thinking=%d',
-      MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache dilewati)' : '',
+    // Dua cache BERBEDA, jangan tertukar: `prompt-cache` = implicit caching Vertex (sisi Google),
+    // sedangkan yang dilewati `?think=` adalah cache JAWABAN di localStorage klien.
+    console.info('[tokens] model=%s think=%s%s in=%d (prompt-cache %d%%) out=%d thinking=%d',
+      MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
       inp, inp ? Math.round((cache / inp) * 100) : 0,
       usageBox.last?.candidatesTokenCount ?? 0, usageBox.last?.thoughtsTokenCount ?? 0);
   }
