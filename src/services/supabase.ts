@@ -888,8 +888,11 @@ export async function searchTechnicalManualMulti(
   console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR)',
     confidence, topScore.toFixed(2), reranked.length, top.length);
 
-  // Loose-filter fallback → downgrade confidence ke medium supaya AI inject caveat verifikasi
-  const effectiveConfidence = usedLooseFallback && confidence === 'high' ? 'medium' : confidence;
+  // Rerank gagal → hasil cuma urutan vector mentah, TIDAK boleh mengaku 'high'.
+  // (Fallback memberi skor 0.5 yang kebetulan lolos ambang HIGH — itu skor palsu.)
+  const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
+    ? 'medium'
+    : confidence;
   // Content di-join dgn separator --- saja (tanpa prefix [Rank N] — AI tak butuh nomor ranking).
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };

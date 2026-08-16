@@ -720,17 +720,25 @@ function extractRelatedPCodes(content: string, searchTerms: string[]): string[] 
 
 // Canned templates "data not found" — bypass AI (guaranteed no halu). User = tim Hexindo,
 // JANGAN suruh "konsultasi dealer". Singkatan teknis (MPDr/TM/WM) tak di-expand.
+/** Kalau kembalikan string → jawaban DIBLOKIR dan string itu yang ditampilkan. '' = lanjut. */
 function ragErrorTemplate(errorMsg: string): string {
-  const isTimeout = errorMsg.toLowerCase().includes('timeout');
-  const isRerank  = errorMsg.toLowerCase().includes('rerank');
-  if (isRerank && isTimeout) {
-    // Rerank timeout: hasil masih ada (vector order), tapi ranking tidak optimal
-    // Tidak perlu block — cukup warning di console, lanjut normal
-    return '';
-  }
-  // Embedding / Supabase error: tidak ada data → jangan jawab
+  // Rerank gagal (timeout ATAU rate limit) → data tetap ada, cuma urutannya mentah.
+  // JANGAN blokir: memblokir berarti membuang hasil yang masih berguna. Ditandai lewat
+  // RERANK_DEGRADED_NOTE supaya teknisi tetap tahu kualitas urutannya turun.
+  if (errorMsg.toLowerCase().includes('rerank')) return '';
+  // Embedding / Supabase error: benar-benar tidak ada data → jangan jawab.
   return `Sistem pencarian data sedang mengalami gangguan sementara. Jawaban ditahan dulu untuk menghindari informasi yang keliru.\n\nCoba kirim ulang pertanyaanmu dalam beberapa saat.`;
 }
+
+const isRerankError = (msg?: string): boolean => !!msg && msg.toLowerCase().includes('rerank');
+
+/** Disisipkan ke user-turn saat rerank gagal — AI wajib menyampaikannya ke teknisi. */
+const RERANK_DEGRADED_NOTE =
+  '\n\n[PERINGATAN SISTEM — WAJIB DISAMPAIKAN] Mesin pemeringkat (reranker) sedang tidak bisa dihubungi, '
+  + 'kemungkinan kena batas pemakaian. Data manual di bawah TETAP ASLI dan boleh dipakai, tapi URUTANNYA '
+  + 'belum tersaring — chunk paling relevan bisa saja tidak di urutan pertama. '
+  + 'BUKA jawabanmu dengan satu kalimat singkat yang memberi tahu hal ini, lalu jawab seperti biasa. '
+  + 'Ingatkan sekali agar angka/PN penting diverifikasi ke manual. JANGAN mengarang untuk menutupi kekurangan urutan.';
 
 function faultCodeNotFoundTemplate(faultQuery: string, model: string): string {
   return `Kode \`${faultQuery}\` tidak ditemukan di database manual **${model}**.
@@ -848,7 +856,7 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 
 /** Discriminated union — hasil routing RAG sebelum AI dipanggil */
 type RagRouteResult =
-  | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low' }
+  | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
   | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
   // google_search: 'casual' (obrolan ringan, tanpa grounding) | 'technical' (teknis tanpa data
   // manual → web + guardrail)
@@ -920,7 +928,10 @@ async function resolveFaultCodeQuery(
   }
 
   const augmented = await augmentWithEngineManual(ragResult.content, faultQuery, model, emit);
-  return { type: 'rag_found', content: augmented, dataLabel: RAG_LABEL.manual };
+  return {
+    type: 'rag_found', content: augmented, dataLabel: RAG_LABEL.manual,
+    rerankDegraded: isRerankError(ragResult.ragError),
+  };
 }
 
 // Pattern: "service 2000 jam/hm/hr" — deteksi di code agar tidak bergantung
@@ -1138,6 +1149,7 @@ async function resolveNaturalLanguageQuery(
       content: ragResult.content,
       dataLabel: RAG_LABEL.manual,
       confidence: ragResult.confidence,
+      rerankDegraded: isRerankError(ragResult.ragError),
     };
   }
 
@@ -1154,6 +1166,7 @@ async function resolveNaturalLanguageQuery(
     content: finalContent || ragResult.content,
     dataLabel: RAG_LABEL.manual,
     confidence: ragResult.confidence,
+    rerankDegraded: isRerankError(ragResult.ragError),
   };
 }
 
@@ -1387,9 +1400,15 @@ export async function generateResponseStream(
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   const thinkingLevel: ThinkingLevel = 'medium';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
-  const caveat = ragConfidence === 'medium'
-    ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
-    : '';
+  const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
+  // Kalau rerank gagal, peringatannya menggantikan caveat MEDIUM — dua-duanya sekaligus
+  // membuat jawaban penuh disclaimer dan justru tak terbaca.
+  const caveat = rerankDegraded
+    ? RERANK_DEGRADED_NOTE
+    : ragConfidence === 'medium'
+      ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
+      : '';
+  if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
   const userText         = ragContent
     ? `${trimmed || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
     : gsTechnical
