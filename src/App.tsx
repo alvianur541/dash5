@@ -20,10 +20,29 @@ import { useNetwork } from './hooks/useNetwork';
 
 type AgenticPreference = 'adaptive' | 'always' | 'never';
 
+const AGENTIC_KEY = 'dash-agentic';
+
+// Pilihan dari URL DISIMPAN. start_url manifest = "/" tanpa query, jadi membuka PWA dari ikon
+// selalu membuang ?agentic — sakelar eksperimennya jadi tak terpakai justru di HP.
 function getAgenticPreference(): AgenticPreference {
   const param = new URLSearchParams(window.location.search).get('agentic')?.toLowerCase();
-  if (param === 'true' || param === '1' || param === 'always') return 'always';
-  if (param === 'false' || param === '0' || param === 'never') return 'never';
+  const dariUrl: AgenticPreference | null =
+    param === 'true'  || param === '1' || param === 'always' ? 'always' :
+    param === 'false' || param === '0' || param === 'never'  ? 'never'  : null;
+
+  if (dariUrl) {
+    try { localStorage.setItem(AGENTIC_KEY, dariUrl); } catch { /* storage mati — abaikan */ }
+    console.info('[agentic] mode=%s (dari URL, disimpan)', dariUrl);
+    return dariUrl;
+  }
+
+  try {
+    const tersimpan = localStorage.getItem(AGENTIC_KEY);
+    if (tersimpan === 'always' || tersimpan === 'never') {
+      console.info('[agentic] mode=%s (tersimpan — matikan dengan ?agentic=false)', tersimpan);
+      return tersimpan;
+    }
+  } catch { /* storage mati — abaikan */ }
 
   const envMode = String(import.meta.env.VITE_AGENTIC_MODE ?? 'adaptive').toLowerCase();
   if (envMode === 'always' || envMode === 'true') return 'always';
