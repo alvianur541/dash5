@@ -819,7 +819,13 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     },
   };
 
-  const onChunk = (text) => sseWrite(res, 'text', { text });
+  // ttft = yang benar-benar dirasakan teknisi (layar mulai terisi), bukan total.
+  const tMulai = Date.now();
+  let ttft = 0;
+  const onChunk = (text) => {
+    if (!ttft) ttft = Date.now() - tMulai;
+    sseWrite(res, 'text', { text });
+  };
   const onEvent = (event) => sseWrite(res, 'agent_event', { event });
 
   try {
@@ -832,6 +838,9 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       }
       return orch.generateResponseStream(unit, userName, history, b.userInput, onChunk, onEvent);
     });
+    console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',
+      ttft, Date.now() - tMulai, deps.usage.input, deps.usage.output,
+      deps.usage.thinking, deps.usage.calls);
     sseWrite(res, 'meta', {
       usage: deps.usage,
       model: orch.MODEL,

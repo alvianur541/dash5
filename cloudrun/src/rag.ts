@@ -350,6 +350,7 @@ export async function searchTechnicalManualMulti(
 ): Promise<RAGResult> {
   if (!sb() || queries.length === 0) return { content: '', hasResults: false };
 
+  const tMulai = Date.now();
   const primaryQuery = queries[0].trim();
   const faultCode    = isFaultCode(primaryQuery);
   // forceKategori menang di atas auto-routing — caller eksplisit minta kategori spesifik
@@ -445,6 +446,7 @@ export async function searchTechnicalManualMulti(
     rankedPromise,
     vectorPromise,
   ]);
+  const msCari = Date.now() - tMulai;
 
 // Collect separately then INTERLEAVE so the cap cuts fairly - never revert to keyword-first.
   const kwDocs:  string[] = [];
@@ -524,7 +526,9 @@ export async function searchTechnicalManualMulti(
   const rerankInput = capRerankPayload(filteredDocs);
   // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
   const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
+  const tRerank = Date.now();
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
+  const msRerank = Date.now() - tRerank;
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   let top = mmrSelect(reranked, topN, 0.7);
 
@@ -539,8 +543,8 @@ export async function searchTechnicalManualMulti(
 
   const { confidence, topScore } = computeConfidence(top);
 
-  console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR)',
-    confidence, topScore.toFixed(2), reranked.length, top.length);
+  console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
+    confidence, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
 
   const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
     ? 'medium'
