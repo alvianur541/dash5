@@ -169,7 +169,14 @@ async function resolveUpstream(model, { stream }) {
 // (auth=0ms, fetch=27846ms), lalu panggilan BERIKUTNYA lewat dalam 3 dtk. Jadi menunggu
 // bukan strategi — koneksi baru yang menyembuhkan. Timer ini hanya menutupi fase HEADER;
 // fetch() sudah resolve sebelum body mengalir, jadi stream tidak pernah terpotong di tengah.
-const STALL_MS = 8_000;
+// ⚠️ 20 dtk, BUKAN 8. Untuk streaming, Vertex baru mengirim HEADER saat token pertama siap —
+// jadi waktu fetch mencakup fase thinking. Terukur 17 Agu sesudah `medium` menyala: fetch SEHAT
+// melebar 4,2–13,7 dtk. Dengan ambang 8 dtk, penjaga ini membunuh permintaan yang sehat lalu
+// mengulangnya dari nol — dan pengulangan itu ikut berpikir lagi, jadi total malah membengkak.
+// Bukti bahwa itu BUKAN koneksi mati: percobaan sesudah "macet" memakan 13,7 dan 14,2 dtk,
+// bukan 3–5 dtk seperti koneksi yang benar-benar baru.
+// Turunkan lagi HANYA kalau thinking dikembalikan ke `low` di semua jalur.
+const STALL_MS = 20_000;
 const STALL_MAX = 3;
 
 async function fetchAntiMacet(url, opts, signal, label) {
