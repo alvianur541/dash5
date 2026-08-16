@@ -176,16 +176,22 @@ async function resolveUpstream(model, { stream }) {
 // Bukti bahwa itu BUKAN koneksi mati: percobaan sesudah "macet" memakan 13,7 dan 14,2 dtk,
 // bukan 3–5 dtk seperti koneksi yang benar-benar baru.
 // Turunkan lagi HANYA kalau thinking dikembalikan ke `low` di semua jalur.
-const STALL_MS = 20_000;
+// Ambang dipisah karena dua jenis panggilan ini berbeda sifat:
+// - non-stream (analyzeIntent, compress): output ≤600 token, thinking `minimal` → sehat 1–4 dtk
+// - stream (jawaban): header baru dikirim saat token pertama siap, JADI TERMASUK fase thinking
+//   → dengan `medium` sehatnya melebar sampai ~19 dtk (terukur 17 Agu)
+// Satu ambang untuk keduanya pasti salah di salah satu sisi.
+const STALL_MS_NONSTREAM = 8_000;
+const STALL_MS_STREAM    = 30_000;
 const STALL_MAX = 3;
 
-async function fetchAntiMacet(url, opts, signal, label) {
+async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
   for (let i = 1; i <= STALL_MAX; i++) {
     if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
     const ctrl = new AbortController();
     const teruskan = () => ctrl.abort();
     if (signal) signal.addEventListener('abort', teruskan, { once: true });
-    const timer = setTimeout(() => ctrl.abort(), i < STALL_MAX ? STALL_MS : 60_000);
+    const timer = setTimeout(() => ctrl.abort(), i < STALL_MAX ? stallMs : 60_000);
     try {
       return await fetch(url, { ...opts, signal: ctrl.signal });
     } catch (err) {
@@ -193,7 +199,7 @@ async function fetchAntiMacet(url, opts, signal, label) {
       if (signal && signal.aborted) throw err;
       if (i === STALL_MAX) throw err;
       console.warn('[upstream] %s macet >%d dtk — buka koneksi baru (%d/%d)',
-        label, STALL_MS / 1000, i, STALL_MAX);
+        label, stallMs / 1000, i, STALL_MAX);
     } finally {
       clearTimeout(timer);
       if (signal) signal.removeEventListener('abort', teruskan);
@@ -209,7 +215,8 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
   const tFetch = Date.now();
-  let upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label);
+  const stallMs = stream ? STALL_MS_STREAM : STALL_MS_NONSTREAM;
+  let upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label, stallMs);
   const msFetch = Date.now() - tFetch;
   if (msAuth > 1000 || msFetch > 3000) {
     console.warn('[upstream] LAMBAT %s auth=%dms fetch=%dms status=%d', label, msAuth, msFetch, upstream.status);
@@ -219,7 +226,7 @@ async function vertexFetch(model, body, { stream, signal, label }) {
     console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
     await new Promise(r => setTimeout(r, waitMs));
     if (signal && signal.aborted) break;
-    upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label);
+    upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label, stallMs);
   }
   return upstream;
 }
