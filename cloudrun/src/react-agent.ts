@@ -151,7 +151,7 @@ async function forceFinalAnswer(
     {
       contents: finalContents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'medium' } },
+      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'low' } },
       toolConfig: { functionCallingConfig: { mode: 'NONE' } },
     },
     onChunk,
@@ -194,7 +194,7 @@ export async function runReActAgent(
     const res = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'medium' } },
+      generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'low' } },
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
     }, false, MODEL);

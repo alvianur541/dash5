@@ -942,22 +942,6 @@ const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tin
 // Atribut/permintaan terukur — buat deteksi follow-up pendek multi-atribut ("berat dan diameternya").
 const MULTI_ATTR_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|tekanan|pressure|torque|torsi|clearance|displacement|kapasitas|capacity|rpm|harga|price|part\s*number|partnumber|pn|spec|ukuran|size)\w*/gi;
 
-// Gejala/keluhan (bukan lookup angka). Dipakai HANYA untuk memilih thinking level:
-// diagnosa butuh penalaran bertahap, lookup spec tidak. Salah tebak = jawaban lebih lambat
-// atau lebih dangkal, tidak pernah salah data.
-const GEJALA_RE = new RegExp(
-  '\\b(?:kenapa|mengapa|kok|koq|gimana|bagaimana|masalah|kendala|trouble|problem|gangguan|' +
-  'bocor|kebocoran|leak|panas|overheat|macet|stuck|lemah|lemas|weak|lambat|slow|drop|turun|' +
-  'getar|getaran|vibrasi|vibration|aus|rusak|kerusakan|error|gagal|fail|mati|kendur|slack|' +
-  'bunyi|berisik|noise|abnormal|tidak\\s+(?:mau|bisa|naik|jalan|keluar|nyala|hidup)|' +
-  'nggak\\s+(?:mau|bisa|naik|jalan|keluar|nyala|hidup)|ga\\s+(?:mau|bisa)|susah|berat\\s+sekali)\\b',
-  'i',
-);
-
-function isDiagnosisQuery(q: string): boolean {
-  return GEJALA_RE.test(q);
-}
-
 function isMultiAspectQuery(q: string): boolean {
   if (!MULTI_CONNECTOR_RE.test(q)) return false;
   if (!MULTI_TECH_RE.test(q)) return false;
@@ -1120,12 +1104,10 @@ export async function generateResponseStream(
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   // Casual tidak menerima data manual → prompt ringkas.
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  // Diukur 16 Agu 2026: medium → low memangkas waktu-ke-huruf-pertama 19,6 → 5,6 dtk (token
-  // thinking dihasilkan SELURUHNYA sebelum satu huruf pun keluar). Jadi low untuk lookup —
-  // fault code, parts, spec — yang jawabannya tinggal disusun dari data. Diagnosa gejala tetap
-  // medium: di situ penalaran bertahap yang menentukan mutu, dan lambatnya terbayar.
-  const isDiagnosis = !isFaultCode && !isCasual && isDiagnosisQuery(trimmed);
-  const thinkingLevel: ThinkingLevel = isDiagnosis ? 'medium' : 'low';
+  // Diukur 16 Agu 2026: medium → low memangkas waktu-ke-huruf-pertama 19,6 → 5,6 dtk — token
+  // thinking dihasilkan SELURUHNYA sebelum satu huruf pun keluar, jadi jatuh 100% ke waktu tunggu.
+  // `low` untuk SEMUA jalur. Bandingkan lewat ?think=medium sebelum menaikkannya lagi.
+  const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
