@@ -793,9 +793,13 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
-      const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
+      // Timeout WAJIB per-panggilan. Kalau meng-abort ctrl request, satu call lambat
+      // (compressChunks jalan paralel) mematikan seluruh pertanyaan.
+      const callCtrl = new AbortController();
+      const timer = setTimeout(() => callCtrl.abort(), UPSTREAM_TIMEOUT_MS);
+      const signal = AbortSignal.any([callCtrl.signal, ctrl.signal]);
       try {
-        const upstream = await vertexFetch(model, payload, { stream: false, signal: ctrl.signal, label: '/v1/ask' });
+        const upstream = await vertexFetch(model, payload, { stream: false, signal, label: '/v1/ask' });
         const data = await upstream.json();
         if (!upstream.ok) throw new Error(`Vertex AI error ${upstream.status}: ${JSON.stringify(data)}`);
         return data;
@@ -831,7 +835,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       full: answer,
     });
   } catch (err) {
-    console.error('/v1/ask error:', err && err.message);
+    console.error('/v1/ask error:', (err && err.stack) || err);
     sseWrite(res, 'error', { message: err && err.message === 'KUOTA_PENUH' ? 'KUOTA_PENUH' : 'Gagal memproses pertanyaan.' });
   } finally {
     if (!res.writableEnded) { sseWrite(res, 'done', {}); res.end(); }
