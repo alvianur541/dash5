@@ -1097,9 +1097,12 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  // Casual tidak menerima data manual → prompt ringkas + thinking paling rendah yang didukung.
+  // Casual tidak menerima data manual → prompt ringkas.
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  const thinkingLevel: ThinkingLevel = isCasual ? 'low' : 'medium';
+  // Diukur 16 Agu 2026: medium → low memangkas waktu-ke-huruf-pertama 19,6 dtk → 5,6 dtk
+  // (token thinking dihasilkan SELURUHNYA sebelum satu huruf pun keluar). Naikkan lagi hanya
+  // kalau mutu jawaban terbukti turun — bandingkan lewat ?think=medium, jangan diubah asal.
+  const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
@@ -1289,7 +1292,7 @@ export async function generateResponse(
       generationConfig: {
         maxOutputTokens: sendImageToModel ? 8192 : 4096,
         temperature: 0.3,
-        thinkingConfig: { thinkingLevel: 'medium' },
+        thinkingConfig: { thinkingLevel: 'low' },
       },
     };
 
