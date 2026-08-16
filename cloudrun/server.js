@@ -696,7 +696,10 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
 // Seluruh pipeline (intent → search → rerank → generate) jalan di sini. Dulu di browser:
 // 5-7 round-trip Sampit↔Iowa per pertanyaan, sekarang satu.
 
-const { createClient } = require('@supabase/supabase-js');
+// PostgREST langsung, BUKAN @supabase/supabase-js: createClient() menyalakan RealtimeClient di
+// constructor dan itu butuh WebSocket global yang belum ada di Node 20 → proses crash tiap request.
+// Orkestrasi hanya memakai .from() dan .rpc(), keduanya ada di sini.
+const { PostgrestClient } = require('@supabase/postgrest-js');
 const orch = require('./dist/orchestrator.cjs');
 
 const ASK_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140']);
@@ -767,9 +770,9 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const ctrl = new AbortController();
   req.on('close', () => ctrl.abort());
 
-  const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-    global: { headers: { Authorization: `Bearer ${req.authToken}` } },
+  // JWT teknisi diteruskan apa adanya → RLS tetap berlaku persis seperti waktu di browser.
+  const supabase = new PostgrestClient(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.authToken}` },
   });
 
   const deps = {
