@@ -152,6 +152,35 @@ async function resolveUpstream(model, { stream }) {
 // Endpoint HTTP lama DAN orkestrasi server-side memanggil lewat sini, supaya retry 429,
 // rotasi key Cohere, dan pemilihan endpoint v1beta1/global hanya ada satu salinan.
 
+// Terukur 16 Agu 2026: panggilan ke Vertex kadang tertahan 24-28 dtk di level KONEKSI
+// (auth=0ms, fetch=27846ms), lalu panggilan BERIKUTNYA lewat dalam 3 dtk. Jadi menunggu
+// bukan strategi — koneksi baru yang menyembuhkan. Timer ini hanya menutupi fase HEADER;
+// fetch() sudah resolve sebelum body mengalir, jadi stream tidak pernah terpotong di tengah.
+const STALL_MS = 8_000;
+const STALL_MAX = 3;
+
+async function fetchAntiMacet(url, opts, signal, label) {
+  for (let i = 1; i <= STALL_MAX; i++) {
+    if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
+    const ctrl = new AbortController();
+    const teruskan = () => ctrl.abort();
+    if (signal) signal.addEventListener('abort', teruskan, { once: true });
+    const timer = setTimeout(() => ctrl.abort(), i < STALL_MAX ? STALL_MS : 60_000);
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal });
+    } catch (err) {
+      // Klien yang putus JANGAN diulang — itu keputusan teknisi, bukan kemacetan.
+      if (signal && signal.aborted) throw err;
+      if (i === STALL_MAX) throw err;
+      console.warn('[upstream] %s macet >%d dtk — buka koneksi baru (%d/%d)',
+        label, STALL_MS / 1000, i, STALL_MAX);
+    } finally {
+      clearTimeout(timer);
+      if (signal) signal.removeEventListener('abort', teruskan);
+    }
+  }
+}
+
 async function vertexFetch(model, body, { stream, signal, label }) {
   // auth vs fetch dipisah: token GCP menggantung dan koneksi Vertex menggantung itu dua
   // penyakit berbeda dengan obat berbeda. Tanpa pemisahan ini keduanya terlihat sama.
@@ -160,7 +189,7 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
   const tFetch = Date.now();
-  let upstream = await fetch(url, { method: 'POST', headers, body: payload, signal });
+  let upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label);
   const msFetch = Date.now() - tFetch;
   if (msAuth > 1000 || msFetch > 3000) {
     console.warn('[upstream] LAMBAT %s auth=%dms fetch=%dms status=%d', label, msAuth, msFetch, upstream.status);
@@ -170,7 +199,7 @@ async function vertexFetch(model, body, { stream, signal, label }) {
     console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
     await new Promise(r => setTimeout(r, waitMs));
     if (signal && signal.aborted) break;
-    upstream = await fetch(url, { method: 'POST', headers, body: payload, signal });
+    upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label);
   }
   return upstream;
 }
@@ -181,14 +210,17 @@ async function vertexEmbed(query, taskType = 'RETRIEVAL_QUERY') {
     `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
     `/locations/${LOCATION}/publishers/google/models/gemini-embedding-001:predict`;
   const gToken = await getAccessToken();
-  const upstream = await fetch(url, {
+  const tEmb = Date.now();
+  const upstream = await fetchAntiMacet(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gToken}` },
     body: JSON.stringify({
       instances: [{ content: query, task_type: taskType }],
       parameters: { outputDimensionality: 3072 },
     }),
-  });
+  }, undefined, '/v1/embed');
+  const msEmb = Date.now() - tEmb;
+  if (msEmb > 3000) console.warn('[upstream] LAMBAT /v1/embed fetch=%dms', msEmb);
   const data = await upstream.json();
   if (!upstream.ok) {
     console.error('Vertex embed error:', JSON.stringify(data));
