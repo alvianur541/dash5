@@ -1,13 +1,7 @@
-// Cost/token ledger — kirim usage 1 pertanyaan ke proxy /v1/usage (yang insert ke
-// Supabase usage_logs pakai service_role, server-side). Fire-and-forget: JANGAN blokir
-// atau lempar error ke UI kalau gagal. Service_role key TIDAK PERNAH ada di frontend.
 import { getAuthToken } from './supabase';
 
 const PROXY_URL = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
-// Identitas (nama/email) SENGAJA tidak ada di sini — server mengambilnya dari token
-// yang sudah diverifikasi. Kalau dikirim dari sini, ledger bisa dipalsukan atas nama
-// teknisi lain dan atribusi biaya di dashboard admin jadi tidak bisa dipercaya.
 export interface QuestionUsage {
   sessionId: string | null;
   model: string;

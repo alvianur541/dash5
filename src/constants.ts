@@ -1,10 +1,5 @@
 import { UnitModel } from './types';
 
-// Diexport supaya dipakai di user-turn (ai.ts/react-agent.ts), BUKAN di sini.
-// SYSTEM_PROMPT harus tetap byte-identical antar request agar Gemini prompt
-// caching (implicit/explicit) bisa hit — kalau timestamp ada di system prompt,
-// string berubah setiap menit dan cache selalu miss, termasuk di loop agentic
-// yang ngirim system prompt yang sama berkali-kali per 1 pesan user.
 export function jakartaTime(): string {
   return new Date().toLocaleString('id-ID', {
     timeZone: 'Asia/Jakarta',
@@ -36,11 +31,6 @@ const DOC_DESC: Record<string, string> = {
   'TECHNICAL NEWS':            'service bulletin resmi TSD-CE Hexindo',
 };
 
-/**
- * Inventaris dokumen NYATA per model — census Supabase (Jul 2026, terverifikasi).
- * Prompt HANYA menyebut sumber yang benar-benar ada supaya AI tidak pernah
- * menyuruh teknisi "cek CPM/Engine Manual" untuk model yang tidak punya.
- */
 const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
   'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
   'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
@@ -50,9 +40,6 @@ const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
   'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO'],
 };
 
-/** Section PROMO Q2 FY2026 yang BENAR-BENAR ada per model (census DB Aug 2026).
- *  Berbeda-beda per model — KCM cuma 2 section, ZX200 punya 10. AI dilarang menyuruh
- *  cek section yang tidak ada di daftar modelnya. */
 const PROMO_SECTIONS_BY_MODEL: Record<UnitModel, string[]> = {
   'ZX48U-5A':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
   'ZX65USB-5A': ['FILTER PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
@@ -62,8 +49,6 @@ const PROMO_SECTIONS_BY_MODEL: Record<UnitModel, string[]> = {
   'ZW140':      ['FILTER PARTS', 'COOLANT', 'LUBRICANT'],
 };
 
-/** CPM sebagian model dipetakan dari tabel unit setara (tertulis di chunk-nya).
- *  AI wajib jujur menyebut pemetaan ini saat menyajikan jadwal CPM. */
 const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
   'ZX138MF-5G': 'ZX110-5G',
   'ZX65USB-5A': 'ZX65U-5A',
@@ -79,27 +64,6 @@ const ABSENT_SOURCES: Record<UnitModel, string> = {
   'ZW140':      'Engine Manual, Engine Parts Catalog, Operator Manual & CPM',
 };
 
-/**
- * Prompt RINGKAS khusus jalur CASUAL — dipakai saat `analyzeIntent` memutuskan
- * `shouldSearch = false`: sapaan, ucapan terima kasih, pertanyaan tentang asisten
- * sendiri, pertanyaan jam/tanggal, dan permintaan terjemahan jawaban sebelumnya.
- *
- * KENAPA ADA: di jalur ini **tidak ada satu pun data manual yang disisipkan**, tapi
- * dulu prompt penuh (~9.850 token) tetap dikirim — termasuk seluruh aturan PARTS &
- * PROMO, FAULT CODE, cara membaca blok data, format tabel parts, dan catatan lapangan.
- * Semua itu mustahil terpakai untuk menjawab "halo" atau "sekarang jam berapa".
- * Varian ini ~85% lebih kecil, jadi sapaan tidak lagi membayar ongkos prompt diagnosa.
- *
- * ⚠️ HARUS BYTE-IDENTICAL antar request (jangan sisipkan timestamp/nilai berubah di
- * sini) supaya prompt-cache Gemini tetap kena — sama seperti SYSTEM_PROMPT penuh.
- *
- * ⚠️ Yang SENGAJA DIPERTAHANKAN meski ini jalur ringan:
- *   - Aturan terjemahan. "in english"/"pakai bahasa indo" masuk jalur casual, dan yang
- *     diterjemahkan sering jawaban TEKNIS sebelumnya — angka/PN/backtick wajib selamat.
- *   - Pagar cakupan unit lain & off-topic, supaya jalur ringan tidak jadi celah.
- *   - Larangan menjawab teknis dari ingatan — di sini justru paling rawan, karena
- *     tidak ada data sama sekali yang menahan model.
- */
 export const SYSTEM_PROMPT_CASUAL = (model: UnitModel, userName: string): string => {
   const isKcm = model.startsWith('KCM');
   const isZw  = model.startsWith('ZW');
@@ -170,8 +134,6 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
         ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
         : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
 
-  // Bulletin TSD-CE yang benar-benar ada per model (census Supabase). Disebut ringkas supaya AI
-  // tahu topiknya ada dan tidak menyuruh teknisi cari ke tempat lain.
   const bulletins: string[] = [];
   if (model === 'ZX48U-5A') {
     bulletins.push('**No.13/2026 — ZX48U-5A SE (Super Economy)**: engine \`Yanmar 4TNV88-BPHC\` (Mechanical Governor) vs standard \`4TNV88-ZPHB\`, ECU digantikan Relay Control, identifikasi unit via serial prefix \`HCMAEA10\` (standard \`HCMAEA90\`) & sticker, perbedaan accessories kabin, brand LANDCROS');

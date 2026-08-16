@@ -107,9 +107,6 @@ export async function deleteAllChatSessions(userId: string): Promise<void> {
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
 }
 
-// ── Bookmark sinkron lintas perangkat ────────────────────────────────────────
-// Tabel `bookmarks` (RLS per-user). Client tetap menulis localStorage sebagai cache
-// offline; fungsi-fungsi ini fail-silent — offline berarti pakai cache lokal saja.
 export interface RemoteBookmark { message_id: string; model: string; question: string; answer: string; saved_at: string }
 
 export async function fetchBookmarksRemote(userId: string): Promise<RemoteBookmark[] | null> {
@@ -142,8 +139,6 @@ export async function deleteBookmarkRemote(userId: string, messageId: string): P
   if (error) console.warn('[bookmark] hapus remote gagal (offline?):', error.message);
 }
 
-// ── Feedback learning loop ──────────────────────────────
-// Persist rating 👍/👎 + Q/A → sinyal audit jawaban buruk. Fire-and-forget, fail-silent.
 export async function saveFeedback(payload: {
   userId: string;
   messageId: string;
@@ -169,22 +164,16 @@ export async function saveFeedback(payload: {
   }
 }
 
-// Ambang kasar saja — terukur meloloskan 1259/1259 chunk. Penyaring nyatanya Cohere rerank.
-// Jangan dinaikkan: similarity query-ke-dokumen belum pernah diukur.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Penyumbang latensi terbesar di rantai pencarian. 30 = 20 vector + 10 keyword.
-// ⚠️ Kalau diturunkan di bawah jumlah kandidat, penyilangan keyword/vector di
-// searchTechnicalManualMulti yang menjaga pembagiannya adil — jangan diubah jadi urut.
+// Biggest latency lever in search. Safe only because candidates are interleaved kw/vector below.
 const RERANK_INPUT_CAP = 30;
 /** Dokumen yang dikembalikan Cohere → masuk MMR. Wajib > topN, kalau sama MMR tak punya pilihan. */
 const RERANK_RETURN_N = 10;
+// Coarse gate only - measured to pass 1259/1259 chunks. Cohere rerank is the real filter.
 const VECTOR_MATCH_COUNT = 20;
 // Jaring pengaman ukuran payload. Tak pernah tersentuh selama RERANK_DOC_CAP masih aktif.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
-/** Ambil dokumen sebanyak mungkin untuk rerank, dibatasi JUMLAH dan TOTAL UKURAN.
- *  Selalu kembalikan minimal 1 dokumen — kalau chunk pertama sendiri melebihi budget,
- *  tetap kirim (Cohere yang memotong), sebab mengirim nol dokumen = rerank pasti gagal. */
 function capRerankPayload(docs: string[]): string[] {
   const out: string[] = [];
   let total = 0;
@@ -203,8 +192,6 @@ function capRerankPayload(docs: string[]): string[] {
 const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
-// In-flight map: dedup concurrent identical embed requests.
-// Tanpa ini 10 user query "swing motor" bersamaan → 10× embed API call → rate limit.
 const embeddingInFlight = new Map<string, Promise<number[]>>();
 
 function setCached(key: string, value: number[]) {
@@ -227,8 +214,6 @@ function getCachedLru(key: string): number[] | null {
 }
 
 function isFaultCode(query: string): boolean {
-  // WAJIB ada digit (cegah "blade"/"cafe" false-positive). Letter-prefix tanpa dash wajib ≥4 digit
-  // (cegah fuel grade "B50"/"B100"). Konsisten dgn FAULT_CODE_PATTERN di ai.ts.
   return /^(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i.test(query.trim());
 }
 
@@ -238,9 +223,6 @@ const PARTS_KEYWORDS_RE = /\b(part\s*number|part\s*no\.?|p\/?n[\s:]+\w|spare\s*p
 // Price query Indonesia ('harga seal kit') — PARTS_KEYWORDS_RE butuh kata 'part', jadi ini pelengkap.
 const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft)\b/i;
 
-// PN patterns: Yanmar YNM129150-14200 · Hitachi body YB60000068 · KCM engine YZ0108060850 ·
-// Isuzu/Hitachi pure 4616545 · Komatsu 423-27-21370 · KCM 60ZV 34820-66720 · ZW140 163E3-42241.
-// Range \d{6,12} hindari false-positive 4-5 digit (service interval / spec value).
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
 export function isPartsQuery(query: string): boolean {
@@ -292,19 +274,12 @@ export function extractSearchTerms(query: string): string[] {
 interface RerankedDoc { content: string; score: number }
 interface RerankResult { docs: RerankedDoc[]; error?: string }
 
-// Cap per-dokumen KHUSUS payload skoring rerank. Sinyal relevansi ada di header chunk
-// (Section:/Model:/Kategori:) + baris-baris awal; chunk tipikal 1-2rb char tidak tersentuh,
-// hanya outlier jumbo (sampai 8rb) yang dipangkas. Konten UTUH tetap dipakai untuk jawaban —
-// mapping via index ke array asli. Efek: upload dari HP lapangan & token Cohere turun drastis
-// di kasus terburuk → tail-latency rerank terpangkas tanpa mengubah pemilihan chunk tipikal.
 const RERANK_DOC_CAP = 2500;
 
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
 
   const controller = new AbortController();
-  // 8s: margin buat rerank-pro (lebih lambat) dgn input di-cap (RERANK_INPUT_CAP) supaya tak abort
-  // & fallback ke urutan vektor.
   const timer = setTimeout(() => controller.abort(), 8000);
 
   const token = await getAuthToken();
@@ -337,8 +312,6 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
   }
 }
 
-/** Confidence tier dari rerank score (calibration v2, Cohere valid range ~0.35-0.65).
- *  HIGH ≥0.45 (no caveat) · MEDIUM ≥0.25 (inject + caveat) · LOW <0.25 (fallback/canned). */
 function computeConfidence(scored: RerankedDoc[]): { confidence: 'high' | 'medium' | 'low'; topScore: number } {
   const topScore = scored[0]?.score ?? 0;
   if (topScore >= 0.45) return { confidence: 'high', topScore };
@@ -346,9 +319,6 @@ function computeConfidence(scored: RerankedDoc[]): { confidence: 'high' | 'mediu
   return { confidence: 'low', topScore };
 }
 
-// ── MMR (Maximal Marginal Relevance) ────────────────────────────────────────
-// Pilih dokumen relevan TAPI saling melengkapi (bukan top-k yg isinya 3 chunk kembar).
-// MMR = argmax[ λ·relevance − (1−λ)·max overlap ]. Redundansi via Jaccard token (deterministik).
 function mmrTokens(s: string): Set<string> {
   return new Set(s.toLowerCase().match(/[a-z0-9]{3,}/g) ?? []);
 }
@@ -377,13 +347,8 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
 }
 
 
-// Nama model distrip dari query sebelum embedding (sudah difilter via metadata) — kalau ikut,
-// vektor bias ke chunk yg literal mention model, bukan konten relevan.
 const MODEL_NAMES_RE = /\b(ZX48U-5A|ZX65USB-5A|ZX138MF-5G|ZX200-5G|KCM\s+60ZV|ZW140(?:-\w+)?)\b\s*/gi;
 
-/** Escape wildcard LIKE (`%`, `_`, `\`) dari input user sebelum masuk pola ilike.
- *  Bukan SQL injection (PostgREST tetap parameterisasi), tapi tanpa ini user bisa
- *  mengirim `%` → pola liar → full scan berat / hasil kacau. */
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, m => `\\${m}`);
 }
@@ -392,8 +357,6 @@ export function stripModelFromQuery(query: string): string {
   return query.replace(MODEL_NAMES_RE, '').replace(/\s+/g, ' ').trim();
 }
 
-// EXPAND: Indonesian → English untuk embedding query. Rules: (1) key hanya Indo/shorthand,
-// (2) value TAK boleh mengandung key-nya sendiri (cegah duplikat), (3) hanya kalau menambah makna.
 const EXPAND: Record<string, string> = {
   // Indonesian mechanical terms → English
   hidrolik: 'hydraulic', hidraulik: 'hydraulic', pompa: 'pump',
@@ -457,12 +420,8 @@ const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
-// Pertanyaan yang MENUNTUT NILAI terukur walau tanpa kata spec baku ("berapa minimum…",
-// "standar normalnya berapa"). Memicu bonus ANGKA+SATUAN di retrieval ber-peringkat.
 const NUMERIC_INTENT_RE = /\b(berapa|nilai|standar|standard|spesifikasi|spec|minimum|minimal|maksimum|maksimal|normal|batas|limit|toleransi|range)\b/i;
 
-// Kata SPEC TERUKUR — dipakai keyword-boost (komponen + spec word) agar angka spec terkubur di
-// chunk prosedur ketangkap (mis. "Swing device weight: 220 kg"). English + Indo.
 const SPEC_TERMS = new Set([
   'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
   'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
@@ -491,8 +450,6 @@ function expandQuery(query: string): string {
 }
 
 async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]> {
-  // Sanity guard: embed query terlalu pendek/cuma angka = vector tidak bermakna.
-  // Apapun path yang nyasar ke sini, transform jadi query bermakna sebelum kirim.
   let safeQuery = query;
   const trimmedQ = query.trim();
   const intervalOnly = /^\s*(\d{3,5})\s*(?:jam|hm|hours?|hr)?\s*$/i.test(trimmedQ);
@@ -518,9 +475,6 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
     const data   = await res.json() as { values?: unknown };
     let values = Array.isArray(data.values) ? (data.values as number[]) : null;
     if (!values || values.length === 0) throw new Error('Embed returned no values');
-    // Bulatkan ke 6 desimal — payload RPC vector turun ±45% (3072 dim × float panjang → pendek).
-    // Efek ke cosine similarity ~1e-6 (jauh di bawah noise antar-query) — hasil ranking identik.
-    // Penting di koneksi lapangan: parts search kirim vector ini 3-4× paralel per pertanyaan.
     values = values.map(v => Math.round(v * 1e6) / 1e6);
     setCached(cacheKey, values);
     return values;
@@ -531,8 +485,6 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
 
 /** Diexport utk semantic cache — LRU + in-flight dedup di dalamnya cegah embed ganda. */
 export async function getEmbedding(query: string): Promise<number[]> {
-  // Normalisasi cache key — "Seal Kit", "seal kit", "seal  kit" → 1 entry yang sama.
-  // Penting agar tidak duplicate embed call & vector tetap konsisten.
   const cacheKey = query.toLowerCase().replace(/\s+/g, ' ').trim();
 
   // 1. Cache hit — kembalikan langsung tanpa network (promotes to MRU)
@@ -553,8 +505,6 @@ export async function getEmbedding(query: string): Promise<number[]> {
 
 export interface CatalogEntry { model: string; kategori: string; count: number }
 
-// Memo 10 menit — census dokumen nyaris statis, tapi query-nya berat (paging metadata SEMUA
-// dokumen, bisa >10 halaman × 1000 baris). Buka-tutup dashboard berulang jangan mengunduh ulang.
 let _catalogCache: { data: CatalogEntry[]; expiresAt: number } | null = null;
 const CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
 
@@ -564,10 +514,6 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
     return _catalogCache.data;
   }
 
-  // PostgREST hardcode max 1000 row per request (meski .limit(10000) di-set).
-  // Pakai pagination ADAPTIF — fetch 4 pages paralel batch pertama, lalu lanjut
-  // sequential sampai page kosong. Akomodasi DB growth tanpa hard cap.
-  // Sebelumnya: 6 pages × 1000 = max 6000 docs hard cap → bisa miss kalau DB > 6K.
   const PAGE_SIZE = 1000;
   const INITIAL_BATCH = 4;  // 4000 docs covered in 1 parallel batch (most common case)
   const MAX_SAFETY = 20;    // hard upper bound — 20K docs cap before warning
@@ -645,16 +591,9 @@ interface RAGResult {
   topScore?: number;        // Top rerank score (0..1) — untuk telemetry & calibration
 }
 
-// Mapping nama Kategori untuk fault-code/troubleshooting data per model.
-// Naming inconsistency dari ingest:
-// - ZX200-5G  → 'TROUBLESHOOTING'
-// - KCM 60ZV  → 'WORKSHOP MANUAL' (tidak punya TM/Troubleshooting kategori, WM cover repair info)
-// - default   → 'TECHNICAL MANUAL'
 const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
   'ZX200-5G': 'TROUBLESHOOTING',
   'KCM 60ZV': 'WORKSHOP MANUAL',
-  // ZW140: fault code (14102-2 dll) ADA di TROUBLESHOOTING (23 chunk, verified
-  // Jul 2026). TECHNICAL MANUAL-nya deskripsi sistem — 0 chunk fault code.
   'ZW140': 'TROUBLESHOOTING',
 };
 const DEFAULT_TROUBLESHOOTING_KATEGORI = 'TECHNICAL MANUAL';
@@ -663,19 +602,10 @@ function getTroubleshootingKategori(model: string): string {
   return TROUBLESHOOTING_KATEGORI_BY_MODEL[model] ?? DEFAULT_TROUBLESHOOTING_KATEGORI;
 }
 
-/**
- * Unified technical manual search — 1 embed per call (bukan per variant).
- * Sebelumnya searchTechnicalManualMulti → N×searchRawDocs → N embed calls.
- * Sekarang: keyword search semua variants paralel (gratis) + 1 vector search.
- * Untuk 4 variants: 4 embeds → 1 embed. Untuk 2 codes × 4 variants: 8 → 2.
- */
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
   topN = 4,   // 4 chunk final yang benar-benar dibaca Gemini (riwayat: 5 → 4 → 3 → 4).
-              // ⚠️ Ini angka paling sensitif ke MUTU jawaban: terlalu kecil → diagnosa
-              // kehilangan cabang (mis. E-8 Travel HP Mode + E-13 overload butuh 2 tabel
-              // troubleshooting sekaligus); terlalu besar → input membengkak & stream lambat.
   forceKategori?: string,  // override default routing — utk HCD search via tools
 ): Promise<RAGResult> {
   if (!supabase || queries.length === 0) return { content: '', hasResults: false };
@@ -697,9 +627,6 @@ export async function searchTechnicalManualMulti(
       : q.trim(),
   );
 
-  // ── 1. Keyword searches — ALL variants in parallel, NO embed cost ──
-  // Fault code: WAJIB exact-substring (kode harus muncul literal). Non-fault-code pakai
-  // jalur ber-peringkat di bawah, jadi ilike arbitrer ini hanya untuk fault code.
   const kwPromises = faultCode
     ? normalizedQueries.map(sq =>
         supabase!.from('documents').select('content, metadata')
@@ -709,9 +636,6 @@ export async function searchTechnicalManualMulti(
       )
     : [];
 
-  // Pertanyaan MENANYAKAN NILAI TERUKUR? Dihitung di luar promise karena dipakai dua kali:
-  // (1) mengaktifkan bonus angka+satuan di RPC, (2) mengaktifkan JAMINAN KATA KUNCI di
-  // penyaringan akhir (lihat blok setelah MMR).
   const wantsNumericAnswer =
     primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
@@ -725,17 +649,14 @@ export async function searchTechnicalManualMulti(
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
-    // Bigram wajib: manual menulis "swing motor ASSEMBLY weight", jadi frasa penuh sering nol.
-    // ⚠️ JUMLAH TERM = satu-satunya variabel mahal di RPC (~+35 ms/term). p_match_count gratis.
+// Bigrams are essential: manuals write 'swing motor ASSEMBLY weight', so the full phrase scores zero.
     const bigrams = words.slice(0, -1).map((w, i) => `${w} ${words[i + 1]}`);
     const terms = [...new Set([primaryQuery.toLowerCase().trim(), ...bigrams, ...words])].slice(0, 7);
     // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
     const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await supabase!.rpc('match_documents_keyword_ranked', {
-      // 15 (riwayat 6 → 10 → 15). GRATIS: sudah diukur EXPLAIN ANALYZE bahwa p_match_count
-      // tidak berbiaya sama sekali (6/8/10/12 → sama ~240 ms; LIMIT tak mengubah pemindaian).
-      // Yang berbiaya adalah JUMLAH TERM (~35 ms per term), bukan angka ini.
+// Term count is the only expensive knob here (~+35ms each); p_match_count is free.
       p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
@@ -759,8 +680,6 @@ export async function searchTechnicalManualMulti(
       : []);
   });
 
-  // 2. Satu embedding untuk vector search. JANGAN expandQuery di sini — query sudah English.
-  // Nama model di-strip: sudah difilter metadata, kalau ikut vektornya jadi bias.
   const stripped = stripModelFromQuery(primaryQuery);
   const embeddingQuery = stripped.split(/\s+/).filter(Boolean).length >= 2
     ? stripped
@@ -787,8 +706,7 @@ export async function searchTechnicalManualMulti(
     vectorPromise,
   ]);
 
-  // Kandidat dikumpulkan terpisah lalu DISILANG, supaya RERANK_INPUT_CAP memotong adil.
-  // ⚠️ Jangan kembalikan ke "keyword dulu semua" — keyword akan menghabiskan slot vector.
+// Collect separately then INTERLEAVE so the cap cuts fairly - never revert to keyword-first.
   const kwDocs:  string[] = [];
   const vecDocs: string[] = [];
 
@@ -837,8 +755,6 @@ export async function searchTechnicalManualMulti(
 
   if (allDocs.length === 0) return { content: '', hasResults: false };
 
-  // Fault code literal-contain filter (cegah false-positive dari vector). CRITICAL: cek juga stripped
-  // variant — OCR baca "13006-02" tapi content simpan "13006-2" (leading-zero suffix).
   let filteredDocs = allDocs;
   if (faultCode) {
     const codeUpper = primaryQuery.toUpperCase();
@@ -872,9 +788,7 @@ export async function searchTechnicalManualMulti(
   // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
   let top = mmrSelect(reranked, topN, 0.7);
 
-  // Jaminan slot untuk juara kata kunci saat pertanyaan menanyakan NILAI. Cohere memberi
-  // skor pada chunk yang fokus topiknya, bukan yang memuat angkanya — tanpa ini, chunk
-  // berisi angka jawaban bisa kalah oleh chunk prosedur. Tidak menambah slot.
+// Guarantee one slot for the keyword winner on numeric questions - Cohere ranks topical focus, not the chunk holding the number.
   const juaraKeyword = rankedSettled.status === 'fulfilled' ? rankedSettled.value[0] : undefined;
   if (wantsNumericAnswer && juaraKeyword && top.length > 0
       && !top.some(t => t.content === juaraKeyword)) {
@@ -888,8 +802,6 @@ export async function searchTechnicalManualMulti(
   console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR)',
     confidence, topScore.toFixed(2), reranked.length, top.length);
 
-  // Rerank gagal → hasil cuma urutan vector mentah, TIDAK boleh mengaku 'high'.
-  // (Fallback memberi skor 0.5 yang kebetulan lolos ambang HIGH — itu skor palsu.)
   const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
     ? 'medium'
     : confidence;
@@ -898,8 +810,6 @@ export async function searchTechnicalManualMulti(
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
 
-// Models yang punya ENGINE MANUAL di Supabase
-// (Yanmar 4TNV88 untuk ZX48U-5A + ZX65USB-5A, engine lain untuk model lain)
 const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
 
 /** Search ENGINE MANUAL by P-code (2nd-pass setelah fault code TM) → DTC diagnosis procedure. */
@@ -912,8 +822,6 @@ export async function searchEngineManual(
     return { content: '', hasResults: false };
   }
 
-  // Keyword-only — P-code muncul LITERAL di DTC chunk ("DTC P0340/4 ...") → tak butuh embed
-  // (fault code path total = 1 embed). Rerank via Cohere.
   const filter = { Model: model, Kategori: 'ENGINE MANUAL' };
   const seen = new Set<string>();
   const allDocs: string[] = [];
@@ -938,8 +846,6 @@ export async function searchEngineManual(
 
   if (allDocs.length === 0) return { content: '', hasResults: false };
 
-  // Pagar payload juga di sini. Sebelumnya allDocs TANPA batas ukuran sama sekali
-  // (maks 3 P-code × 4 hasil = 12 chunk, tapi chunk bisa 27 rb char → bisa lewat 1 MB).
   const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
   const { confidence, topScore } = computeConfidence(top);
   return {
@@ -951,16 +857,8 @@ export async function searchEngineManual(
   };
 }
 
-// Active PROMO kategori — HANYA periode terbaru/aktif (period lama dihapus dari DB).
-// Saat ganti periode: ingest yang baru → hapus period lama dari DB → update array ini,
-// biar acuan harga selalu yang terkini (tak ada harga kadaluarsa yang ikut ke-retrieve).
 const ACTIVE_PROMO_KATEGORI = ['PROMO Q2 FY2026'] as const;
 
-// Prefer harga period TERBARU. Ambil semua chunk period terbaru, lalu tambah chunk period
-// lama HANYA untuk section-type yang belum terwakili. Cegah AI lihat harga lama + baru
-// sekaligus lalu salah pilih period kadaluarsa (bug: tampil harga Q4 padahal Q1 lebih baru).
-// Section-type = teks setelah "PROMO QX FYXXXX - " sebelum "(" — sama antar period
-// (FILTER PARTS, ELECTRICAL PARTS, COOLANT, dll) walau deskripsi dalam kurung beda.
 type PromoChunk = { content: string; similarity?: number; match_type?: string };
 
 function promoSectionKey(content: string): string {
@@ -987,32 +885,12 @@ function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
   return out;
 }
 
-// Engine PN patterns:
-// - Isuzu 6BG1-TRA14 (ZX200-5G): pure 10-digit (e.g. 8981759510, 1153004210)
-// - Yanmar 4TNV88-BPHBB (ZX48U/65USB): YNM-prefix + dash (e.g. YNM129150-14200)
-// - Isuzu BB-6BG1T (KCM 60ZV): YZ-prefix + 10-12 digit (e.g. YZ0108060850, YZ18781231114)
-// - Edge: DCA50000030001 (3-letter + 11-12 digit) — rare KCM engine variant
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 
-// Models yang punya ENGINE PARTS CATALOG di Supabase
-// ZX200-5G : 33 sections (ISUZU 6BG1-TRA14)
-// ZX48U-5A : 17 sections (YANMAR 4TNV88-BPHBB)
-// KCM 60ZV : 1 chunk index/system code only — scanned PDF 102 hal, no PN spesifik
-//            (cukup untuk routing keyword & AI saran "lihat catalog fisik")
 const ENGINE_CATALOG_MODELS = new Set(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
 
-// Models yang BELUM punya PARTS CATALOG di Supabase (ingest pending).
-// Saat searchPartsCatalog return empty untuk model ini → caller harus fallback
-// ke Workshop Manual / Technical Manual yg punya PN inline.
 export const MODELS_WITHOUT_PARTS_CATALOG = new Set(['ZX65USB-5A', 'ZX138MF-5G']);
 
-/**
- * Search HANYA CPM + PROMO untuk service interval queries (mis. "service 2000 jam").
- * Tidak include PARTS CATALOG/ENGINE PARTS CATALOG karena ratusan PN tak relevan
- * untuk service interval = source of hallucination buat model.
- *
- * Coverage: CPM (1 chunk per model, full schedule) + ACTIVE_PROMO_KATEGORI (Q2 FY2026)
- */
 export async function searchServiceIntervalParts(
   query: string,
   model: string,
@@ -1073,16 +951,6 @@ export async function searchServiceIntervalParts(
   };
 }
 
-/**
- * Search parts catalog — section-based chunking, search BOTH catalogs paralel.
- *
- * Coverage: PARTS CATALOG (331 body sections) + ENGINE PARTS CATALOG (33 ISUZU 6BG1-TRA14 sections)
- *
- * Strategy:
- * - Part number 10-digit pure → likely engine, prioritize ENGINE PARTS CATALOG
- * - Otherwise → search BOTH catalogs paralel via match_documents_hybrid, merge & sort
- * - hybrid RPC sudah handle exact PN match (match_type='exact_part_no') + semantic
- */
 export async function searchPartsCatalog(
   query: string,
   model: string,
@@ -1112,8 +980,6 @@ export async function searchPartsCatalog(
   // Cek apakah model punya engine catalog (saat ini hanya ZX200-5G)
   const hasEngineCatalog = ENGINE_CATALOG_MODELS.has(model);
 
-  // PARTS CATALOG (always) + ENGINE PARTS (kalau ada). Counts dinaikkan — PROMO banyak section terpisah,
-  // 3 chunk dulu miss section non-electrical utk 'harga bucket'.
   const bodyCount = (isEnginePN && hasEngineCatalog) ? 3 : 7;     // was 2/5
   const engineCount = isEnginePN ? 5 : 3;
   const promoCount = 5;                                           // was 3
@@ -1181,8 +1047,6 @@ export async function searchPartsCatalog(
 
   const bodyData: HybridResult[]   = getData(PARTS_IDX);
   const cpmData: HybridResult[]    = getData(CPM_IDX);
-  // Prefer harga period TERBARU — period lama cuma untuk section yang tidak ada di terbaru.
-  // getData index PROMO_START_IDX..PROMO_END_IDX = urutan ACTIVE_PROMO_KATEGORI (lama → baru).
   const promoByPeriod: HybridResult[][] = [];
   for (let i = PROMO_START_IDX; i < PROMO_END_IDX; i++) {
     promoByPeriod.push(getData(i));
@@ -1219,8 +1083,6 @@ export async function searchPartsCatalog(
     };
   }
 
-  // Urutan invarian: CPM → exact_part_no → sisanya by relevance.
-  // Query nama komponen di-rerank; PN literal tidak (exact match sudah deterministik).
   const nonCpm = [...bodyData, ...engineData, ...promoData];
   nonCpm.sort((a, b) => {
     const aExact = a.match_type === 'exact_part_no' ? 1 : 0;
@@ -1234,9 +1096,6 @@ export async function searchPartsCatalog(
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
     if (rest.length > 3) {
-      // Cap input rerank (rest sudah tersortir by similarity) → bounded latency + payload.
-      // Pakai capRerankPayload, bukan slice(0, RERANK_INPUT_CAP): jalur ini ikut naik ke 45
-      // saat konstanta itu dinaikkan, jadi butuh pagar ukuran yang sama.
       const rerankDocs = capRerankPayload(rest.map(d => d.content));
       const rerankRest = rest.slice(0, rerankDocs.length);
       const { docs: reranked, error } = await rerankWithCohere(

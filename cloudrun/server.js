@@ -2,41 +2,25 @@ const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 
 const app = express();
-// Parser default RAMPING (1mb) & berlaku utk SEMUA route. Dulu 20mb global dan jalan
-// SEBELUM verifyToken → penyerang tanpa token bisa memaksa server mem-parse 20mb per
-// request (CPU/memori terbakar tanpa pernah kena rate limit). Route yang memang butuh
-// payload besar (transcribe audio, chat multimodal/foto) memasang parser besar SENDIRI
-// setelah verifyToken — lihat bigJson di bawah.
 app.use(express.json({ limit: '1mb' }));
 const bigJson = express.json({ limit: '20mb' });
 
 const PROJECT_ID     = process.env.GOOGLE_CLOUD_PROJECT;
 const LOCATION       = process.env.VERTEX_LOCATION || 'us-central1';
-// Origin allowlist (comma-separated). Wildcard '*' SENGAJA dibuang — endpoint jalan pakai
-// kredensial service account kita, jadi tak boleh dibuka ke origin sembarang. Dev lokal: tambah eksplisit.
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || 'https://dash5.my.id')
   .split(',').map(s => s.trim()).filter(s => s && s !== '*');
 if (ALLOWED_ORIGINS.length === 0) {
   console.error('ALLOWED_ORIGIN kosong / hanya "*" — CORS ditutup total. Set origin eksplisit.');
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
-// 35 dtk — SENGAJA LEBIH PENDEK dari batas 40 dtk di klien (STREAM_TIMEOUT_MS di
-// src/services/ai.ts). Dulu keduanya sama-sama 60 dtk, jadi menyerah bersamaan dan klien
-// tak pernah menerima pesan error terstruktur dari sini — yang terlihat cuma "menggantung".
-// Dengan 35 < 40, proxy selalu sempat membalas alasan gagalnya sebelum klien menyerah.
-// ⚠️ Kalau angka klien diubah, angka ini harus tetap di bawahnya.
+// Keep BELOW the client STREAM_TIMEOUT_MS so this proxy can return a real error first.
 const UPSTREAM_TIMEOUT_MS = 35_000;
-// Retry khusus 429 (kuota Vertex habis). Jeda tumbuh: 1,5s → 4s → 8s. Total tunggu
-// terburuk 13,5s, masih di dalam UPSTREAM_TIMEOUT_MS dan jauh lebih baik daripada
-// teknisi harus mengetik ulang pertanyaan. Angka kecil-dulu karena kuota Vertex
-// jendela geser per menit — sering pulih hanya dalam hitungan detik.
 const UPSTREAM_429_BACKOFF_MS = [1_500, 4_000, 8_000];
 const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
-// service_role key — HANYA di server. Dua nama diterima: salah menamai saat cutover bikin
-// /v1/dashboard, /v1/usage, dan /v1/field-note mati diam-diam (503 yang tak terlihat di UI).
+// Both names accepted: a rename at cutover would silently 503 dashboard, usage ledger and field notes.
 const SUPABASE_SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
 const GEMINI_INPUT_PRICE_USD  = parseFloat(process.env.GEMINI_INPUT_PRICE_USD  || '1.50'); // gemini-3.6-flash: $1.50 / 1M input
 const GEMINI_OUTPUT_PRICE_USD = parseFloat(process.env.GEMINI_OUTPUT_PRICE_USD || '7.50'); // gemini-3.6-flash: $7.50 / 1M output (turun dari $9 di 3.5)
@@ -58,21 +42,14 @@ const COHERE_KEYS = [
   process.env.COHERE_API_KEY_5,
 ].filter(Boolean);
 
-// Rerank Cohere. Default `rerank-v4.0-fast` (~500ms) — pro terlalu lambat di jalur kritis.
-// Bisa dicoba lagi via env COHERE_RERANK_MODEL=rerank-v4.0-pro.
 const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast';
 
-// Allowlist model — `model` client diinterpolasi ke URL Vertex; tanpa ini user bisa inject model
-// arbitrer (cost abuse / path manipulation pada request yg jalan pakai service account).
-// Model di luar daftar ini ditolak 400. ⚠️ Kalau env ALLOWED_MODELS di-set manual di Cloud Run,
-// default ini TIDAK dipakai — model baru harus ditambahkan ke env-nya juga.
+// Models outside this list are rejected 400. An explicit env var overrides this default entirely.
 const ALLOWED_MODELS = new Set(
   (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
 );
 
-// Rate limit per user (in-memory) — jaring pengaman loop client liar / token curian.
-// 1 pertanyaan ≈ 4-7 call, jadi 150/menit longgar utk normal tapi memutus flood.
 const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
 const _rateBuckets = new Map();
 function rateLimit(req, res, next) {
@@ -165,8 +142,6 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// Verifikasi token ke Supabase + cache object user (bukan cuma boolean) supaya endpoint pakai
-// identitas asli tanpa round-trip. TTL 60s: token dicabut berhenti diterima ≤1 menit.
 const AUTH_CACHE_TTL_MS = parseInt(process.env.AUTH_CACHE_TTL_MS || '60000', 10);
 const _userCache = new Map();
 
@@ -186,9 +161,6 @@ async function fetchAuthUser(token) {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-// ── Monitoring dashboard (admin-only) ─────────────────────────────────────────
-// Agregat usage_logs + census via service_role. Gate: email ada di ADMIN_EMAILS (teknisi biasa
-// tak lihat data semua orang). 1 RPC get_dashboard_snapshot() → snapshot atomik.
 app.get('/v1/dashboard', verifyToken, rateLimit, async (req, res) => {
   if (!SUPABASE_SERVICE_KEY) return res.status(503).json({ error: 'Dashboard not configured' });
   if (!isAdminUser(req.authUser)) {
@@ -240,9 +212,6 @@ app.post('/v1/chat', verifyToken, rateLimit, bigJson, async (req, res) => {
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
   try {
     const { url, headers } = await resolveUpstream(model, { stream: false });
-    // Endpoint ini melayani intent-classifier, HyDE, OCR foto, dan compression —
-    // panggilan terbanyak per pertanyaan, jadi paling sering kena 429 duluan.
-    // Retry sama seperti jalur stream (lihat UPSTREAM_429_BACKOFF_MS).
     let upstream = await fetch(url, {
       method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
@@ -285,11 +254,6 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
 
   try {
     const { url, headers } = await resolveUpstream(model, { stream: true });
-    // 429 RESOURCE_EXHAUSTED = kuota Vertex per-menit habis, dan itu penyebab nyata
-    // "koneksi terputus" yang dilihat teknisi. Kuotanya jendela geser, jadi menunggu
-    // beberapa detik sering sudah cukup. Retry dilakukan DI SINI (bukan di browser)
-    // karena di sini belum ada satu byte pun terkirim ke client — aman diulang, dan
-    // satu hop lebih dekat ke Vertex sehingga jedanya tidak terasa di HP teknisi.
     let upstream = await fetch(url, {
       method: 'POST', headers, body: JSON.stringify(body), signal: ctrl.signal,
     });
@@ -306,8 +270,6 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
     if (!upstream.ok) {
       const errText = await upstream.text();
       console.error('Vertex stream error:', errText);
-      // Kirim status aslinya supaya client bisa membedakan kuota habis (429) dari
-      // gangguan lain, dan menampilkan pesan yang benar tanpa menghajar ulang server.
       res.write(`data: ${JSON.stringify({ error: 'Upstream request failed', code: upstream.status })}\n\n`);
       return res.end();
     }
@@ -440,9 +402,6 @@ app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
   return res.status(429).json({ error: 'Rerank rate limit reached. Coba lagi dalam 1 menit.' });
 });
 
-// ── Cost ledger: 1 baris per pertanyaan user ──────────────────────────────────
-// Frontend akumulasi token/llm_calls/tools untuk 1 pertanyaan → POST → insert usage_logs (service_role).
-// Kegagalan insert TIDAK boleh mengganggu — sudah verifyToken (user login) di depan.
 app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_KEY) {
     console.error('usage_logs: SUPABASE_URL/SUPABASE_SERVICE_KEY belum di-set');
@@ -456,8 +415,6 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   // Cap panjang string client — jangan biarkan payload jumbo masuk ledger.
   const clip = (v, n) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
 
-  // Identitas WAJIB dari token (req.authUser), bukan body — kalau dari body, teknisi bisa POST ledger
-  // atas nama rekan (dashboard admin kelompokkan biaya dari kolom ini).
   const authUser = req.authUser || {};
   const authMeta = authUser.user_metadata || {};
   const authEmail = typeof authUser.email === 'string' ? authUser.email : null;
@@ -523,9 +480,6 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
   }
 });
 
-// ── Catatan Lapangan: AI menilai kelayakan → auto-ingest ke KB (tanpa gerbang admin) ──
-// Juri + ingest WAJIB di server (kalau di client bisa di-bypass). Write ke documents via RPC
-// service_role. Semua masuk Kategori CATATAN LAPANGAN (dilabeli belum-resmi, tak menimpa manual).
 const FIELD_NOTE_JUDGE_MODEL = process.env.FIELD_NOTE_JUDGE_MODEL || 'gemini-3.1-flash-lite';
 const FIELD_NOTE_MODELS = new Set(['ZX48U-5A','ZX65USB-5A','ZX138MF-5G','ZX200-5G','KCM 60ZV','ZW140']);
 

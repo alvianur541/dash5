@@ -32,11 +32,6 @@ function getAgenticPreference(): AgenticPreference {
   return 'adaptive';
 }
 
-// Default (adaptive) → SINGLE-PASS. Query multi-aspek ("2 pertanyaan dalam 1") sekarang
-// ditangani DETERMINISTIK di dalam generateResponseStream (decompose + dual-search per aspek,
-// lihat resolveMultiAspectQuery di ai.ts) — lebih cepat & andal daripada ReAct loop yang
-// rentan 400 (functionCall/functionResponse). ReAct penuh tetap tersedia via ?agentic=true
-// untuk demo/eksperimen.
 function shouldUseAgenticForQuery(_input: string): boolean {
   return false;
 }
@@ -61,8 +56,6 @@ export default function App() {
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  // Default adaptive: simple lookup tetap single-pass, diagnosis kompleks otomatis ReAct.
-  // URL override: ?agentic=true memaksa agent, ?agentic=false memaksa single-pass.
   const agenticPreference = useRef(getAgenticPreference()).current;
   const shouldUseAgentic = useCallback((content: string) => {
     if (agenticPreference === 'always') return true;
@@ -110,10 +103,6 @@ export default function App() {
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
 
-  // Muat Bookmark — offline-first: cache lokal tampil instan, lalu sinkron dgn cloud.
-  // Deps sengaja `user?.uid` (string stabil), BUKAN objek `user`: AuthProvider membuat
-  // objek user BARU tiap event auth (refresh token / fokus tab), dan itu dulu memicu
-  // sinkron berulang yang membangkitkan lagi bookmark yang baru dihapus.
   const uid = user?.uid ?? null;
   useEffect(() => {
     if (!uid) { setPocket([]); setPocketView(null); return; }
@@ -123,8 +112,6 @@ export default function App() {
 
     fetchBookmarksRemote(uid).then(remote => {
       if (!remote || !mountedRef.current) return;
-      // Baca ULANG tombstone & cache lokal — user bisa menghapus SELAMA fetch berjalan.
-      // Tanpa ini, hasil fetch yang sudah basi menimpa penghapusan barusan.
       const tomb = loadPocketTombstones(uid);
       const freshLocal = loadPocket(uid).filter(i => !tomb[i.id]);
 
@@ -135,8 +122,6 @@ export default function App() {
           answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(),
         }));
 
-      // Bereskan sisa di server: id ber-tombstone yang masih ada di remote = perintah
-      // hapus sebelumnya gagal/offline → ulangi sekarang (self-healing).
       remote.filter(r => tomb[r.message_id])
         .forEach(r => { deleteBookmarkRemote(uid, r.message_id).catch(() => {}); });
 
@@ -189,10 +174,6 @@ export default function App() {
     deleteBookmarkRemote(user.uid, id).catch(() => {});
   }, [user]);
 
-  // Tinggi input bar diukur nyata, bukan ditebak. Bar-nya position:absolute di atas
-  // daftar chat, jadi daftar butuh padding-bottom setinggi bar. Angka mati 140px meleset
-  // saat tinggi bar berubah: mode standalone (safe-area-spacer 6px→24px), textarea
-  // multiline, atau chip lampiran. Hasil ukur dikirim ke CSS via --input-bar-h.
   useEffect(() => {
     const bar = inputBarRef.current;
     const host = mainRef.current;
@@ -204,8 +185,6 @@ export default function App() {
     return () => ro.disconnect();
   }, [user]);
 
-  // Tombol Stop: hentikan tampilan streaming SEKETIKA. Teks yang sudah tampil dipertahankan
-  // & tetap dipersist (lihat guard streamCtrl.signal.aborted di handleSend).
   const stopStreaming = useCallback(() => {
     abortStreamRef.current?.abort();
     setIsTyping(false);
@@ -239,8 +218,6 @@ export default function App() {
         setSessionList(list);
         localStorage.setItem(listKey(user.uid), JSON.stringify(list));
       } else {
-        // Supabase definitif kosong → sinkron ke browser/device ini
-        // setFlag=false: jangan set clearedKey agar refresh berikutnya tetap fetch Supabase
         deleteAllSessionData(user.uid, false);
         setSessionList([]);
       }
@@ -301,8 +278,6 @@ export default function App() {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
   }, []);
 
-  // Cost ledger: kirim total token 1 pertanyaan ke /v1/usage (fire-and-forget).
-  // Dibaca dari accumulator ai.ts setelah jawaban selesai. tools = dari agent events.
   const logCost = useCallback((sid: string | null, tools: string[]) => {
     if (!user) return;
     const u = getQuestionUsage();
@@ -316,8 +291,6 @@ export default function App() {
     });
   }, [user]);
 
-  // Refresh manual: paksa cek update service worker → tunggu SW baru aktif → reload.
-  // Mengatasi masalah PWA serve kode lama (StaleWhileRevalidate) tanpa perlu unregister SW manual.
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -382,14 +355,6 @@ export default function App() {
     const persist = (fullText: string) => {
       const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
       const newMessages = [...currentMessages, userMessage, assistantMessage];
-      // Base64 foto DIBUANG sebelum disimpan — ke localStorage MAUPUN ke Supabase.
-      // Dulu Supabase menerima `newMessages` yang masih utuh, dan karena penyimpanannya
-      // upsert SELURUH array (bukan append), tiap giliran berikutnya mengunggah ulang
-      // semua foto yang sudah ada: foto ke-2 mengirim A+B, ke-3 mengirim A+B+C. Dari
-      // uplink HP itu berebut bandwidth dengan request foto baru → stream terasa macet.
-      // Terukur: sesi berfoto rata-rata 187 kB vs 3 kB untuk sesi teks (62×).
-      // Foto tetap tampil di layar selama sesi berjalan (state React); yang tidak
-      // disimpan hanyalah salinan permanennya.
       const messagesForStorage = newMessages.map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
@@ -399,9 +364,6 @@ export default function App() {
 
     const toolsUsed = new Set<string>();
     try {
-      // Mesin streaming dipakai SEMUA jalur (teks & foto) — dulu jalur foto
-      // non-stream tanpa progress: user lihat layar diam lalu jawaban muncul
-      // sekaligus, padahal foto paling lambat (OCR → search → 2nd-pass).
       const assistantId = crypto.randomUUID();
       const assistantTs = Date.now();
       const sessionSnapshot = sessionId; // capture — guard ghost content jika session switch
@@ -419,8 +381,6 @@ export default function App() {
         if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch
         if (streamCtrl.signal.aborted) return;
         if (!buffered.length) return;
-        // Adaptif: buffer menumpuk (jawaban sudah diterima dari server) → flush lebih besar,
-        // jangan pura-pura "mengetik" lama. Batch minimum tetap kecil supaya live stream halus.
         const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
         const batch = buffered.slice(0, size);
         buffered = buffered.slice(size);
@@ -467,8 +427,6 @@ export default function App() {
               )
             : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
         } catch (agErr) {
-          // Fallback: agentic gagal SEBELUM streaming jawaban → diam-diam pakai single-pass
-          // supaya tidak tampil error ke user. Kalau sudah terlanjur streaming, lempar ulang.
           const aborted = (agErr as Error)?.name === 'AbortError' || (agErr as Error)?.message?.includes('abort');
           if (!useAgentic || streamedAny || aborted) throw agErr;
           console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
@@ -480,8 +438,6 @@ export default function App() {
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
       if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
-      // Tombol Stop ditekan → pakai teks yang SUDAH TAMPIL (partial), jangan timpa dengan
-      // hasil penuh yang datang belakangan — layar & riwayat konsisten dgn yang dilihat user.
       if (streamCtrl.signal.aborted) fullText = displayed + buffered;
       if (!fullText.trim()) return; // stop sebelum ada teks → tak ada yang perlu disimpan
       setMessages(prev => {
@@ -492,8 +448,6 @@ export default function App() {
       persist(fullText);
       logCost(sessionSnapshot, [...toolsUsed]);
 
-      // Deteksi ilmu lapangan DARI pesan teknisi (async, non-blocking pasca-jawaban).
-      // Kalau AI menangkap ada ilmu reusable → tempel candidate ke pesan → kartu muncul.
       if (content.trim()) {
         detectFieldKnowledge(content, selectedModel).then(candidate => {
           if (!candidate) return;
@@ -504,13 +458,7 @@ export default function App() {
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
-      // Catat juga saat GAGAL. Sebelumnya logCost hanya jalan di jalur sukses, jadi
-      // kegagalan tidak meninggalkan jejak apa pun di usage_logs — mustahil mengukur
-      // seberapa sering ini terjadi. Token yang terlanjur terpakai (intent/HyDE/OCR)
-      // juga tetap dibayar, jadi memang layak masuk ledger.
       logCost(sessionId, [...toolsUsed]);
-      // Stream putus di upstream bukan salah teknisi maupun API key — pesannya harus
-      // menuntun ke aksi yang benar (kirim ulang), bukan menyuruh mengecek kredensial.
       setError(
         err.message?.includes('KUOTA_PENUH')
           ? 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.'

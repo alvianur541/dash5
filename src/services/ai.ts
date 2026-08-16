@@ -44,9 +44,11 @@ export interface VRequest {
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 // gemini-3.7 menolak 'minimal' dengan HTTP 400 — jangan kirim, naikkan ke 'low'.
+// gemini-3.7 rejects thinkingLevel 'minimal' with HTTP 400 - raise it to 'low' instead.
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
 /** Override eksperimen: `?think=low|medium|high`. Model utama saja; cache dilewati. */
+/** Experiment switch: ?think=low|medium|high. Main model only; bypasses the answer cache. */
 export const THINK_OVERRIDE: Exclude<ThinkingLevel, 'minimal'> | null = (() => {
   try {
     const v = new URLSearchParams(window.location.search).get('think')?.toLowerCase();
@@ -104,9 +106,6 @@ function fileToInlineData(file: File): Promise<InlineDataPart> {
   });
 }
 
-/** Warm-up proxy saat app dibuka — bangunkan instance Cloud Run (cold start bisa 2-5s)
- *  + buka koneksi TLS keep-alive, supaya pertanyaan PERTAMA tidak menanggung biaya itu.
- *  Fire-and-forget; /health tanpa auth & tanpa efek samping. */
 export function warmupProxy(): void {
   fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
 }
@@ -125,25 +124,12 @@ async function fetchWithTimeout(url: string, init: RequestInit, ms: number): Pro
   }
 }
 
-// ── Token usage accumulator (per pertanyaan) ────────────────────────────────
-// resetUsage() di awal tiap entry publik; getQuestionUsage() dibaca App.tsx utk ledger.
-// Single-active-question → accumulator module-level aman.
 let _usage = { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 };
 export function resetUsage(): void { _usage = { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }
 export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
   return { ..._usage, model: MODEL };
 }
-/**
- * thoughts → DIHITUNG SEBAGAI OUTPUT. Gemini menagih thinking token dengan tarif
- * output, jadi tanpa ini ledger biaya UNDER-REPORT. Angka biaya setelah perubahan
- * ini akan terlihat lebih tinggi dari sebelumnya — itu koreksi, bukan pemborosan baru.
- * Disimpan juga terpisah (_usage.thinking) supaya bisa dilihat berapa porsinya.
- *
- * cached = prompt token yang kena cache Gemini. SYSTEM_PROMPT ~9.800 token = >55%
- * dari input tiap query, dan kode sengaja menjaga string-nya byte-identical supaya
- * cache kena (timestamp ditaruh di user-turn, bukan system prompt). Sebelumnya
- * angka ini tak pernah dibaca sama sekali → kita buta apakah usaha itu berhasil.
- */
+// Thinking tokens are billed as output - count them there or the cost ledger under-reports.
 function addUsage(input?: number, output?: number, thoughts?: number, cached?: number): void {
   _usage.input    += input || 0;
   _usage.output   += (output || 0) + (thoughts || 0);
@@ -216,8 +202,6 @@ async function analyzeIntent(
   history: Message[],
   _model: UnitModel,  // reserved — akan dipakai kalau ada prompt variasi per model
 ): Promise<IntentAnalysis> {
-  // Window konteks lebih lebar (6 pesan, 300 char) — follow-up sering merujuk PN/komponen
-  // dari jawaban AI beberapa giliran sebelumnya ("harganya?", "diameternya?", "yang tadi").
   const ctx = history.slice(-6)
     .filter(m => m.content?.trim())
     .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
@@ -376,21 +360,6 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
   }
 }
 
-/**
- * HyDE (Hypothetical Document Embeddings) — tulis SATU kalimat teknis singkat
- * yang "berlagak" kutipan service manual menjawab query. Dipakai sebagai
- * second-pass embedding saat retrieval pertama gagal: kalimat penuh jauh lebih
- * dekat ke frasa manual daripada query 2-3 kata yang embeddingnya kabur.
- *
- * AMAN untuk tool diagnostik: output HyDE HANYA di-embed untuk mencari chunk,
- * TIDAK PERNAH ditampilkan / masuk ke jawaban. Jadi walau kalimatnya salah,
- * paling buruk cuma retrieval kurang pas → fallback web (perilaku lama).
- * Larangan angka spesifik = jaga-jaga supaya vektor tidak bias ke angka karangan.
- */
-/** ⚠️ TIDAK DIPANGGIL sejak 15 Agu 2026 — HyDE dinonaktifkan (alasan lengkap di
- *  resolveNaturalLanguageQuery). Sengaja DISIMPAN, bukan dihapus, supaya gampang
- *  dihidupkan lagi kalau nanti chunk dipecah lebih kecil dan ruang embedding jadi
- *  lebih diskriminatif. Tree-shaking membuangnya dari bundle selama tak dipanggil. */
 async function hydeExpand(query: string): Promise<string | null> {
   const SYS = 'Tulis SATU kalimat teknis singkat dalam bahasa Inggris, seolah kutipan dari service manual alat berat, yang menjawab pertanyaan user. Fokus: nama komponen + gejala/fungsi/sistem terkait. DILARANG menyebut angka spesifik (torque/tekanan/RPM/PN — jangan mengarang). DILARANG menyebut nama/merek model. Output HANYA satu kalimat itu, tanpa kutip, tanpa preamble.';
   try {
@@ -410,10 +379,6 @@ async function hydeExpand(query: string): Promise<string | null> {
   }
 }
 
-// 6 pesan terakhir dikirim UTUH (follow-up merujuk tabel/PN dari jawaban barusan);
-// yang lebih lama dipangkas ke 2500 char. Di sesi panjang, jawaban teknis 4rb+ char
-// menumpuk → input membengkak → TTFB lambat + biaya naik, padahal rujukan ke jawaban
-// >6 giliran lalu praktis selalu ke bagian awalnya (kesimpulan/tabel utama di atas).
 const HISTORY_FULL_TAIL = 6;
 const HISTORY_OLD_CAP   = 2500;
 
@@ -432,8 +397,6 @@ function historyToContents(history: Message[], window = 20): VContent[] {
 }
 
 async function extractFaultCodes(imageParts: InlineDataPart[]): Promise<string[]> {
-  // INTENT_MODEL (flash-lite), bukan main MODEL: model utama punya thinking → makan budget →
-  // output OCR ke-truncate (fault code tak lengkap). flash-lite no-thinking → full output.
   const SYS_PROMPT = `OCR fault code specialist untuk Hitachi/KCM heavy equipment monitor display.
 Format output: 1 baris, comma-separated codes, atau "NONE".
 
@@ -462,17 +425,6 @@ Rules:
   return raw.split(',').map(c => c.trim()).filter(Boolean);
 }
 
-/**
- * Guard loop degeneratif — model kadang macet mengulang frasa identik sampai
- * kena cap token (kejadian nyata: "Ditulis oleh Dash⁵. " ×50 di akhir jawaban;
- * temperature rendah tanpa repetition penalty rawan ini).
- *
- * Dua pola yang di-collapse (keduanya AMAN untuk konten sah):
- * 1. Unit kalimat (diakhiri .!?…) yang persis sama berulang ≥4× beruntun → 1×.
- *    Separator tabel markdown ("| --- |") tidak kena karena tanpa punctuation.
- * 2. Baris utuh identik berulang ≥4× beruntun → 1×. Baris data tabel yang sah
- *    tidak pernah identik 4× beruntun (PN/qty pasti beda).
- */
 function collapseDegenerateLoops(text: string): string {
   let out = text;
   let prev = '';
@@ -485,12 +437,8 @@ function collapseDegenerateLoops(text: string): string {
   return out;
 }
 
-// Deteksi dini di tail stream — unit kalimat sama berulang ≥6× berarti model
-// sudah pasti macet; hentikan baca supaya tidak bayar token sampah sampai cap.
 const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
 
-// Penanda jawaban terpotong (upstream putus di tengah stream). Dipakai juga sebagai gerbang
-// agar jawaban buntung TIDAK masuk answer-cache / semantic-cache selama TTL 3 hari.
 export const STREAM_CUT_NOTE =
   '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
 
@@ -503,15 +451,9 @@ export async function callProxyStream(
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
-  // 40 dtk = standar tunggu Dash⁵ (Alvian, 15 Agu 2026). Turun dari 60 dtk yang dulu
-  // PERSIS SAMA dengan UPSTREAM_TIMEOUT_MS proxy — akibatnya keduanya menyerah bersamaan
-  // dan klien tak pernah tahu apakah proxy sempat mengirim pesan error yang berguna.
+// Keep ABOVE the proxy UPSTREAM_TIMEOUT_MS so its error message wins over our own timeout.
   const STREAM_TIMEOUT_MS = 40_000;
-  // Watchdog TOKEN PERTAMA. Stream yang sehat mengeluarkan teks dalam hitungan detik;
-  // yang belum mengeluarkan SATU karakter pun setelah 22 dtk hampir pasti sudah mati.
-  // Tanpa ini, kegagalan baru ketahuan di detik ke-40 — kasus nyata dari waterfall
-  // Alvian: percobaan pertama menggantung 60 dtk (balas 662 B), percobaan kedua sukses
-  // 16 dtk → total tunggu ~76 dtk padahal jawabannya cuma butuh 16 dtk.
+// No token by now means the stream is dead - abort and retry instead of waiting out the timeout.
   const FIRST_TOKEN_TIMEOUT_MS = 22_000;
   const doFetch = () => fetchWithTimeout(`${PROXY_URL}/v1/chat/stream`, {
     method: 'POST',
@@ -519,12 +461,6 @@ export async function callProxyStream(
     body: JSON.stringify({ model: MODEL, enableGoogleSearch, ...clampThinking(body, MODEL) }),
   }, STREAM_TIMEOUT_MS);
 
-  // ── Percobaan ulang otomatis ────────────────────────────────────────────────
-  // Kegagalan upstream (Vertex menolak / koneksi putus) sebagian besar TRANSIEN, dan
-  // terbukti frekuensinya mengikuti volume pemakaian, bukan isi pertanyaan. Selama
-  // BELUM ada satu pun teks yang tampil di layar, mengulang request itu aman: teknisi
-  // tidak melihat apa pun kecuali indikator loading yang berjalan sedikit lebih lama.
-  // Setelah teks mulai mengalir, JANGAN diulang — hasilnya akan dobel/kacau.
   const MAX_ATTEMPT = 3;
   let attempt = 0;
   let fullText = '';
@@ -537,9 +473,6 @@ export async function callProxyStream(
   attempt++;
   fullText = '';
   let res = await doFetch();
-  // 401/503 dari verifyToken proxy kerap transien: verifikasi token itu round-trip
-  // jaringan Cloud Run → Supabase /auth/v1/user, dan satu hiccup di situ dulu langsung
-  // jadi banner merah walau token teknisi sah. Satu percobaan ulang menutup kasus itu.
   if (!res.ok && (res.status === 401 || res.status === 503)) {
     console.warn('[stream] %d dari proxy — retry sekali (kemungkinan auth transien)', res.status);
     await new Promise(r => setTimeout(r, 800));
@@ -576,14 +509,7 @@ export async function callProxyStream(
       if (!jsonStr || jsonStr === '[DONE]') continue;
       try {
         const json = JSON.parse(jsonStr);
-        // Proxy mengirim {"error":"Stream failed"} / {"error":"Upstream request failed"}
-        // saat Vertex menolak atau koneksi putus. Event itu tak punya `candidates`, jadi
-        // dulu DIBUANG diam-diam — akibatnya jawaban terpotong tampil seolah utuh, atau
-        // kosong sama sekali lalu jatuh ke template "sistem tidak bisa memproses".
         if (json.error) {
-          // code 429 = kuota Vertex habis. Proxy SUDAH mencoba ulang dengan backoff
-          // sampai 13,5 detik; mengulang lagi dari browser cuma menambah beban ke
-          // kuota yang sedang penuh dan memperpanjang pemulihannya.
           if (json.code === 429) throw new Error('KUOTA_PENUH');
           upstreamError = String(json.error);
           break;
@@ -598,8 +524,6 @@ export async function callProxyStream(
     }
     if (upstreamError) {
       reader.cancel().catch(() => {});
-      // Sudah sebagian tampil → JANGAN diulang (teks akan dobel). Tandai terpotong:
-      // diagnosis buntung yang terlihat selesai jauh lebih berbahaya daripada error jujur.
       if (fullText.trim()) {
         console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
         fullText += STREAM_CUT_NOTE;
@@ -615,8 +539,6 @@ export async function callProxyStream(
       }
       throw new Error(`Stream terputus: ${upstreamError}`);
     }
-    // Loop degeneratif terdeteksi di tail → stop baca (hemat token), teks
-    // dibersihkan sebelum return; UI final di-overwrite dgn hasil bersih.
     if (fullText.length > 400 && TAIL_LOOP_RE.test(fullText.slice(-800))) {
       console.warn('[stream] degenerate loop terdeteksi — stream dihentikan dini');
       reader.cancel().catch(() => {});
@@ -627,8 +549,6 @@ export async function callProxyStream(
     clearTimeout(watchdog);
   }
 
-  // Watchdog memutus stream sebelum satu token pun keluar → perlakukan seperti kegagalan
-  // upstream yang aman diulang (layar teknisi masih kosong, tak ada risiko teks dobel).
   if (!firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT) {
     console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
     await new Promise(r => setTimeout(r, attempt * 900));
@@ -641,15 +561,9 @@ export async function callProxyStream(
 
   addUsage(lastUsage?.promptTokenCount, lastUsage?.candidatesTokenCount,
            lastUsage?.thoughtsTokenCount, lastUsage?.cachedContentTokenCount);
-  // Telemetri prompt-cache & thinking. Dua angka ini dulu tak pernah terlihat:
-  // cache% rendah terus → SYSTEM_PROMPT tidak byte-identical (cek jangan ada
-  // timestamp/nilai berubah di dalamnya). thinking besar → kandidat pemangkasan
-  // thinkingLevel kalau stream terasa lama padahal jawabannya pendek.
   {
     const inp = lastUsage?.promptTokenCount ?? 0;
     const cache = lastUsage?.cachedContentTokenCount ?? 0;
-    // Level yang BENAR-BENAR terkirim (sudah lewat override + clamp) ikut dicetak, supaya
-    // hasil eksperimen ?think= bisa dibaca tanpa menebak level mana yang aktif.
     const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
     console.info('[tokens] model=%s think=%s%s in=%d (cache %d%%) out=%d thinking=%d',
       MODEL, lvlTerkirim, THINK_OVERRIDE ? ' (override, cache dilewati)' : '',
@@ -659,9 +573,6 @@ export async function callProxyStream(
   return collapseDegenerateLoops(fullText);
 }
 
-/** Contextual Compression — extract baris relevan-query tiap chunk via INTENT_MODEL, paralel.
- *  Hanya NL-technical path (skip fault code & parts). Fallback per-chunk: <500 char / gagal /
- *  hasil <30 char → pakai original. */
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
   // Extraction balance: buang narasi, sisakan konteks (section/notes) — compress terlalu agresif = jawaban monoton.
   const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Chunk berisi PROSEDUR/langkah troubleshooting/tabel troubleshooting → salin SEMUA langkah & SEMUA baris penyebab UTUH, jangan diringkas/di-skip/digabung — langkah yang hilang di sini tidak bisa dipulihkan lagi.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
@@ -682,8 +593,6 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
       const res = await callProxy({
         contents: [{ role: 'user', parts: [{ text: buildPrompt(chunk) }] }],
         systemInstruction: { parts: [{ text: SYS }] },
-        // 600 (naik dari 350): chunk prosedur troubleshooting butuh ruang utk SEMUA langkah —
-        // cap ketat dulu bikin langkah terpotong diam-diam.
         generationConfig: { maxOutputTokens: 600, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
       }, false, INTENT_MODEL);
       const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
@@ -699,8 +608,6 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   return results.map((r, i) => r.status === 'fulfilled' ? r.value : chunks[i]);
 }
 
-/** Extract P-code HANYA dari baris yg mengandung search term (cegah 30+ embed calls dari
- *  chunk "Engine Fault Code List" yg punya puluhan P-code). Cap 3 P-code. */
 function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
   const pCodes: string[] = [];
@@ -718,13 +625,8 @@ function extractRelatedPCodes(content: string, searchTerms: string[]): string[] 
   return [...new Set(pCodes)].slice(0, 3);
 }
 
-// Canned templates "data not found" — bypass AI (guaranteed no halu). User = tim Hexindo,
-// JANGAN suruh "konsultasi dealer". Singkatan teknis (MPDr/TM/WM) tak di-expand.
-/** Kalau kembalikan string → jawaban DIBLOKIR dan string itu yang ditampilkan. '' = lanjut. */
+/** A non-empty return BLOCKS the answer. Return '' to let it through. */
 function ragErrorTemplate(errorMsg: string): string {
-  // Rerank gagal (timeout ATAU rate limit) → data tetap ada, cuma urutannya mentah.
-  // JANGAN blokir: memblokir berarti membuang hasil yang masih berguna. Ditandai lewat
-  // RERANK_DEGRADED_NOTE supaya teknisi tetap tahu kualitas urutannya turun.
   if (errorMsg.toLowerCase().includes('rerank')) return '';
   // Embedding / Supabase error: benar-benar tidak ada data → jangan jawab.
   return `Sistem pencarian data sedang mengalami gangguan sementara. Jawaban ditahan dulu untuk menghindari informasi yang keliru.\n\nCoba kirim ulang pertanyaanmu dalam beberapa saat.`;
@@ -761,9 +663,6 @@ Supaya pencariannya kena:
 Alternatif: cek Parts Catalog fisik unit, atau konfirmasi ke Parts Counter dengan menyebut model + nama komponen.`;
 }
 
-// Query "seal kit"/"repair kit": katalog Hitachi sering tak punya 1 PN kit-bundel — komponennya
-// ditandai svc:K. Deterministik: kalau kit-query & data mengandung part svc:K, injeksi petunjuk
-// agar AI menyajikan komponen svc:K sebagai "isi kit" (bukan jawab "tidak ada"), tanpa mengarang PN.
 const KIT_QUERY_RE = /\bkit\b/i;
 const KIT_HINT =
   '[PETUNJUK KIT] User mencari seal kit / repair kit. Di katalog Hitachi, kit sering TIDAK punya ' +
@@ -775,16 +674,10 @@ const KIT_HINT =
 
 // Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
 
-// Template ikut bahasa user — canned bypass AI, jadi deteksi bahasa dilakukan di sini.
-// Heuristik ringan: aksara Jepang → JP; kata fungsi English tanpa kata Indonesia → EN; sisanya ID.
 const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
 const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
 const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
 
-// ── Pagar unit: pertanyaan tentang model LAIN ditolak deterministik di kode ──
-// Cakupan Dash⁵ = HANYA unit yang dipilih di sidebar, karena jawaban wajib bersumber
-// dari manual yang sudah di-ingest untuk unit itu. Menyebut model lain (ZX350-7G,
-// PC200, dsb) → tolak & arahkan ganti unit; JANGAN tawarkan bantuan umum.
 const SUPPORTED_MODELS = ['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140'] as const;
 // Pola model alat berat generik: ZX350-7G, ZX210LC, PC200-8, EX1200, SK200, CAT320, WA380…
 const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
@@ -829,9 +722,6 @@ Maaf aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshoot
 Apa ada yang bisa aku bantu cek?`;
 }
 
-// Regex fault code WAJIB ada digit (cegah "blade"/"cafe" false-positive). Letter-prefix tanpa
-// dash wajib ≥4 digit — kalau tidak fuel grade "B50"/"B100" ke-detect. Real: CA2769/W:1208
-// atau dash-suffix (ENG:00436-04, 11006-2). Hoisted module-level (tak re-compile per call).
 const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
 // ─── Konstanta ────────────────────────────────────────────────────────────────
@@ -843,8 +733,6 @@ const RAG_LABEL = {
 
 const FALLBACK_RESPONSE = 'Maaf, sistem tidak bisa memproses permintaan ini.';
 
-// Directive fallback web (mode 'technical'). Di USER-turn (bukan system prompt) supaya
-// SYSTEM_PROMPT byte-identical → prompt caching hit. Guardrail: HARAM klaim angka unit dari web.
 const EXTERNAL_DIRECTIVE = (model: string): string =>
   `[SUMBER EKSTERNAL] Manual internal ${model} tidak memuat data spesifik untuk pertanyaan ini. Jawab profesional memakai prinsip teknik umum + hasil penelusuran web. ATURAN WAJIB:
 - Sampaikan sekali di awal, natural: jawaban ini rujukan umum industri, bukan dari manual resmi ${model}.
@@ -858,8 +746,6 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
   | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
-  // google_search: 'casual' (obrolan ringan, tanpa grounding) | 'technical' (teknis tanpa data
-  // manual → web + guardrail)
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
 // ─── Helper functions ─────────────────────────────────────────────────────────
@@ -873,8 +759,6 @@ function streamCanned(text: string, onChunk: (text: string) => void): string {
   return text;
 }
 
-/** Deteksi fault code: exact-match atau embedded. EMBEDDED pure-digit DITOLAK (false-positive
- *  dgn service interval "2000 jam"); pure-digit valid hanya kalau FULL match. */
 const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/i;
 
 function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
@@ -934,12 +818,8 @@ async function resolveFaultCodeQuery(
   };
 }
 
-// Pattern: "service 2000 jam/hm/hr" — deteksi di code agar tidak bergantung
-// pada INTENT_MODEL yang rentan strip angka interval menjadi "2000" saja.
 const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b/i;
 
-/** Parse tabel CPM → list parts di interval tertentu. Baca langsung tabel (bukan RINGKASAN yg
- *  terpotong "...") → model tak perlu interpretasi tabel → kurangi halu PN. */
 function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
 
@@ -979,9 +859,6 @@ async function resolvePartsQuery(
   history: Message[],
   model: UnitModel,
   emit: AgentEventEmit = () => {},
-  // Jalur NL sudah bayar analyzeIntent — hasilnya dioper ke sini supaya tidak dipanggil
-  // dua kali (hemat ~0.5-1s) DAN cabang NL-parts ikut menikmati fallback WM + KIT hint
-  // + ekstraksi CPM yang dulu hanya ada di jalur regex-parts.
   precomputedOpt?: string,
 ): Promise<RagRouteResult> {
   const hasLiteralPN = !!extractPartNumber(trimmed);
@@ -989,8 +866,6 @@ async function resolvePartsQuery(
   let searchQuery    = trimmed;
   let usedOptimized  = false;
 
-  // Fast-path service interval ("service 2000 jam") → embed query langsung, bypass analyzeIntent
-  // (yg sering return "2000" saja).
   const intervalMatch = !hasLiteralPN && trimmed.match(SERVICE_INTERVAL_RE);
   if (intervalMatch) {
     searchQuery = `${intervalMatch[1]} hour service maintenance schedule parts`;
@@ -1005,8 +880,6 @@ async function resolvePartsQuery(
     }
   }
 
-  // Service interval → fungsi terpisah, HANYA CPM + PROMO (skip PARTS CATALOG: ratusan PN tak
-  // relevan = sumber halu; hemat 2 RPC).
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
   const ragResult = intervalMatch
     ? await searchServiceIntervalParts(searchQuery, model)
@@ -1014,8 +887,6 @@ async function resolvePartsQuery(
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
 
   if (!ragResult.hasResults) {
-    // Smart fallback: model tanpa PARTS CATALOG (ZX65USB/ZX138MF) → Workshop Manual (sering
-    // inline-mention PN) → info partial > zero info.
     if (MODELS_WITHOUT_PARTS_CATALOG.has(model)) {
       const wmResult = await searchTechnicalManualMulti([trimmed], model, 3, 'WORKSHOP MANUAL');
       if (wmResult.hasResults) {
@@ -1031,9 +902,6 @@ async function resolvePartsQuery(
     const hours    = parseInt(intervalMatch[1]);
     const partsList = extractCpmPartsForInterval(ragResult.content, hours);
     if (partsList) {
-      // Konteks ramping: CPM list + HANYA baris promo yg PN-nya ada di CPM (bukan SEMUA section
-      // promo). Dulu suntik semua section → input ~25rb token → generate lambat (~48s). Sekarang
-      // cuma baris relevan → input turun drastis → jauh lebih cepat & hemat, tanpa kehilangan data.
       const cpmPNs = partsList.split('\n')
         .map(l => l.split('|')[0].trim())
         .filter(pn => pn.length >= 4);
@@ -1059,23 +927,7 @@ async function resolvePartsQuery(
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
 }
 
-/**
- * Sapaan & ucapan singkat yang PASTI tidak butuh pencarian — dicocokkan pada SELURUH
- * pesan (bukan awalan), setelah dinormalisasi. Kalau cocok, `analyzeIntent` dilewati
- * sepenuhnya: hemat satu round-trip Flash Lite penuh (~1,1 detik terukur di waterfall).
- *
- * Sejak HyDE dimatikan, analyzeIntent adalah SATU-SATUNYA panggilan yang memblokir —
- * jalur kata kunci maupun similarity dua-duanya menunggu keluarannya. Jadi melewatinya
- * untuk "oke" atau "makasih" memangkas hampir seluruh waktu tunggu sapaan.
- *
- * ⚠️ SENGAJA KONSERVATIF. Aturan menambah entri:
- *   - Hanya kata/frasa yang MUSTAHIL jadi pertanyaan teknis, apa pun konteksnya.
- *   - Cocok SELURUH pesan. "oke tapi kenapa swing lambat" TIDAK boleh kena — makanya
- *     dipakai Set + kecocokan penuh, bukan startsWith/includes.
- *   - JANGAN masukkan kata yang bisa berarti "lanjutkan penjelasan tadi" (mis. "lanjut",
- *     "terus", "next") — itu follow-up yang butuh konteks, bukan sapaan.
- * Salah memasukkan entri = pertanyaan teknis dijawab tanpa data sama sekali.
- */
+// Whole-message match only. A wrong entry here answers a technical question with zero data.
 const CASUAL_EXACT = new Set([
   'halo', 'hallo', 'hai', 'hi', 'hei', 'hey', 'helo',
   'pagi', 'siang', 'sore', 'malam',
@@ -1115,8 +967,6 @@ async function resolveNaturalLanguageQuery(
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
-    // Delegasi ke jalur parts utama dgn intent yang SUDAH dihitung (tanpa panggilan kedua).
-    // Cabang ini dulu duplikat mini tanpa fallback WM/KIT hint/CPM — sekarang satu jalur.
     return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
   }
 
@@ -1133,8 +983,6 @@ async function resolveNaturalLanguageQuery(
     if (errMsg) return { type: 'rag_canned', text: errMsg };
   }
 
-  // Manual internal kosong/nyerempet (low) → JANGAN buntu, fallback web (mode 'technical' + guardrail
-  // anti-halu angka). Fault code & parts tetap internal-only (web tak bisa PN/fault-code model-spesifik).
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
@@ -1170,9 +1018,6 @@ async function resolveNaturalLanguageQuery(
   };
 }
 
-// ─── Multi-aspek (2+ pertanyaan dalam 1 query) ───────────────────────────────
-// Pecah query jadi sub-query English (1 INTENT call), cari tiap aspek di TM+Parts paralel, gabung.
-// Deterministik, BUKAN ReAct loop (rapuh/lambat/400-prone).
 
 const MULTI_CONNECTOR_RE = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i;
 // \w* di akhir grup → toleran sufiks Indonesia (beratnya/diameternya/panjangnya).
@@ -1189,8 +1034,6 @@ function isMultiAspectQuery(q: string): boolean {
   return words >= 5 || attrCount >= 2;
 }
 
-// Pecah query → sub-query English (1 komponen+atribut tiap item, max 4). Sadar-konteks:
-// resolusi rujukan (itu/nya/tadi) ke komponen dari percakapan sebelumnya.
 async function decomposeAspects(query: string, history: Message[] = []): Promise<string[]> {
   const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE component+attribute each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
 RESOLVE references (itu/ini/nya/tadi/tersebut) to the concrete component from the conversation context. If user says "berat & diameternya" after discussing a pin, expand to that component.
@@ -1270,8 +1113,6 @@ async function resolveMultiAspectQuery(
   return { type: 'rag_found', content: blocks.join('\n\n---\n\n'), dataLabel: RAG_LABEL.manual };
 }
 
-// Answer cache (localStorage). Hanya rag_found, skip query ber-rujukan konteks, TTL 3 hari.
-// Prefix ber-generasi — naikkan CACHE_GEN di cacheGen.ts saat mengubah isi jawaban.
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
@@ -1302,9 +1143,6 @@ function writeAnswerCache(key: string, text: string): void {
   } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
 }
 
-// ─── Anti-halu: telemetri grounding angka spec ──────────────────────────────────
-// Cek deterministik: angka spec (dgn unit) yg DIKUTIP AI benar ada di DATA yg disisipkan.
-// Wajib ada unit → step number/qty tak ke-flag. Telemetri console dulu (basis eskalasi nanti).
 const GROUNDING_SPEC_RE = /(\d+(?:[.,]\d+)?)\s*(N·?m|Nm|MPa|kPa|bar|psi|kgf?|mm|cm|rpm|°C|kW|HP|L\b|Ω|μm)\b/gi;
 function normalizeNum(s: string): string {
   return s.replace(/,/g, '.').replace(/^0+(\d)/, '$1');
@@ -1344,9 +1182,7 @@ export async function generateResponseStream(
     .replace(/<\|[^|]*\|>/g, '[blocked]'); // ChatML-style tokens
   const trimmed  = sanitized.trim();
 
-  // Answer-cache HIT → stream instan, lewati embed/search/LLM (token=0, tak ke-log ledger).
-  // Cache hanya isi jawaban rag_found (lihat write di bawah) → hit = valid.
-  // ?think= aktif → lewati cache, kalau tidak hasil eksperimen cuma jawaban tersimpan.
+// Skip cache during ?think= runs, otherwise the experiment just replays a stored answer.
   const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, userName, trimmed);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
@@ -1361,8 +1197,6 @@ export async function generateResponseStream(
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
 
-  // Pagar unit — dicek PALING AWAL, sebelum routing/LLM. Pertanyaan yang menyebut model
-  // lain langsung ditolak: cakupan Dash⁵ hanya unit terpilih & hanya dari data ter-ingest.
   const foreignModel = detectForeignModel(trimmed, model);
   if (foreignModel) {
     console.info('[scope] model asing terdeteksi: %s (aktif: %s)', foreignModel, model);
@@ -1371,8 +1205,6 @@ export async function generateResponseStream(
 
   const { isFaultCode, faultQuery } = detectFaultCodeInQuery(trimmed);
 
-  // Service interval ("service 2000 jam") di-route ke parts meski isPartsQuery=false — cegah
-  // lolos ke NLP → analyzeIntent return "2000" → embed kabur.
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
   // Multi-aspek dicek SEBELUM parts-routing — cegah "diameter X dan PN Y" nyangkut di parts saja.
@@ -1387,10 +1219,6 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
-  // Scrub deterministik SEBELUM data sampai ke model (tak bergantung kepatuhan prompt):
-  // 1. "Hitachi Astrea" (brand distribusi di header dokumen promo) — dilarang muncul.
-  // 2. Notasi pangkat mentah dari scan PDF ({mm}^2, mm^2, cm^3) → mm²/cm³ — model menyalin
-  //    verbatim dari data, jadi datanya yang dirapikan (kasus nyata: "{mm}^2" tampil ke user).
   const ragContent       = routeResult.type === 'rag_found'
     ? routeResult.content
         .replace(/Hitachi\s+Astrea\s*/gi, '')
@@ -1401,8 +1229,6 @@ export async function generateResponseStream(
   const thinkingLevel: ThinkingLevel = 'medium';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
-  // Kalau rerank gagal, peringatannya menggantikan caveat MEDIUM — dua-duanya sekaligus
-  // membuat jawaban penuh disclaimer dan justru tak terbaca.
   const caveat = rerankDegraded
     ? RERANK_DEGRADED_NOTE
     : ragConfidence === 'medium'
@@ -1431,13 +1257,8 @@ export async function generateResponseStream(
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
-  // Cache HANYA jawaban rag_found (bukan web/canned/casual) → re-ask identik instan & gratis.
-  // Jawaban TERPOTONG tidak boleh masuk cache — kalau lolos, versi buntung itu yang
-  // dilayani ke pertanyaan identik/parafrase selama TTL 3 hari.
   if (cacheKey && routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
     writeAnswerCache(cacheKey, fullText);
-    // (Penulisan cache semantik dihapus bersama pembacaannya — dulu di sini ada satu embed
-    //  call lagi di latar belakang hanya untuk mengisi cache itu.)
   }
 
   // Anti-halu telemetri — cek angka spec di jawaban benar bersumber dari data.
@@ -1446,13 +1267,9 @@ export async function generateResponseStream(
   return fullText || FALLBACK_RESPONSE;
 }
 
-// ─── Agentic API (Sprint 2) ──────────────────────────────────────────────────
-// ReAct loop wrapper — opt-in via ?agentic=true (lihat App.tsx). Orthogonal, tak ubah single-pass.
 
 export type { AgentEvent } from './react-agent';
 
-/** Multi-step agentic — AI pilih dari 5 tool, decompose, panggil berurutan/paralel, synthesize.
- *  Stream final via onChunk (interface sama dgn generateResponseStream). */
 export async function generateResponseAgentic(
   model: UnitModel,
   userName: string,
@@ -1503,8 +1320,7 @@ export async function generateResponse(
       .filter((r): r is PromiseFulfilledResult<InlineDataPart> => r.status === 'fulfilled')
       .map(r => r.value);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-    // Foto dikirim ke model HANYA kalau OCR gagal / kode tak ketemu di manual — kalau tidak,
-    // foto terkirim dua kali (OCR + jawaban) dan itu murni pemborosan ~1.064 token.
+// Photo reaches the model only when OCR fails - otherwise it is sent twice (~1064 wasted tokens).
     let sendImageToModel = true;
 
     try {
@@ -1519,14 +1335,7 @@ export async function generateResponse(
             : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
         });
         emit({ type: 'tool_call', tool: 'search_technical_manual' });
-        // Chunk per kode DIKECILKAN saat kodenya banyak — konteks tumbuh PERKALIAN, bukan
-        // penjumlahan: 4 kode × 3 chunk = 12 chunk (~11rb token) hanya dari fault code,
-        // dan itu langsung memperlambat token pertama. Untuk 3 kode ke atas, 2 chunk per
-        // kode sudah memuat tabel penyebab + tindakan — cukup untuk diagnosa per kode.
-        // (Alvian, 15 Agu 2026.)
         const perCodeTopN = faultCodes.length >= 3 ? 2 : 3;
-        // Search per code + 2nd-pass Engine Manual (sama seperti text path) — tanpa 2nd-pass,
-        // P-code diagnosis tak ter-inject → AI ngarang dari training.
         const settled = await Promise.allSettled(
           faultCodes.map(async code => {
             const terms = extractSearchTerms(code);
@@ -1596,8 +1405,6 @@ export async function generateResponse(
       currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
     }
 
-    // Foto ditaruh PALING DEPAN (unshift) — urutan gambar-lalu-teks penting supaya model
-    // membaca instruksi sebagai rujukan ke gambar, bukan sebaliknya.
     if (sendImageToModel) currentParts.unshift(...imageParts);
 
     // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.

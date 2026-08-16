@@ -6,11 +6,6 @@ export const listKey    = (uid: string) => `dash-session-list-${uid}`;
 const dataKey           = (uid: string, id: string) => `dash-session-${uid}-${id}`;
 const clearedKey        = (uid: string) => `dash-cleared-${uid}`;
 
-// Flag "baru hapus semua" — TTL PENDEK, bukan permanen.
-// Tujuannya HANYA guard race: fetch Supabase yang sedang in-flight saat user klik
-// "Hapus Semua" jangan re-populate sesi yang baru dihapus.
-// JANGAN permanen — kalau permanen, browser yang pernah "Hapus Semua" berhenti sync
-// dari Supabase SELAMANYA → sesi dari browser/device lain tidak pernah muncul (bug sync).
 const CLEARED_TTL_MS = 15_000;
 
 export const isSessionsCleared = (uid: string): boolean => {
@@ -37,8 +32,6 @@ function safeSetItem(key: string, value: string): void {
         return;
       }
 
-      // Hapus sesi paling lama (by updatedAt dari list metadata) untuk buat ruang
-      // UUID key tidak bisa di-sort secara temporal, pakai list sebagai sumber kebenaran.
       let evicted = false;
       for (const lk of Object.keys(localStorage).filter(k => k.startsWith('dash-session-list-'))) {
         try {
@@ -66,8 +59,6 @@ function safeSetItem(key: string, value: string): void {
 export function loadSessionList(uid: string): SessionMeta[] {
   try {
     const parsed = JSON.parse(localStorage.getItem(listKey(uid)) || '[]');
-    // Defensive: localStorage bisa di-tamper user/extension. JSON.parse
-    // bisa return non-array (mis. object/string) → caller .filter/.map crash.
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
@@ -116,9 +107,6 @@ export function deleteSessionData(uid: string, id: string): SessionMeta[] {
   return updated;
 }
 
-// ── Saku: jawaban tersimpan untuk dibaca OFFLINE ─────────────────────────────
-// localStorage per-user → tetap terbaca tanpa sinyal (shell PWA sudah di-cache SW).
-// Cap 30 item, dedup by messageId, newest-first. safeSetItem = eviction-aware.
 
 export interface PocketItem {
   id: string;          // messageId jawaban sumber — dipakai dedup & toggle
@@ -158,12 +146,6 @@ export function replacePocket(uid: string, items: PocketItem[]): void {
   safeSetItem(pocketKey(uid), JSON.stringify(items.slice(0, MAX_POCKET_ITEMS)));
 }
 
-// ── Tombstone penghapusan ────────────────────────────────────────────────────
-// Tanpa ini, merge sinkron tidak bisa membedakan "dibuat offline" dari "sudah
-// dihapus di perangkat lain" → item yang dihapus HIDUP LAGI (bahkan terunggah ulang
-// ke cloud). Tombstone = catatan "id ini sengaja dihapus", dipakai merge untuk
-// menyaring & untuk mengulang perintah hapus ke server bila sempat gagal.
-// Dipangkas otomatis setelah 30 hari (jauh melewati TTL entri mana pun).
 
 const tombKey = (uid: string) => `dash-pocket-del-${uid}`;
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;

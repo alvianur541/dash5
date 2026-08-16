@@ -104,10 +104,6 @@ export function MessageInput({
   useLayoutEffect(() => {
     const el = textareaRef.current;
     if (!el) return;
-    // Kalau input kosong: JANGAN ukur scrollHeight.
-    // scrollHeight bisa return nilai besar saat font Geist belum ter-load
-    // (setelah login) karena placeholder wrap ke banyak baris dengan sistem
-    // font yang lebih lebar. Setelah refresh font sudah di-cache → normal.
     if (!input) {
       el.style.height = '24px';
       return;

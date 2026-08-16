@@ -13,9 +13,6 @@ import type { AgentEvent } from '../services/ai';
 
 const ReactMarkdown = lazy(() => import('react-markdown'));
 
-// Hapus LaTeX math notation yang bocor dari AI ($P_{LS}$, $$...$$, dll).
-// Renderer tidak support LaTeX — tampil sebagai raw text yang membingungkan user.
-// Convert: inline $...$ → `backtick`, display $$...$$ → plain text.
 export function stripLatex(text: string): string {
   const clean = (s: string) =>
     s.replace(/_\{([^}]+)\}/g, '_$1')
@@ -25,13 +22,9 @@ export function stripLatex(text: string): string {
   return text
     .replace(/\$\$([\s\S]+?)\$\$/g, (_, inner) => clean(inner))
     .replace(/\$([^$\n]+?)\$/g,     (_, inner) => '`' + clean(inner) + '`')
-    // Notasi pangkat satuan bocor dari data ({mm}^2, mm^2, cm^3) → Unicode superscript.
-    // Deterministik di renderer — menutup juga jawaban lama yang sudah ter-cache.
     .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
 
-// Strict markdown sanitize schema — block iframe, embed, object, form, dll.
-// Whitelist explicit tag yang aman untuk teknis content (table, code, dll).
 export const SANITIZE_SCHEMA = {
   ...defaultSchema,
   tagNames: [
@@ -50,8 +43,6 @@ export const SANITIZE_SCHEMA = {
   protocols: { href: ['http', 'https', 'mailto', 'tel'] },
 };
 
-// Ekstrak teks polos dari node hast — untuk deteksi blockquote "catatan lapangan"
-// (biar bisa dikasih shading beda dari data manual resmi).
 function hastText(node: unknown): string {
   const n = node as { type?: string; value?: string; children?: unknown[] } | null;
   if (!n) return '';
@@ -80,8 +71,6 @@ function formatTime(timestamp: number) {
 }
 
 
-// Agent thinking indicator — show real-time progress saat ReAct loop jalan.
-// Subtle styling, fade in/out via AnimatePresence. Auto-hide saat done event.
 const TOOL_LABELS: Record<string, string> = {
   search_technical_manual: 'Technical Manual',
   search_parts_catalog:    'Parts Catalog',
@@ -121,10 +110,6 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
     if (l) { current = events[i]; label = l; break; }
   }
 
-  // Jeda antara pencarian selesai dan teks jawaban mulai mengalir bisa beberapa detik
-  // (model sedang menyusun jawaban). Tanpa ini indikator berhenti di centang & app
-  // terlihat menggantung. Centang ditahan sebentar sebagai konfirmasi, lalu berganti
-  // ke status menyusun jawaban yang beranimasi sampai chunk pertama datang.
   const settled = label?.icon === 'check';
   const [composing, setComposing] = useState(false);
   useEffect(() => {
@@ -249,8 +234,6 @@ const MessageItem = memo(function MessageItem({
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}
                 components={{
-                  // Tombol ekspansi di LUAR container scroll (absolute di outer) supaya
-                  // tidak ikut tergeser saat tabel di-scroll horizontal.
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
                       <div className="markdown-table-wrap"><table>{children}</table></div>
@@ -266,17 +249,11 @@ const MessageItem = memo(function MessageItem({
                       )}
                     </div>
                   ),
-                  // Blockquote yang berisi "catatan lapangan" → callout shaded (ilmu
-                  // teknisi, belum resmi) supaya beda jelas dari data manual resmi.
                   blockquote: ({ children, node }) => (
                     hastText(node).toLowerCase().includes('catatan lapangan')
                       ? <blockquote className="fieldnote-callout">{children}</blockquote>
                       : <blockquote>{children}</blockquote>
                   ),
-                  // Fallback: kalau AI bungkus PN/spec dalam **bold** alih-alih
-                  // backtick, deteksi pattern PN/spec dan render mono.
-                  // Pattern strict: max 2 words, word[0] punya digit, word[1]
-                  // (kalau ada) cuma huruf max 5 char (unit kayak MPa/rpm/Nm).
                   strong: ({ children }) => {
                     const text = typeof children === 'string'
                       ? children
@@ -356,8 +333,6 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  // Tabel layar penuh — simpan node tabel yang diperbesar + ukuran font (kontrol A−/A+,
-  // lebih andal utk sarung tangan daripada pinch yang diblokir viewport maximum-scale=1).
   const [expandedTable, setExpandedTable] = useState<ReactNode | null>(null);
   const [tableFont, setTableFont] = useState(15);
   const openTable = useCallback((table: ReactNode) => { setTableFont(15); setExpandedTable(table); }, []);
@@ -369,8 +344,6 @@ export function ChatWindow({
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [expandedTable]);
-  // "Menempel di bawah" — auto-scroll HANYA saat user memang di dasar chat.
-  // Kalau user scroll ke atas (baca awal jawaban saat streaming), jangan diseret turun.
   const pinnedRef = useRef(true);
   const prevLenRef = useRef(0);
 
@@ -415,9 +388,6 @@ export function ChatWindow({
     }
   }, [messages, isTyping]);
 
-  // Welcome mode: flex-col supaya child bisa pakai flex:1 untuk isi penuh.
-  // Tanpa ini, minHeight:'100%' di dalam overflow-y:auto = circular reference
-  // → browser resolve ke 0 → welcome content top-aligned → gap besar di bawah.
   const isWelcome = messages.length === 0 && !isTyping;
 
   return (

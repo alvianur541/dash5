@@ -1,10 +1,3 @@
-// Catatan Lapangan — crowd-sourced ilmu teknisi untuk menambal knowledge base.
-// Model: AI OTOMATIS mendeteksi & mengekstrak ilmu DARI pesan teknisi (bukan teknisi
-// isi form). Kalau kedeteksi → kartu konfirmasi muncul (sudah terisi) → teknisi tap
-// Simpan → JURI AI server nilai & kalau layak langsung embed ke documents
-// (Kategori CATATAN LAPANGAN) → ke-retrieve untuk teknisi berikutnya. Tanpa admin.
-//
-// Juri + ingest WAJIB di server (proxy /v1/field-note) supaya tak bisa di-bypass.
 
 import { getAuthToken } from './supabase';
 import { callProxy, getText, INTENT_MODEL } from './ai';
@@ -45,14 +38,8 @@ Output HANYA JSON valid (tanpa markdown): {"present":true|false,"component":"<ko
 
 const GREETING_RE = /^(hai|halo|hi|oke|ok|sip|siap|makasih|terima kasih|thanks?|pagi|siang|sore|malam|test|tes|coba)\b/i;
 
-// Pesan yang DIAWALI kata tanya/perintah-lookup = hampir pasti pertanyaan, bukan berbagi ilmu.
-// Teknisi sering tidak pakai "?" ("berapa tekanan main pump mpa") → tanpa gate ini, hampir tiap
-// pertanyaan memicu 1 call flash-lite deteksi yang pasti return false = biaya sia-sia.
 const LOOKUP_START_RE = /^(berapa(kah)?|apa(kah)?|siapa|kenapa|mengapa|gimana|bagaimana|di\s?mana|kapan|cari(kan)?|cek|tolong|minta|mohon|ada(kah)?\s|harga|pn\s|part\s*number|kode|fault|diagnosa|jelaskan|sebutkan|tampilkan|kasih|butuh|perlu|mau\s+(tanya|cari|cek)|what|how|why|when|where|which|who|find|check|list|show|give)\b/i;
 
-/** Deteksi + ekstrak ilmu dari pesan teknisi. Return candidate atau null (tak ada ilmu).
- *  Ada heuristik gate murah supaya LLM tidak dipanggil untuk pesan yang jelas bukan
- *  berbagi ilmu (sapaan, lookup pendek, pesan pendek). */
 export async function detectFieldKnowledge(message: string, model: UnitModel): Promise<KnowledgeCandidate | null> {
   const msg = message.trim();
   const words = msg.split(/\s+/).filter(Boolean).length;

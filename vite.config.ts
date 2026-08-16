@@ -14,8 +14,6 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         workbox: {
           cleanupOutdatedCaches: true,
-          // SW baru langsung aktif & ambil alih semua tab → update (kode, index.html,
-          // viewport meta) nyampai dalam 1 reload, bukan nunggu semua tab ketutup.
           skipWaiting: true,
           clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,woff2}'],
@@ -23,9 +21,6 @@ export default defineConfig(() => {
           navigateFallbackDenylist: [/^\/api\//],
           runtimeCaching: [
             {
-              // Supabase (cloud & self-host) — dicocokkan lewat pola PATH, bukan nama host.
-              // ⚠️ Anchor `^https://[^/]+` wajib: Workbox hanya menerapkan regex lintas-origin
-              // kalau kecocokannya mulai dari awal URL.
               urlPattern: /^https:\/\/[^/]+\/(rest|auth|storage|realtime)\/v1\//i,
               handler: 'NetworkOnly',
             },
@@ -49,8 +44,6 @@ export default defineConfig(() => {
               },
             },
             {
-              // App shell: static assets saja. Pengecualian rest/auth/storage/realtime =
-              // lapis kedua kalau Supabase self-host nanti dilayani di path domain yang sama.
               urlPattern: /^https:\/\/dash5\.my\.id\/(?!api\/|v1\/|rest\/|auth\/|storage\/|realtime\/).*/i,
               handler: 'StaleWhileRevalidate',
               options: {
@@ -66,8 +59,6 @@ export default defineConfig(() => {
           short_name: 'Dash⁵',
           description: 'AI-powered heavy equipment troubleshooting assistant for field technicians',
           lang: 'id',
-          // theme_color WAJIB match --bg-app dark (#1A1915, palet Claude) — kalau
-          // meleset, title bar / task switcher Android salah warna
           theme_color: '#1A1915',
           background_color: '#1A1915',
           display: 'standalone',

@@ -1,6 +1,3 @@
-// ReAct agent loop — frontend-orchestrated multi-step reasoning.
-// AI pakai Gemini native function calling untuk pilih tool dari catalog.
-// Loop: Reason → Act (tool) → Observe → Reason → ... → Final Answer (streamed).
 
 import { UnitModel, Message } from '../types';
 import { SYSTEM_PROMPT, jakartaTime } from '../constants';
@@ -31,9 +28,6 @@ export interface AgentConfig {
 const DEFAULT_MAX_ITER = 4;
 const DEFAULT_TIMEOUT  = 45_000;
 
-// REACT_SYSTEM hanya berisi rule UNIK untuk agentic mode (tool selection + loop).
-// Style, format, anti-halu, CARA BICARA sudah ada di SYSTEM_PROMPT yang di-prepend.
-// Duplikasi dihapus untuk mengurangi token waste dan mencegah konflik instruksi.
 const REACT_SYSTEM = `Dash⁵ agentic mode — SYSTEM_PROMPT tetap berlaku penuh (anti-halu, style, format, bahasa).
 
 TOOL SELECTION:
@@ -57,10 +51,6 @@ interface LoopOutcome {
   observations: ToolResult[];
 }
 
-/**
- * Build conversation contents dari history pesan user/assistant + query baru.
- * Forward window 20 message terakhir (sama seperti generateResponseStream).
- */
 function buildInitialContents(history: Message[], userInput: string, window = 20): VContent[] {
   const contents: VContent[] = history
     .slice(-window)
@@ -69,17 +59,10 @@ function buildInitialContents(history: Message[], userInput: string, window = 20
       role: m.role === 'user' ? ('user' as const) : ('model' as const),
       parts: [{ text: m.content }] as Part[],
     }));
-  // Timestamp di user-turn, BUKAN system prompt — systemInstruction di loop ReAct
-  // dikirim ulang tiap iterasi (sampai 4x per 1 pesan user), jadi harus byte-identical
-  // antar call agar prompt caching bisa hit (lihat constants.ts).
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userInput}` }] });
   return contents;
 }
 
-/**
- * Execute single tool dengan dedup. Kalau toolName === 'decompose_query',
- * caller bertanggung jawab handle hasil array sub-queries (di runReActAgent).
- */
 async function executeTool(
   toolName: string,
   args: Record<string, unknown>,
@@ -102,11 +85,6 @@ async function executeTool(
   }
 }
 
-/**
- * Handle decompose_query khusus — eksekusi sub-queries paralel via search_technical_manual + search_parts_catalog,
- * lalu gabung sebagai observasi teks. Jangan pakai functionResponse synthetic untuk nama tool
- * yang tidak dideklarasikan, karena Gemini bisa menolak history tool-call yang tidak valid.
- */
 async function expandDecomposed(
   subQueries: string[],
   model: UnitModel,
@@ -130,10 +108,6 @@ async function expandDecomposed(
   return flat;
 }
 
-/**
- * Format ToolResult sebagai JSON ringkas untuk masuk ke functionResponse.response.
- * AI akan baca object ini di iterasi berikutnya.
- */
 function toFunctionResponse(toolName: string, result: ToolResult): { name: string; response: Record<string, unknown> } {
   return {
     name: toolName,
@@ -147,10 +121,6 @@ function toFunctionResponse(toolName: string, result: ToolResult): { name: strin
   };
 }
 
-/**
- * Cari functionCall part di response. Gemini bisa return text + functionCall mixed,
- * tapi function calling biasanya monopoli 1 part.
- */
 function extractFunctionCall(parts: Part[]): { name: string; args: Record<string, unknown> } | null {
   for (const p of parts) {
     if ('functionCall' in p && p.functionCall?.name) {
@@ -166,18 +136,12 @@ function extractPCodes(content: string): string[] {
   return [...new Set(matches)].slice(0, 3);
 }
 
-/**
- * Force final answer setelah max iterations habis — toolConfig.mode = NONE
- * agar AI tidak bisa panggil tool lagi, harus return text. Stream output.
- */
 async function forceFinalAnswer(
   contents: VContent[],
   systemInstruction: string,
   observations: ToolResult[],
   onChunk: (text: string) => void,
 ): Promise<string> {
-  // 1500 (naik dari 500): potongan 500 char membuang langkah troubleshooting dari observasi —
-  // jawaban akhir jadi tidak lengkap. 1500 muat prosedur penuh per tool result.
   const summary = observations
     .filter(o => o.hasResults)
     .map(o => `- ${o.toolName}: ${o.content.slice(0, 1500)}${o.content.length > 1500 ? '...' : ''}`)
@@ -199,9 +163,6 @@ async function forceFinalAnswer(
   );
 }
 
-/**
- * Main loop — return final answer text. Throws kalau timeout atau total fail.
- */
 export async function runReActAgent(
   query: string,
   model: UnitModel,
@@ -272,10 +233,6 @@ export async function runReActAgent(
       try { subQueries = JSON.parse(decomposeResult.content); } catch { subQueries = []; }
       console.info('[react-agent] decomposed into %d sub-queries: %j', subQueries.length, subQueries);
 
-      // Jalankan fan-out sub-queries (kalau ada), lalu gabung SEMUA ke dalam SATU
-      // functionResponse untuk decompose_query. Satu functionCall ↔ satu functionResponse,
-      // tanpa extra turn / nama tool non-declared / dua user-turn berturut → contents valid,
-      // tidak kena Gemini 400 ("function response without matching call" / role tidak alternasi).
       let synth = '';
       if (subQueries.length > 0) {
         emit({ type: 'thinking', message: `Mencari ${subQueries.length} aspek paralel…` });
@@ -317,8 +274,6 @@ export async function runReActAgent(
         const engineResult = await executeTool('search_engine_manual', { p_codes: pCodes }, model, callSet);
         observations.push(engineResult);
         emit({ type: 'tool_result', tool: 'search_engine_manual', found: engineResult.hasResults });
-        // functionCall sintetis (tanpa thoughtSignature) — functionResponse tanpa pasangan = 400.
-        // Belum diuji di 3.7; kalau agentic error di jalur ini, cek sini duluan.
         contents.push({ role: 'model', parts: [{ functionCall: { name: 'search_engine_manual', args: { p_codes: pCodes } } }] });
         contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse('search_engine_manual', engineResult) }] });
       }

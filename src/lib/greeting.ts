@@ -1,29 +1,13 @@
-// Time-aware + context-aware greetings untuk welcome screen.
-// Context-aware welcome message.
 
 export interface GreetingContext {
   name: string;
   date?: Date;
 }
 
-/**
- * Sapaan bergaya obrolan, bukan formal kantoran — teknisi buka app ini sambil
- * berdiri di samping unit, bukan di meja rapat.
- *
- * Tiap slot punya beberapa varian, dipilih berdasarkan TANGGAL. Jadi sapaan
- * berganti tiap hari tapi tetap sama sepanjang hari itu. Math.random() sengaja
- * TIDAK dipakai: getGreeting() dipanggil saat render, jadi acak murni bikin
- * teksnya loncat-loncat tiap re-render.
- *
- * Jaga tetap pendek (±22-26 karakter + emoji) supaya muat 1 baris di hero
- * desktop (font 30px). Kalimat panjang akan turun baris dan merusak hero.
- */
 const GREETINGS = {
   monday:  ['Senin, gaskeun', 'Balik ngegas', 'Senin lagi euy'],
   friday:  ['Dikit lagi weekend', 'Tinggal separuh jalan', 'Bentar lagi bebas'],
   weekend: ['Waduh lembur nih', 'Weekend tetap gas', 'Libur kok manggil'],
-  // Hindari koma di dalam frasa (kecuali yang memang enak dibaca) — nama sudah
-  // didahului koma di template, jadi "Pagi, gercep, Alvianur" jadi dobel koma.
   pagi:    ['Pagi, sat set ya', 'Cus pagi ini', 'Pagi udah gercep'],
   siang:   ['Siang masih kuat', 'Siang gas terus', 'Siang santuy dulu'],
   sore:    ['Sore, dikit lagi', 'Sore hampir kelar', 'Sore sisa tenaga'],

@@ -254,8 +254,6 @@ function TrendChart({ hourly, daily }: { hourly: Bucket[]; daily: Bucket[] }) {
   const dPrev = ab && prevB && mval(prevB) > 0 ? ((mval(ab) - mval(prevB)) / mval(prevB)) * 100 : null;
   const dAvg  = ab && avg > 0 && mval(ab) > 0 ? ((mval(ab) - avg) / avg) * 100 : null;
 
-  // Scrub: geser jari/kursor di area grafik → bucket aktif mengikuti posisi (ala app saham).
-  // Getar 5ms tiap pindah bucket — feedback taktil halus di mobile.
   const scrub = (clientX: number) => {
     const el = barsRef.current;
     if (!el || buckets.length === 0) return;

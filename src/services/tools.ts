@@ -1,5 +1,3 @@
-// Tool definitions untuk ReAct agent loop.
-// Semua tool wrap fungsi existing di supabase.ts atau ai.ts — tidak duplicate logic.
 
 import { UnitModel } from '../types';
 import {

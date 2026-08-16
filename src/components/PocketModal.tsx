@@ -1,6 +1,3 @@
-// Saku — viewer jawaban tersimpan. Murni localStorage → tetap berfungsi OFFLINE
-// (shell PWA di-cache service worker). Render markdown memakai pipeline sanitasi
-// yang sama dengan ChatWindow supaya tampilan & keamanannya identik.
 
 import { Suspense, lazy, useEffect } from 'react';
 import { m, AnimatePresence } from 'motion/react';
