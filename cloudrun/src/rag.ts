@@ -546,6 +546,12 @@ export async function searchTechnicalManualMulti(
   console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
     confidence, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
 
+  // Chunk mana yang BENAR-BENAR sampai ke Gemini. Tanpa ini, "jawaban salah" tidak bisa dipisah
+  // antara retrieval meleset vs model tak mau menyimpulkan dari data yang sudah ada di tangannya.
+  console.info('[chunks] %s', top.map((t, i) =>
+    `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
+  ).join('  ||  '));
+
   const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
     ? 'medium'
     : confidence;
