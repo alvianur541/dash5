@@ -172,13 +172,13 @@ export async function saveFeedback(payload: {
 // Ambang kasar saja — terukur meloloskan 1259/1259 chunk. Penyaring nyatanya Cohere rerank.
 // Jangan dinaikkan: similarity query-ke-dokumen belum pernah diukur.
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Penyumbang latensi terbesar di rantai pencarian.
-// ⚠️ Aman di angka ini HANYA karena kandidat disilang keyword/vector (lihat penggabungan
-// di searchTechnicalManualMulti). Tanpa penyilangan, keyword memakan 15 dari 20 slot.
-const RERANK_INPUT_CAP = 20;
+// Penyumbang latensi terbesar di rantai pencarian. 40 = 30 vector + 10 keyword.
+// ⚠️ Kalau diturunkan di bawah jumlah kandidat, penyilangan keyword/vector di
+// searchTechnicalManualMulti yang menjaga pembagiannya adil — jangan diubah jadi urut.
+const RERANK_INPUT_CAP = 40;
 /** Dokumen yang dikembalikan Cohere → masuk MMR. Wajib > topN, kalau sama MMR tak punya pilihan. */
 const RERANK_RETURN_N = 10;
-const VECTOR_MATCH_COUNT = 20;
+const VECTOR_MATCH_COUNT = 30;
 // Jaring pengaman ukuran payload. Tak pernah tersentuh selama RERANK_DOC_CAP masih aktif.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
@@ -736,7 +736,7 @@ export async function searchTechnicalManualMulti(
       // 15 (riwayat 6 → 10 → 15). GRATIS: sudah diukur EXPLAIN ANALYZE bahwa p_match_count
       // tidak berbiaya sama sekali (6/8/10/12 → sama ~240 ms; LIMIT tak mengubah pemindaian).
       // Yang berbiaya adalah JUMLAH TERM (~35 ms per term), bukan angka ini.
-      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 15,
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
