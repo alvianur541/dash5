@@ -4,7 +4,6 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
-import { ResetPasswordPage } from './components/ResetPasswordPage';
 import { FieldNoteModal } from './components/FieldNoteModal';
 import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
 import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, warmupProxy, type AgentEvent } from './services/ai';
@@ -37,7 +36,7 @@ function shouldUseAgenticForQuery(_input: string): boolean {
 }
 
 export default function App() {
-  const { user, loading: authLoading, isRecoveryMode } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const { isOnline, showOffline, showBackOnline } = useNetwork();
   const [selectedModel, setSelectedModel] = useState<UnitModel>('ZX200-5G');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -478,8 +477,6 @@ export default function App() {
       </div>
     );
   }
-
-  if (isRecoveryMode) return <ResetPasswordPage theme={theme} onThemeToggle={handleThemeToggle} />;
 
   if (!user) return <LoginPage theme={theme} onThemeToggle={handleThemeToggle} />;
 

@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../services/supabase';
 
 interface AuthUser {
@@ -12,11 +12,8 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
-  isRecoveryMode: boolean;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  sendResetEmail: (email: string) => Promise<{ ok: boolean; error?: string }>;
-  updatePassword: (newPassword: string) => Promise<{ ok: boolean; error?: string }>;
   authError: string | null;
 }
 
@@ -38,8 +35,6 @@ async function resolveAuthEmail(input: string): Promise<string> {
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isRecoveryMode, setIsRecoveryMode] = useState(false);
-  const recoveryRef = useRef(false);
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -62,9 +57,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }).catch(() => { clearTimeout(timeout); setLoading(false); });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') { setUser(null); setIsRecoveryMode(false); recoveryRef.current = false; }
-      if (event === 'PASSWORD_RECOVERY') { setIsRecoveryMode(true); recoveryRef.current = true; }
-      if (event === 'SIGNED_IN' && session?.user && !recoveryRef.current) {
+      if (event === 'SIGNED_OUT') setUser(null);
+      if (event === 'SIGNED_IN' && session?.user) {
         const meta = session.user.user_metadata || {};
         setUser({
           uid: session.user.id,
@@ -112,28 +106,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     await supabase?.auth.signOut();
     setUser(null);
-    setIsRecoveryMode(false);
-  };
-
-  const sendResetEmail = async (email: string): Promise<{ ok: boolean; error?: string }> => {
-    if (!supabase) return { ok: false, error: 'Layanan tidak tersedia.' };
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: import.meta.env.VITE_SITE_URL ?? window.location.origin,
-    });
-    if (error) return { ok: false, error: error.message };
-    return { ok: true };
-  };
-
-  const updatePassword = async (newPassword: string): Promise<{ ok: boolean; error?: string }> => {
-    if (!supabase) return { ok: false, error: 'Layanan tidak tersedia.' };
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) return { ok: false, error: error.message };
-    setIsRecoveryMode(false);
-    return { ok: true };
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, isRecoveryMode, login, logout, sendResetEmail, updatePassword, authError }}>
+    <AuthContext.Provider value={{ user, loading, login, logout, authError }}>
       {children}
     </AuthContext.Provider>
   );

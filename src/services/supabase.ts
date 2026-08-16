@@ -3,10 +3,11 @@ import { Message, UnitModel } from '../types';
 
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
-const proxyUrl        = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
+// detectSessionInUrl mati: fitur lupa-password sudah dihapus, jadi token recovery di fragment URL
+// tidak boleh ditukar jadi sesi — kalau tidak, link reset lama = login tanpa password.
 export const supabase = (supabaseUrl && supabaseAnonKey)
-  ? createClient(supabaseUrl, supabaseAnonKey)
+  ? createClient(supabaseUrl, supabaseAnonKey, { auth: { detectSessionInUrl: false } })
   : null;
 
 
