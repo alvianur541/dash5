@@ -14,9 +14,15 @@ const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/
 export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.7-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
-interface TextPart            { text: string }
+// `thoughtSignature` — BARU di Gemini 3.x. Model menyertakannya pada part hasil berpikir
+// (terlihat di stream: {"text":"","thoughtSignature":"AY89a18..."}). Untuk function calling
+// MULTI-GILIRAN, signature ini WAJIB dikembalikan apa adanya bersama giliran model; kalau
+// dibuang, model kehilangan jejak penalarannya sendiri di giliran berikutnya.
+// Karena itu tipenya dideklarasikan di sini — supaya bisa diteruskan utuh, bukan hilang
+// diam-diam saat part disusun ulang.
+interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
 interface InlineDataPart      { inlineData: { mimeType: string; data: string } }
-interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> } }
+interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
 interface FunctionResponsePart { functionResponse: { name: string; response: Record<string, unknown> } }
 
 export type Part = TextPart | InlineDataPart | FunctionCallPart | FunctionResponsePart;

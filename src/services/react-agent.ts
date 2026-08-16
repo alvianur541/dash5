@@ -259,8 +259,16 @@ export async function runReActAgent(
     console.info('[react-agent] iteration=%d tool=%s args=%j', iterations, name, args);
     emit({ type: 'tool_call', tool: name });
 
-    // Append model turn (functionCall) ke contents
-    contents.push({ role: 'model', parts: [{ functionCall: { name, args } }] });
+    // Append giliran model APA ADANYA — JANGAN disusun ulang jadi [{ functionCall }].
+    //
+    // Dulu baris ini menulis `parts: [{ functionCall: { name, args } }]`, yang membuang
+    // semua field lain yang dikembalikan model — termasuk `thoughtSignature` (baru di
+    // Gemini 3.x). Untuk function calling multi-giliran, signature itu harus dikembalikan
+    // utuh; tanpa itu model kehilangan jejak penalarannya di iterasi berikutnya dan bisa
+    // mengulang tool yang sama atau menolak request.
+    // Mengirim `parts` asli juga otomatis benar kalau model membalas text + functionCall
+    // sekaligus (lihat catatan di extractFunctionCall).
+    contents.push({ role: 'model', parts });
 
     // Special case decompose_query — eksekusi → expand sub-queries paralel
     if (name === 'decompose_query') {
@@ -318,6 +326,11 @@ export async function runReActAgent(
         observations.push(engineResult);
         emit({ type: 'tool_result', tool: 'search_engine_manual', found: engineResult.hasResults });
         // Synthetic functionCall dulu — functionResponse tanpa functionCall pasangannya = Gemini 400.
+        // ⚠️ Giliran ini DIKARANG aplikasi (model tak pernah memintanya), jadi tidak ada
+        // `thoughtSignature` yang bisa disertakan — beda dari giliran asli di atas.
+        // BELUM DIUJI dengan Gemini 3.7: model 3.x bisa saja menuntut signature pada setiap
+        // giliran model saat berpikir aktif. Kalau mode agentic error di jalur 2nd-pass
+        // Engine Manual, DI SINI tempat pertama yang harus dicek.
         contents.push({ role: 'model', parts: [{ functionCall: { name: 'search_engine_manual', args: { p_codes: pCodes } } }] });
         contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse('search_engine_manual', engineResult) }] });
       }
