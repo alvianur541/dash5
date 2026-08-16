@@ -153,9 +153,18 @@ async function resolveUpstream(model, { stream }) {
 // rotasi key Cohere, dan pemilihan endpoint v1beta1/global hanya ada satu salinan.
 
 async function vertexFetch(model, body, { stream, signal, label }) {
+  // auth vs fetch dipisah: token GCP menggantung dan koneksi Vertex menggantung itu dua
+  // penyakit berbeda dengan obat berbeda. Tanpa pemisahan ini keduanya terlihat sama.
+  const tAuth = Date.now();
   const { url, headers } = await resolveUpstream(model, { stream });
+  const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
+  const tFetch = Date.now();
   let upstream = await fetch(url, { method: 'POST', headers, body: payload, signal });
+  const msFetch = Date.now() - tFetch;
+  if (msAuth > 1000 || msFetch > 3000) {
+    console.warn('[upstream] LAMBAT %s auth=%dms fetch=%dms status=%d', label, msAuth, msFetch, upstream.status);
+  }
   for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
     const waitMs = UPSTREAM_429_BACKOFF_MS[i];
     console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
@@ -869,4 +878,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => console.log(`Dash⁵ proxy :${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Dash⁵ proxy :${PORT}`);
+  // Panaskan kredensial GCP saat boot — kalau tidak, pertanyaan PERTAMA di tiap instance
+  // membayar penemuan kredensial + panggilan metadata server di jalur panas.
+  getAccessToken()
+    .then(() => console.log('[boot] kredensial GCP siap'))
+    .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));
+});

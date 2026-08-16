@@ -384,7 +384,12 @@ export async function callProxyStream(
 // (thinking ~1000 token + 1500 token teks) sah memakan lebih dari itu dan akan terpotong.
   const STREAM_TIMEOUT_MS = 90_000;
 // Nol chunk sejak awal = stream benar-benar mati. Chunk thinking sudah dihitung hidup.
-  const FIRST_TOKEN_TIMEOUT_MS = 25_000;
+// ⚠️ 45 dtk, BUKAN 25. Terukur 16 Agu 2026: respons Vertex kadang tertahan ~24 dtk di level
+// KONEKSI (`[vertex-stream] header=24033ms chunk1=24034ms` — data mengalir 1 ms setelah header).
+// Dengan ambang 25 dtk, hang itu tepat di batas: kadang lolos, kadang dibunuh lalu diulang —
+// dan pengulangannya yang membuat total membengkak jadi 58-79 dtk. Lebih baik satu jawaban
+// lambat 28 dtk daripada tiga percobaan 80 dtk.
+  const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 
   const MAX_ATTEMPT = 3;
   let attempt = 0;
