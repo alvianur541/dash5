@@ -314,7 +314,8 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
 
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
-  req.on('close', () => { clearTimeout(timer); ctrl.abort(); });
+  // res, bukan req — `req` emit 'close' begitu body selesai dibaca (Node 16+), bukan saat klien putus.
+  res.on('close', () => { clearTimeout(timer); if (!res.writableFinished) ctrl.abort(); });
 
   try {
     const upstream = await vertexFetch(model, body, { stream: true, signal: ctrl.signal, label: '/v1/chat/stream' });
@@ -767,8 +768,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
+  // WAJIB res, BUKAN req: sejak Node 16 `req` emit 'close' begitu body selesai dibaca, jadi
+  // memakai req meng-abort SEMUA panggilan Vertex sebelum sempat jalan. res hanya close saat
+  // jawaban tuntas (writableFinished) atau klien benar-benar putus di tengah.
   const ctrl = new AbortController();
-  req.on('close', () => ctrl.abort());
+  res.on('close', () => { if (!res.writableFinished) ctrl.abort(); });
 
   // JWT teknisi diteruskan apa adanya → RLS tetap berlaku persis seperti waktu di browser.
   const supabase = new PostgrestClient(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1`, {
