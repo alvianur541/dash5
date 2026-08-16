@@ -4,7 +4,14 @@ import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, get
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 const PROXY_URL    = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
-export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.6-flash';
+// gemini-3.7-flash — diverifikasi tersedia di project ini lewat Cloud Shell (15 Agu 2026):
+// generateContent 200 · streamGenerateContent 200 · thinkingLevel LOW 200.
+// ⚠️ Model ini MENOLAK thinkingLevel 'minimal' → 400 "Thinking level is unsupported:
+// THINKING_LEVEL_MINIMAL" (diuji langsung, bukan asumsi). Ditangani otomatis oleh
+// clampThinking() di bawah — 'minimal' dinaikkan ke 'low' khusus model 3.7.
+// Rollback: set VITE_VERTEX_MODEL=gemini-3.6-flash di Cloudflare, redeploy. 3.6 tetap
+// ada di ALLOWED_MODELS server, jadi tidak perlu sentuh backend.
+export const MODEL        = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.7-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
 interface TextPart            { text: string }

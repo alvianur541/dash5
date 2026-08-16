@@ -5,6 +5,7 @@ import {
   TrendingUp, TrendingDown, FilterX, Package, Wrench, Zap, Split, Download,
 } from 'lucide-react';
 import { getAuthToken } from '../services/supabase';
+import { MODEL } from '../services/ai';
 import { cn } from '../lib/utils';
 
 interface MonitorModalProps {
@@ -903,7 +904,11 @@ export function MonitorModal({ open, onClose }: MonitorModalProps) {
                   {/* Catatan tarif */}
                   {pricing && (
                     <p className="text-[10.5px] text-[var(--text-muted)] leading-relaxed px-1">
-                      Perhitungan biaya mengikuti tarif resmi gemini-3.5-flash — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs IDR {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
+                      {/* Nama model diambil dari MODEL yang benar-benar dipakai, JANGAN ditulis
+                          manual — dulu di sini tertulis "gemini-3.5-flash" dan tertinggal usang
+                          saat model naik ke 3.6 lalu 3.7, jadi admin membaca tarif yang salah
+                          modelnya. Angka tarifnya sendiri sudah datang dari server. */}
+                      Perhitungan biaya mengikuti tarif resmi {MODEL} — input ${dec2(pricing.inputPerMUsd)} / output ${dec2(pricing.outputPerMUsd)} per 1 juta token, kurs IDR {num(pricing.usdToIdr)}. Seluruh data ditarik langsung dari basis data internal dan hanya dapat diakses oleh admin.
                     </p>
                   )}
                 </div>
