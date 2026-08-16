@@ -380,10 +380,11 @@ export async function callProxyStream(
   onChunk: (text: string) => void,
   enableGoogleSearch = false,
 ): Promise<string> {
-// Keep ABOVE the proxy UPSTREAM_TIMEOUT_MS so its error message wins over our own timeout.
-  const STREAM_TIMEOUT_MS = 40_000;
-// No token by now means the stream is dead - abort and retry instead of waiting out the timeout.
-  const FIRST_TOKEN_TIMEOUT_MS = 22_000;
+// Batas keras anti-runaway saja. Jangan diturunkan ke 40 dtk lagi — jawaban panjang
+// (thinking ~1000 token + 1500 token teks) sah memakan lebih dari itu dan akan terpotong.
+  const STREAM_TIMEOUT_MS = 90_000;
+// Nol chunk sejak awal = stream benar-benar mati. Chunk thinking sudah dihitung hidup.
+  const FIRST_TOKEN_TIMEOUT_MS = 25_000;
 
   const MAX_ATTEMPT = 3;
   let attempt = 0;
@@ -404,11 +405,12 @@ export async function callProxyStream(
   const ctrl = new AbortController();
   const hardTimer = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
 
-  // Watchdog token pertama — dibatalkan begitu karakter pertama sampai ke layar.
+  // Watchdog stream MATI (nol chunk sama sekali), bukan stream yang sedang berpikir.
   let firstTokenSeen = false;
+  let streamHidup    = false;
   const watchdog = setTimeout(() => {
-    if (!firstTokenSeen) {
-      console.warn('[stream] %d dtk tanpa token pertama — batalkan & ulang', FIRST_TOKEN_TIMEOUT_MS / 1000);
+    if (!streamHidup) {
+      console.warn('[stream] %d dtk tanpa satu chunk pun — batalkan & ulang', FIRST_TOKEN_TIMEOUT_MS / 1000);
       ctrl.abort();
     }
   }, FIRST_TOKEN_TIMEOUT_MS);
@@ -421,9 +423,12 @@ export async function callProxyStream(
         ctrl.abort();
         return;
       }
+      // Chunk thinking TIDAK berisi teks tapi membuktikan stream hidup — kalau watchdog cuma
+      // menghitung teks, jawaban yang berpikir lama dibunuh lalu diulang dari nol.
+      if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
       if (c.usageMetadata) usageBox.last = c.usageMetadata; // kumulatif; chunk terakhir menang
       if (c.text) {
-        if (!firstTokenSeen) { firstTokenSeen = true; clearTimeout(watchdog); }
+        firstTokenSeen = true;
         fullText += c.text; onChunk(c.text);
         if (fullText.length > 400 && TAIL_LOOP_RE.test(fullText.slice(-800))) {
           console.warn('[stream] degenerate loop terdeteksi — stream dihentikan dini');

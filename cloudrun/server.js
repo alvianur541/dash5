@@ -739,7 +739,9 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
         const parts = (json.candidates && json.candidates[0] && json.candidates[0].content &&
                        json.candidates[0].content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
-        onChunk({ text, usageMetadata: json.usageMetadata });
+        // live=true di SETIAP chunk, termasuk yang isinya cuma thinking. Watchdog memakai ini —
+        // tanpa itu stream yang sedang berpikir dikira mati lalu dibunuh & diulang.
+        onChunk({ text, usageMetadata: json.usageMetadata, live: true });
       }
     }
   } finally {
@@ -751,9 +753,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const b = req.body || {};
   const unit = typeof b.model === 'string' ? b.model : '';
   if (!ASK_MODELS.has(unit)) return res.status(400).json({ error: 'Model unit tidak dikenal' });
-  if (typeof b.userInput !== 'string' || !b.userInput.trim()) {
-    return res.status(400).json({ error: 'userInput is required' });
-  }
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Supabase belum dikonfigurasi' });
 
   const userName = typeof b.userName === 'string' ? b.userName.slice(0, 80) : 'Teknisi';
@@ -762,6 +761,12 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const images   = Array.isArray(b.attachments)
     ? b.attachments.filter(a => a && typeof a.mimeType === 'string' && typeof a.data === 'string').slice(0, 1)
     : [];
+
+  // Kirim foto TANPA mengetik apa pun itu sah — jalur OCR fault code justru paling sering begitu.
+  const userInput = typeof b.userInput === 'string' ? b.userInput : '';
+  if (!userInput.trim() && images.length === 0) {
+    return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
+  }
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -831,12 +836,12 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   try {
     const answer = await orch.runWithDeps(deps, async () => {
       if (images.length > 0) {
-        return orch.generateResponse(unit, userName, history, b.userInput, images, onChunk, onEvent);
+        return orch.generateResponse(unit, userName, history, userInput, images, onChunk, onEvent);
       }
       if (b.agentic === true) {
-        return orch.generateResponseAgentic(unit, userName, history, b.userInput, onChunk, onEvent);
+        return orch.generateResponseAgentic(unit, userName, history, userInput, onChunk, onEvent);
       }
-      return orch.generateResponseStream(unit, userName, history, b.userInput, onChunk, onEvent);
+      return orch.generateResponseStream(unit, userName, history, userInput, onChunk, onEvent);
     });
     console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',
       ttft, Date.now() - tMulai, deps.usage.input, deps.usage.output,
