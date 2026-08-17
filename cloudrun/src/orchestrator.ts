@@ -527,7 +527,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   return results.map((r, i) => r.status === 'fulfilled' ? r.value : chunks[i]);
 }
 
-function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
+export function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
   const pCodes: string[] = [];
   // Capture base P-code (P\d{4}); suffix di-strip — ilike '%P0340%' tetap match 'P0340-04'/'P0340/4'.

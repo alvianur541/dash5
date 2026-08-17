@@ -1,4 +1,13 @@
-export type UnitModel = 'ZX48U-5A' | 'ZX65USB-5A' | 'ZX138MF-5G' | 'ZX200-5G' | 'KCM 60ZV' | 'ZW140';
+/**
+ * SATU-SATUNYA daftar model. Menambah unit cukup di sini — `UnitModel`, regex strip nama model,
+ * dan allowlist `/v1/ask` semuanya diturunkan dari sini. Dulu tersebar di empat tempat dan
+ * gampang ada yang tertinggal saat menambah model.
+ */
+export const UNIT_MODELS = [
+  'ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140',
+] as const;
+
+export type UnitModel = typeof UNIT_MODELS[number];
 
 export interface Message {
   id: string;

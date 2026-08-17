@@ -1,4 +1,5 @@
 import { deps } from './deps';
+import { UNIT_MODELS } from './types';
 
 // Klien Supabase datang dari server.js per-request (ber-scope JWT teknisi) supaya RLS
 // tetap berlaku persis seperti waktu kode ini masih jalan di browser.
@@ -192,7 +193,14 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
 }
 
 
-const MODEL_NAMES_RE = /\b(ZX48U-5A|ZX65USB-5A|ZX138MF-5G|ZX200-5G|KCM\s+60ZV|ZW140(?:-\w+)?)\b\s*/gi;
+// Diturunkan dari UNIT_MODELS — jangan tulis ulang daftarnya di sini.
+// Spasi jadi \s+ ("KCM 60ZV"), dan ZW140 boleh bersufiks ("ZW140-6").
+const MODEL_NAMES_RE = new RegExp(
+  '\\b(' + UNIT_MODELS
+    .map(m => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
+    .join('|') + ')(?:-\\w+)?\\b\\s*',
+  'gi',
+);
 
 function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, m => `\\${m}`);
@@ -230,31 +238,33 @@ const EXPAND: Record<string, string> = {
   cyl: 'cylinder', cyls: 'cylinders', cilinder: 'cylinder',
   kit: 'assembly o-ring',   // 'kit assembly seal' → hapus 'kit' dari value
   seal: 'o-ring gasket',    // 'seal o-ring' → hapus 'seal' dari value
-  blade: 'dozer cylinder',  // hapus 'blade' dari value
-  dozer: 'blade cylinder',  // hapus 'dozer' dari value
-  bucket: 'arm cylinder',   // hapus 'bucket' dari value
-  arm: 'cylinder boom',     // hapus 'arm' dari value
-  boom: 'cylinder hydraulic', // hapus 'boom' dari value
   asm: 'assembly', assy: 'assembly',
   pn: 'part number', nomor: 'number part',
   // Operator manual
   isi: 'capacity refill',
   cek: 'check inspect',
   jadwal: 'schedule maintenance interval',
-  // Hydraulic circuit — value tidak mengandung key
+  // Hydraulic circuit
   relief: 'valve pressure MPa',          // hapus 'relief'
   displacement: 'cm3 rev motor',         // hapus 'displacement'
-  pilot: 'circuit pressure pump',        // hapus 'pilot'
-  main: 'pump primary',                  // hapus 'main'
-  pump: 'hydraulic variable piston',     // hapus 'pump'
-  control: 'valve spool',                // hapus 'control'
-  spool: 'valve control',               // hapus 'spool' (oke cross-ref sama 'control')
-  port: 'relief pressure',              // hapus 'port'
 };
 
+// ⚠️ DIBUANG 17 Agu 2026 — pemetaan LINTAS-KOMPONEN yang menambah makna baru, bukan menerjemahkan:
+//   bucket → 'arm cylinder' · arm → 'cylinder boom' · boom → 'cylinder hydraulic'
+//   blade ↔ dozer · main → 'pump primary' · pump → 'hydraulic variable piston'
+//   pilot → 'circuit pressure pump' · control ↔ spool · port → 'relief pressure'
+// expandQuery MENAMBAHKAN token ke query sebelum embed, jadi "seal kit bucket" ikut membawa
+// "arm cylinder" — komponen yang BERBEDA. Untuk katalog parts itu menggeser vektor ke section
+// yang salah. Kamus ini tujuannya Indonesia→Inggris; pemetaan antar-komponen bukan tugasnya.
+
+// Kata yang DIBUANG dari EXPAND tetap harus dihitung "teknis" di sini. TECH_TERMS dipakai
+// menilai bigram di extractSearchTerms — kalau ikut hilang, "swing motor" & "main pump" kehilangan
+// bobotnya dan pemilihan term keyword ikut melemah. Tidak diekspansi ≠ bukan istilah teknis.
 const TECH_TERMS = new Set([
   ...Object.keys(EXPAND),
   ...Object.values(EXPAND).flatMap(v => v.split(' ')),
+  'bucket', 'arm', 'boom', 'blade', 'dozer', 'pump', 'main', 'pilot',
+  'control', 'spool', 'port', 'cylinder', 'valve', 'primary', 'piston',
 ]);
 
 const STOP_WORDS = new Set([
@@ -579,18 +589,22 @@ export async function searchTechnicalManualMulti(
 
   const { confidence, topScore } = computeConfidence(top);
 
-  console.info('[confidence] tm tier=%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
-    confidence, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
+  const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
+    ? 'medium'
+    : confidence;
+
+  // LOG TIER EFEKTIF, bukan mentahnya. Kalau rerank gagal, semua skor jadi 0.5 semu (>0.45 = high)
+  // padahal tier yang dipakai sudah diturunkan — mencetak yang mentah pernah membuat sesi ini
+  // menyimpulkan retrieval sehat padahal Cohere sedang menolak semua key.
+  const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
+  console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
+    effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
 
   // Chunk mana yang BENAR-BENAR sampai ke Gemini. Tanpa ini, "jawaban salah" tidak bisa dipisah
   // antara retrieval meleset vs model tak mau menyimpulkan dari data yang sudah ada di tangannya.
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
-
-  const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
-    ? 'medium'
-    : confidence;
   // Content di-join dgn separator --- saja (tanpa prefix [Rank N] — AI tak butuh nomor ranking).
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
@@ -634,10 +648,14 @@ export async function searchEngineManual(
 
   const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
   const { confidence, topScore } = computeConfidence(top);
+  // Rerank gagal → semua skor 0.5 semu (>0.45 = high). Turunkan, sama seperti jalur TM.
+  const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
+  console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
+    effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);
   return {
     content: top.map(t => t.content).join('\n\n---\n\n'),  // strip [Rank N] prefix
     hasResults: top.length > 0,
-    confidence,
+    confidence: effectiveConfidence,
     topScore,
     ...(rerankErr ? { ragError: rerankErr } : {}),
   };
@@ -863,9 +881,11 @@ export async function searchPartsCatalog(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5);
     if (allFallback.length === 0) return { content: '', hasResults: false };
+    // Sumber pengganti (Workshop Manual) untuk model tanpa Parts Catalog — tak pernah 'high'.
     return {
       content: allFallback.map(d => d.content).join('\n\n---\n\n'),
       hasResults: true,
+      confidence: 'medium',
     };
   }
 
@@ -878,6 +898,8 @@ export async function searchPartsCatalog(
   });
 
   let orderedNonCpm = nonCpm;
+  let rerankTopScore = 0;
+  let rerankDipakai  = false;
   if (!partNum && nonCpm.length > 3) {
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
@@ -890,6 +912,8 @@ export async function searchPartsCatalog(
         Math.min(rerankRest.length, 12),
       );
       if (!error && reranked.length > 0) {
+        rerankTopScore = reranked[0].score;
+        rerankDipakai  = true;
         // MMR: hasil relevan tapi saling melengkapi (hindari 3 section nyaris kembar)
         const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
         const byContent = new Map(rest.map(d => [d.content, d]));
@@ -906,15 +930,41 @@ export async function searchPartsCatalog(
 
   const merged = [...cpmData, ...orderedNonCpm];
 
+  // 🔴 PAGAR PN LITERAL. Teknisi menyebut PN spesifik = dia menanyakan PN ITU, bukan yang mirip.
+  // Tanpa ini, PN yang tidak ada di katalog tetap dijawab dengan part lain yang kebetulan mirip
+  // secara semantik — dan salah PN saat memesan part itu mahal. Lebih baik jujur tidak ketemu.
+  // Dua bukti diterima supaya tidak salah menolak: match_type dari RPC ATAU PN muncul verbatim.
+  if (partNum) {
+    const pnUpper = partNum.toUpperCase();
+    const adaLiteral = merged.some(d =>
+      d.match_type === 'exact_part_no' || (d.content ?? '').toUpperCase().includes(pnUpper));
+    if (!adaLiteral) {
+      console.warn('[parts] PN %s TIDAK ada literal di %d kandidat — menolak menyodorkan part mirip',
+        partNum, merged.length);
+      return { content: '', hasResults: false };
+    }
+  }
+
   // Top 12 (naik dari 7) → lebih banyak section PROMO/PARTS terwakili (compression extract nanti).
   const top = merged.slice(0, 12);
   if (top.length === 0) return { content: '', hasResults: false };
 
-  console.info('[parts] cpm=%d body=%d engine=%d promo=%d (Q4+Q1) → top=%d',
-    cpmData.length, bodyData.length, engineData.length, promoData.length, top.length);
+  // Confidence jalur parts (dulu tidak ada sama sekali → jawaban parts tak pernah dapat caveat).
+  // PN literal terbukti = bukti terkuat; selain itu ikut skor rerank kalau memang dijalankan.
+  const partsConfidence: 'high' | 'medium' | 'low' = partNum
+    ? 'high'
+    : rerankDipakai
+      ? computeConfidence([{ content: '', score: rerankTopScore }]).confidence
+      : 'medium';
+
+  console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
+    cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
+    partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
 
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
+    confidence: partsConfidence,
+    ...(rerankDipakai ? { topScore: rerankTopScore } : {}),
   };
 }

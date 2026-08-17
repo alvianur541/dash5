@@ -5,10 +5,12 @@ import {
   callProxy,
   callProxyStream,
   getText,
+  extractRelatedPCodes,
   VContent,
   Part,
   MODEL,
 } from './orchestrator';
+import { extractSearchTerms } from './rag';
 import { TOOLS, TOOL_DECLARATIONS, ToolResult } from './tools';
 
 export interface AgentEvent {
@@ -125,11 +127,6 @@ function extractFunctionCall(parts: Part[]): { name: string; args: Record<string
   return null;
 }
 
-function extractPCodes(content: string): string[] {
-  const matches = [...content.matchAll(/\bP\d{4}\b/gi)]
-    .map(m => m[0].toUpperCase());
-  return [...new Set(matches)].slice(0, 3);
-}
 
 async function forceFinalAnswer(
   contents: VContent[],
@@ -263,7 +260,13 @@ export async function runReActAgent(
     contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse(name, result) }] });
 
     if (name === 'search_technical_manual' && result.hasResults) {
-      const pCodes = extractPCodes(result.content);
+      // Ekstraksi P-code WAJIB sama dengan jalur deterministik: hanya dari baris yang relevan
+      // dengan query. Versi global (/\bP\d{4}\b/g) pernah dibuang karena chunk "Engine Fault Code
+      // List" memuat 30+ P-code → 30+ embed call + isi Engine Manual yang tak nyambung.
+      const kueri = typeof (args as { query?: unknown })?.query === 'string'
+        ? (args as { query: string }).query
+        : query;
+      const pCodes = extractRelatedPCodes(result.content, extractSearchTerms(kueri));
       if (pCodes.length > 0) {
         emit({ type: 'tool_call', tool: 'search_engine_manual' });
         const engineResult = await executeTool('search_engine_manual', { p_codes: pCodes }, model, callSet);

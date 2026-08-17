@@ -1,6 +1,12 @@
 const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 const { setGlobalDispatcher, Agent } = require('undici');
+// Bundel orkestrasi. Di-require di ATAS supaya UNIT_MODELS bisa dipakai semua allowlist model —
+// satu daftar, bukan disalin ulang di beberapa tempat.
+const orch = require('./dist/orchestrator.cjs');
+
+// SATU sumber daftar unit (cloudrun/src/types.ts). Menambah model cukup di sana.
+const UNIT_MODELS = new Set(orch.UNIT_MODELS);
 
 // Koneksi menganggur JANGAN dipakai ulang terlalu lama. Terukur 16 Agu 2026: panggilan ke
 // aiplatform.googleapis.com macet >8 dtk pada 31-67% pertanyaan, lalu koneksi BARU sembuh
@@ -564,7 +570,7 @@ app.post('/v1/usage', verifyToken, rateLimit, async (req, res) => {
 });
 
 const FIELD_NOTE_JUDGE_MODEL = process.env.FIELD_NOTE_JUDGE_MODEL || 'gemini-3.1-flash-lite';
-const FIELD_NOTE_MODELS = new Set(['ZX48U-5A','ZX65USB-5A','ZX138MF-5G','ZX200-5G','KCM 60ZV','ZW140']);
+const FIELD_NOTE_MODELS = UNIT_MODELS;   // daftar unit sama dengan /v1/ask
 
 const FIELD_NOTE_JUDGE_SYSTEM = `Kamu KURATOR knowledge base teknis alat berat Hitachi/KCM (Hexindo). Nilai apakah CATATAN LAPANGAN dari teknisi LAYAK masuk knowledge base yang dipakai teknisi lain.
 
@@ -769,9 +775,8 @@ app.post('/v1/field-note', verifyToken, rateLimit, async (req, res) => {
 // constructor dan itu butuh WebSocket global yang belum ada di Node 20 → proses crash tiap request.
 // Orkestrasi hanya memakai .from() dan .rpc(), keduanya ada di sini.
 const { PostgrestClient } = require('@supabase/postgrest-js');
-const orch = require('./dist/orchestrator.cjs');
 
-const ASK_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140']);
+const ASK_MODELS = UNIT_MODELS;
 
 function sseWrite(res, event, payload) {
   if (res.writableEnded) return;

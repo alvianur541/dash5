@@ -9,4 +9,5 @@ export {
   MODEL,
   INTENT_MODEL,
 } from './orchestrator';
+export { UNIT_MODELS } from './types';
 export type { UnitModel, Message, InlineImage, AgentEvent } from './types';
