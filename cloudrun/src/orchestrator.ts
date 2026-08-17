@@ -1126,12 +1126,11 @@ export async function generateResponseStream(
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   // Casual tidak menerima data manual → prompt ringkas.
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  // Fault code & pertanyaan teknis → `medium`: di situ penalaran menentukan mutu jawaban.
-  // Parts/PN/harga/interval & casual → `low`: jawabannya tinggal disusun dari data, thinking
-  // tidak menambah apa pun tapi jatuh 100% ke waktu tunggu (terukur: +14 dtk ke huruf pertama).
-  // Pemilahnya `dataLabel` — data apa yang BENAR-BENAR kembali, bukan tebakan dari teks query.
-  const isParts = dataLabel === RAG_LABEL.parts || hasServiceInterval;
-  const thinkingLevel: ThinkingLevel = (isCasual || isParts) ? 'low' : 'medium';
+  // `low` untuk SEMUA jalur. Token thinking dihasilkan SELURUHNYA sebelum satu huruf pun muncul,
+  // jadi jatuh 100% ke waktu tunggu teknisi. Terukur 17 Agu: fault code `medium` ttft 5,7–16,7 dtk
+  // vs `low` 2,2–3,5 dtk — dan mutu jawabannya tidak terasa cukup berbeda di lapangan.
+  // Bandingkan lewat ?think=medium sebelum menaikkannya lagi; jangan diubah tanpa mengukur.
+  const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
@@ -1321,8 +1320,7 @@ export async function generateResponse(
       generationConfig: {
         maxOutputTokens: sendImageToModel ? 8192 : 4096,
         temperature: 0.3,
-        // Jalur foto = OCR fault code → ikut aturan fault code: medium.
-        thinkingConfig: { thinkingLevel: 'medium' },
+        thinkingConfig: { thinkingLevel: 'low' },
       },
     };
 
