@@ -938,7 +938,14 @@ async function resolveNaturalLanguageQuery(
 }
 
 
-const MULTI_CONNECTOR_RE = /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|lalu|kemudian|serta)\b|[+&]/i;
+// Termasuk penghubung sehari-hari lapangan. Terukur 17 Agu 2026: "carikan PN valve swing motor
+// SAMA cara pasangnya" gagal terdeteksi multi-aspek → jatuh ke jalur parts saja → PN keluar tapi
+// langkah bongkar-pasang tidak pernah dicari, padahal chunk-nya ADA (WM SWING DEVICE - REMOVAL &
+// INSTALLATION). Teknisi menulis "sama"/"ama"/"trus", bukan "dan".
+// ⚠️ "sama" juga berarti IDENTIK — makanya "yang sama" dan "sama dengan/persis/kaya/seperti"
+// sengaja dikecualikan, kalau tidak pertanyaan pembanding ikut terseret.
+const MULTI_CONNECTOR_RE =
+  /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\byang\s+)\b(?:sama|ama)\b(?!\s+(?:dengan|persis|kaya|seperti))/i;
 // \w* di akhir grup → toleran sufiks Indonesia (beratnya/diameternya/panjangnya).
 const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
 // Atribut/permintaan terukur — buat deteksi follow-up pendek multi-atribut ("berat dan diameternya").
