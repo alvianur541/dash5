@@ -187,8 +187,9 @@ async function resolveUpstream(model, { stream }) {
 // - stream (jawaban): header baru dikirim saat token pertama siap, JADI TERMASUK fase thinking
 //   → dengan `medium` sehatnya melebar sampai ~19 dtk (terukur 17 Agu)
 // Satu ambang untuk keduanya pasti salah di salah satu sisi.
-const STALL_MS_NONSTREAM = 8_000;
-const STALL_MS_STREAM    = 30_000;
+const STALL_MS_NONSTREAM     = 8_000;
+const STALL_MS_STREAM_CEPAT  = 10_000;   // thinking low/minimal — sapaan, parts, lookup
+const STALL_MS_STREAM_MIKIR  = 30_000;   // thinking medium/high — fault code, teknis
 const STALL_MAX = 3;
 
 async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
@@ -221,7 +222,16 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
   const tFetch = Date.now();
-  const stallMs = stream ? STALL_MS_STREAM : STALL_MS_NONSTREAM;
+  // Ambang IKUT thinking level, bukan sekadar stream/non-stream. Untuk streaming, header baru
+  // dikirim saat token pertama siap — jadi jawaban `medium` sah memakan belasan detik, sedangkan
+  // sapaan `low` sehatnya 1–2 dtk. Satu ambang 30 dtk untuk keduanya membuat sapaan yang kena
+  // koneksi macet menunggu 30 dtk penuh (terukur 17 Agu: "oke" → 32 dtk).
+  const lvl = body && body.generationConfig && body.generationConfig.thinkingConfig
+    ? body.generationConfig.thinkingConfig.thinkingLevel : undefined;
+  const mikirPanjang = lvl === 'medium' || lvl === 'high';
+  const stallMs = !stream
+    ? STALL_MS_NONSTREAM
+    : (mikirPanjang ? STALL_MS_STREAM_MIKIR : STALL_MS_STREAM_CEPAT);
   let upstream = await fetchAntiMacet(url, { method: 'POST', headers, body: payload }, signal, label, stallMs);
   const msFetch = Date.now() - tFetch;
   if (msAuth > 1000 || msFetch > 3000) {
