@@ -961,14 +961,27 @@ function isMultiAspectQuery(q: string): boolean {
 }
 
 async function decomposeAspects(query: string, history: Message[] = []): Promise<string[]> {
-  const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE component+attribute each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
-RESOLVE references (itu/ini/nya/tadi/tersebut) to the concrete component from the conversation context. If user says "berat & diameternya" after discussing a pin, expand to that component.
+  const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE information-need each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
+
+SPLIT whenever the technician asks for MORE THAN ONE KIND of information — even about the SAME component. Kinds: part number/price · procedure (removal, installation, disassembly, adjustment) · numeric spec (weight, pressure, torque, capacity, clearance) · symptom/diagnosis · maintenance interval.
+A procedure request is ALWAYS its own sub-query — it lives in a different manual than part numbers.
+
+Indonesian connectors include: dan, sama, ama, plus, trus, terus, sekalian, beserta, serta, juga, "+".
+
+RESOLVE references (itu/ini/nya/tadi/tersebut) to the concrete component from the conversation context.
+
 Examples:
+"carikan part number valve swing motor sama cara pasangnya" -> ["swing valve part number","swing device removal installation procedure"]
+"PN seal kit swing trus langkah bongkarnya" -> ["swing motor seal kit part number","swing motor disassembly procedure"]
 "berat swing motor dan partnumber rotor" -> ["swing motor weight","rotor part number"]
 "diameter pin bucket dan part numbernya" -> ["bucket pin diameter","bucket pin part number"]
-"harga seal kit swing dan o-ring" -> ["swing motor seal kit price","o-ring price"]
+"harga filter oli sekalian interval gantinya" -> ["engine oil filter price","engine oil filter replacement interval"]
 "swing lambat dan pump bocor" -> ["swing motor slow response","hydraulic pump leak"]
-[ctx: bahas swing motor] "berat dan diameternya" -> ["swing motor weight","swing motor diameter"]`;
+[ctx: bahas swing motor] "berat dan diameternya" -> ["swing motor weight","swing motor diameter"]
+
+Single information-need → return ONE item:
+"kenapa swing lambat" -> ["swing motor slow response"]
+"harga seal kit swing" -> ["swing motor seal kit price"]`;
   const ctx = history.slice(-4)
     .filter(m => m.content?.trim())
     .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)

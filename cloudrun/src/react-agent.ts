@@ -11,7 +11,7 @@ import {
   MODEL,
 } from './orchestrator';
 import { extractSearchTerms } from './rag';
-import { TOOLS, TOOL_DECLARATIONS, ToolResult } from './tools';
+import { TOOLS, TOOL_DECLARATIONS, ToolResult, SubQuery, toSubQueries } from './tools';
 
 export interface AgentEvent {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'done';
@@ -33,7 +33,13 @@ const DEFAULT_TIMEOUT  = 45_000;
 const REACT_SYSTEM = `Dash⁵ agentic mode — SYSTEM_PROMPT tetap berlaku penuh (anti-halu, style, format, bahasa).
 
 TOOL SELECTION:
-- Query punya >1 isu berbeda (komponen berbeda / fault code + symptom tidak related) → decompose_query DULU
+- Teknisi minta >1 JENIS informasi → decompose_query DULU. Jenis: part number/harga · PROSEDUR
+  (bongkar, pasang, setel) · angka spec · gejala/diagnosa · interval perawatan.
+  ⚠️ Berlaku walau komponennya SAMA. "PN valve swing + cara pasangnya" = 2 jenis → WAJIB decompose,
+  karena PN ada di Parts Catalog sedangkan prosedur ada di Workshop Manual — satu pencarian saja
+  PASTI kehilangan salah satu sisi.
+  Penghubung yang dipakai teknisi: dan, sama, ama, plus, trus, terus, sekalian, beserta, serta, "+".
+- Query punya >1 isu/komponen berbeda (fault code + symptom tak related) → decompose_query DULU
 - Fault code / troubleshooting → search_technical_manual
 - PN / harga / parts / interval maintenance → search_parts_catalog
 - P-code muncul di TM result → WAJIB follow up search_engine_manual
@@ -83,17 +89,17 @@ async function executeTool(
 }
 
 async function expandDecomposed(
-  subQueries: string[],
+  subQueries: SubQuery[],
   model: UnitModel,
   callSet: Set<string>,
   emit: (e: AgentEvent) => void,
 ): Promise<ToolResult[]> {
-  // Untuk tiap sub-query → fan out ke TM + Parts paralel, ambil yang hasResults=true
+  // Fan-out MENGIKUTI TIPE. Dulu tiap sub-query dipukul ke TM + Parts sekaligus → 2 aspek jadi
+  // 4 pencarian, separuhnya pasti tak relevan dan cuma mengotori konteks yang dibaca Gemini.
   const results = await Promise.allSettled(
-    subQueries.flatMap(q => [
-      executeTool('search_technical_manual', { query: q }, model, callSet),
-      executeTool('search_parts_catalog',    { query: q }, model, callSet),
-    ]),
+    subQueries.map(s => s.type === 'parts'
+      ? executeTool('search_parts_catalog',    { query: s.q }, model, callSet)
+      : executeTool('search_technical_manual', { query: s.q }, model, callSet)),
   );
   const flat: ToolResult[] = [];
   for (const r of results) {
@@ -221,8 +227,8 @@ export async function runReActAgent(
       observations.push(decomposeResult);
       emit({ type: 'tool_result', tool: name, found: decomposeResult.hasResults });
 
-      let subQueries: string[] = [];
-      try { subQueries = JSON.parse(decomposeResult.content); } catch { subQueries = []; }
+      let subQueries: SubQuery[] = [];
+      try { subQueries = toSubQueries(JSON.parse(decomposeResult.content)); } catch { subQueries = []; }
       console.info('[react-agent] decomposed into %d sub-queries: %j', subQueries.length, subQueries);
 
       let synth = '';

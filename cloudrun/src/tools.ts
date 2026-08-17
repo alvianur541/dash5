@@ -28,6 +28,25 @@ function toStrArray(val: unknown): string[] {
   return val.filter((v): v is string => typeof v === 'string');
 }
 
+/** Sub-query bertipe — supaya fan-out cuma memanggil tool yang relevan, bukan TM + Parts semuanya. */
+export interface SubQuery { q: string; type: 'technical' | 'parts' }
+
+/** Toleran dua bentuk: objek bertipe (baru) dan string polos (kalau model mengabaikan format). */
+export function toSubQueries(val: unknown): SubQuery[] {
+  if (!Array.isArray(val)) return [];
+  const out: SubQuery[] = [];
+  for (const v of val) {
+    if (typeof v === 'string' && v.trim()) {
+      out.push({ q: v.trim(), type: 'technical' });   // tak bertipe → jalur teknis lebih luas cakupannya
+    } else if (v && typeof v === 'object') {
+      const o = v as { q?: unknown; query?: unknown; type?: unknown };
+      const q = typeof o.q === 'string' ? o.q : typeof o.query === 'string' ? o.query : '';
+      if (q.trim()) out.push({ q: q.trim(), type: o.type === 'parts' ? 'parts' : 'technical' });
+    }
+  }
+  return out;
+}
+
 // ─── Tool 1: search_technical_manual ──────────────────────────────────────────
 
 const searchTechnicalManualTool: Tool = {
@@ -166,35 +185,41 @@ const searchCircuitDiagramTool: Tool = {
 
 const DECOMPOSE_SYSTEM = `You are a query decomposition specialist for Hitachi/KCM heavy equipment diagnostics.
 
-TASK: Break queries with MULTIPLE DISTINCT issues into independent parallel sub-queries.
-DO NOT decompose single-issue queries — return array with the original query translated to English.
+TASK: split a technician's query into independent sub-queries — ONE information-need each.
 
-OUTPUT: ONLY a JSON array of English strings. Max 4 items. No markdown fences. No preamble.
-Each sub-query: 3-6 English words, ONE specific issue/component. NO model names.
+OUTPUT: ONLY a JSON array. Max 4 items. No markdown fences, no preamble.
+Each item: {"q":"<3-6 English words, NO model name>","type":"technical"|"parts"}
+  type "parts"     → part number, price, promo, seal kit, maintenance-interval parts (Parts Catalog)
+  type "technical" → procedure, fault code, symptom, numeric spec, torque, pressure (Technical/Workshop Manual)
 
-DECOMPOSE when query has:
-  - Multiple fault codes (CA2769 + W:1208)
-  - Different components with different symptoms (swing slow + pump leak)
-  - Fault code + unrelated symptom (CA2769 + engine overheat)
+SPLIT whenever the technician asks for MORE THAN ONE KIND of information — even about the SAME
+component. A procedure request is ALWAYS its own sub-query: it lives in a different manual than
+part numbers, so merging them loses one side.
 
-DO NOT decompose:
-  - Single component query → ["swing motor slow response"]
-  - Single fault code → ["CA2769 fault code"]
-  - Parts lookup → ["swing motor seal kit price"]
-  - Service interval → ["1000 hour maintenance parts"]
+Kinds that must be separated: part number/price · procedure (removal, installation, disassembly,
+adjustment) · numeric spec · symptom/diagnosis · maintenance interval.
+
+Indonesian connectors include: dan, sama, ama, plus, trus, terus, sekalian, beserta, serta, juga, "+".
 
 Examples:
+Input: "carikan part number valve swing motor sama cara pasangnya"
+Output: [{"q":"swing valve part number","type":"parts"},{"q":"swing device removal installation procedure","type":"technical"}]
+
+Input: "PN seal kit swing trus langkah bongkarnya"
+Output: [{"q":"swing motor seal kit part number","type":"parts"},{"q":"swing motor disassembly procedure","type":"technical"}]
+
 Input: "swing lambat dan ada fault CA2769, tekanan juga drop"
-Output: ["CA2769 fault code","swing motor slow response","hydraulic pressure drop"]
+Output: [{"q":"CA2769 fault code","type":"technical"},{"q":"swing motor slow response","type":"technical"},{"q":"hydraulic pressure drop","type":"technical"}]
 
-Input: "engine overheat saat beban berat, oli bocor di pump"
-Output: ["engine overheat heavy load","main pump oil leak"]
+Input: "harga filter oli sekalian interval gantinya"
+Output: [{"q":"engine oil filter price","type":"parts"},{"q":"engine oil filter replacement interval","type":"parts"}]
 
+Single information-need → return ONE item:
 Input: "harga seal kit swing motor"
-Output: ["swing motor seal kit price"]
+Output: [{"q":"swing motor seal kit price","type":"parts"}]
 
 Input: "kenapa swing lambat"
-Output: ["swing motor slow response"]`;
+Output: [{"q":"swing motor slow response","type":"technical"}]`;
 
 const decomposeQueryTool: Tool = {
   declaration: {
@@ -229,10 +254,19 @@ const decomposeQueryTool: Tool = {
       );
       const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
       // Robust JSON extraction — toleran terhadap markdown fence atau text bocor
-      const arrMatch = raw.match(/\[[\s\S]*?\]/);
-      const subQueries = arrMatch ? toStrArray(JSON.parse(arrMatch[0])).slice(0, 4) : [];
+      // Objek bertipe punya kurung dalam, jadi [\s\S]*? yang non-greedy bisa berhenti terlalu awal.
+      const awal = raw.indexOf('[');
+      const akhir = raw.lastIndexOf(']');
+      const subQueries = awal >= 0 && akhir > awal
+        ? toSubQueries(JSON.parse(raw.slice(awal, akhir + 1))).slice(0, 4)
+        : [];
       if (subQueries.length === 0) {
-        return { toolName: 'decompose_query', content: JSON.stringify([query]), hasResults: false, error: 'parse failed, fallback to original' };
+        return {
+          toolName: 'decompose_query',
+          content: JSON.stringify([{ q: query, type: 'technical' }]),
+          hasResults: false,
+          error: 'parse failed, fallback to original',
+        };
       }
       return {
         toolName: 'decompose_query',
@@ -242,7 +276,7 @@ const decomposeQueryTool: Tool = {
     } catch (err) {
       return {
         toolName: 'decompose_query',
-        content: JSON.stringify([query]),
+        content: JSON.stringify([{ q: query, type: 'technical' }]),
         hasResults: false,
         error: (err as Error)?.message ?? 'decompose call failed',
       };
