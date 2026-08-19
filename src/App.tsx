@@ -19,8 +19,7 @@ type AgenticPreference = 'adaptive' | 'always' | 'never';
 
 const AGENTIC_KEY = 'dash-agentic';
 
-// Pilihan dari URL DISIMPAN. start_url manifest = "/" tanpa query, jadi membuka PWA dari ikon
-// selalu membuang ?agentic — sakelar eksperimennya jadi tak terpakai justru di HP.
+// Persisted: manifest start_url drops ?agentic on PWA launch.
 function getAgenticPreference(): AgenticPreference {
   const param = new URLSearchParams(window.location.search).get('agentic')?.toLowerCase();
   const dariUrl: AgenticPreference | null =
@@ -65,7 +64,7 @@ export default function App() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
-  // Saku — jawaban tersimpan offline (localStorage per-user)
+  // Saku — offline per user.
   const [pocket, setPocket] = useState<PocketItem[]>([]);
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
@@ -80,9 +79,9 @@ export default function App() {
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const mountedRef = useRef(true);
-  // AbortController untuk in-flight stream — plain ref, tidak masuk deps chain
+  // Ref, stays out of deps.
   const abortStreamRef = useRef<AbortController | null>(null);
-  // Dipakai mengukur tinggi input bar → --input-bar-h (lihat effect ResizeObserver)
+  // Feeds --input-bar-h.
   const mainRef = useRef<HTMLElement | null>(null);
   const inputBarRef = useRef<HTMLDivElement | null>(null);
 
@@ -105,7 +104,7 @@ export default function App() {
     root.classList.add(`${theme}-theme`);
     localStorage.setItem('dash-theme', theme);
 
-    // Update theme-color meta — remove+re-add (attribute change alone tidak trigger Chrome re-evaluate)
+    // Remove+re-add; Chrome ignores attribute change.
     const color = theme === 'dark' ? '#1A1915' : '#FAF9F5';
     document.querySelectorAll('meta[name="theme-color"]').forEach(el => el.remove());
     const meta = document.createElement('meta');
@@ -139,7 +138,7 @@ export default function App() {
       remote.filter(r => tomb[r.message_id])
         .forEach(r => { deleteBookmarkRemote(uid, r.message_id).catch(() => {}); });
 
-      // Sisa lokal yang belum ada di remote = benar-benar dibuat saat offline → push.
+      // Local-only = made offline -> push.
       const remoteIds = new Set(remoteItems.map(i => i.id));
       const localOnly = freshLocal.filter(i => !remoteIds.has(i.id));
       localOnly.forEach(i => { upsertBookmarkRemote(uid, i).catch(() => {}); });
@@ -207,7 +206,6 @@ export default function App() {
   }, []);
 
   const startNewSession = useCallback(() => {
-    // Abort in-flight stream — abortStreamRef adalah ref, tidak masuk deps
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
     setMessages([]);
@@ -300,7 +298,7 @@ export default function App() {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) {
           await reg.update(); // cek SW versi baru dari server
-          // Kalau ada SW baru installing/waiting, tunggu dia ambil alih sebelum reload
+          // Wait for the new SW to take over.
           if (reg.waiting || reg.installing) {
             await new Promise<void>((resolve) => {
               navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
@@ -373,7 +371,6 @@ export default function App() {
       let timerId: ReturnType<typeof setTimeout> | null = null;
       const FLUSH_INTERVAL = 40;
       const FLUSH_BATCH = 200;
-      // AbortController per stream — ref tidak masuk deps, aman
       const streamCtrl = new AbortController();
       abortStreamRef.current = streamCtrl;
       const drip = () => {
@@ -413,7 +410,7 @@ export default function App() {
 
       let fullText: string;
       if (attachments && attachments.length > 0) {
-        // Jalur foto: sekarang streaming + progress event (OCR → cocokkan manual → diagnosis)
+        // Photo path streams too.
         fullText = await generateResponse(
           selectedModel, userName, currentMessages, content, attachments,
           onChunkCb, onAgentEventCb,

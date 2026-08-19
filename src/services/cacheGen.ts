@@ -1,9 +1,9 @@
-// Bump on anything that CHANGES ANSWER CONTENT (retrieval, prompt, output format). Not for UI.
+// Bump when ANSWER CONTENT changes. Not for UI.
 export const CACHE_GEN = 8;
 
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
 
-/** Hapus entri cache generasi lama (termasuk cache semantik yang sudah dibuang). */
+/** Drop older generations. */
 export function purgeStaleAnswerCaches(): void {
   try {
     if (typeof localStorage === 'undefined') return;

@@ -1,38 +1,35 @@
-// Seam antara orkestrasi (TS) dan server.js. Kode yang dipindah dari browser memanggil
-// Vertex/Cohere/Supabase lewat sini, jadi jalur upstream server.js yang sudah teruji
-// (retry 429, rotasi key Cohere, verifyToken) dipakai ulang — bukan diduplikasi.
+// Seam to server.js: reuse its upstream path, never duplicate it.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './orchestrator';
 
-/** Index menunjuk ke array `documents` yang dikirim — hindari cocokkan teks (chunk bisa kembar). */
+/** Index, not text — chunks can be identical. */
 export interface RerankOut { results: { index: number; score: number }[]; error?: string }
 
 export interface Deps {
-  /** Klien Supabase ber-scope JWT teknisi — RLS tetap berlaku seperti saat di browser. */
+  /** JWT-scoped, RLS still applies. */
   supabase: any;
   embed(text: string): Promise<number[]>;
   rerank(query: string, docs: string[], topN: number): Promise<RerankOut>;
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
-  /** SSE Vertex sudah di-parse server.js; watchdog/retry/deteksi loop tetap di orchestrator. */
+  /** SSE parsed by server.js. */
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
-  /** Eksperimen ?think=low|medium|high — diteruskan frontend per request. */
+  /** ?think= override. */
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
-  /** Ledger token satu pertanyaan. Per-request, kalau tidak angka teknisi lain ikut terhitung. */
+  /** Per-request token ledger. */
   usage: Usage;
-  /** Diisi orchestrator, dibaca server.js sesudah selesai — mis. boleh-tidaknya jawaban di-cache klien. */
+  /** Written by orchestrator, read by server.js. */
   meta: { cacheable?: boolean };
 }
 
-/** live: chunk apa pun dari upstream, termasuk yang isinya cuma thinking — dipakai watchdog. */
+/** live: any chunk, thinking included. */
 export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean }
 export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 
 export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number }
 export function newUsage(): Usage { return { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }
 
-// Per-request, BUKAN singleton: satu instance Cloud Run melayani banyak teknisi sekaligus dan
-// setiap request bawa klien Supabase-nya sendiri. Global variable akan menukar identitas mereka.
+// Per-request, NOT singleton — one instance serves many technicians.
 const store = new AsyncLocalStorage<Deps>();
 
 export function runWithDeps<T>(d: Deps, fn: () => Promise<T>): Promise<T> {

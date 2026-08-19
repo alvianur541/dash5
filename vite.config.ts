@@ -29,12 +29,12 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             },
             {
-              // Proxy API & streaming: NetworkOnly — POST, tidak cacheable
+              // POST, not cacheable.
               urlPattern: /^https:\/\/dash5\.my\.id\/(api|v1)\//i,
               handler: 'NetworkOnly',
             },
             {
-              // Google Fonts CSS + font files — CacheFirst, 1 tahun TTL
+              // Fonts, 1 year.
               urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
               handler: 'CacheFirst',
               options: {

@@ -94,7 +94,7 @@ function eventLabel(e: AgentEvent): { icon: 'search' | 'check' | 'spark'; text: 
 const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
   events,
 }: { events: AgentEvent[] }) {
-  // SATU indikator saja — ambil event terakhir yang punya label, ganti (bukan tumpuk).
+  // One indicator: replace, never stack.
   let current: AgentEvent | null = null;
   let label: ReturnType<typeof eventLabel> = null;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -318,7 +318,7 @@ export function ChatWindow({
   const handleFeedback = (id: string, type: 'up' | 'down') => {
     setFeedback(prev => {
       const next = prev[id] === type ? null : type;
-      // Persist HANYA saat memberi rating (bukan saat membatalkan) → sinyal learning loop.
+      // Persist only on rating, not on undo.
       if (next && user) {
         const idx = messages.findIndex(m => m.id === id);
         const answer = idx >= 0 ? (messages[idx]?.content ?? '') : '';
@@ -343,7 +343,7 @@ export function ChatWindow({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // Pesan baru dari user → selalu pin ke bawah (user pasti mau lihat pesannya terkirim).
+    // New user message -> pin to bottom.
     const lengthGrew = messages.length > prevLenRef.current;
     prevLenRef.current = messages.length;
     if (lengthGrew && messages[messages.length - 1]?.role === 'user') pinnedRef.current = true;
@@ -351,7 +351,7 @@ export function ChatWindow({
     if (pinnedRef.current) {
       el.scrollTop = el.scrollHeight;
     } else {
-      // Konten tumbuh saat user di atas → pastikan tombol "ke bawah" tampil.
+      // Growth while scrolled up -> show the button.
       setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
     }
   }, [messages, isTyping]);
@@ -435,7 +435,7 @@ export function ChatWindow({
       {messages.length > 0 && (
         <div className="chat-messages-list">
           {messages.map((message, idx) => {
-            // Cursor typewriter hanya tampil di pesan AI terakhir saat streaming
+            // Last AI message only.
             const isLast = idx === messages.length - 1;
             const showCursor = isStreaming && isLast && message.role === 'assistant';
             return (

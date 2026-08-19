@@ -1,4 +1,4 @@
-// Titik masuk bundel orkestrasi. server.js memanggil lewat sini, bukan ke modul dalam.
+// Bundle entry point.
 export { runWithDeps, newUsage } from './deps';
 export type { Deps, StreamChunk, StreamOpts, RerankOut, Usage } from './deps';
 export {

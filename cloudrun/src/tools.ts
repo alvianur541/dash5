@@ -21,17 +21,17 @@ export interface Tool {
   execute: (args: Record<string, unknown>, model: UnitModel) => Promise<ToolResult>;
 }
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// Helpers
 
 function toStrArray(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
   return val.filter((v): v is string => typeof v === 'string');
 }
 
-/** Sub-query bertipe — supaya fan-out cuma memanggil tool yang relevan, bukan TM + Parts semuanya. */
+/** Typed sub-query — calls only the relevant tool. */
 export interface SubQuery { q: string; type: 'technical' | 'parts' }
 
-/** Toleran dua bentuk: objek bertipe (baru) dan string polos (kalau model mengabaikan format). */
+/** Tolerates plain strings too. */
 export function toSubQueries(val: unknown): SubQuery[] {
   if (!Array.isArray(val)) return [];
   const out: SubQuery[] = [];
@@ -47,7 +47,7 @@ export function toSubQueries(val: unknown): SubQuery[] {
   return out;
 }
 
-// ─── Tool 1: search_technical_manual ──────────────────────────────────────────
+// search_technical_manual
 
 const searchTechnicalManualTool: Tool = {
   declaration: {
@@ -80,7 +80,7 @@ const searchTechnicalManualTool: Tool = {
   },
 };
 
-// ─── Tool 2: search_parts_catalog ─────────────────────────────────────────────
+// search_parts_catalog
 
 const searchPartsCatalogTool: Tool = {
   declaration: {
@@ -101,7 +101,7 @@ const searchPartsCatalogTool: Tool = {
   execute: async (args, model) => {
     const query = String(args.query ?? '').trim();
     if (!query) return { toolName: 'search_parts_catalog', content: '', hasResults: false, error: 'empty query' };
-    // skipExpand=true karena query dari AI sudah English-optimized via reasoning step
+    // Already English-optimized.
     const result = await searchPartsCatalog(query, model, true);
     return {
       toolName: 'search_parts_catalog',
@@ -113,7 +113,7 @@ const searchPartsCatalogTool: Tool = {
   },
 };
 
-// ─── Tool 3: search_engine_manual ─────────────────────────────────────────────
+// search_engine_manual
 
 const searchEngineManualTool: Tool = {
   declaration: {
@@ -148,7 +148,7 @@ const searchEngineManualTool: Tool = {
   },
 };
 
-// ─── Tool 4: search_circuit_diagram ───────────────────────────────────────────
+// search_circuit_diagram
 
 const searchCircuitDiagramTool: Tool = {
   declaration: {
@@ -181,7 +181,7 @@ const searchCircuitDiagramTool: Tool = {
   },
 };
 
-// ─── Tool 5: decompose_query ──────────────────────────────────────────────────
+// decompose_query
 
 const DECOMPOSE_SYSTEM = `You are a query decomposition specialist for Hitachi/KCM heavy equipment diagnostics.
 
@@ -253,8 +253,7 @@ const decomposeQueryTool: Tool = {
         INTENT_MODEL,
       );
       const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-      // Robust JSON extraction — toleran terhadap markdown fence atau text bocor
-      // Objek bertipe punya kurung dalam, jadi [\s\S]*? yang non-greedy bisa berhenti terlalu awal.
+      // Non-greedy regex stops too early on nested braces.
       const awal = raw.indexOf('[');
       const akhir = raw.lastIndexOf(']');
       const subQueries = awal >= 0 && akhir > awal
@@ -284,7 +283,7 @@ const decomposeQueryTool: Tool = {
   },
 };
 
-// ─── Catalog ──────────────────────────────────────────────────────────────────
+// Catalog
 
 export const TOOLS: Record<string, Tool> = {
   search_technical_manual: searchTechnicalManualTool,

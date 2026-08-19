@@ -10,7 +10,7 @@ import { SupportModal } from './SupportModal';
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
-/** Label Bookmark — 2 kata pertama jawaban AI (markdown dilucuti), ringkas & rapi di sidebar. */
+/** First 2 words of the answer, markdown stripped. */
 function pocketPreview(answer: string): string {
   return answer
     .replace(/```[\s\S]*?```/g, ' ')
@@ -79,7 +79,7 @@ export function Sidebar({
     return group?.type ?? MODEL_GROUPS[0].type;
   });
   const [showHistory, setShowHistory] = useState(true);
-  // Bookmark auto-hide: tertutup default — buka saat diketuk
+  // Collapsed by default.
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
 
@@ -366,7 +366,7 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                // Active marker matches the unit-model list: dot + tint, no own border.
+                                // Dot + tint, no border.
                                 "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
                                 isActive
                                   ? "bg-[var(--accent-active)]/8 text-[var(--text-primary)] font-medium"

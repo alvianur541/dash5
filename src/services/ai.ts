@@ -1,6 +1,4 @@
-// Klien tipis ke /v1/ask. Seluruh orkestrasi RAG (intent → search → rerank → generate)
-// sekarang jalan di Cloud Run — satu round-trip Sampit↔Iowa, bukan 5-7 seperti dulu.
-// Kode orkestrasinya ada di cloudrun/src/, bukan di sini lagi.
+// Thin client for /v1/ask. Orchestration lives in cloudrun/src/.
 
 import { UnitModel, Message } from '../types';
 import { getAuthToken } from './supabase';
@@ -17,7 +15,7 @@ export interface AgentEvent {
 
 type ThinkLevel = 'low' | 'medium' | 'high';
 
-/** Experiment switch: ?think=low|medium|high. Main model only; bypasses the answer cache. */
+/** ?think= — main model only, bypasses the answer cache. */
 const THINK_OVERRIDE: ThinkLevel | null = (() => {
   try {
     const v = new URLSearchParams(window.location.search).get('think')?.toLowerCase();
@@ -29,8 +27,8 @@ export function warmupProxy(): void {
   fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
 }
 
-// ─── Cache jawaban (localStorage) ─────────────────────────────────────────────
-// Tetap di klien: hit berarti NOL round-trip ke Cloud Run, bukan sekadar hemat token.
+// Answer cache
+// Stays client-side: a hit means zero round-trips.
 
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
@@ -62,7 +60,7 @@ function writeAnswerCache(key: string, text: string): void {
   } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
 }
 
-/** Replay cache dengan ritme mirip streaming asli — tanpa ini jawaban muncul sekali kedip. */
+/** Replay with streaming rhythm. */
 async function streamCanned(text: string, onChunk: (t: string) => void): Promise<string> {
   const CHUNK = 24;
   for (let i = 0; i < text.length; i += CHUNK) {
@@ -72,7 +70,7 @@ async function streamCanned(text: string, onChunk: (t: string) => void): Promise
   return text;
 }
 
-// ─── Panggilan ke /v1/ask ─────────────────────────────────────────────────────
+// /v1/ask
 
 interface AskBody {
   model: UnitModel;
@@ -134,7 +132,7 @@ async function ask(
           break;
         case 'meta':
           cacheable = frame.cacheable === true;
-          // Jaring pengaman: kalau ada frame text yang hilang, teks utuh dari server yang menang.
+          // Server full text wins.
           if (typeof frame.full === 'string' && frame.full.length > text.length) text = frame.full;
           break;
         case 'error':
@@ -148,7 +146,7 @@ async function ask(
   return { text: text || FALLBACK_RESPONSE, cacheable };
 }
 
-// ─── Public API — tanda tangan identik dengan versi browser ───────────────────
+// Public API — signatures unchanged
 
 export async function generateResponseStream(
   model: UnitModel,
@@ -195,7 +193,7 @@ function fileToInline(file: File): Promise<{ mimeType: string; data: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      // reader.result bisa null jika file kosong atau read gagal sebelum onloadend
+      // null on empty or failed read.
       const result = reader.result;
       if (typeof result !== 'string') { reject(new Error('FileReader result bukan string')); return; }
       const [, base64] = result.split(',');

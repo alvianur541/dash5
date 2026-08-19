@@ -9,7 +9,7 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 registerSW({ immediate: true });
 
-// Buang cache generasi lama sebelum render — lihat CACHE_GEN di services/cacheGen.ts.
+// See CACHE_GEN.
 import { purgeStaleAnswerCaches } from './services/cacheGen';
 purgeStaleAnswerCaches();
 

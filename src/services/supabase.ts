@@ -4,8 +4,7 @@ import { Message, UnitModel } from '../types';
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// detectSessionInUrl mati: fitur lupa-password sudah dihapus, jadi token recovery di fragment URL
-// tidak boleh ditukar jadi sesi — kalau tidak, link reset lama = login tanpa password.
+// Off: an old recovery link would become a passwordless login.
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, { auth: { detectSessionInUrl: false } })
   : null;
@@ -14,7 +13,7 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
 export async function getAuthToken(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
-  // Null = user belum login (Dash5 wajib login sebelum akses chat).
+  // Null = not logged in.
   return data.session?.access_token ?? null;
 }
 
@@ -59,11 +58,11 @@ export async function fetchUserSessionList(userId: string): Promise<import('../t
     .select('id, title, model, updated_at, user_id')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false })
-    .limit(100); // 100 sesi — cukup untuk power user tanpa overload response
+    .limit(100);  // Enough for power users.
 
   if (error) {
     console.error('Failed to fetch session list:', error.message);
-    return null; // null = error jaringan, bukan kosong
+    return null;  // Network error, not empty.
   }
 
   return (data || []).map(row => ({
@@ -177,8 +176,8 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
   }
 
   const PAGE_SIZE = 1000;
-  const INITIAL_BATCH = 4;  // 4000 docs covered in 1 parallel batch (most common case)
-  const MAX_SAFETY = 20;    // hard upper bound — 20K docs cap before warning
+  const INITIAL_BATCH = 4;  // 4000 docs.
+  const MAX_SAFETY = 20;  // Hard cap.
 
   type Row = { metadata: { Model?: string; Kategori?: string } };
 
@@ -191,7 +190,7 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
     return Array.isArray(result.data) ? (result.data as Row[]) : [];
   };
 
-  // Batch 1: paralel 4 pages (cover typical DB size 0-4K)
+  // Batch 1: 4 pages in parallel.
   const initialSettled = await Promise.allSettled(
     Array.from({ length: INITIAL_BATCH }, (_, i) => fetchPage(i))
   );
@@ -203,18 +202,18 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
       if (r.value.length < PAGE_SIZE) lastPageFull = false;
     } else {
       console.error('Catalog page fetch error:', r.reason);
-      lastPageFull = false; // stop early on error
+      lastPageFull = false;  // Stop on error.
     }
   }
 
-  // Batch 2+: continue sequential dari page INITIAL_BATCH sampai empty atau cap
+  // Batch 2+: sequential.
   let nextPage = INITIAL_BATCH;
   while (lastPageFull && nextPage < MAX_SAFETY) {
     try {
       const rows = await fetchPage(nextPage);
       if (rows.length === 0) break;
       allRows.push(...rows);
-      if (rows.length < PAGE_SIZE) break; // partial page = last page
+      if (rows.length < PAGE_SIZE) break;  // Last page.
       nextPage++;
     } catch (err) {
       console.error('Catalog pagination error at page', nextPage, err);

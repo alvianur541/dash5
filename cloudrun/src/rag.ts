@@ -1,8 +1,7 @@
 import { deps } from './deps';
 import { UNIT_MODELS } from './types';
 
-// Klien Supabase datang dari server.js per-request (ber-scope JWT teknisi) supaya RLS
-// tetap berlaku persis seperti waktu kode ini masih jalan di browser.
+// Per-request client, JWT-scoped.
 const sb = () => deps().supabase as any;
 
 
@@ -15,13 +14,13 @@ interface SearchResult {
 
 
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Biggest latency lever in search. Safe only because candidates are interleaved kw/vector below.
+// Latency lever.
 const RERANK_INPUT_CAP = 30;
-/** Dokumen yang dikembalikan Cohere → masuk MMR. Wajib > topN, kalau sama MMR tak punya pilihan. */
+/** Must exceed topN, else MMR has no choice. */
 const RERANK_RETURN_N = 10;
-// Coarse gate only - measured to pass 1259/1259 chunks. Cohere rerank is the real filter.
+// Coarse gate.
 const VECTOR_MATCH_COUNT = 20;
-// Jaring pengaman ukuran payload. Tak pernah tersentuh selama RERANK_DOC_CAP masih aktif.
+// Payload guard.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
 function capRerankPayload(docs: string[]): string[] {
@@ -45,7 +44,7 @@ const embeddingCache    = new Map<string, { values: number[]; expiresAt: number 
 const embeddingInFlight = new Map<string, Promise<number[]>>();
 
 function setCached(key: string, value: number[]) {
-  // Delete first so re-insert lands at end of Map iteration order (true LRU)
+  // True LRU.
   if (embeddingCache.has(key)) embeddingCache.delete(key);
   if (embeddingCache.size >= 200) {
     const oldest = embeddingCache.keys().next().value;
@@ -57,7 +56,6 @@ function setCached(key: string, value: number[]) {
 function getCachedLru(key: string): number[] | null {
   const entry = embeddingCache.get(key);
   if (!entry || entry.expiresAt <= Date.now()) { embeddingCache.delete(key); return null; }
-  // Promote to MRU position: delete + re-insert
   embeddingCache.delete(key);
   embeddingCache.set(key, entry);
   return entry.values;
@@ -67,10 +65,9 @@ function isFaultCode(query: string): boolean {
   return /^(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i.test(query.trim());
 }
 
-// Parts catalog detection — keyword + part number patterns
 const PARTS_KEYWORDS_RE = /\b(part\s*number|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
 
-// Price query Indonesia ('harga seal kit') — PARTS_KEYWORDS_RE butuh kata 'part', jadi ini pelengkap.
+// Price queries.
 const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft)\b/i;
 
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
@@ -90,11 +87,11 @@ export function extractPartNumber(query: string): string | null {
 export function extractSearchTerms(query: string): string[] {
   const trimmed = query.trim();
   if (isFaultCode(trimmed)) {
-    // Normalize spacing variants: W:1208 → W: 1208 and vice versa
+    // Spacing variants.
     const spaced   = trimmed.replace(/^([A-Z]{1,3})\s*:\s*([0-9A-Fa-f]+)/i, '$1: $2');
     const unspaced = trimmed.replace(/^([A-Z]{1,3})\s*:\s*([0-9A-Fa-f]+)/i, '$1:$2');
     const numOnly  = trimmed.replace(/^[A-Z]{1,3}\s*:?\s*/i, '');
-    // Strip-leading-zero variant ("00436-04" → "00436-4") dicoba paralel utk keyword hit keduanya.
+    // Stripped variant.
     const stripped = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1');
     return [...new Set([trimmed, spaced, unspaced, numOnly, stripped])].filter(Boolean).slice(0, 5);
   }
@@ -121,7 +118,7 @@ export function extractSearchTerms(query: string): string[] {
   return [trimmed, ...picked].slice(0, 3);
 }
 
-/** Samakan tunggal & jamak untuk pencocokan substring. <6 huruf dibiarkan (oil, tank, swing). */
+/** Singular/plural match. */
 function batangKata(w: string): string {
   if (w.length < 6) return w;
   if (w.endsWith('ies')) return w.slice(0, -3) + 'i';
@@ -139,7 +136,7 @@ const RERANK_DOC_CAP = 2500;
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
 
-  // Dokumen dipangkas sebelum dikirim, tapi skor dipetakan balik ke teks penuh.
+  // Scores map back to full text.
   const scoringDocs = docs.map(d => d.length > RERANK_DOC_CAP ? d.slice(0, RERANK_DOC_CAP) : d);
 
   try {
@@ -153,7 +150,7 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
     const msg = (err as Error)?.message ?? 'Unknown error';
     const errMsg = msg.includes('abort') ? 'Rerank timeout (8s)' : `Rerank error: ${msg}`;
     console.warn('Cohere rerank failed:', errMsg);
-    // Fallback: pakai vector order, score=0.5 neutral (tidak trigger LOW tier)
+    // Neutral score.
     return { docs: docs.slice(0, topN).map(content => ({ content, score: 0.5 })), error: errMsg };
   }
 }
@@ -178,7 +175,7 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
   if (docs.length <= finalN) return docs;
   const pool = docs.map(d => ({ d, tok: mmrTokens(d.content) }));
   pool.sort((a, b) => b.d.score - a.d.score);
-  const selected = [pool.shift()!]; // seed: relevansi tertinggi
+  const selected = [pool.shift()!];  // Seed.
   while (selected.length < finalN && pool.length > 0) {
     let bestIdx = 0, best = -Infinity;
     for (let i = 0; i < pool.length; i++) {
@@ -193,8 +190,7 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
 }
 
 
-// Diturunkan dari UNIT_MODELS — jangan tulis ulang daftarnya di sini.
-// Spasi jadi \s+ ("KCM 60ZV"), dan ZW140 boleh bersufiks ("ZW140-6").
+// Derived from UNIT_MODELS.
 const MODEL_NAMES_RE = new RegExp(
   '\\b(' + UNIT_MODELS
     .map(m => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
@@ -211,7 +207,7 @@ export function stripModelFromQuery(query: string): string {
 }
 
 const EXPAND: Record<string, string> = {
-  // Indonesian mechanical terms → English
+  // Indonesian -> English
   hidrolik: 'hydraulic', hidraulik: 'hydraulic', pompa: 'pump',
   katup: 'valve', silinder: 'cylinder', tangki: 'tank', selang: 'hose',
   akumulator: 'accumulator', tekanan: 'pressure', aliran: 'flow',
@@ -221,12 +217,10 @@ const EXPAND: Record<string, string> = {
   aki: 'battery', starter: 'starter motor', sekring: 'fuse',
   kabel: 'wiring harness', bantalan: 'bearing',
   sepatu: 'shoe track', final: 'final drive', travel: 'travel motor',
-  // Symptoms
   bocor: 'leak', kebocoran: 'leak', panas: 'overheat', macet: 'stuck',
   tersumbat: 'clogged', lemah: 'weak power', lambat: 'slow response',
   getaran: 'vibration', aus: 'wear', rusak: 'failure', kerusakan: 'failure',
   kendur: 'slack', mati: 'not working',
-  // Fluids / maintenance
   oli: 'oil', minyak: 'oil', pendingin: 'coolant', gemuk: 'grease',
   kapasitas: 'capacity', celah: 'clearance', toleransi: 'tolerance',
   spesifikasi: 'specification', kalibrasi: 'calibration',
@@ -234,32 +228,21 @@ const EXPAND: Record<string, string> = {
   torsi: 'torque', kecepatan: 'speed',
   perawatan: 'maintenance', servis: 'service',
   sistem: 'system', kopling: 'clutch', rem: 'brake', rantai: 'chain',
-  // Parts shorthand (lapangan) — value tidak mengandung key
+  // Field shorthand
   cyl: 'cylinder', cyls: 'cylinders', cilinder: 'cylinder',
   kit: 'assembly o-ring',   // 'kit assembly seal' → hapus 'kit' dari value
   seal: 'o-ring gasket',    // 'seal o-ring' → hapus 'seal' dari value
   asm: 'assembly', assy: 'assembly',
   pn: 'part number', nomor: 'number part',
-  // Operator manual
   isi: 'capacity refill',
   cek: 'check inspect',
   jadwal: 'schedule maintenance interval',
-  // Hydraulic circuit
   relief: 'valve pressure MPa',          // hapus 'relief'
   displacement: 'cm3 rev motor',         // hapus 'displacement'
 };
 
-// ⚠️ DIBUANG 17 Agu 2026 — pemetaan LINTAS-KOMPONEN yang menambah makna baru, bukan menerjemahkan:
-//   bucket → 'arm cylinder' · arm → 'cylinder boom' · boom → 'cylinder hydraulic'
-//   blade ↔ dozer · main → 'pump primary' · pump → 'hydraulic variable piston'
-//   pilot → 'circuit pressure pump' · control ↔ spool · port → 'relief pressure'
-// expandQuery MENAMBAHKAN token ke query sebelum embed, jadi "seal kit bucket" ikut membawa
-// "arm cylinder" — komponen yang BERBEDA. Untuk katalog parts itu menggeser vektor ke section
-// yang salah. Kamus ini tujuannya Indonesia→Inggris; pemetaan antar-komponen bukan tugasnya.
 
-// Kata yang DIBUANG dari EXPAND tetap harus dihitung "teknis" di sini. TECH_TERMS dipakai
-// menilai bigram di extractSearchTerms — kalau ikut hilang, "swing motor" & "main pump" kehilangan
-// bobotnya dan pemilihan term keyword ikut melemah. Tidak diekspansi ≠ bukan istilah teknis.
+// Not expanded, still technical.
 const TECH_TERMS = new Set([
   ...Object.keys(EXPAND),
   ...Object.values(EXPAND).flatMap(v => v.split(' ')),
@@ -281,13 +264,13 @@ const SPEC_TERMS = new Set([
   'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
   'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
   'resistance', 'flow', 'dimension', 'dimensi', 'gap', 'speed',
-  // Dimensi/ukuran — sering ditanya untuk pin/shaft/bushing/bore
+  // Dimensions.
   'diameter', 'dia', 'length', 'panjang', 'width', 'lebar', 'height', 'tinggi',
   'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore',
 ]);
 
 function expandQuery(query: string): string {
-  // Limit max 3 ekspansi + dedupe per-token (cegah "seal kit" → 8 kata distorsi).
+  // Max 3, deduped.
   const seen = new Set<string>();
   const extras: string[] = [];
   for (const w of query.toLowerCase().split(/\s+/)) {
@@ -322,19 +305,17 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
   return values;
 }
 
-/** Diexport utk semantic cache — LRU + in-flight dedup di dalamnya cegah embed ganda. */
+/** LRU + in-flight dedup. */
 export async function getEmbedding(query: string): Promise<number[]> {
   const cacheKey = query.toLowerCase().replace(/\s+/g, ' ').trim();
 
-  // 1. Cache hit — kembalikan langsung tanpa network (promotes to MRU)
   const cached = getCachedLru(cacheKey);
   if (cached) return cached;
 
-  // 2. In-flight dedup pakai key yang sama agar concurrent identical queries hanya 1 fetch
+  // Dedup concurrent fetches.
   const inFlight = embeddingInFlight.get(cacheKey);
   if (inFlight) return inFlight;
 
-  // 3. Fetch dengan query asli (proxy embed query string), cache pakai normalized key
   const promise = fetchEmbedding(query, cacheKey).finally(() => {
     embeddingInFlight.delete(cacheKey);
   });
@@ -346,9 +327,9 @@ export async function getEmbedding(query: string): Promise<number[]> {
 interface RAGResult {
   content: string;
   hasResults: boolean;
-  ragError?: string;        // Set kalau embedding/rerank pipeline error — caller harus surface ke user
+  ragError?: string;  // Caller must surface.
   confidence?: 'high' | 'medium' | 'low'; // Adaptive retrieval confidence dari rerank score distribution
-  topScore?: number;        // Top rerank score (0..1) — untuk telemetry & calibration
+  topScore?: number;  // Telemetry.
 }
 
 const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
@@ -365,15 +346,15 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 4,   // 4 chunk final yang benar-benar dibaca Gemini (riwayat: 5 → 4 → 3 → 4).
-  forceKategori?: string,  // override default routing — utk HCD search via tools
+  topN = 4,  // Final chunks.
+  forceKategori?: string,  // Routing override.
 ): Promise<RAGResult> {
   if (!sb() || queries.length === 0) return { content: '', hasResults: false };
 
   const tMulai = Date.now();
   const primaryQuery = queries[0].trim();
   const faultCode    = isFaultCode(primaryQuery);
-  // forceKategori menang di atas auto-routing — caller eksplisit minta kategori spesifik
+  // Explicit wins.
   const strictFilter = forceKategori
     ? { Model: model, Kategori: forceKategori }
     : faultCode
@@ -381,7 +362,6 @@ export async function searchTechnicalManualMulti(
       : { Model: model };
   const looseFilter  = { Model: model };
 
-  // Normalize all queries for keyword search (colon spacing only, no strip)
   const normalizedQueries = queries.map(q =>
     faultCode
       ? q.trim().replace(/^([A-Z]{1,3})\s*:\s*([0-9A-Fa-f]+)/i, '$1: $2')
@@ -403,30 +383,25 @@ export async function searchTechnicalManualMulti(
       .some(w => SPEC_TERMS.has(w))
     || NUMERIC_INTENT_RE.test(primaryQuery);
 
-  // 1b. Keyword ber-peringkat (non-fault-code) — skoring dikerjakan RPC di database.
+  // Ranked keyword.
   const rankedPromise: Promise<string[]> = (async () => {
     if (faultCode) return [];
     const words = primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
-// Bigrams are essential: manuals write 'swing motor ASSEMBLY weight', so the full phrase scores zero.
-    // Manual menulis JAMAK ("Service Refill Capacities"), analyzeIntent menulis TUNGGAL
-    // ("capacity"). RPC mencocokkan ILIKE substring, dan 'capacity' BUKAN substring dari
-    // 'capacities' → sumber terbersih untuk pertanyaan kapasitas tidak pernah terambil.
-    // Memotong akhiran hanya MEMPERPENDEK term, jadi hasilnya selalu superset — tidak mungkin
-    // menghilangkan kecocokan yang tadinya ada. Terukur: brosur spec di luar-10 → #2.
+// Bigrams matter.
+    // Stem: 'capacity' misses 'Capacities'.
     const stems = words.map(batangKata);
     const bigrams = stems.slice(0, -1).map((w, i) => `${w} ${stems[i + 1]}`);
-    // Frasa penuh tetap SELURUH query (termasuk kata pendek spt 'kg'), cuma dibatangkan.
-    // Membuangnya bikin "operating weight kg" kehilangan peringkat — terukur, jangan diulang.
+    // Full phrase stays whole.
     const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
     const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
-    // Pertanyaan NILAI terukur? → aktifkan bonus angka+satuan.
+    // Numeric bonus.
     const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await sb().rpc('match_documents_keyword_ranked', {
-// Term count is the only expensive knob here (~+35ms each); p_match_count is free.
+// Term count is the cost.
       p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
@@ -455,7 +430,7 @@ export async function searchTechnicalManualMulti(
     ? stripped
     : primaryQuery;
 
-  // Dirantai ke promise embedding → paralel penuh dengan jalur keyword.
+  // Parallel with keyword.
   const vectorPromise: Promise<SearchResult[]> = getEmbedding(embeddingQuery).then(async emb => {
     let { data: vecData } = await sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
@@ -468,8 +443,7 @@ export async function searchTechnicalManualMulti(
     }
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
-    // Jalur vektor dilaporkan TERPISAH dari keyword — tanpa ini tidak ketahuan arm mana yang
-    // menyumbang kandidat dan mana yang diam saja.
+    // Vector arm logged separately.
     console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
       hasil.length,
       hasil[0]?.similarity?.toFixed(3) ?? '-',
@@ -485,7 +459,7 @@ export async function searchTechnicalManualMulti(
   ]);
   const msCari = Date.now() - tMulai;
 
-// Collect separately then INTERLEAVE so the cap cuts fairly - never revert to keyword-first.
+// Interleave, never keyword-first.
   const kwDocs:  string[] = [];
   const vecDocs: string[] = [];
 
@@ -514,7 +488,7 @@ export async function searchTechnicalManualMulti(
     pushUnik(vecDocs[i]);
   }
 
-  // Fallback keyword ke loose filter kalau strict Kategori kosong. Ditandai → inject caveat confidence.
+  // Loose fallback -> caveat.
   let usedLooseFallback = false;
   if (faultCode && allDocs.length === 0) {
     const fbPromises = normalizedQueries.map(sq =>
@@ -543,14 +517,14 @@ export async function searchTechnicalManualMulti(
       const upper = text.toUpperCase();
       if (upper.includes(codeUpper)) return true;
       if (numOnly.length >= 4 && upper.includes(numOnly)) return true;
-      // Accept stripped variant (leading-zero removed from suffix)
+      // Stripped variant.
       if (stripped !== numOnly && stripped.length >= 4 && upper.includes(stripped)) return true;
       return false;
     });
   }
 
   if (filteredDocs.length === 0) {
-    // Kalau embedding/vector gagal DAN keyword juga tidak ada hasil → RAG pipeline error
+    // Both arms failed.
     const embedFailed = vectorSettled.status === 'rejected';
     if (embedFailed && allDocs.length === 0) {
       const reason = (vectorSettled.reason as Error)?.message ?? 'Embedding service error';
@@ -559,28 +533,23 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
-  // Cap input rerank → bounded latency + bounded PAYLOAD.
+  // Bounded payload.
   const rerankInput = capRerankPayload(filteredDocs);
-  // Rerank pool lebih besar dari topN → MMR punya kandidat untuk dipilih beragam.
   const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
   const tRerank = Date.now();
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
   const msRerank = Date.now() - tRerank;
-  // MMR: topN relevan TAPI saling melengkapi (top[0] tetap relevansi tertinggi → confidence valid).
+  // MMR keeps top[0] first.
   let top = mmrSelect(reranked, topN, 0.7);
 
-  // Jaminan slot untuk juara KATA KUNCI pada pertanyaan bernilai. Cohere memeringkat fokus topik,
-  // bukan chunk yang memegang angkanya — chunk tabel campuran selalu kalah dari chunk prosedur.
-  // ⚠️ Dulu hanya melindungi peringkat #1 dan itu TIDAK CUKUP: terukur 16 Agu 2026, untuk
-  // "engine oil capacity" jawabannya (25 L) ada di #2 sedangkan #1 chunk lain — jadi jaminannya
-  // membuang slot untuk chunk keliru dan chunk jawaban tetap tersingkir. Sekarang 2 teratas.
+  // Guarantees top 2, not just #1.
   const KW_DIJAMIN = 2;
   if (wantsNumericAnswer && rankedSettled.status === 'fulfilled' && top.length > 0) {
     const kandidat = rankedSettled.value
       .slice(0, KW_DIJAMIN)
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
-      // top[0] WAJIB tetap di depan — skor rerank tertingginya yang menentukan tier confidence.
+      // top[0] sets tier.
       top = [top[0], ...kandidat.map(c => ({ content: c, score: top[0].score })), ...top.slice(1)]
         .slice(0, topN);
       console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
@@ -593,26 +562,23 @@ export async function searchTechnicalManualMulti(
     ? 'medium'
     : confidence;
 
-  // LOG TIER EFEKTIF, bukan mentahnya. Kalau rerank gagal, semua skor jadi 0.5 semu (>0.45 = high)
-  // padahal tier yang dipakai sudah diturunkan — mencetak yang mentah pernah membuat sesi ini
-  // menyimpulkan retrieval sehat padahal Cohere sedang menolak semua key.
+  // Effective tier, not raw.
   const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
   console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
     effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
 
-  // Chunk mana yang BENAR-BENAR sampai ke Gemini. Tanpa ini, "jawaban salah" tidak bisa dipisah
-  // antara retrieval meleset vs model tak mau menyimpulkan dari data yang sudah ada di tangannya.
+  // What actually reached Gemini.
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
-  // Content di-join dgn separator --- saja (tanpa prefix [Rank N] — AI tak butuh nomor ranking).
+  // No rank prefix.
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
 
 const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
 
-/** Search ENGINE MANUAL by P-code (2nd-pass setelah fault code TM) → DTC diagnosis procedure. */
+/** P-code 2nd pass. */
 export async function searchEngineManual(
   pCodes: string[],
   model: string,
@@ -648,7 +614,7 @@ export async function searchEngineManual(
 
   const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
   const { confidence, topScore } = computeConfidence(top);
-  // Rerank gagal → semua skor 0.5 semu (>0.45 = high). Turunkan, sama seperti jalur TM.
+  // Rerank failed -> downgrade.
   const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
   console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
     effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);
@@ -670,11 +636,11 @@ function promoSectionKey(content: string): string {
   return (m ? m[1] : '').trim().toUpperCase();
 }
 
-// byPeriod: array per period dalam urutan ACTIVE_PROMO_KATEGORI (lama → baru).
+// Old -> new order.
 function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
   const out: PromoChunk[] = [];
   const seen = new Set<string>();
-  for (let i = byPeriod.length - 1; i >= 0; i--) {   // iterate newest → oldest
+  for (let i = byPeriod.length - 1; i >= 0; i--) {  // Newest first.
     const period = byPeriod[i];
     for (const d of period) {
       const key = promoSectionKey(d.content);
@@ -715,7 +681,6 @@ export async function searchServiceIntervalParts(
 
   const queryText = stripModelFromQuery(query.trim());
 
-  // Search CPM + promo aktif (Q2 FY2026) paralel.
   const cpmPromise = sb().rpc('match_documents_hybrid', {
     query_text: queryText,
     query_embedding: embedding,
@@ -737,7 +702,7 @@ export async function searchServiceIntervalParts(
   const [cpmRes, ...promoSettled] = await Promise.allSettled([cpmPromise, ...promoPromises]);
 
   const cpmData = cpmRes.status === 'fulfilled' && Array.isArray(cpmRes.value.data) ? cpmRes.value.data : [];
-  // promoSettled urutannya = ACTIVE_PROMO_KATEGORI (lama → baru). Prefer harga period terbaru.
+  // Prefer newest.
   const promoByPeriod: HybridResult[][] = promoSettled.map(r =>
     r.status === 'fulfilled' && Array.isArray(r.value.data) ? r.value.data : [],
   );
@@ -747,7 +712,6 @@ export async function searchServiceIntervalParts(
     return { content: '', hasResults: false };
   }
 
-  // Format: CPM dulu (primary source PN), lalu PROMO (untuk lookup harga)
   const all = [...cpmData, ...promoData];
   return {
     content: all.map(d => d.content).join('\n\n---\n\n'),
@@ -765,7 +729,7 @@ export async function searchPartsCatalog(
   const partNum = extractPartNumber(query);
   const isEnginePN = !!partNum && ENGINE_PN_RE.test(partNum);
 
-  // PN literal digabung dengan konteks aslinya — embed PN saja bikin vektor kabur.
+  // PN needs context.
   const stripped = stripModelFromQuery(query.trim());
   const embedQuery = partNum
     ? stripped                                  // PN tetap dalam konteks (mis. "YB60000068 itu apa")
@@ -781,7 +745,6 @@ export async function searchPartsCatalog(
 
   type HybridResult = { content: string; similarity?: number; match_type?: string };
 
-  // Cek apakah model punya engine catalog (saat ini hanya ZX200-5G)
   const hasEngineCatalog = ENGINE_CATALOG_MODELS.has(model);
 
   const bodyCount = (isEnginePN && hasEngineCatalog) ? 3 : 7;     // was 2/5
@@ -789,10 +752,10 @@ export async function searchPartsCatalog(
   const promoCount = 5;                                           // was 3
   const cpmCount = 1;
 
-  // Strip nama model dari query_text juga — cegah keyword terpolarisasi ke chunk yg literal mention model.
+  // Strip model name.
   const queryText = stripModelFromQuery(query.trim());
 
-  // Build queries dengan structured indexes — track per-kategori untuk assignment hasil yg benar.
+  // Indexed per category.
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
   const PROMO_START_IDX = 2;
@@ -800,7 +763,6 @@ export async function searchPartsCatalog(
   const ENGINE_IDX = hasEngineCatalog ? PROMO_END_IDX : -1;
 
   const queries: Promise<{ data: HybridResult[] | null }>[] = [
-    // 0. PARTS CATALOG — body/hydraulic/frame/cab sections
     sb().rpc('match_documents_hybrid', {
       query_text: queryText,
       query_embedding: embedding,
@@ -808,7 +770,6 @@ export async function searchPartsCatalog(
       filter: { Model: model, Kategori: 'PARTS CATALOG' },
       similarity_threshold: 0.28,
     }) as unknown as Promise<{ data: HybridResult[] | null }>,
-    // 1. CPM — maintenance schedule PNs dengan interval jam operasi
     sb().rpc('match_documents_hybrid', {
       query_text: queryText,
       query_embedding: embedding,
@@ -818,7 +779,7 @@ export async function searchPartsCatalog(
     }) as unknown as Promise<{ data: HybridResult[] | null }>,
   ];
 
-  // 2+. SEMUA periode PROMO aktif (Q4+Q1). Threshold lebih rendah utk capture section non-electrical.
+  // Lower threshold.
   for (const promoKat of ACTIVE_PROMO_KATEGORI) {
     queries.push(
       sb().rpc('match_documents_hybrid', {
@@ -858,7 +819,7 @@ export async function searchPartsCatalog(
   const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
 
-  // Fallback ke match_documents standard kalau hybrid RPC error (mis. function not deployed)
+  // Hybrid RPC fallback.
   if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
@@ -881,7 +842,7 @@ export async function searchPartsCatalog(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5);
     if (allFallback.length === 0) return { content: '', hasResults: false };
-    // Sumber pengganti (Workshop Manual) untuk model tanpa Parts Catalog — tak pernah 'high'.
+    // Never high.
     return {
       content: allFallback.map(d => d.content).join('\n\n---\n\n'),
       hasResults: true,
@@ -914,7 +875,7 @@ export async function searchPartsCatalog(
       if (!error && reranked.length > 0) {
         rerankTopScore = reranked[0].score;
         rerankDipakai  = true;
-        // MMR: hasil relevan tapi saling melengkapi (hindari 3 section nyaris kembar)
+        // Avoid near-duplicates.
         const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
         const byContent = new Map(rest.map(d => [d.content, d]));
         orderedNonCpm = [
@@ -930,10 +891,7 @@ export async function searchPartsCatalog(
 
   const merged = [...cpmData, ...orderedNonCpm];
 
-  // 🔴 PAGAR PN LITERAL. Teknisi menyebut PN spesifik = dia menanyakan PN ITU, bukan yang mirip.
-  // Tanpa ini, PN yang tidak ada di katalog tetap dijawab dengan part lain yang kebetulan mirip
-  // secara semantik — dan salah PN saat memesan part itu mahal. Lebih baik jujur tidak ketemu.
-  // Dua bukti diterima supaya tidak salah menolak: match_type dari RPC ATAU PN muncul verbatim.
+  // Literal PN required.
   if (partNum) {
     const pnUpper = partNum.toUpperCase();
     const adaLiteral = merged.some(d =>
@@ -945,12 +903,10 @@ export async function searchPartsCatalog(
     }
   }
 
-  // Top 12 (naik dari 7) → lebih banyak section PROMO/PARTS terwakili (compression extract nanti).
   const top = merged.slice(0, 12);
   if (top.length === 0) return { content: '', hasResults: false };
 
-  // Confidence jalur parts (dulu tidak ada sama sekali → jawaban parts tak pernah dapat caveat).
-  // PN literal terbukti = bukti terkuat; selain itu ikut skor rerank kalau memang dijalankan.
+  // Parts confidence.
   const partsConfidence: 'high' | 'medium' | 'low' = partNum
     ? 'high'
     : rerankDipakai

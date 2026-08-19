@@ -1,19 +1,13 @@
 const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 const { setGlobalDispatcher, Agent } = require('undici');
-// Bundel orkestrasi. Di-require di ATAS supaya UNIT_MODELS bisa dipakai semua allowlist model —
-// satu daftar, bukan disalin ulang di beberapa tempat.
+// Required early so UNIT_MODELS feeds every allowlist.
 const orch = require('./dist/orchestrator.cjs');
 
-// SATU sumber daftar unit (cloudrun/src/types.ts). Menambah model cukup di sana.
+// Single source: cloudrun/src/types.ts.
 const UNIT_MODELS = new Set(orch.UNIT_MODELS);
 
-// Koneksi menganggur JANGAN dipakai ulang terlalu lama. Terukur 16 Agu 2026: panggilan ke
-// aiplatform.googleapis.com macet >8 dtk pada 31-67% pertanyaan, lalu koneksi BARU sembuh
-// dalam 3-5 dtk. Penyebabnya koneksi pool yang sudah mati diam-diam (egress/NAT Cloud Run
-// memutus mapping yang menganggur) tapi Node masih mengira hidup.
-// Membuangnya setelah 10 dtk menganggur berarti bayar TLS handshake ~100-300 ms sesekali —
-// jauh lebih murah daripada menggantung 8 dtk. Berlaku global: Vertex, Supabase, Cohere.
+// Idle pooled connections die silently; drop them after 10s.
 setGlobalDispatcher(new Agent({
   keepAliveTimeout: 10_000,
   keepAliveMaxTimeout: 10_000,
@@ -22,8 +16,7 @@ setGlobalDispatcher(new Agent({
 
 const app = express();
 
-// Parser global HARUS melewati route bawah ini — kalau tidak dia menelan body duluan dan
-// bigJson tak pernah kebagian, jadi foto/audio besar kena 413 walau limitnya 20mb.
+// Global parser MUST skip these, else bigJson never runs and photos 413.
 const BIG_BODY_PATHS = new Set(['/v1/chat', '/v1/chat/stream', '/v1/transcribe', '/v1/ask']);
 const smallJson = express.json({ limit: '1mb' });
 const bigJson   = express.json({ limit: '20mb' });
@@ -37,7 +30,7 @@ if (ALLOWED_ORIGINS.length === 0) {
   console.error('ALLOWED_ORIGIN kosong / hanya "*" — CORS ditutup total. Set origin eksplisit.');
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
-// Keep BELOW the client STREAM_TIMEOUT_MS so this proxy can return a real error first.
+// Keep below client STREAM_TIMEOUT_MS.
 const UPSTREAM_TIMEOUT_MS = 35_000;
 const UPSTREAM_429_BACKOFF_MS = [1_500, 4_000, 8_000];
 const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
@@ -54,7 +47,7 @@ const COHERE_KEYS = [
 
 const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast';
 
-// Models outside this list are rejected 400. An explicit env var overrides this default entirely.
+// Env var replaces this default entirely.
 const ALLOWED_MODELS = new Set(
   (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
@@ -101,9 +94,9 @@ async function verifyToken(req, res, next) {
   try {
     const user = await fetchAuthUser(authHeader.slice(7));
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
-    // Identitas TERVERIFIKASI — endpoint wajib pakai ini, JANGAN percaya nama/NIK/email dari body.
+    // Verified identity — never trust body.
     req.authUser = user;
-    req.authToken = authHeader.slice(7); // diteruskan ke klien Supabase /v1/ask supaya RLS tetap jalan
+    req.authToken = authHeader.slice(7);  // RLS.
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -115,7 +108,7 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
 });
 
-// Let google-auth-library handle token caching and refresh internally
+// Library caches and refreshes.
 async function getAccessToken() {
   const client = await auth.getClient();
   const { token } = await client.getAccessToken();
@@ -153,29 +146,15 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// ─── Jalur upstream terpakai-bersama ────────────────────────────────────────
-// Endpoint HTTP lama DAN orkestrasi server-side memanggil lewat sini, supaya retry 429,
-// rotasi key Cohere, dan pemilihan endpoint v1beta1/global hanya ada satu salinan.
+// Shared upstream
+// One copy of retry, key rotation, endpoint choice.
 
-// Terukur 16 Agu 2026: panggilan ke Vertex kadang tertahan 24-28 dtk di level KONEKSI
-// (auth=0ms, fetch=27846ms), lalu panggilan BERIKUTNYA lewat dalam 3 dtk. Jadi menunggu
-// bukan strategi — koneksi baru yang menyembuhkan. Timer ini hanya menutupi fase HEADER;
-// fetch() sudah resolve sebelum body mengalir, jadi stream tidak pernah terpotong di tengah.
-// ⚠️ 20 dtk, BUKAN 8. Untuk streaming, Vertex baru mengirim HEADER saat token pertama siap —
-// jadi waktu fetch mencakup fase thinking. Terukur 17 Agu sesudah `medium` menyala: fetch SEHAT
-// melebar 4,2–13,7 dtk. Dengan ambang 8 dtk, penjaga ini membunuh permintaan yang sehat lalu
-// mengulangnya dari nol — dan pengulangan itu ikut berpikir lagi, jadi total malah membengkak.
-// Bukti bahwa itu BUKAN koneksi mati: percobaan sesudah "macet" memakan 13,7 dan 14,2 dtk,
-// bukan 3–5 dtk seperti koneksi yang benar-benar baru.
-// Turunkan lagi HANYA kalau thinking dikembalikan ke `low` di semua jalur.
-// Ambang dipisah karena dua jenis panggilan ini berbeda sifat:
-// - non-stream (analyzeIntent, compress): output ≤600 token, thinking `minimal` → sehat 1–4 dtk
-// - stream (jawaban): header baru dikirim saat token pertama siap, JADI TERMASUK fase thinking
-//   → dengan `medium` sehatnya melebar sampai ~19 dtk (terukur 17 Agu)
-// Satu ambang untuk keduanya pasti salah di salah satu sisi.
+// Vertex stalls at CONNECTION level; a new one cures it. Header phase only.
+// 20s, NOT 8 — streaming headers arrive only after thinking finishes.
+// Split per call type: one threshold is wrong for one of them.
 const STALL_MS_NONSTREAM     = 8_000;
-const STALL_MS_STREAM_CEPAT  = 10_000;   // thinking low/minimal — sapaan, parts, lookup
-const STALL_MS_STREAM_MIKIR  = 30_000;   // thinking medium/high — fault code, teknis
+const STALL_MS_STREAM_CEPAT  = 10_000;  // low/minimal.
+const STALL_MS_STREAM_MIKIR  = 30_000;  // medium/high.
 const STALL_MAX = 3;
 
 async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
@@ -188,7 +167,7 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
     try {
       return await fetch(url, { ...opts, signal: ctrl.signal });
     } catch (err) {
-      // Klien yang putus JANGAN diulang — itu keputusan teknisi, bukan kemacetan.
+      // Client disconnect is a decision, not a stall.
       if (signal && signal.aborted) throw err;
       if (i === STALL_MAX) throw err;
       console.warn('[upstream] %s macet >%d dtk — buka koneksi baru (%d/%d)',
@@ -201,17 +180,13 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
 }
 
 async function vertexFetch(model, body, { stream, signal, label }) {
-  // auth vs fetch dipisah: token GCP menggantung dan koneksi Vertex menggantung itu dua
-  // penyakit berbeda dengan obat berbeda. Tanpa pemisahan ini keduanya terlihat sama.
+  // auth vs fetch: two different illnesses.
   const tAuth = Date.now();
   const { url, headers } = await resolveUpstream(model, { stream });
   const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
   const tFetch = Date.now();
-  // Ambang IKUT thinking level, bukan sekadar stream/non-stream. Untuk streaming, header baru
-  // dikirim saat token pertama siap — jadi jawaban `medium` sah memakan belasan detik, sedangkan
-  // sapaan `low` sehatnya 1–2 dtk. Satu ambang 30 dtk untuk keduanya membuat sapaan yang kena
-  // koneksi macet menunggu 30 dtk penuh (terukur 17 Agu: "oke" → 32 dtk).
+  // Threshold follows thinking level, not just stream/non-stream.
   const lvl = body && body.generationConfig && body.generationConfig.thinkingConfig
     ? body.generationConfig.thinkingConfig.thinkingLevel : undefined;
   const mikirPanjang = lvl === 'medium' || lvl === 'high';
@@ -342,7 +317,7 @@ app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) =>
 
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
-  // res, bukan req — `req` emit 'close' begitu body selesai dibaca (Node 16+), bukan saat klien putus.
+  // res, not req — req emits 'close' when the body is read (Node 16+).
   res.on('close', () => { clearTimeout(timer); if (!res.writableFinished) ctrl.abort(); });
 
   try {
@@ -413,7 +388,7 @@ const upstream = await fetch(url, {
     const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
     return res.json({ text });
   } catch (err) {
-    // Detail error hanya ke log — jangan bocorkan internal (stack/host/config) ke client.
+    // Details to log only.
     console.error('Transcribe error:', err);
     return res.status(500).json({ error: 'Transcribe gagal. Coba lagi.' });
   }
@@ -428,7 +403,7 @@ app.post('/v1/embed', verifyToken, rateLimit, async (req, res) => {
     return res.json({ values: await vertexEmbed(query, task_type) });
   } catch (err) {
     if (err.status) return res.status(err.status).json(err.data || { error: 'Embedding gagal' });
-    // Detail error hanya ke log — jangan bocorkan internal ke client.
+    // Details to log only.
     console.error('Embed error:', err);
     return res.status(500).json({ error: 'Embedding gagal. Coba lagi.' });
   }
@@ -445,13 +420,10 @@ app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
   }
 });
 
-// ─── /v1/ask — orkestrasi RAG server-side ───────────────────────────────────
-// Seluruh pipeline (intent → search → rerank → generate) jalan di sini. Dulu di browser:
-// 5-7 round-trip Sampit↔Iowa per pertanyaan, sekarang satu.
+// /v1/ask — server-side RAG
+// Whole pipeline here. Was 5-7 round-trips from the browser, now one.
 
-// PostgREST langsung, BUKAN @supabase/supabase-js: createClient() menyalakan RealtimeClient di
-// constructor dan itu butuh WebSocket global yang belum ada di Node 20 → proses crash tiap request.
-// Orkestrasi hanya memakai .from() dan .rpc(), keduanya ada di sini.
+// PostgREST direct: supabase-js needs a global WebSocket, absent in Node 20.
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
 const ASK_MODELS = UNIT_MODELS;
@@ -461,9 +433,9 @@ function sseWrite(res, event, payload) {
   res.write(`data: ${JSON.stringify({ ev: event, ...payload })}\n\n`);
 }
 
-// SSE Vertex → chunk terstruktur. Format frame sama dengan yang dulu di-parse browser.
+// SSE -> structured chunks.
 async function vertexStreamParsed(model, body, onChunk, signal) {
-  // Pisahkan "koneksi menggantung" dari "model diam": header vs chunk data pertama.
+  // Hanging connection vs silent model.
   const t0 = Date.now();
   let tHeader = 0, tChunk1 = 0;
   const upstream = await vertexFetch(model, body, { stream: true, signal, label: '/v1/ask' });
@@ -498,8 +470,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
         const parts = (json.candidates && json.candidates[0] && json.candidates[0].content &&
                        json.candidates[0].content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
-        // live=true di SETIAP chunk, termasuk yang isinya cuma thinking. Watchdog memakai ini —
-        // tanpa itu stream yang sedang berpikir dikira mati lalu dibunuh & diulang.
+        // Thinking chunks count as alive, else the watchdog kills them.
         onChunk({ text, usageMetadata: json.usageMetadata, live: true });
       }
     }
@@ -521,7 +492,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     ? b.attachments.filter(a => a && typeof a.mimeType === 'string' && typeof a.data === 'string').slice(0, 1)
     : [];
 
-  // Kirim foto TANPA mengetik apa pun itu sah — jalur OCR fault code justru paling sering begitu.
+  // Photo without text is normal for OCR.
   const userInput = typeof b.userInput === 'string' ? b.userInput : '';
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
@@ -532,13 +503,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // WAJIB res, BUKAN req: sejak Node 16 `req` emit 'close' begitu body selesai dibaca, jadi
-  // memakai req meng-abort SEMUA panggilan Vertex sebelum sempat jalan. res hanya close saat
-  // jawaban tuntas (writableFinished) atau klien benar-benar putus di tengah.
+  // res, NOT req — req 'close' fires when the body is read, aborting everything.
   const ctrl = new AbortController();
   res.on('close', () => { if (!res.writableFinished) ctrl.abort(); });
 
-  // JWT teknisi diteruskan apa adanya → RLS tetap berlaku persis seperti waktu di browser.
+  // JWT passed through, RLS still applies.
   const supabase = new PostgrestClient(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1`, {
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.authToken}` },
   });
@@ -561,8 +530,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
-      // Timeout WAJIB per-panggilan. Kalau meng-abort ctrl request, satu call lambat
-      // (compressChunks jalan paralel) mematikan seluruh pertanyaan.
+      // Per-call: one slow compress must not kill the request.
       const callCtrl = new AbortController();
       const timer = setTimeout(() => callCtrl.abort(), UPSTREAM_TIMEOUT_MS);
       const signal = AbortSignal.any([callCtrl.signal, ctrl.signal]);
@@ -577,13 +545,13 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
-      // Sinyal orchestrator (watchdog/deteksi loop) digabung dengan putusnya koneksi klien.
+      // Orchestrator signal + client disconnect.
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
       await vertexStreamParsed(model, payload, onChunk, signal);
     },
   };
 
-  // ttft = yang benar-benar dirasakan teknisi (layar mulai terisi), bukan total.
+  // ttft is what the technician feels.
   const tMulai = Date.now();
   let ttft = 0;
   const onChunk = (text) => {
@@ -622,8 +590,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Dash⁵ proxy :${PORT}`);
-  // Panaskan kredensial GCP saat boot — kalau tidak, pertanyaan PERTAMA di tiap instance
-  // membayar penemuan kredensial + panggilan metadata server di jalur panas.
+  // Warm credentials at boot, off the hot path.
   getAccessToken()
     .then(() => console.log('[boot] kredensial GCP siap'))
     .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));

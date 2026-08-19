@@ -3,11 +3,11 @@ import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { deps } from './deps';
 
-// Rollback: set VERTEX_MODEL=gemini-3.6-flash di Cloud Run (masih di ALLOWED_MODELS).
+// Rollback: VERTEX_MODEL=gemini-3.6-flash.
 export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.7-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
-// thoughtSignature (Gemini 3.x) WAJIB dikembalikan utuh di function calling multi-giliran.
+// Must round-trip intact.
 interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
 interface InlineDataPart      { inlineData: { mimeType: string; data: string } }
 interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
@@ -17,7 +17,7 @@ export type Part = TextPart | InlineDataPart | FunctionCallPart | FunctionRespon
 
 export interface VContent { role: 'user' | 'model'; parts: Part[] }
 
-// Gemini function calling — JSON schema subset (type, properties, required, items)
+// Schema subset only.
 export interface FunctionDeclaration {
   name: string;
   description: string;
@@ -42,7 +42,7 @@ export interface VRequest {
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
-// gemini-3.7 rejects thinkingLevel 'minimal' with HTTP 400 - raise it to 'low' instead.
+// 3.7 rejects 'minimal' with HTTP 400.
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
 function clampThinking(body: VRequest, model: string): VRequest {
@@ -64,7 +64,7 @@ function clampThinking(body: VRequest, model: string): VRequest {
 }
 
 export interface VResponse {
-  // Optional: Gemini bisa balas 200 tanpa candidates (safety block / MAX_TOKENS) → wajib akses `?.[0]`.
+  // 200 without candidates is possible.
   candidates?: Array<{
     content?: { role: string; parts: Part[] };
     finishReason?: string;
@@ -77,10 +77,10 @@ interface IntentAnalysis {
   optimizedQuery: string;
 }
 
-// Progress event (thinking/tool_call/tool_result) — single-pass juga pakai ini utk indikator UI.
+// UI progress.
 type AgentEventEmit = (event: import('./react-agent').AgentEvent) => void;
 
-// Browser sudah mengubah File jadi base64 sebelum kirim — server tak punya FileReader.
+// Already base64.
 function toInlineData(img: InlineImage): InlineDataPart {
   return { inlineData: { mimeType: img.mimeType, data: img.data } };
 }
@@ -92,7 +92,7 @@ export function resetUsage(): void {
 export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
   return { ...deps().usage, model: MODEL };
 }
-// Thinking tokens are billed as output - count them there or the cost ledger under-reports.
+// Thinking billed as output.
 function addUsage(input?: number, output?: number, thoughts?: number, cached?: number): void {
   const u = deps().usage;
   u.input    += input || 0;
@@ -117,11 +117,11 @@ export function getText(parts: Part[]): string {
     .join('');
 }
 
-/** Bersihkan optimizedQuery AI: dedup kata (via synonym map) + cap 10 kata. Deterministik. */
+/** Dedup + cap 10 words. */
 function cleanOptimizedQuery(query: string): string {
   if (!query.trim()) return query;
 
-  // Synonym → canonical utk dedup. JANGAN map unit (kg/MPa/rpm) — query unit-spesifik jadi rusak.
+  // Never map units.
   const SYNONYMS: Record<string, string> = {
     mass: 'weight', berat: 'weight',
     spec: 'specification', specs: 'specification',
@@ -129,7 +129,7 @@ function cleanOptimizedQuery(query: string): string {
     press: 'pressure', tekanan: 'pressure',
     vol: 'volume', cap: 'capacity', kapasitas: 'capacity',
   };
-  // Filler yang sering di-pad AI. 'specification' sengaja TIDAK di sini (kata penting, ada di SYNONYMS).
+  // 'specification' deliberately absent.
   const STOPWORDS = new Set(['the', 'and', 'for', 'of', 'in', 'on', 'at', 'with',
     'information', 'data', 'detail', 'value']);
 
@@ -143,7 +143,7 @@ function cleanOptimizedQuery(query: string): string {
     if (lower.length < 2 || seen.has(canonical) || STOPWORDS.has(lower)) continue;
     seen.add(canonical);
     clean.push(word);
-    if (clean.length >= 10) break; // safety cap — AI sudah jaga panjang, ini hanya emergency stop
+    if (clean.length >= 10) break;  // Emergency stop.
   }
 
   return clean.join(' ');
@@ -152,7 +152,7 @@ function cleanOptimizedQuery(query: string): string {
 async function analyzeIntent(
   userInput: string,
   history: Message[],
-  _model: UnitModel,  // reserved — akan dipakai kalau ada prompt variasi per model
+  _model: UnitModel,  // Reserved.
 ): Promise<IntentAnalysis> {
   const ctx = history.slice(-6)
     .filter(m => m.content?.trim())
@@ -292,7 +292,7 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
       generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-    // Cari JSON object pertama — toleran terhadap text bocor sebelum/sesudah JSON
+    // Tolerate leaked text.
     const jsonStart = raw.indexOf('{');
     const jsonEnd   = raw.lastIndexOf('}');
     const jsonStr   = jsonStart !== -1 && jsonEnd > jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : '';
@@ -380,15 +380,9 @@ export async function callProxyStream(
   onChunk: (text: string) => void,
   enableGoogleSearch = false,
 ): Promise<string> {
-// Batas keras anti-runaway saja. Jangan diturunkan ke 40 dtk lagi — jawaban panjang
-// (thinking ~1000 token + 1500 token teks) sah memakan lebih dari itu dan akan terpotong.
+// Anti-runaway only. Never lower to 40s.
   const STREAM_TIMEOUT_MS = 90_000;
-// Nol chunk sejak awal = stream benar-benar mati. Chunk thinking sudah dihitung hidup.
-// ⚠️ 45 dtk, BUKAN 25. Terukur 16 Agu 2026: respons Vertex kadang tertahan ~24 dtk di level
-// KONEKSI (`[vertex-stream] header=24033ms chunk1=24034ms` — data mengalir 1 ms setelah header).
-// Dengan ambang 25 dtk, hang itu tepat di batas: kadang lolos, kadang dibunuh lalu diulang —
-// dan pengulangannya yang membuat total membengkak jadi 58-79 dtk. Lebih baik satu jawaban
-// lambat 28 dtk daripada tiga percobaan 80 dtk.
+// 45s, not 25 — Vertex stalls ~24s at connection level.
   const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 
   const MAX_ATTEMPT = 3;
@@ -410,7 +404,7 @@ export async function callProxyStream(
   const ctrl = new AbortController();
   const hardTimer = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
 
-  // Watchdog stream MATI (nol chunk sama sekali), bukan stream yang sedang berpikir.
+  // Zero chunks, not slow thinking.
   let firstTokenSeen = false;
   let streamHidup    = false;
   const watchdog = setTimeout(() => {
@@ -428,10 +422,9 @@ export async function callProxyStream(
         ctrl.abort();
         return;
       }
-      // Chunk thinking TIDAK berisi teks tapi membuktikan stream hidup — kalau watchdog cuma
-      // menghitung teks, jawaban yang berpikir lama dibunuh lalu diulang dari nol.
+      // Thinking chunks prove liveness.
       if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
-      if (c.usageMetadata) usageBox.last = c.usageMetadata; // kumulatif; chunk terakhir menang
+      if (c.usageMetadata) usageBox.last = c.usageMetadata;  // Last wins.
       if (c.text) {
         firstTokenSeen = true;
         fullText += c.text; onChunk(c.text);
@@ -442,7 +435,7 @@ export async function callProxyStream(
       }
     }, { enableGoogleSearch, signal: ctrl.signal });
   } catch (err) {
-    // Abort yang KITA picu (error upstream / loop / watchdog) sudah punya penanganannya sendiri.
+    // Our own aborts handled elsewhere.
     if (!ctrl.signal.aborted) upstreamError = (err as Error)?.message ?? 'Stream gagal';
   } finally {
     clearTimeout(watchdog);
@@ -457,9 +450,9 @@ export async function callProxyStream(
       fullText += STREAM_CUT_NOTE;
       onChunk(STREAM_CUT_NOTE);
     } else if (attempt < MAX_ATTEMPT) {
-      // Belum ada teks → aman diulang, teknisi tak melihat apa pun.
+      // No text yet, safe to retry.
       console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
-      await new Promise(r => setTimeout(r, attempt * 900));   // backoff 0,9s lalu 1,8s
+      await new Promise(r => setTimeout(r, attempt * 900));  // Backoff.
       retryNeeded = true;
     } else {
       throw new Error(`Stream terputus: ${upstreamError}`);
@@ -472,7 +465,7 @@ export async function callProxyStream(
     continue;
   }
 
-  if (retryNeeded) continue;   // percobaan baru — fullText di-reset di awal iterasi
+  if (retryNeeded) continue;  // Retry.
   break;
   }
 
@@ -482,8 +475,7 @@ export async function callProxyStream(
     const inp = usageBox.last?.promptTokenCount ?? 0;
     const cache = usageBox.last?.cachedContentTokenCount ?? 0;
     const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
-    // Dua cache BERBEDA, jangan tertukar: `prompt-cache` = implicit caching Vertex (sisi Google),
-    // sedangkan yang dilewati `?think=` adalah cache JAWABAN di localStorage klien.
+    // Vertex prompt cache, not the answer cache.
     console.info('[tokens] model=%s think=%s%s in=%d (prompt-cache %d%%) out=%d thinking=%d',
       MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
       inp, inp ? Math.round((cache / inp) * 100) : 0,
@@ -493,10 +485,10 @@ export async function callProxyStream(
 }
 
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
-  // Extraction balance: buang narasi, sisakan konteks (section/notes) — compress terlalu agresif = jawaban monoton.
+  // Keep section context.
   const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Chunk berisi PROSEDUR/langkah troubleshooting/tabel troubleshooting → salin SEMUA langkah & SEMUA baris penyebab UTUH, jangan diringkas/di-skip/digabung — langkah yang hilang di sini tidak bisa dipulihkan lagi.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
-  // Cap chunk yg dikirim ke INTENT_MODEL — context window flash-lite ~8K input.
+  // flash-lite ~8K input.
   const MAX_CHUNK_FOR_COMPRESS = 8000;
 
   const buildPrompt = (chunk: string) => {
@@ -507,7 +499,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   };
 
   const compressOne = async (chunk: string): Promise<string> => {
-    if (chunk.length < 500) return chunk; // skip small — sudah compact
+    if (chunk.length < 500) return chunk;  // Already compact.
     try {
       const res = await callProxy({
         contents: [{ role: 'user', parts: [{ text: buildPrompt(chunk) }] }],
@@ -515,7 +507,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
         generationConfig: { maxOutputTokens: 600, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
       }, false, INTENT_MODEL);
       const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-      if (compressed.length < 30) return chunk; // over-stripped, fallback ke original
+      if (compressed.length < 30) return chunk;  // Over-stripped.
       return compressed;
     } catch (err) {
       console.warn('[compressChunks] failed for one chunk, fallback to original:', (err as Error)?.message);
@@ -530,7 +522,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
 export function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
   const pCodes: string[] = [];
-  // Capture base P-code (P\d{4}); suffix di-strip — ilike '%P0340%' tetap match 'P0340-04'/'P0340/4'.
+  // Suffix stripped.
   const P_CODE_RE = /\bP\d{4}\b/gi;
   for (const line of lines) {
     const lineUpper = line.toUpperCase();
@@ -540,20 +532,20 @@ export function extractRelatedPCodes(content: string, searchTerms: string[]): st
       pCodes.push(...matches);
     }
   }
-  // Dedup + cap. Max 3 → max 3 embed calls di searchEngineManual.
+  // Cap 3 embeds.
   return [...new Set(pCodes)].slice(0, 3);
 }
 
-/** A non-empty return BLOCKS the answer. Return '' to let it through. */
+/** Non-empty BLOCKS the answer. */
 function ragErrorTemplate(errorMsg: string): string {
   if (errorMsg.toLowerCase().includes('rerank')) return '';
-  // Embedding / Supabase error: benar-benar tidak ada data → jangan jawab.
+  // No data at all.
   return `Sistem pencarian data sedang mengalami gangguan sementara. Jawaban ditahan dulu untuk menghindari informasi yang keliru.\n\nCoba kirim ulang pertanyaanmu dalam beberapa saat.`;
 }
 
 const isRerankError = (msg?: string): boolean => !!msg && msg.toLowerCase().includes('rerank');
 
-/** Disisipkan ke user-turn saat rerank gagal — AI wajib menyampaikannya ke teknisi. */
+/** Rerank failed — AI must say so. */
 const RERANK_DEGRADED_NOTE =
   '\n\n[PERINGATAN SISTEM — WAJIB DISAMPAIKAN] Mesin pemeringkat (reranker) sedang tidak bisa dihubungi, '
   + 'kemungkinan kena batas pemakaian. Data manual di bawah TETAP ASLI dan boleh dipakai, tapi URUTANNYA '
@@ -591,26 +583,25 @@ const KIT_HINT =
   '(PN + nama + qty apa adanya), lalu jelaskan singkat katalog tak mencantumkan satu PN kit-bundel. ' +
   'HARAM mengarang PN kit yang tidak ada di data.';
 
-// Low-confidence & no-result jalur NL teknis → fallback web (bukan canned) — tetap anti-halu angka unit.
+// Web fallback, still no invented numbers.
 
 const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
 const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
 const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
 
 const SUPPORTED_MODELS = ['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140'] as const;
-// Pola model alat berat generik: ZX350-7G, ZX210LC, PC200-8, EX1200, SK200, CAT320, WA380…
 const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
 
-/** Model lain yang disebut user (bukan unit aktif & bukan model yang didukung). */
+/** Foreign model mentioned. */
 function detectForeignModel(query: string, activeModel: string): string | null {
   const norm = (s: string) => s.toUpperCase().replace(/[\s-]/g, '');
   const active = norm(activeModel);
   for (const m of query.matchAll(new RegExp(OTHER_MODEL_RE.source, 'gi'))) {
     const hit = m[0].trim();
     const n = norm(hit);
-    if (n === active || active.includes(n) || n.includes(active)) continue;   // unit aktif
-    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;                 // didukung, tapi belum dipilih
-    if (/\d{2,}/.test(n)) return hit;                                          // model lain sama sekali
+    if (n === active || active.includes(n) || n.includes(active)) continue;  // Active unit.
+    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;  // Supported, not selected.
+    if (/\d{2,}/.test(n)) return hit;  // Foreign model.
   }
   return null;
 }
@@ -643,7 +634,7 @@ Apa ada yang bisa aku bantu cek?`;
 
 const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
-// ─── Konstanta ────────────────────────────────────────────────────────────────
+// Konstanta
 
 const RAG_LABEL = {
   manual: 'DATA MANUAL TERSEDIA',
@@ -659,17 +650,17 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 - Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
 - Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;
 
-// ─── Tipe routing ──────────────────────────────────────────────────────────────
+// Tipe routing
 
-/** Discriminated union — hasil routing RAG sebelum AI dipanggil */
+/** Routing result before AI. */
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
   | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
-// ─── Helper functions ─────────────────────────────────────────────────────────
+// Helper
 
-/** Stream canned text via onChunk — feel natural seperti AI streaming */
+/** Canned text, streamed. */
 function streamCanned(text: string, onChunk: (text: string) => void): string {
   const CHUNK_SIZE = 80;
   for (let i = 0; i < text.length; i += CHUNK_SIZE) {
@@ -688,7 +679,7 @@ function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQ
   return { isFaultCode: looksLike || !!embeddedCode, faultQuery: embeddedCode ?? trimmed };
 }
 
-/** 2nd-pass: enrichment ENGINE MANUAL via P-code dari TM result. Non-fatal (TM tetap dikembalikan). */
+/** P-code enrichment. Non-fatal. */
 async function augmentWithEngineManual(
   tmContent: string,
   faultQuery: string,
@@ -710,7 +701,7 @@ async function augmentWithEngineManual(
   }
 }
 
-// ─── Routing resolvers (masing-masing < 25 baris) ────────────────────────────
+// Routing resolvers
 
 async function resolveFaultCodeQuery(
   faultQuery: string,
@@ -742,11 +733,9 @@ const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b/i;
 function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
 
-  // Cari header line yang berisi kolom interval
   const headerLine = lines.find(l => /\b500hr\b/.test(l) && /\b1000hr\b/.test(l));
   if (!headerLine) return '';
 
-  // Tentukan urutan interval dari header
   const intervals = Array.from(headerLine.matchAll(/(\d+)hr/g), m => parseInt(m[1]));
   const colIdx = intervals.indexOf(hours);
   if (colIdx < 0) return '';
@@ -755,11 +744,11 @@ function extractCpmPartsForInterval(content: string, hours: number): string {
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    // Split by 2+ whitespace: [no, description, partNumber, "v1 v2 v3..."]
+    // Split on 2+ spaces.
     const fields = line.trim().split(/\s{2,}/);
     if (fields.length < 4) continue;
     const no = fields[0];
-    if (!/^\d+$/.test(no)) continue; // bukan baris data
+    if (!/^\d+$/.test(no)) continue;  // Not data.
 
     const desc = fields[1];
     const pn   = fields[2];
@@ -795,7 +784,7 @@ async function resolvePartsQuery(
     const optWords = opt?.trim().split(/\s+/).length ?? 0;
     if (opt && opt !== trimmed && optWords >= 3) {
       searchQuery = opt;
-      usedOptimized = true;   // → skipExpand: query sudah English, expandQuery malah distorsi
+      usedOptimized = true;  // Already English.
     }
   }
 
@@ -824,7 +813,7 @@ async function resolvePartsQuery(
       const cpmPNs = partsList.split('\n')
         .map(l => l.split('|')[0].trim())
         .filter(pn => pn.length >= 4);
-      // Substring match → toleran suffix promo (4630525 ↔ 4630525HPB). Hanya baris ber-"Promo: Rp".
+      // Tolerate promo suffix.
       const promoLines = [...new Set(
         ragResult.content.split('\n')
           .map(l => l.trim())
@@ -839,14 +828,14 @@ async function resolvePartsQuery(
         : cpmHeader;
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
-    // Kit-query & data punya komponen svc:K → injeksi petunjuk deterministik (lihat KIT_HINT).
+    // See KIT_HINT.
     finalContent = `${KIT_HINT}\n\n${finalContent}`;
   }
 
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
 }
 
-// Whole-message match only. A wrong entry here answers a technical question with zero data.
+// Whole-message match only.
 const CASUAL_EXACT = new Set([
   'halo', 'hallo', 'hai', 'hi', 'hei', 'hey', 'helo',
   'pagi', 'siang', 'sore', 'malam',
@@ -861,7 +850,7 @@ const CASUAL_EXACT = new Set([
   'bye', 'dadah', 'sampai jumpa',
 ]);
 
-/** Normalisasi untuk pencocokan sapaan: huruf kecil, buang tanda baca & emoji, rapikan spasi. */
+/** Normalise greeting. */
 function normalizeCasual(s: string): string {
   return s.toLowerCase()
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')   // tanda baca & emoji → spasi
@@ -875,7 +864,7 @@ async function resolveNaturalLanguageQuery(
   model: UnitModel,
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
-  // Jalan pintas deterministik — nol panggilan LLM untuk sapaan/ucapan singkat.
+  // Zero LLM calls.
   if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
     console.info('[intent] sapaan terdeteksi deterministik — analyzeIntent dilewati');
     return { type: 'google_search', mode: 'casual' };
@@ -889,11 +878,10 @@ async function resolveNaturalLanguageQuery(
     return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
   }
 
-  // Technical: guard juga untuk query pendek
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  // HyDE nonaktif — miss/low langsung ke fallback web. hydeExpand() masih ada kalau mau dihidupkan.
+  // HyDE off; hydeExpand() still exists.
   let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
@@ -905,7 +893,7 @@ async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
-  // Compression = langkah flash-lite lossy & serial sebelum jawaban → hanya untuk konten jumbo.
+  // Lossy and serial — jumbo content only.
   const totalBefore = ragResult.content.length;
   const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
 
@@ -938,17 +926,12 @@ async function resolveNaturalLanguageQuery(
 }
 
 
-// Termasuk penghubung sehari-hari lapangan. Terukur 17 Agu 2026: "carikan PN valve swing motor
-// SAMA cara pasangnya" gagal terdeteksi multi-aspek → jatuh ke jalur parts saja → PN keluar tapi
-// langkah bongkar-pasang tidak pernah dicari, padahal chunk-nya ADA (WM SWING DEVICE - REMOVAL &
-// INSTALLATION). Teknisi menulis "sama"/"ama"/"trus", bukan "dan".
-// ⚠️ "sama" juga berarti IDENTIK — makanya "yang sama" dan "sama dengan/persis/kaya/seperti"
-// sengaja dikecualikan, kalau tidak pertanyaan pembanding ikut terseret.
+// "sama" also means IDENTICAL — comparisons excluded.
 const MULTI_CONNECTOR_RE =
   /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\byang\s+)\b(?:sama|ama)\b(?!\s+(?:dengan|persis|kaya|seperti))/i;
-// \w* di akhir grup → toleran sufiks Indonesia (beratnya/diameternya/panjangnya).
+// Tolerate Indonesian suffixes.
 const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
-// Atribut/permintaan terukur — buat deteksi follow-up pendek multi-atribut ("berat dan diameternya").
+// Measurable attributes.
 const MULTI_ATTR_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|tekanan|pressure|torque|torsi|clearance|displacement|kapasitas|capacity|rpm|harga|price|part\s*number|partnumber|pn|spec|ukuran|size)\w*/gi;
 
 function isMultiAspectQuery(q: string): boolean {
@@ -956,7 +939,7 @@ function isMultiAspectQuery(q: string): boolean {
   if (!MULTI_TECH_RE.test(q)) return false;
   const words = q.split(/\s+/).filter(Boolean).length;
   const attrCount = (q.match(MULTI_ATTR_RE) ?? []).length;
-  // ≥5 kata (query penuh) ATAU ≥2 atribut terukur (follow-up pendek "berat dan diameternya").
+  // 5+ words or 2+ attributes.
   return words >= 5 || attrCount >= 2;
 }
 
@@ -1012,12 +995,12 @@ async function resolveMultiAspectQuery(
 ): Promise<RagRouteResult> {
   emit({ type: 'thinking', message: 'Memecah query jadi beberapa aspek…' });
   const subs = await decomposeAspects(trimmed, history);
-  // Decompose gagal / cuma 1 aspek → balik ke jalur NL biasa (single search).
+  // Fall back to single search.
   if (subs.length < 2) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
   emit({ type: 'thinking', message: `Mencari ${subs.length} aspek paralel…` });
 
-  // Tiap sub-query → cari di TM + Parts paralel (sama seperti kalau user pisah manual).
+  // TM + Parts in parallel.
   const tasks = subs.flatMap(sub => {
     const clean = stripModelFromQuery(sub);
     return [
@@ -1038,7 +1021,7 @@ async function resolveMultiAspectQuery(
 
   const results = await Promise.all(tasks);
 
-  // Gabung konten unik (dedup persis) dari semua aspek.
+  // Dedup exact.
   const seen = new Set<string>();
   const blocks: string[] = [];
   for (const r of results) {
@@ -1070,7 +1053,7 @@ function verifyGrounding(answer: string, context: string): void {
   }
 }
 
-// ─── Public API ───────────────────────────────────────────────────────────────
+// Public API
 
 export async function generateResponseStream(
   model: UnitModel,
@@ -1080,11 +1063,11 @@ export async function generateResponseStream(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
-  // Progress indicator — single-pass juga emit "thinking/tool_call" utk UI (dulu cuma agentic).
+  resetUsage();  // Token ledger.
+  // UI progress.
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
 
-  // Sanitize input (anti prompt-injection): cap 4000 char + blokir instruction markers.
+  // Anti prompt-injection.
   const sanitized = userInput
     .slice(0, 4000)
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
@@ -1105,7 +1088,7 @@ export async function generateResponseStream(
 
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
-  // Multi-aspek dicek SEBELUM parts-routing — cegah "diameter X dan PN Y" nyangkut di parts saja.
+  // Before parts-routing.
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
     : isMultiAspectQuery(trimmed)
@@ -1124,12 +1107,9 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  // Casual tidak menerima data manual → prompt ringkas.
+  // No manual data.
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  // `low` untuk SEMUA jalur. Token thinking dihasilkan SELURUHNYA sebelum satu huruf pun muncul,
-  // jadi jatuh 100% ke waktu tunggu teknisi. Terukur 17 Agu: fault code `medium` ttft 5,7–16,7 dtk
-  // vs `low` 2,2–3,5 dtk — dan mutu jawabannya tidak terasa cukup berbeda di lapangan.
-  // Bandingkan lewat ?think=medium sebelum menaikkannya lagi; jangan diubah tanpa mengukur.
+  // 'low' everywhere — measure via ?think= before raising.
   const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
@@ -1145,26 +1125,26 @@ export async function generateResponseStream(
       ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (trimmed || 'Halo');
 
-  // Timestamp di user-turn (BUKAN system prompt) — SYSTEM_PROMPT wajib byte-identical utk prompt-cache hit.
+  // User-turn: system prompt stays byte-identical for cache.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
   const systemText = isCasual
     ? SYSTEM_PROMPT_CASUAL(model, userName)
     : SYSTEM_PROMPT(model, userName);
 
-  // Google Search grounding HANYA untuk fallback web-teknis. Casual (sapaan/ack) murni LLM → instan.
+  // Web-technical fallback only.
   const fullText = await callProxyStream({
     contents,
     systemInstruction: { parts: [{ text: systemText }] },
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
-  // Cache jawaban tinggal di klien (hit = nol round-trip); server cuma menandai boleh/tidaknya.
+  // Client-side answer cache.
   if (routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
     deps().meta.cacheable = true;
   }
 
-  // Anti-halu telemetri — cek angka spec di jawaban benar bersumber dari data.
+  // Anti-halu telemetry.
   if (ragContent && fullText) verifyGrounding(fullText, ragContent);
 
   return fullText || FALLBACK_RESPONSE;
@@ -1181,15 +1161,14 @@ export async function generateResponseAgentic(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
-  // Sanitize input — sama defense seperti generateResponseStream
+  resetUsage();  // Token ledger.
   const sanitized = userInput
     .slice(0, 4000)
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
     .replace(/<\|[^|]*\|>/g, '[blocked]');
   const trimmed = sanitized.trim() || 'Halo';
 
-  // Lazy import untuk hindari circular deps di kompilasi (react-agent → ai → react-agent)
+  // Lazy import breaks circular deps.
   const { runReActAgent } = await import('./react-agent');
 
   const result = await runReActAgent(trimmed, model, userName, history, {
@@ -1209,8 +1188,8 @@ export async function generateResponse(
   onChunk?: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage(); // mulai akumulasi token untuk 1 pertanyaan (cost ledger)
-  // Progress indicator — jalur foto paling lambat (OCR → search → 2nd-pass → generate).
+  resetUsage();  // Token ledger.
+  // Slowest path.
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
@@ -1222,7 +1201,7 @@ export async function generateResponse(
       .filter(a => a?.mimeType && a?.data)
       .map(toInlineData);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-// Photo reaches the model only when OCR fails - otherwise it is sent twice (~1064 wasted tokens).
+// Sent twice unless OCR succeeded.
     let sendImageToModel = true;
 
     try {
@@ -1244,7 +1223,7 @@ export async function generateResponse(
             let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
             let content = result.content;
 
-            // 2nd-pass: P-code hanya dari baris relevan (extractRelatedPCodes) — cegah 20+ embed calls.
+            // Relevant lines only.
             if (result.hasResults) {
               const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
               if (pCodes.length > 0) {
@@ -1274,13 +1253,13 @@ export async function generateResponse(
 
         emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
 
-        // Kalau SEMUA code tidak ditemukan → bypass AI, return canned
+        // All codes missing -> canned.
         if (found.length === 0 && notFound.length > 0) {
           const lines = notFound.map(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`).join('\n');
           return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
         }
 
-        // Instruksi eksplisit: jelaskan SETIAP kode dgn heading terpisah (bukan footnote kode lain).
+        // Heading per code.
         const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
         const note = `Fault code terdeteksi dari gambar: **${faultCodes.join(', ')}**\n\n` +
           `INSTRUKSI: Jelaskan SETIAP fault code di atas dalam heading terpisah (## Kode X). ` +
@@ -1294,7 +1273,7 @@ export async function generateResponse(
           injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
         }
 
-        // Kode terbaca DAN datanya ketemu di manual → foto tidak perlu dikirim ulang.
+        // Photo not resent.
         sendImageToModel = false;
         currentParts.push({ text: `${note}\n\n${injection}` });
       } else {
@@ -1309,7 +1288,7 @@ export async function generateResponse(
 
     if (sendImageToModel) currentParts.unshift(...imageParts);
 
-    // Timestamp di user-turn (BUKAN system prompt) — part terpisah, tak ganggu urutan image/text.
+    // User-turn timestamp.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });

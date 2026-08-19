@@ -12,7 +12,7 @@ export function jakartaTime(): string {
   });
 }
 
-/** Deskripsi singkat tiap jenis dokumen — dipakai merender inventaris per model. */
+/** Rendered per model. */
 const DOC_DESC: Record<string, string> = {
   'TROUBLESHOOTING':           'fault code & trouble symptom',
   'TECHNICAL MANUAL':          'spec teknis & deskripsi sistem',
@@ -54,7 +54,7 @@ const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
   'ZX65USB-5A': 'ZX65U-5A',
 };
 
-/** Sumber yang TIDAK dimiliki model — supaya AI tidak merujuk dokumen kosong. */
+/** Absent sources. */
 const ABSENT_SOURCES: Record<UnitModel, string> = {
   'ZX48U-5A':   '',
   'ZX65USB-5A': 'Parts Catalog & Operator Manual',
@@ -145,7 +145,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, userName: string): string => {
     ? `\nBulletin TECHNICAL NEWS yang tersedia untuk ${model}: ${bulletins.join('; ')}.`
     : '';
 
-  // Wiring diagram (kategori "Circuit Diagram") — sumber nomor kabel/warna/connector.
+  // Wiring diagram.
   const wiringNote = model === 'ZX200-5G'
     ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk connector/harness yang harus dicek — SEBUT LEVEL KOMPONEN saja (nama connector/harness), SIMPAN detail per-pin/warna/nomor kabel kecuali user eksplisit minta detail wiring/pin. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
     : '';

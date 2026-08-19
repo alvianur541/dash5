@@ -113,11 +113,11 @@ export function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [input]);
 
-  // Haptic tick halus saat kirim — Android bergetar 8ms, iOS/desktop no-op aman.
+  // Android only, no-op elsewhere.
   const buzz = () => { try { navigator.vibrate?.(8); } catch { /* unsupported */ } };
 
   const handleSend = () => {
-    // Blokir kirim saat streaming — cegah 2 stream paralel menulis ke sesi yang sama.
+    // Prevent two streams on one session.
     if (!input.trim() || isOffline || isStreaming) return;
     buzz();
     onSendMessage(input.trim());
@@ -130,7 +130,7 @@ export function MessageInput({
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
     const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — setelah compress ~1-2MB, aman untuk localStorage
 
-    // Hanya 1 foto — OCR + diagnosis optimal untuk 1 gambar per query
+    // One photo only.
     const file = e.target.files[0];
     let errorMsg: string | null = null;
     const valid: File[] = [];
@@ -154,7 +154,7 @@ export function MessageInput({
       .map(r => r.value);
     if (compressed.length === 0) return;
 
-    // Beri tahu user kalau compress gagal (timeout / canvas error) — kirim original
+    // Compress failed -> send original.
     const anyFallback = compressed.some(r => !r.compressed);
     if (anyFallback) {
       setTranscribeError('Compress gambar gagal — mengirim file original.');
@@ -348,7 +348,6 @@ export function MessageInput({
                 onClick={handleSend}
                 disabled={!canSend}
                 className={cn(
-                  // Mobile: 36×36 (touch-friendly), desktop: 30×30 (compact)
                   "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
                   canSend
                     ? "bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"

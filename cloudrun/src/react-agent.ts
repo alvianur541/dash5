@@ -94,8 +94,7 @@ async function expandDecomposed(
   callSet: Set<string>,
   emit: (e: AgentEvent) => void,
 ): Promise<ToolResult[]> {
-  // Fan-out MENGIKUTI TIPE. Dulu tiap sub-query dipukul ke TM + Parts sekaligus → 2 aspek jadi
-  // 4 pencarian, separuhnya pasti tak relevan dan cuma mengotori konteks yang dibaca Gemini.
+  // Fan-out follows type: 2 aspects = 2 searches, not 4.
   const results = await Promise.allSettled(
     subQueries.map(s => s.type === 'parts'
       ? executeTool('search_parts_catalog',    { query: s.q }, model, callSet)
@@ -147,7 +146,6 @@ async function forceFinalAnswer(
 
   const forceMsg = `Iterations habis (max 4). Synthesize dari observations berikut ke final answer Bahasa Indonesia. Quote verbatim dari data — JANGAN ngarang.\n\nObservations:\n${summary || '(tidak ada data dari tools)'}`;
 
-  // Append force prompt sebagai user turn
   const finalContents: VContent[] = [...contents, { role: 'user', parts: [{ text: forceMsg }] }];
 
   return callProxyStream(
@@ -193,7 +191,6 @@ export async function runReActAgent(
   while (iterations < maxIter) {
     checkTimeout();
 
-    // Reasoning step — minta AI pilih tool atau jawab
     const res = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
@@ -206,22 +203,21 @@ export async function runReActAgent(
     const fnCall = extractFunctionCall(parts);
 
     if (!fnCall) {
-      // Final answer — AI return text, no more tool calls
+      // Final answer.
       finalText = getText(parts).trim();
       console.info('[react-agent] iteration=%d finalAnswer chars=%d', iterations, finalText.length);
       break;
     }
 
-    // Tool call branch
     iterations++;
     const { name, args } = fnCall;
     console.info('[react-agent] iteration=%d tool=%s args=%j', iterations, name, args);
     emit({ type: 'tool_call', tool: name });
 
-    // Kirim parts APA ADANYA — menyusun ulang jadi [{ functionCall }] membuang thoughtSignature.
+    // Rebuilding parts drops thoughtSignature.
     contents.push({ role: 'model', parts });
 
-    // Special case decompose_query — eksekusi → expand sub-queries paralel
+    // Decompose -> parallel sub-queries.
     if (name === 'decompose_query') {
       const decomposeResult = await executeTool(name, args, model, callSet);
       observations.push(decomposeResult);
@@ -258,7 +254,6 @@ export async function runReActAgent(
       continue;
     }
 
-    // Regular tool execution
     const result = await executeTool(name, args, model, callSet);
     observations.push(result);
     emit({ type: 'tool_result', tool: name, found: result.hasResults });
@@ -266,9 +261,7 @@ export async function runReActAgent(
     contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse(name, result) }] });
 
     if (name === 'search_technical_manual' && result.hasResults) {
-      // Ekstraksi P-code WAJIB sama dengan jalur deterministik: hanya dari baris yang relevan
-      // dengan query. Versi global (/\bP\d{4}\b/g) pernah dibuang karena chunk "Engine Fault Code
-      // List" memuat 30+ P-code → 30+ embed call + isi Engine Manual yang tak nyambung.
+      // Relevant lines only — global match cost 30+ embeds.
       const kueri = typeof (args as { query?: unknown })?.query === 'string'
         ? (args as { query: string }).query
         : query;
@@ -284,9 +277,8 @@ export async function runReActAgent(
     }
   }
 
-  // Stream final answer phase
   if (finalText) {
-    // AI sudah produce text di loop — chunk-stream-it manually agar UI behavior konsisten
+    // Chunk manually so UI behaves the same.
     const CHUNK = 80;
     for (let i = 0; i < finalText.length; i += CHUNK) {
       onChunk(finalText.slice(i, i + CHUNK));
@@ -295,7 +287,7 @@ export async function runReActAgent(
     return finalText;
   }
 
-  // Hit max iterations tanpa final answer → force final mode
+  // Force final.
   console.warn('[react-agent] max iterations (%d) hit, forcing final answer', maxIter);
   emit({ type: 'thinking', message: 'Menyusun jawaban…' });
   finalText = await forceFinalAnswer(contents, systemInstruction, observations, onChunk);
