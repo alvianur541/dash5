@@ -17,4 +17,5 @@ CLAUDE.md
 .mcp.json
 
 # Kunci service account Google Cloud — jangan pernah di-commit.
-secrets/
+secrets/*
+!secrets/.gitkeep
