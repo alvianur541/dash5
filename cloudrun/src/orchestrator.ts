@@ -3,8 +3,8 @@ import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { deps } from './deps';
 
-// Rollback: VERTEX_MODEL=gemini-3.6-flash.
-export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.7-flash';
+// 3.7 returns 429 on shared global capacity. Rollback: VERTEX_MODEL=gemini-3.7-flash.
+export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
 // Must round-trip intact.
