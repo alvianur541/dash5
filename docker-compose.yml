@@ -1,0 +1,39 @@
+# Dash⁵ — backend + frontend sekali jalan:  docker compose up -d --build
+#
+# Sebelum menjalankan, siapkan tiga hal:
+#   1. cloudrun/.env        salin dari cloudrun/.env.example, lalu isi
+#   2. .env                 salin dari .env.example, lalu isi
+#   3. secrets/sa-key.json  kunci service account dari Google Cloud
+
+services:
+  backend:
+    build: ./cloudrun
+    env_file: ./cloudrun/.env
+    environment:
+      GOOGLE_APPLICATION_CREDENTIALS: /app/sa-key.json
+    volumes:
+      - ./secrets/sa-key.json:/app/sa-key.json:ro
+    ports:
+      - "3000:8080"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: deploy/Dockerfile.frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+        VITE_VERTEX_PROXY_URL: ${VITE_VERTEX_PROXY_URL}
+        VITE_AGENTIC_MODE: ${VITE_AGENTIC_MODE:-adaptive}
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+    depends_on:
+      - backend
