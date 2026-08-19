@@ -1,11 +1,9 @@
-# Frontend dibangun DI DALAM container — server tidak perlu memasang Node.js.
 FROM node:20-alpine AS build
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
 
-# Nilai VITE_* ditanam saat build, bukan dibaca saat jalan. Ubah nilai = build ulang.
 ARG VITE_SUPABASE_URL
 ARG VITE_SUPABASE_ANON_KEY
 ARG VITE_VERTEX_PROXY_URL
@@ -15,7 +13,6 @@ ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
     VITE_VERTEX_PROXY_URL=$VITE_VERTEX_PROXY_URL \
     VITE_AGENTIC_MODE=$VITE_AGENTIC_MODE
 
-# Gagal di sini lebih baik daripada layar putih tanpa pesan di HP teknisi.
 RUN for v in VITE_SUPABASE_URL VITE_SUPABASE_ANON_KEY VITE_VERTEX_PROXY_URL; do \
       eval "isi=\$$v"; \
       [ -n "$isi" ] || { echo "GAGAL: $v kosong — isi berkas .env lebih dulu"; exit 1; }; \

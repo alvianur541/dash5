@@ -1,10 +1,3 @@
-# Dash⁵ — backend + frontend sekali jalan:  docker compose up -d --build
-#
-# Sebelum menjalankan, siapkan tiga hal:
-#   1. cloudrun/.env        salin dari cloudrun/.env.example, lalu isi
-#   2. .env                 salin dari .env.example, lalu isi
-#   3. secrets/sa-key.json  kunci service account dari Google Cloud
-
 services:
   backend:
     build: ./cloudrun
