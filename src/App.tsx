@@ -4,11 +4,8 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
-import { FieldNoteModal } from './components/FieldNoteModal';
-import { UnitModel, Message, SessionMeta, KnowledgeCandidate } from './types';
-import { generateResponse, generateResponseStream, generateResponseAgentic, getQuestionUsage, warmupProxy, type AgentEvent } from './services/ai';
-import { detectFieldKnowledge } from './services/fieldNotes';
-import { logQuestionUsage } from './services/usage';
+import { UnitModel, Message, SessionMeta } from './types';
+import { generateResponse, generateResponseStream, generateResponseAgentic, warmupProxy, type AgentEvent } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, loadPocketTombstones, addPocketTombstone, clearPocketTombstone, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
@@ -67,7 +64,6 @@ export default function App() {
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
-  const [fieldNoteState, setFieldNoteState] = useState<{ messageId: string; candidate?: KnowledgeCandidate; question: string; answer: string } | null>(null);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   // Saku — jawaban tersimpan offline (localStorage per-user)
   const [pocket, setPocket] = useState<PocketItem[]>([]);
@@ -296,19 +292,6 @@ export default function App() {
     setTheme(t => t === 'dark' ? 'light' : 'dark');
   }, []);
 
-  const logCost = useCallback((sid: string | null, tools: string[]) => {
-    if (!user) return;
-    const u = getQuestionUsage();
-    logQuestionUsage({
-      sessionId: sid,
-      model: u.model,
-      inputTokens: u.input,
-      outputTokens: u.output,
-      llmCalls: u.calls,
-      toolsUsed: tools,
-    });
-  }, [user]);
-
   const handleRefresh = useCallback(async () => {
     if (isRefreshing) return;
     setIsRefreshing(true);
@@ -464,19 +447,9 @@ export default function App() {
         return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
       });
       persist(fullText);
-      logCost(sessionSnapshot, [...toolsUsed]);
-
-      if (content.trim()) {
-        detectFieldKnowledge(content, selectedModel).then(candidate => {
-          if (!candidate) return;
-          if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
-          setMessages(prev => prev.map(m => m.id === assistantId ? { ...m, knowledgeCandidate: candidate } : m));
-        }).catch(() => {});
-      }
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
       console.error('AI Error:', err.message);
-      logCost(sessionId, [...toolsUsed]);
       setError(
         err.message?.includes('KUOTA_PENUH')
           ? 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.'
@@ -487,7 +460,7 @@ export default function App() {
       setIsTyping(false);
       setIsStreaming(false);
     }
-  }, [user, selectedModel, logCost]);
+  }, [user, selectedModel]);
 
   if (authLoading) {
     return (
@@ -652,14 +625,6 @@ export default function App() {
           hasHistory={sessionList.length > 0}
           pocketIds={pocketIds}
           onTogglePocket={togglePocket}
-          onOpenFieldNote={(id) => {
-            const msgs = messagesRef.current;
-            const idx = msgs.findIndex(m => m.id === id);
-            if (idx < 0) return;
-            const asst = msgs[idx];
-            const q = idx > 0 && msgs[idx - 1].role === 'user' ? msgs[idx - 1].content : '';
-            setFieldNoteState({ messageId: id, candidate: asst.knowledgeCandidate, question: q, answer: asst.content });
-          }}
           agentEvents={agentEvents}
         />
 
@@ -682,21 +647,6 @@ export default function App() {
         item={pocketView}
         onClose={() => setPocketView(null)}
         onDelete={deletePocketItem}
-      />
-
-      {/* ── Catatan Lapangan Modal ── */}
-      <FieldNoteModal
-        isOpen={fieldNoteState !== null}
-        onClose={() => setFieldNoteState(null)}
-        onSaved={() => {
-          const id = fieldNoteState?.messageId;
-          if (id) setMessages(prev => prev.map(m => m.id === id ? { ...m, knowledgeCandidate: undefined } : m));
-        }}
-        model={selectedModel}
-        candidate={fieldNoteState?.candidate}
-        sourceMessageId={fieldNoteState?.messageId}
-        sourceQuestion={fieldNoteState?.question}
-        sourceAnswer={fieldNoteState?.answer}
       />
 
       {/* ── Delete All Confirmation Dialog ── */}

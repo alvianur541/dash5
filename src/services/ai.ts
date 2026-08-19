@@ -8,9 +8,6 @@ import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 const PROXY_URL = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
 
-// Hanya untuk label di panel Monitoring — model sebenarnya ditentukan server, dikirim balik di frame meta.
-export const MODEL = import.meta.env.VITE_VERTEX_MODEL || 'gemini-3.7-flash';
-
 export interface AgentEvent {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'done';
   tool?: string;
@@ -75,13 +72,6 @@ async function streamCanned(text: string, onChunk: (t: string) => void): Promise
   return text;
 }
 
-// ─── Ledger token ─────────────────────────────────────────────────────────────
-
-let _usage = { input: 0, output: 0, calls: 0, model: MODEL };
-export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
-  return { ..._usage };
-}
-
 // ─── Panggilan ke /v1/ask ─────────────────────────────────────────────────────
 
 interface AskBody {
@@ -101,7 +91,6 @@ async function ask(
   onChunk: (text: string) => void,
   onAgentEvent?: (e: AgentEvent) => void,
 ): Promise<{ text: string; cacheable: boolean }> {
-  _usage = { input: 0, output: 0, calls: 0, model: MODEL };
 
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -144,14 +133,6 @@ async function ask(
           if (frame.event && onAgentEvent) onAgentEvent(frame.event as AgentEvent);
           break;
         case 'meta':
-          if (frame.usage) {
-            _usage = {
-              input: frame.usage.input ?? 0,
-              output: frame.usage.output ?? 0,
-              calls: frame.usage.calls ?? 0,
-              model: frame.model || MODEL,
-            };
-          }
           cacheable = frame.cacheable === true;
           // Jaring pengaman: kalau ada frame text yang hilang, teks utuh dari server yang menang.
           if (typeof frame.full === 'string' && frame.full.length > text.length) text = frame.full;

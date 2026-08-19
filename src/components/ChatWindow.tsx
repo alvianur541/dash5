@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Lightbulb, Search, Sparkles, Loader2, ChevronDown, ArrowRight, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
 import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
@@ -43,13 +43,6 @@ export const SANITIZE_SCHEMA = {
   protocols: { href: ['http', 'https', 'mailto', 'tel'] },
 };
 
-function hastText(node: unknown): string {
-  const n = node as { type?: string; value?: string; children?: unknown[] } | null;
-  if (!n) return '';
-  if (n.type === 'text') return n.value ?? '';
-  if (Array.isArray(n.children)) return n.children.map(hastText).join('');
-  return '';
-}
 
 interface ChatWindowProps {
   messages: Message[];
@@ -58,7 +51,6 @@ interface ChatWindowProps {
   selectedModel: UnitModel;
   userName?: string;
   hasHistory?: boolean;
-  onOpenFieldNote?: (messageId: string) => void;
   agentEvents?: AgentEvent[];
   pocketIds?: Set<string>;
   onTogglePocket?: (messageId: string) => void;
@@ -188,13 +180,12 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onOpenFieldNote, onExpandTable, inPocket = false, onTogglePocket,
+  message, feedback, onFeedback, isStreaming = false, onExpandTable, inPocket = false, onTogglePocket,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
   onFeedback: (id: string, type: 'up' | 'down') => void;
   isStreaming?: boolean;
-  onOpenFieldNote?: (messageId: string) => void;
   onExpandTable?: (table: ReactNode) => void;
   inPocket?: boolean;
   onTogglePocket?: (messageId: string) => void;
@@ -249,11 +240,6 @@ const MessageItem = memo(function MessageItem({
                       )}
                     </div>
                   ),
-                  blockquote: ({ children, node }) => (
-                    hastText(node).toLowerCase().includes('catatan lapangan')
-                      ? <blockquote className="fieldnote-callout">{children}</blockquote>
-                      : <blockquote>{children}</blockquote>
-                  ),
                   strong: ({ children }) => {
                     const text = typeof children === 'string'
                       ? children
@@ -278,24 +264,6 @@ const MessageItem = memo(function MessageItem({
             </Suspense>
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
-
-          {/* Catatan Lapangan — muncul saat AI MENDETEKSI teknisi berbagi ilmu di
-              pesannya. Sudah terisi hasil ekstraksi AI; teknisi tinggal cek & simpan. */}
-          {!isStreaming && message.knowledgeCandidate && onOpenFieldNote && (
-            <button
-              className="fieldnote-cta"
-              onClick={() => onOpenFieldNote(message.id)}
-            >
-              <span className="fieldnote-cta-icon"><Lightbulb size={15} /></span>
-              <span className="fieldnote-cta-text">
-                <span className="fieldnote-cta-title">Sepertinya kamu berbagi ilmu lapangan</span>
-                <span className="fieldnote-cta-sub">
-                  {message.knowledgeCandidate.component ? `${message.knowledgeCandidate.component} · ` : ''}ketuk untuk cek &amp; simpan ke knowledge base
-                </span>
-              </span>
-              <ArrowRight size={15} className="fieldnote-cta-arrow" />
-            </button>
-          )}
 
           <div className="ai-actions">
             <CopyButton text={message.content} />
@@ -327,7 +295,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, onOpenFieldNote, agentEvents = [], pocketIds, onTogglePocket,
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -477,7 +445,6 @@ export function ChatWindow({
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
                 isStreaming={showCursor}
-                onOpenFieldNote={onOpenFieldNote}
                 onExpandTable={openTable}
                 inPocket={pocketIds?.has(message.id) ?? false}
                 onTogglePocket={onTogglePocket}

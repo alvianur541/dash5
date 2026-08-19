@@ -2,14 +2,11 @@
 import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, BarChart3, Bookmark, Tractor, History as HistoryIcon } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon } from 'lucide-react';
 import { supabase } from '../services/supabase';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
-import { MonitorModal } from './MonitorModal';
 
-const ADMIN_EMAILS = (import.meta.env.VITE_ADMIN_EMAILS ?? 'alvianur@gmail.com')
-  .split(',').map((s: string) => s.trim().toLowerCase()).filter(Boolean);
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
@@ -85,8 +82,6 @@ export function Sidebar({
   // Bookmark auto-hide: tertutup default — buka saat diketuk
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
-  const [showMonitor, setShowMonitor] = useState(false);
-  const isAdmin = ADMIN_EMAILS.includes((user?.email ?? '').toLowerCase());
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -445,15 +440,6 @@ export function Sidebar({
                       <KeyRound size={14} className="text-[var(--text-muted)]" />
                       <span>Ganti Password</span>
                     </button>
-                    {isAdmin && (
-                      <button
-                        onClick={() => { setShowUserMenu(false); setShowMonitor(true); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
-                      >
-                        <BarChart3 size={14} className="text-[var(--accent-main)]" />
-                        <span>Monitoring Pemakaian</span>
-                      </button>
-                    )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowSupport(true); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
@@ -552,7 +538,6 @@ export function Sidebar({
       </m.div>
 
       <SupportModal open={showSupport} onClose={() => setShowSupport(false)} />
-      {isAdmin && <MonitorModal open={showMonitor} onClose={() => setShowMonitor(false)} />}
     </>
   );
 }
