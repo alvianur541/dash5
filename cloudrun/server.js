@@ -32,7 +32,8 @@ if (ALLOWED_ORIGINS.length === 0) {
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
 // Keep below client STREAM_TIMEOUT_MS.
 const UPSTREAM_TIMEOUT_MS = 35_000;
-const UPSTREAM_429_BACKOFF_MS = [1_500, 4_000, 8_000];
+// One retry only: retrying a full quota just deepens it.
+const UPSTREAM_429_BACKOFF_MS = [1_500];
 const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
