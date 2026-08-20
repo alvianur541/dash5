@@ -17,12 +17,6 @@ export async function getAuthToken(): Promise<string | null> {
   return data.session?.access_token ?? null;
 }
 
-interface SearchResult {
-  content: string;
-  metadata: any;
-  similarity: number;
-}
-
 export async function saveOrUpdateChatSession(
   id: string,
   userId: string,

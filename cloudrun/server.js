@@ -17,7 +17,7 @@ setGlobalDispatcher(new Agent({
 const app = express();
 
 // Global parser MUST skip these, else bigJson never runs and photos 413.
-const BIG_BODY_PATHS = new Set(['/v1/chat', '/v1/chat/stream', '/v1/transcribe', '/v1/ask']);
+const BIG_BODY_PATHS = new Set(['/v1/transcribe', '/v1/ask']);
 const smallJson = express.json({ limit: '1mb' });
 const bigJson   = express.json({ limit: '20mb' });
 app.use((req, res, next) => (BIG_BODY_PATHS.has(req.path) ? next() : smallJson(req, res, next)));
@@ -57,7 +57,8 @@ const ALLOWED_MODELS = new Set(
 const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
 const _rateBuckets = new Map();
 function rateLimit(req, res, next) {
-  const key = req.headers['authorization'] || req.ip || 'anon';
+  // User id, not the raw token — a refresh would reset the bucket.
+  const key = (req.authUser && req.authUser.id) || req.headers['authorization'] || req.ip || 'anon';
   const now = Date.now();
   let b = _rateBuckets.get(key);
   if (!b || now >= b.reset) { b = { count: 0, reset: now + 60_000 }; _rateBuckets.set(key, b); }
@@ -283,76 +284,6 @@ async function fetchAuthUser(token) {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
-app.post('/v1/chat', verifyToken, rateLimit, bigJson, async (req, res) => {
-  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
-  if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
-  if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
-
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
-  try {
-    const upstream = await vertexFetch(model, body, { stream: false, signal: ctrl.signal, label: '/v1/chat' });
-    const data = await upstream.json();
-    if (!upstream.ok) {
-      console.error('Vertex AI error:', JSON.stringify(data));
-      return res.status(upstream.status).json(data);
-    }
-    return res.json(data);
-  } catch (err) {
-    console.error('Proxy error:', err);
-    return res.status(500).json({ error: 'Upstream request failed' });
-  } finally {
-    clearTimeout(timer);
-  }
-});
-
-app.post('/v1/chat/stream', verifyToken, rateLimit, bigJson, async (req, res) => {
-  const { model = 'gemini-2.5-flash', enableGoogleSearch = false, ...body } = req.body;
-  if (!ALLOWED_MODELS.has(model)) return res.status(400).json({ error: 'Model tidak diizinkan' });
-  if (enableGoogleSearch) body.tools = [...(body.tools || []), { googleSearch: {} }];
-
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  const ctrl  = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), UPSTREAM_TIMEOUT_MS);
-  // res, not req — req emits 'close' when the body is read (Node 16+).
-  res.on('close', () => { clearTimeout(timer); if (!res.writableFinished) ctrl.abort(); });
-
-  try {
-    const upstream = await vertexFetch(model, body, { stream: true, signal: ctrl.signal, label: '/v1/chat/stream' });
-
-    if (!upstream.ok) {
-      const errText = await upstream.text();
-      console.error('Vertex stream error:', errText);
-      res.write(`data: ${JSON.stringify({ error: 'Upstream request failed', code: upstream.status })}\n\n`);
-      return res.end();
-    }
-
-    const reader = upstream.body.getReader();
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        if (!res.write(value)) await new Promise(r => res.once('drain', r));
-      }
-    } finally {
-      reader.cancel().catch(() => {});
-      res.end();
-    }
-  } catch (err) {
-    console.error('Stream proxy error:', err);
-    if (!res.writableEnded) {
-      res.write(`data: ${JSON.stringify({ error: 'Stream failed' })}\n\n`);
-      res.end();
-    }
-  } finally {
-    clearTimeout(timer);
-  }
-});
-
 app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { audio, mimeType } = req.body;
@@ -392,32 +323,6 @@ const upstream = await fetch(url, {
     // Details to log only.
     console.error('Transcribe error:', err);
     return res.status(500).json({ error: 'Transcribe gagal. Coba lagi.' });
-  }
-});
-
-app.post('/v1/embed', verifyToken, rateLimit, async (req, res) => {
-  if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
-  const { query, task_type = 'RETRIEVAL_QUERY' } = req.body;
-  if (!query) return res.status(400).json({ error: 'query is required' });
-
-  try {
-    return res.json({ values: await vertexEmbed(query, task_type) });
-  } catch (err) {
-    if (err.status) return res.status(err.status).json(err.data || { error: 'Embedding gagal' });
-    // Details to log only.
-    console.error('Embed error:', err);
-    return res.status(500).json({ error: 'Embedding gagal. Coba lagi.' });
-  }
-});
-
-app.post('/v1/rerank', verifyToken, rateLimit, async (req, res) => {
-  const { query, documents, topN = 3 } = req.body;
-  if (!query || !documents) return res.status(400).json({ error: 'query and documents are required' });
-
-  try {
-    return res.json(await cohereRerank(query, documents, topN));
-  } catch (err) {
-    return res.status(err.status || 500).json(err.data || { error: err.message });
   }
 });
 

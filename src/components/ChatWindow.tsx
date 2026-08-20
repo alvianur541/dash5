@@ -56,12 +56,6 @@ interface ChatWindowProps {
   onTogglePocket?: (messageId: string) => void;
 }
 
-function formatTime(timestamp: number) {
-  return new Date(timestamp).toLocaleTimeString('id-ID', {
-    hour: '2-digit', minute: '2-digit', hour12: false,
-  });
-}
-
 
 const TOOL_LABELS: Record<string, string> = {
   search_technical_manual: 'Technical Manual',
