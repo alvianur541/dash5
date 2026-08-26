@@ -210,6 +210,47 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   return upstream;
 }
 
+// AI Studio path — its own quota pool, far above Vertex's hard 5/min cap.
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
+async function geminiEmbed(query, taskType = 'RETRIEVAL_QUERY') {
+  const tEmb = Date.now();
+  const upstream = await fetchAntiMacet(
+    'https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent',
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+      body: JSON.stringify({
+        model: 'models/gemini-embedding-001',
+        content: { parts: [{ text: query }] },
+        taskType,
+        outputDimensionality: 3072,
+      }),
+    }, undefined, '/v1/embed-gemini');
+  const msEmb = Date.now() - tEmb;
+  if (msEmb > 3000) console.warn('[upstream] LAMBAT /v1/embed-gemini fetch=%dms', msEmb);
+  const data = await upstream.json();
+  if (!upstream.ok) {
+    const e = new Error('Gemini embed gagal');
+    e.status = upstream.status; e.data = data;
+    throw e;
+  }
+  const values = data?.embedding?.values;
+  if (!Array.isArray(values) || values.length !== 3072) throw new Error('Gemini embed: values invalid');
+  return values;
+}
+
+// Same model, two doors: AI Studio first, Vertex as fallback.
+async function embedQuery(query, taskType = 'RETRIEVAL_QUERY') {
+  if (GEMINI_API_KEY) {
+    try {
+      return await geminiEmbed(query, taskType);
+    } catch (err) {
+      console.warn('[embed] AI Studio gagal (%s) — fallback Vertex', err?.status ?? err?.message);
+    }
+  }
+  return vertexEmbed(query, taskType);
+}
+
 async function vertexEmbed(query, taskType = 'RETRIEVAL_QUERY') {
   if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
   const url =
@@ -423,7 +464,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     thinkOverride: think,
     usage: orch.newUsage(),
     meta: {},
-    embed: (text) => vertexEmbed(text, 'RETRIEVAL_QUERY'),
+    embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
     rerank: async (query, documents, topN) => {
       try {
         const data = await cohereRerank(query, documents, topN);

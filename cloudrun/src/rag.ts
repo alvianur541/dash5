@@ -431,7 +431,10 @@ export async function searchTechnicalManualMulti(
     : primaryQuery;
 
   // Parallel with keyword.
-  const vectorPromise: Promise<SearchResult[]> = getEmbedding(embeddingQuery).then(async emb => {
+  // Fault code: literal filter drops anything keyword can't find — embed is pure waste (quota 5/min).
+  const vectorPromise: Promise<SearchResult[]> = faultCode
+    ? Promise.resolve([])
+    : getEmbedding(embeddingQuery).then(async emb => {
     let { data: vecData } = await sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
     });
