@@ -141,7 +141,7 @@ async function forceFinalAnswer(
 ): Promise<string> {
   const summary = observations
     .filter(o => o.hasResults)
-    .map(o => `- ${o.toolName}: ${o.content.slice(0, 1500)}${o.content.length > 1500 ? '...' : ''}`)
+    .map(o => `- ${o.toolName}: ${o.content.slice(0, 3000)}${o.content.length > 3000 ? '...' : ''}`)
     .join('\n');
 
   const forceMsg = `Iterations habis (max 4). Synthesize dari observations berikut ke final answer Bahasa Indonesia. Quote verbatim dari data — JANGAN ngarang.\n\nObservations:\n${summary || '(tidak ada data dari tools)'}`;
@@ -172,11 +172,8 @@ export async function runReActAgent(
   const onChunk = config.onChunk ?? (() => {});
 
   const startedAt = Date.now();
-  const checkTimeout = () => {
-    if (Date.now() - startedAt > timeoutMs) {
-      throw new Error(`Agent timeout ${timeoutMs}ms`);
-    }
-  };
+  // Timeout synthesizes from gathered observations — never discards them.
+  const timedOut = () => Date.now() - startedAt > timeoutMs;
 
   const systemInstruction = `${SYSTEM_PROMPT(model, userName)}\n\n---\n\n${REACT_SYSTEM}`;
   const contents = buildInitialContents(history, query);
@@ -188,13 +185,11 @@ export async function runReActAgent(
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
 
-  while (iterations < maxIter) {
-    checkTimeout();
-
+  while (iterations < maxIter && !timedOut()) {
     const res = await callProxy({
       contents,
       systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: { maxOutputTokens: 1024, thinkingConfig: { thinkingLevel: 'low' } },
+      generationConfig: { maxOutputTokens: 4096, thinkingConfig: { thinkingLevel: 'low' } },
       tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
       toolConfig: { functionCallingConfig: { mode: 'AUTO' } },
     }, false, MODEL);
@@ -234,7 +229,7 @@ export async function runReActAgent(
         observations.push(...fanOut);
         synth = fanOut
           .filter(r => r.hasResults)
-          .map(r => `[${r.toolName}] ${r.content.slice(0, 800)}`)
+          .map(r => `[${r.toolName}] ${r.content.slice(0, 3000)}`)
           .join('\n\n---\n\n');
       }
 
@@ -288,7 +283,8 @@ export async function runReActAgent(
   }
 
   // Force final.
-  console.warn('[react-agent] max iterations (%d) hit, forcing final answer', maxIter);
+  console.warn('[react-agent] %s — forcing final answer from %d observations',
+    timedOut() ? `timeout ${timeoutMs}ms` : `max iterations (${maxIter})`, observations.length);
   emit({ type: 'thinking', message: 'Menyusun jawaban…' });
   finalText = await forceFinalAnswer(contents, systemInstruction, observations, onChunk);
   emit({ type: 'done' });

@@ -1168,6 +1168,11 @@ export async function generateResponseAgentic(
     .replace(/<\|[^|]*\|>/g, '[blocked]');
   const trimmed = sanitized.trim() || 'Halo';
 
+  // Greetings skip the agent loop entirely.
+  if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
+    return generateResponseStream(model, userName, history, userInput, onChunk, onAgentEvent);
+  }
+
   // Lazy import breaks circular deps.
   const { runReActAgent } = await import('./react-agent');
 

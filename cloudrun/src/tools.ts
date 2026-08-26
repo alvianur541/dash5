@@ -169,6 +169,9 @@ const searchCircuitDiagramTool: Tool = {
   execute: async (args, model) => {
     const query = String(args.query ?? '').trim();
     if (!query) return { toolName: 'search_circuit_diagram', content: '', hasResults: false, error: 'empty query' };
+    if (model !== 'ZX48U-5A') {
+      return { toolName: 'search_circuit_diagram', content: '', hasResults: false, error: `HCD tidak tersedia untuk ${model} — pakai search_technical_manual` };
+    }
     const result = await searchTechnicalManualMulti([query], model, 3, 'HYDRAULIC CIRCUIT DIAGRAM');
     return {
       toolName: 'search_circuit_diagram',
