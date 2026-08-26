@@ -414,8 +414,14 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
         let json;
         try { json = JSON.parse(jsonStr); } catch { continue; }
         if (json.error) { onChunk({ error: String(json.error.message || json.error), code: json.error.code }); return; }
-        const parts = (json.candidates && json.candidates[0] && json.candidates[0].content &&
-                       json.candidates[0].content.parts) || [];
+        const cand = json.candidates && json.candidates[0];
+        if (cand && cand.finishReason && cand.finishReason !== 'STOP') {
+          console.warn('[vertex-stream] finishReason=%s', cand.finishReason);
+        }
+        if (json.promptFeedback && json.promptFeedback.blockReason) {
+          console.warn('[vertex-stream] blockReason=%s', json.promptFeedback.blockReason);
+        }
+        const parts = (cand && cand.content && cand.content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
         // Thinking chunks count as alive, else the watchdog kills them.
         onChunk({ text, usageMetadata: json.usageMetadata, live: true });

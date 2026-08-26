@@ -464,6 +464,14 @@ export async function callProxyStream(
     await new Promise(r => setTimeout(r, attempt * 900));
     continue;
   }
+  // Stream closed cleanly but short and without the closing usage stamp = cut, not done.
+  const STUB_MAX = 40;
+  if (!retryNeeded && !upstreamError && !usageBox.last && fullText.trim().length < STUB_MAX && attempt < MAX_ATTEMPT) {
+    console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
+    if (fullText) onChunk('\n\n');
+    await new Promise(r => setTimeout(r, attempt * 900));
+    continue;
+  }
 
   if (retryNeeded) continue;  // Retry.
   break;
