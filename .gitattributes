@@ -1,4 +1,3 @@
 # Tidak ikut `git archive` — paket Hexindo hanya butuh aplikasinya.
 supabase/       export-ignore
-.github/        export-ignore
 .gitattributes  export-ignore
