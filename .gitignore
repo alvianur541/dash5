@@ -12,9 +12,6 @@ coverage/
 .vscode/
 .tmp/
 CLAUDE.md
-# Config MCP lokal — berisi path absolut mesin ini (node-portable), bukan rahasia.
-# Token dibaca dari env var SUPABASE_ACCESS_TOKEN, tidak pernah ditulis di file.
-.mcp.json
 
 # Kunci service account Google Cloud — jangan pernah di-commit.
 secrets/*
