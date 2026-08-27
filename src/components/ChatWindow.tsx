@@ -4,14 +4,12 @@ import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
 import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
 import type { ReactNode } from 'react';
-import rehypeSanitize, { defaultSchema } from 'rehype-sanitize';
-import remarkGfm from 'remark-gfm';
 import { getGreeting } from '../lib/greeting';
 import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../services/ai';
 
-const ReactMarkdown = lazy(() => import('react-markdown'));
+const Markdown = lazy(() => import('./Markdown'));
 
 export function stripLatex(text: string): string {
   const clean = (s: string) =>
@@ -24,24 +22,6 @@ export function stripLatex(text: string): string {
     .replace(/\$([^$\n]+?)\$/g,     (_, inner) => '`' + clean(inner) + '`')
     .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
-
-export const SANITIZE_SCHEMA = {
-  ...defaultSchema,
-  tagNames: [
-    'p', 'br', 'strong', 'em', 'code', 'pre', 'blockquote',
-    'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
-    'table', 'thead', 'tbody', 'tr', 'th', 'td',
-    'a', 'span', 'div', 'hr',
-  ],
-  attributes: {
-    ...defaultSchema.attributes,
-    a: [['href', /^(https?:\/\/|mailto:|tel:)/i], 'title'],
-    code: ['className'],
-    span: ['className'],
-    div: ['className'],
-  },
-  protocols: { href: ['http', 'https', 'mailto', 'tel'] },
-};
 
 interface ChatWindowProps {
   messages: Message[];
@@ -210,9 +190,7 @@ const MessageItem = memo(function MessageItem({
         <div className="ai-msg-wrap">
           <div className="markdown-body">
             <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[[rehypeSanitize, SANITIZE_SCHEMA]]}
+              <Markdown
                 components={{
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
@@ -249,7 +227,7 @@ const MessageItem = memo(function MessageItem({
                       : <strong>{children}</strong>;
                   },
                 }}
-              >{stripLatex(message.content)}</ReactMarkdown>
+              >{stripLatex(message.content)}</Markdown>
             </Suspense>
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>

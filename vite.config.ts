@@ -93,11 +93,13 @@ export default defineConfig(() => {
     build: {
       rollupOptions: {
         output: {
-          manualChunks: {
-            'react-core': ['react', 'react-dom'],
-            'motion':     ['motion'],
-            'supabase':   ['@supabase/supabase-js'],
-            'markdown':   ['react-markdown'],
+          manualChunks(id) {
+            if (!id.includes('/node_modules/')) return;
+            // React first, or its jsx-runtime leaks into whichever chunk claims it.
+            if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-core';
+            if (/\/node_modules\/(react-markdown|remark-gfm|rehype-sanitize)\//.test(id)) return 'markdown';
+            if (id.includes('/node_modules/motion')) return 'motion';
+            if (id.includes('/node_modules/@supabase/')) return 'supabase';
           },
         },
       },

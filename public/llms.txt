@@ -1,0 +1,6 @@
+# Dash⁵
+
+> AI diagnostic assistant for Hitachi and KCM heavy-equipment technicians at PT Hexindo Adiperkasa. Answers fault codes, part numbers, specifications, and maintenance schedules from official manuals via retrieval-augmented generation.
+
+- [Application](https://dash5.my.id): login required (internal technicians)
+- [Source code](https://github.com/alvianur541/dash5)
