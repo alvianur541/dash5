@@ -1,4 +1,3 @@
-/** Single list. UnitModel, model-strip regex, and allowlist all derive from it. */
 export const UNIT_MODELS = [
   'ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140',
 ] as const;
@@ -13,7 +12,6 @@ export interface Message {
   attachments?: string[];
 }
 
-/** Browser already converted it. */
 export interface InlineImage { mimeType: string; data: string }
 
 export interface AgentEvent {

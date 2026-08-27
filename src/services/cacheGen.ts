@@ -3,7 +3,6 @@ export const CACHE_GEN = 8;
 
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
 
-/** Drop older generations. */
 export function purgeStaleAnswerCaches(): void {
   try {
     if (typeof localStorage === 'undefined') return;
@@ -18,5 +17,5 @@ export function purgeStaleAnswerCaches(): void {
     }
     for (const k of buang) localStorage.removeItem(k);
     if (buang.length) console.info('[cache] %d entri generasi lama dihapus', buang.length);
-  } catch { /* localStorage mati/penuh — cache opsional */ }
+  } catch { }
 }

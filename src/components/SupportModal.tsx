@@ -145,12 +145,12 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
             style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
             onClick={e => e.stopPropagation()}
           >
-            {/* Drag handle — mobile only */}
+            {}
             <div className="flex justify-center pt-3 pb-1 sm:hidden">
               <div className="w-9 h-1 rounded-full bg-[var(--border-main)]" />
             </div>
 
-            {/* Header */}
+            {}
             <div className="flex items-center justify-between px-5 pt-3 sm:pt-5 pb-4 border-b border-[var(--border-main)]">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-xl bg-[var(--accent-main)]/12 flex items-center justify-center shrink-0">
@@ -166,10 +166,10 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
               </button>
             </div>
 
-            {/* Body — scrollable, no visible scrollbar */}
+            {}
             <div className="px-4 sm:px-5 py-4 space-y-4 max-h-[72dvh] sm:max-h-[65vh] overflow-y-auto scrollbar-hide">
 
-              {/* Cara Pakai */}
+              {}
               <div>
                 <div className="flex items-center gap-2 mb-2.5">
                   <BookOpen size={12} className="text-[var(--text-muted)]" />
@@ -190,7 +190,7 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
                 </div>
               </div>
 
-              {/* FAQ */}
+              {}
               <div>
                 <div className="flex items-center gap-2 mb-2.5">
                   <Wrench size={12} className="text-[var(--text-muted)]" />
@@ -216,7 +216,7 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
               </div>
             </div>
 
-            {/* Contact footer */}
+            {}
             <div className="px-4 sm:px-5 py-3.5 border-t border-[var(--border-main)] bg-[var(--bg-app)]">
               <p className="text-[11.5px] text-[var(--text-muted)] mb-2">Hubungi kami untuk saran dan support lainnya:</p>
               <a

@@ -23,7 +23,7 @@ type Slot = keyof typeof GREETINGS;
 
 export function getGreeting({ name, date = new Date() }: GreetingContext): string {
   const hour = date.getHours();
-  const day  = date.getDay();   // 0=Min, 1=Sen, …, 6=Sab
+  const day  = date.getDay();
 
   let slot: Slot;
   if (day === 1 && hour >= 5 && hour < 11)                    slot = 'monday';

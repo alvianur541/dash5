@@ -94,7 +94,6 @@ async function expandDecomposed(
   callSet: Set<string>,
   emit: (e: AgentEvent) => void,
 ): Promise<ToolResult[]> {
-  // Fan-out follows type: 2 aspects = 2 searches, not 4.
   const results = await Promise.allSettled(
     subQueries.map(s => s.type === 'parts'
       ? executeTool('search_parts_catalog',    { query: s.q }, model, callSet)
@@ -131,7 +130,6 @@ function extractFunctionCall(parts: Part[]): { name: string; args: Record<string
   }
   return null;
 }
-
 
 async function forceFinalAnswer(
   contents: VContent[],
@@ -198,7 +196,6 @@ export async function runReActAgent(
     const fnCall = extractFunctionCall(parts);
 
     if (!fnCall) {
-      // Final answer.
       finalText = getText(parts).trim();
       console.info('[react-agent] iteration=%d finalAnswer chars=%d', iterations, finalText.length);
       break;
@@ -212,7 +209,6 @@ export async function runReActAgent(
     // Rebuilding parts drops thoughtSignature.
     contents.push({ role: 'model', parts });
 
-    // Decompose -> parallel sub-queries.
     if (name === 'decompose_query') {
       const decomposeResult = await executeTool(name, args, model, callSet);
       observations.push(decomposeResult);
@@ -256,7 +252,6 @@ export async function runReActAgent(
     contents.push({ role: 'user', parts: [{ functionResponse: toFunctionResponse(name, result) }] });
 
     if (name === 'search_technical_manual' && result.hasResults) {
-      // Relevant lines only — global match cost 30+ embeds.
       const kueri = typeof (args as { query?: unknown })?.query === 'string'
         ? (args as { query: string }).query
         : query;
@@ -273,7 +268,6 @@ export async function runReActAgent(
   }
 
   if (finalText) {
-    // Chunk manually so UI behaves the same.
     const CHUNK = 80;
     for (let i = 0; i < finalText.length; i += CHUNK) {
       onChunk(finalText.slice(i, i + CHUNK));
@@ -282,7 +276,6 @@ export async function runReActAgent(
     return finalText;
   }
 
-  // Force final.
   console.warn('[react-agent] %s — forcing final answer from %d observations',
     timedOut() ? `timeout ${timeoutMs}ms` : `max iterations (${maxIter})`, observations.length);
   emit({ type: 'thinking', message: 'Menyusun jawaban…' });

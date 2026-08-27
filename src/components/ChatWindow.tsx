@@ -43,7 +43,6 @@ export const SANITIZE_SCHEMA = {
   protocols: { href: ['http', 'https', 'mailto', 'tel'] },
 };
 
-
 interface ChatWindowProps {
   messages: Message[];
   isTyping: boolean;
@@ -55,7 +54,6 @@ interface ChatWindowProps {
   pocketIds?: Set<string>;
   onTogglePocket?: (messageId: string) => void;
 }
-
 
 const TOOL_LABELS: Record<string, string> = {
   search_technical_manual: 'Technical Manual',
@@ -82,13 +80,12 @@ function eventLabel(e: AgentEvent): { icon: 'search' | 'check' | 'spark'; text: 
         : `Tidak ada data di ${friendly}`,
     };
   }
-  return null; // done — handled di parent (clear list)
+  return null;
 }
 
 const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
   events,
 }: { events: AgentEvent[] }) {
-  // One indicator: replace, never stack.
   let current: AgentEvent | null = null;
   let label: ReturnType<typeof eventLabel> = null;
   for (let i = events.length - 1; i >= 0; i--) {
@@ -135,9 +132,7 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
           {view.icon === 'spark'   && <Sparkles size={12} className="text-[var(--accent-main)]" />}
           {view.icon === 'compose' && <Loader2 size={12} className="animate-spin text-[var(--accent-main)]" />}
           <span>{view.text}</span>
-          {/* Titik berdenyut ikut di BARIS yang sama — animasi loading tetap hidup tanpa
-              menambah tinggi konten (penyebab tabrakan dgn input bar). Hanya jeda singkat
-              di centang yang diam, karena langkah itu memang sudah selesai. */}
+          {}
           {view.icon !== 'check' && (
             <span className="typing-dots-inline">
               {[0, 1, 2].map(i => (
@@ -271,8 +266,7 @@ const MessageItem = memo(function MessageItem({
               <ThumbsDown size={14}
                 style={feedback === 'down' ? { fill: 'currentColor', color: 'var(--status-danger)' } : {}} />
             </button>
-            {/* Saku — simpan jawaban untuk dibaca offline. Disembunyikan saat streaming
-                (jangan simpan jawaban setengah jadi). */}
+            {}
             {onTogglePocket && !isStreaming && (
               <button className="action-btn" title={inPocket ? 'Hapus dari Bookmark' : 'Simpan ke Bookmark (bisa dibaca offline)'}
                 onClick={() => onTogglePocket(message.id)}>
@@ -312,7 +306,6 @@ export function ChatWindow({
   const handleFeedback = (id: string, type: 'up' | 'down') => {
     setFeedback(prev => {
       const next = prev[id] === type ? null : type;
-      // Persist only on rating, not on undo.
       if (next && user) {
         const idx = messages.findIndex(m => m.id === id);
         const answer = idx >= 0 ? (messages[idx]?.content ?? '') : '';
@@ -337,7 +330,6 @@ export function ChatWindow({
   useEffect(() => {
     const el = scrollRef.current;
     if (!el) return;
-    // New user message -> pin to bottom.
     const lengthGrew = messages.length > prevLenRef.current;
     prevLenRef.current = messages.length;
     if (lengthGrew && messages[messages.length - 1]?.role === 'user') pinnedRef.current = true;
@@ -345,7 +337,6 @@ export function ChatWindow({
     if (pinnedRef.current) {
       el.scrollTop = el.scrollHeight;
     } else {
-      // Growth while scrolled up -> show the button.
       setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
     }
   }, [messages, isTyping]);
@@ -373,7 +364,7 @@ export function ChatWindow({
           >
             <div style={{ width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '26px' }}>
 
-              {/* Hero — greeting editorial + subtitle kalem */}
+              {}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', textAlign: 'center' }}>
                 <m.h1
                   className="welcome-greeting"
@@ -429,7 +420,6 @@ export function ChatWindow({
       {messages.length > 0 && (
         <div className="chat-messages-list">
           {messages.map((message, idx) => {
-            // Last AI message only.
             const isLast = idx === messages.length - 1;
             const showCursor = isStreaming && isLast && message.role === 'assistant';
             return (
@@ -445,12 +435,10 @@ export function ChatWindow({
               />
             );
           })}
-          {/* Agent thinking — show progress saat ReAct loop jalan, hilang saat answer streaming */}
+          {}
           {isTyping && agentEvents.length > 0 && <AgentThinkingIndicator events={agentEvents} />}
 
-          {/* Titik-titik hanya saat BELUM ada progres agent. Kalau indikator di atas sudah
-              tampil, dua indikator loading sekaligus = redundan & menambah tinggi konten
-              sampai menabrak input bar. Satu status loading pada satu waktu. */}
+          {}
           <AnimatePresence>
             {isTyping && agentEvents.length === 0 && (
               <m.div
@@ -474,7 +462,7 @@ export function ChatWindow({
         </div>
       )}
 
-      {/* Tabel layar penuh — overlay solid, scroll 2 arah, kontrol ukuran font */}
+      {}
       <AnimatePresence>
         {expandedTable && (
           <m.div
@@ -515,7 +503,7 @@ export function ChatWindow({
         <button
           className="scroll-fab"
           onClick={() => {
-            pinnedRef.current = true; // kembali menempel — auto-scroll aktif lagi
+            pinnedRef.current = true;
             scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
           }}
           aria-label="Scroll ke bawah"

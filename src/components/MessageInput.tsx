@@ -11,8 +11,8 @@ interface MessageInputProps {
   disabled?: boolean;
   selectedModel: UnitModel;
   isOffline?: boolean;
-  isStreaming?: boolean;      // jawaban sedang streaming → tombol kirim jadi tombol Stop
-  onStop?: () => void;        // hentikan streaming yang sedang berjalan
+  isStreaming?: boolean;
+  onStop?: () => void;
 }
 
 type RecordingState = 'idle' | 'recording' | 'transcribing';
@@ -30,7 +30,7 @@ function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-const TRANSCRIBE_TIMEOUT_MS = 15_000; // 15s — cukup untuk audio panjang, cegah hang 60s
+const TRANSCRIBE_TIMEOUT_MS = 15_000;
 
 async function transcribeWithProxy(base64Audio: string, mimeType: string): Promise<string> {
   const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL ?? '';
@@ -113,11 +113,9 @@ export function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [input]);
 
-  // Android only, no-op elsewhere.
-  const buzz = () => { try { navigator.vibrate?.(8); } catch { /* unsupported */ } };
+  const buzz = () => { try { navigator.vibrate?.(8); } catch { } };
 
   const handleSend = () => {
-    // Prevent two streams on one session.
     if (!input.trim() || isOffline || isStreaming) return;
     buzz();
     onSendMessage(input.trim());
@@ -128,9 +126,8 @@ export function MessageInput({
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || disabled) return;
     const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-    const MAX_SIZE_BYTES = 5 * 1024 * 1024; // 5MB — setelah compress ~1-2MB, aman untuk localStorage
+    const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
-    // One photo only.
     const file = e.target.files[0];
     let errorMsg: string | null = null;
     const valid: File[] = [];
@@ -154,7 +151,6 @@ export function MessageInput({
       .map(r => r.value);
     if (compressed.length === 0) return;
 
-    // Compress failed -> send original.
     const anyFallback = compressed.some(r => !r.compressed);
     if (anyFallback) {
       setTranscribeError('Compress gambar gagal — mengirim file original.');
@@ -226,7 +222,7 @@ export function MessageInput({
         style={{ maxWidth: 'var(--input-content-max)' }}
       >
 
-        {/* Input pill — AndalAI-style: soft peach orange border, subtle elevation, focus accent */}
+        {}
         <div className={cn(
           "relative rounded-[22px] transition-all duration-150 shadow-sm",
           "bg-[var(--bg-card)] border",
@@ -236,7 +232,7 @@ export function MessageInput({
           disabled && "opacity-60"
         )}>
 
-          {/* Recording / transcribing overlay */}
+          {}
           <AnimatePresence>
             {(isRecording || isTranscribing) && (
               <m.div
@@ -264,7 +260,7 @@ export function MessageInput({
             )}
           </AnimatePresence>
 
-          {/* Textarea */}
+          {}
           <div className="px-5 pt-[14px] pb-[4px] flex flex-col justify-center">
             <textarea
               ref={textareaRef}
@@ -285,10 +281,10 @@ export function MessageInput({
             />
           </div>
 
-          {/* Bottom bar */}
+          {}
           <div className="flex items-center px-3.5 pb-[13px] pt-0 gap-0.5">
 
-            {/* Offline indicator OR attach button */}
+            {}
             {isOffline ? (
               <WifiOff size={15} className="text-amber-400 mx-1.5 shrink-0" />
             ) : (
@@ -311,7 +307,7 @@ export function MessageInput({
               </>
             )}
 
-            {/* Mic — hidden offline */}
+            {}
             {!isOffline && (
               <button
                 onClick={toggleRecording}
@@ -333,7 +329,7 @@ export function MessageInput({
 
             <div className="flex-1" />
 
-            {/* Send button: compact square control. Saat streaming → tombol Stop. */}
+            {}
             {isStreaming && onStop ? (
               <button
                 onClick={onStop}
@@ -361,7 +357,7 @@ export function MessageInput({
           </div>
         </div>
 
-        {/* Error toast */}
+        {}
         <AnimatePresence>
           {transcribeError && (
             <m.p
@@ -373,13 +369,13 @@ export function MessageInput({
           )}
         </AnimatePresence>
 
-        {/* Desktop disclaimer */}
+        {}
         <div className="hidden md:flex items-center justify-center mt-2 text-[11px] text-[var(--text-muted)] opacity-70">
           <span>Dash⁵ dapat keliru — verifikasi info penting.</span>
         </div>
 
       </div>
-      {/* safe-area-spacer di BAWAH: browser=0px, standalone PWA=env(safe-area-inset-bottom) */}
+      {}
       <div className="safe-area-spacer" />
     </div>
   );

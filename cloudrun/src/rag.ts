@@ -1,10 +1,7 @@
 import { deps } from './deps';
 import { UNIT_MODELS } from './types';
 
-// Per-request client, JWT-scoped.
 const sb = () => deps().supabase as any;
-
-
 
 interface SearchResult {
   content: string;
@@ -12,15 +9,11 @@ interface SearchResult {
   similarity: number;
 }
 
-
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
-// Latency lever.
 const RERANK_INPUT_CAP = 30;
 /** Must exceed topN, else MMR has no choice. */
 const RERANK_RETURN_N = 10;
-// Coarse gate.
 const VECTOR_MATCH_COUNT = 20;
-// Payload guard.
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
 
 function capRerankPayload(docs: string[]): string[] {
@@ -38,13 +31,12 @@ function capRerankPayload(docs: string[]): string[] {
   }
   return out;
 }
-const EMBED_CACHE_TTL = 30 * 60 * 1000; // 30 min
+const EMBED_CACHE_TTL = 30 * 60 * 1000;
 
 const embeddingCache    = new Map<string, { values: number[]; expiresAt: number }>();
 const embeddingInFlight = new Map<string, Promise<number[]>>();
 
 function setCached(key: string, value: number[]) {
-  // True LRU.
   if (embeddingCache.has(key)) embeddingCache.delete(key);
   if (embeddingCache.size >= 200) {
     const oldest = embeddingCache.keys().next().value;
@@ -67,7 +59,6 @@ function isFaultCode(query: string): boolean {
 
 const PARTS_KEYWORDS_RE = /\b(part\s*number|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
 
-// Price queries.
 const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft)\b/i;
 
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
@@ -83,15 +74,12 @@ export function extractPartNumber(query: string): string | null {
   return match ? match[1].trim() : null;
 }
 
-
 export function extractSearchTerms(query: string): string[] {
   const trimmed = query.trim();
   if (isFaultCode(trimmed)) {
-    // Spacing variants.
     const spaced   = trimmed.replace(/^([A-Z]{1,3})\s*:\s*([0-9A-Fa-f]+)/i, '$1: $2');
     const unspaced = trimmed.replace(/^([A-Z]{1,3})\s*:\s*([0-9A-Fa-f]+)/i, '$1:$2');
     const numOnly  = trimmed.replace(/^[A-Z]{1,3}\s*:?\s*/i, '');
-    // Stripped variant.
     const stripped = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1');
     return [...new Set([trimmed, spaced, unspaced, numOnly, stripped])].filter(Boolean).slice(0, 5);
   }
@@ -118,7 +106,6 @@ export function extractSearchTerms(query: string): string[] {
   return [trimmed, ...picked].slice(0, 3);
 }
 
-/** Singular/plural match. */
 function batangKata(w: string): string {
   if (w.length < 6) return w;
   if (w.endsWith('ies')) return w.slice(0, -3) + 'i';
@@ -136,7 +123,6 @@ const RERANK_DOC_CAP = 2500;
 async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
 
-  // Scores map back to full text.
   const scoringDocs = docs.map(d => d.length > RERANK_DOC_CAP ? d.slice(0, RERANK_DOC_CAP) : d);
 
   try {
@@ -150,7 +136,6 @@ async function rerankWithCohere(query: string, docs: string[], topN: number): Pr
     const msg = (err as Error)?.message ?? 'Unknown error';
     const errMsg = msg.includes('abort') ? 'Rerank timeout (8s)' : `Rerank error: ${msg}`;
     console.warn('Cohere rerank failed:', errMsg);
-    // Neutral score.
     return { docs: docs.slice(0, topN).map(content => ({ content, score: 0.5 })), error: errMsg };
   }
 }
@@ -175,7 +160,7 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
   if (docs.length <= finalN) return docs;
   const pool = docs.map(d => ({ d, tok: mmrTokens(d.content) }));
   pool.sort((a, b) => b.d.score - a.d.score);
-  const selected = [pool.shift()!];  // Seed.
+  const selected = [pool.shift()!];
   while (selected.length < finalN && pool.length > 0) {
     let bestIdx = 0, best = -Infinity;
     for (let i = 0; i < pool.length; i++) {
@@ -188,7 +173,6 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
   }
   return selected.map(s => s.d);
 }
-
 
 // Derived from UNIT_MODELS.
 const MODEL_NAMES_RE = new RegExp(
@@ -207,7 +191,6 @@ export function stripModelFromQuery(query: string): string {
 }
 
 const EXPAND: Record<string, string> = {
-  // Indonesian -> English
   hidrolik: 'hydraulic', hidraulik: 'hydraulic', pompa: 'pump',
   katup: 'valve', silinder: 'cylinder', tangki: 'tank', selang: 'hose',
   akumulator: 'accumulator', tekanan: 'pressure', aliran: 'flow',
@@ -228,21 +211,18 @@ const EXPAND: Record<string, string> = {
   torsi: 'torque', kecepatan: 'speed',
   perawatan: 'maintenance', servis: 'service',
   sistem: 'system', kopling: 'clutch', rem: 'brake', rantai: 'chain',
-  // Field shorthand
   cyl: 'cylinder', cyls: 'cylinders', cilinder: 'cylinder',
-  kit: 'assembly o-ring',   // 'kit assembly seal' → hapus 'kit' dari value
-  seal: 'o-ring gasket',    // 'seal o-ring' → hapus 'seal' dari value
+  kit: 'assembly o-ring',
+  seal: 'o-ring gasket',
   asm: 'assembly', assy: 'assembly',
   pn: 'part number', nomor: 'number part',
   isi: 'capacity refill',
   cek: 'check inspect',
   jadwal: 'schedule maintenance interval',
-  relief: 'valve pressure MPa',          // hapus 'relief'
-  displacement: 'cm3 rev motor',         // hapus 'displacement'
+  relief: 'valve pressure MPa',
+  displacement: 'cm3 rev motor',
 };
 
-
-// Not expanded, still technical.
 const TECH_TERMS = new Set([
   ...Object.keys(EXPAND),
   ...Object.values(EXPAND).flatMap(v => v.split(' ')),
@@ -264,13 +244,11 @@ const SPEC_TERMS = new Set([
   'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
   'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
   'resistance', 'flow', 'dimension', 'dimensi', 'gap', 'speed',
-  // Dimensions.
   'diameter', 'dia', 'length', 'panjang', 'width', 'lebar', 'height', 'tinggi',
   'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore',
 ]);
 
 function expandQuery(query: string): string {
-  // Max 3, deduped.
   const seen = new Set<string>();
   const extras: string[] = [];
   for (const w of query.toLowerCase().split(/\s+/)) {
@@ -305,14 +283,12 @@ async function fetchEmbedding(query: string, cacheKey: string): Promise<number[]
   return values;
 }
 
-/** LRU + in-flight dedup. */
 export async function getEmbedding(query: string): Promise<number[]> {
   const cacheKey = query.toLowerCase().replace(/\s+/g, ' ').trim();
 
   const cached = getCachedLru(cacheKey);
   if (cached) return cached;
 
-  // Dedup concurrent fetches.
   const inFlight = embeddingInFlight.get(cacheKey);
   if (inFlight) return inFlight;
 
@@ -323,13 +299,12 @@ export async function getEmbedding(query: string): Promise<number[]> {
   return promise;
 }
 
-
 interface RAGResult {
   content: string;
   hasResults: boolean;
-  ragError?: string;  // Caller must surface.
-  confidence?: 'high' | 'medium' | 'low'; // Adaptive retrieval confidence dari rerank score distribution
-  topScore?: number;  // Telemetry.
+  ragError?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  topScore?: number;
 }
 
 const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
@@ -346,15 +321,14 @@ function getTroubleshootingKategori(model: string): string {
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
-  topN = 4,  // Final chunks.
-  forceKategori?: string,  // Routing override.
+  topN = 4,
+  forceKategori?: string,
 ): Promise<RAGResult> {
   if (!sb() || queries.length === 0) return { content: '', hasResults: false };
 
   const tMulai = Date.now();
   const primaryQuery = queries[0].trim();
   const faultCode    = isFaultCode(primaryQuery);
-  // Explicit wins.
   const strictFilter = forceKategori
     ? { Model: model, Kategori: forceKategori }
     : faultCode
@@ -383,25 +357,21 @@ export async function searchTechnicalManualMulti(
       .some(w => SPEC_TERMS.has(w))
     || NUMERIC_INTENT_RE.test(primaryQuery);
 
-  // Ranked keyword.
   const rankedPromise: Promise<string[]> = (async () => {
     if (faultCode) return [];
     const words = primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
-// Bigrams matter.
     // Stem: 'capacity' misses 'Capacities'.
     const stems = words.map(batangKata);
     const bigrams = stems.slice(0, -1).map((w, i) => `${w} ${stems[i + 1]}`);
     // Full phrase stays whole.
     const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
     const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
-    // Numeric bonus.
     const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await sb().rpc('match_documents_keyword_ranked', {
-// Term count is the cost.
       p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
@@ -430,7 +400,6 @@ export async function searchTechnicalManualMulti(
     ? stripped
     : primaryQuery;
 
-  // Parallel with keyword.
   // Fault code: literal filter drops anything keyword can't find — embed is pure waste (quota 5/min).
   const vectorPromise: Promise<SearchResult[]> = faultCode
     ? Promise.resolve([])
@@ -446,7 +415,6 @@ export async function searchTechnicalManualMulti(
     }
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
-    // Vector arm logged separately.
     console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
       hasil.length,
       hasil[0]?.similarity?.toFixed(3) ?? '-',
@@ -491,7 +459,6 @@ export async function searchTechnicalManualMulti(
     pushUnik(vecDocs[i]);
   }
 
-  // Loose fallback -> caveat.
   let usedLooseFallback = false;
   if (faultCode && allDocs.length === 0) {
     const fbPromises = normalizedQueries.map(sq =>
@@ -515,19 +482,17 @@ export async function searchTechnicalManualMulti(
   if (faultCode) {
     const codeUpper = primaryQuery.toUpperCase();
     const numOnly   = codeUpper.replace(/^[A-Z]{1,3}\s*:?\s*/i, '');
-    const stripped  = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1'); // "13006-02" → "13006-2"
+    const stripped  = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1');
     filteredDocs = allDocs.filter(text => {
       const upper = text.toUpperCase();
       if (upper.includes(codeUpper)) return true;
       if (numOnly.length >= 4 && upper.includes(numOnly)) return true;
-      // Stripped variant.
       if (stripped !== numOnly && stripped.length >= 4 && upper.includes(stripped)) return true;
       return false;
     });
   }
 
   if (filteredDocs.length === 0) {
-    // Both arms failed.
     const embedFailed = vectorSettled.status === 'rejected';
     if (embedFailed && allDocs.length === 0) {
       const reason = (vectorSettled.reason as Error)?.message ?? 'Embedding service error';
@@ -542,17 +507,14 @@ export async function searchTechnicalManualMulti(
   const tRerank = Date.now();
   const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
   const msRerank = Date.now() - tRerank;
-  // MMR keeps top[0] first.
   let top = mmrSelect(reranked, topN, 0.7);
 
-  // Guarantees top 2, not just #1.
   const KW_DIJAMIN = 2;
   if (wantsNumericAnswer && rankedSettled.status === 'fulfilled' && top.length > 0) {
     const kandidat = rankedSettled.value
       .slice(0, KW_DIJAMIN)
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
-      // top[0] sets tier.
       top = [top[0], ...kandidat.map(c => ({ content: c, score: top[0].score })), ...top.slice(1)]
         .slice(0, topN);
       console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
@@ -565,23 +527,19 @@ export async function searchTechnicalManualMulti(
     ? 'medium'
     : confidence;
 
-  // Effective tier, not raw.
   const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
   console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
     effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
 
-  // What actually reached Gemini.
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
-  // No rank prefix.
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
 
 const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
 
-/** P-code 2nd pass. */
 export async function searchEngineManual(
   pCodes: string[],
   model: string,
@@ -617,12 +575,11 @@ export async function searchEngineManual(
 
   const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
   const { confidence, topScore } = computeConfidence(top);
-  // Rerank failed -> downgrade.
   const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
   console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
     effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);
   return {
-    content: top.map(t => t.content).join('\n\n---\n\n'),  // strip [Rank N] prefix
+    content: top.map(t => t.content).join('\n\n---\n\n'),
     hasResults: top.length > 0,
     confidence: effectiveConfidence,
     topScore,
@@ -639,18 +596,17 @@ function promoSectionKey(content: string): string {
   return (m ? m[1] : '').trim().toUpperCase();
 }
 
-// Old -> new order.
 function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
   const out: PromoChunk[] = [];
   const seen = new Set<string>();
-  for (let i = byPeriod.length - 1; i >= 0; i--) {  // Newest first.
+  for (let i = byPeriod.length - 1; i >= 0; i--) {
     const period = byPeriod[i];
     for (const d of period) {
       const key = promoSectionKey(d.content);
-      if (key && seen.has(key)) continue;            // section sudah dari period lebih baru
+      if (key && seen.has(key)) continue;
       out.push(d);
     }
-    for (const d of period) {                          // tandai section period ini SETELAH add
+    for (const d of period) {
       const key = promoSectionKey(d.content);
       if (key) seen.add(key);
     }
@@ -689,7 +645,7 @@ export async function searchServiceIntervalParts(
     query_embedding: embedding,
     match_count: 1,
     filter: { Model: model, Kategori: 'CPM' },
-    similarity_threshold: 0.20,  // Threshold longgar — CPM 1 chunk only, harus selalu masuk
+    similarity_threshold: 0.20,
   }) as unknown as Promise<{ data: HybridResult[] | null }>;
 
   const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
@@ -705,7 +661,6 @@ export async function searchServiceIntervalParts(
   const [cpmRes, ...promoSettled] = await Promise.allSettled([cpmPromise, ...promoPromises]);
 
   const cpmData = cpmRes.status === 'fulfilled' && Array.isArray(cpmRes.value.data) ? cpmRes.value.data : [];
-  // Prefer newest.
   const promoByPeriod: HybridResult[][] = promoSettled.map(r =>
     r.status === 'fulfilled' && Array.isArray(r.value.data) ? r.value.data : [],
   );
@@ -725,17 +680,16 @@ export async function searchServiceIntervalParts(
 export async function searchPartsCatalog(
   query: string,
   model: string,
-  skipExpand = false,   // true kalau query sudah AI-optimized English (skip expandQuery)
+  skipExpand = false,
 ): Promise<RAGResult> {
   if (!sb()) return { content: '', hasResults: false };
 
   const partNum = extractPartNumber(query);
   const isEnginePN = !!partNum && ENGINE_PN_RE.test(partNum);
 
-  // PN needs context.
   const stripped = stripModelFromQuery(query.trim());
   const embedQuery = partNum
-    ? stripped                                  // PN tetap dalam konteks (mis. "YB60000068 itu apa")
+    ? stripped
     : (skipExpand ? stripped : expandQuery(stripped));
   let embedding: number[] | null = null;
   try {
@@ -750,15 +704,13 @@ export async function searchPartsCatalog(
 
   const hasEngineCatalog = ENGINE_CATALOG_MODELS.has(model);
 
-  const bodyCount = (isEnginePN && hasEngineCatalog) ? 3 : 7;     // was 2/5
+  const bodyCount = (isEnginePN && hasEngineCatalog) ? 3 : 7;
   const engineCount = isEnginePN ? 5 : 3;
-  const promoCount = 5;                                           // was 3
+  const promoCount = 5;
   const cpmCount = 1;
 
-  // Strip model name.
   const queryText = stripModelFromQuery(query.trim());
 
-  // Indexed per category.
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
   const PROMO_START_IDX = 2;
@@ -782,7 +734,6 @@ export async function searchPartsCatalog(
     }) as unknown as Promise<{ data: HybridResult[] | null }>,
   ];
 
-  // Lower threshold.
   for (const promoKat of ACTIVE_PROMO_KATEGORI) {
     queries.push(
       sb().rpc('match_documents_hybrid', {
@@ -822,7 +773,6 @@ export async function searchPartsCatalog(
   const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
 
-  // Hybrid RPC fallback.
   if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
@@ -845,7 +795,6 @@ export async function searchPartsCatalog(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5);
     if (allFallback.length === 0) return { content: '', hasResults: false };
-    // Never high.
     return {
       content: allFallback.map(d => d.content).join('\n\n---\n\n'),
       hasResults: true,
@@ -878,7 +827,6 @@ export async function searchPartsCatalog(
       if (!error && reranked.length > 0) {
         rerankTopScore = reranked[0].score;
         rerankDipakai  = true;
-        // Avoid near-duplicates.
         const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
         const byContent = new Map(rest.map(d => [d.content, d]));
         orderedNonCpm = [
@@ -909,7 +857,6 @@ export async function searchPartsCatalog(
   const top = merged.slice(0, 12);
   if (top.length === 0) return { content: '', hasResults: false };
 
-  // Parts confidence.
   const partsConfidence: 'high' | 'medium' | 'low' = partNum
     ? 'high'
     : rerankDipakai

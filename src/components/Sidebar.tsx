@@ -10,7 +10,6 @@ import { SupportModal } from './SupportModal';
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
 
-/** First 2 words of the answer, markdown stripped. */
 function pocketPreview(answer: string): string {
   return answer
     .replace(/```[\s\S]*?```/g, ' ')
@@ -79,7 +78,6 @@ export function Sidebar({
     return group?.type ?? MODEL_GROUPS[0].type;
   });
   const [showHistory, setShowHistory] = useState(true);
-  // Collapsed by default.
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
 
@@ -111,7 +109,7 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile backdrop */}
+      {}
       <AnimatePresence>
         {isMobile && !isCollapsed && (
           <m.div
@@ -141,7 +139,7 @@ export function Sidebar({
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
-          {/* ── Header ── */}
+          {}
           <div className="sidebar-header flex items-center justify-between px-4 pb-3 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-[var(--accent-main)] flex items-center justify-center">
@@ -150,7 +148,7 @@ export function Sidebar({
               <span className="text-[15px] font-medium text-[var(--text-primary)] tracking-tight">Dash⁵</span>
             </div>
             <div className="flex items-center gap-1">
-              {/* Theme toggle — desktop only */}
+              {}
               {!isMobile && onThemeToggle && (
                 <button
                   onClick={onThemeToggle}
@@ -170,7 +168,7 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* ── New Chat ── */}
+          {}
           <div className="px-3 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
@@ -181,7 +179,7 @@ export function Sidebar({
             </button>
           </div>
 
-          {/* ── Model Unit ── */}
+          {}
           <div className="shrink-0 px-3 pb-1">
             <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
               <Tractor size={12} /> Model Unit
@@ -250,10 +248,10 @@ export function Sidebar({
             })}
           </div>
 
-          {/* ── Bookmark — jawaban tersimpan, bisa dibaca offline. Hilang kalau kosong (quiet). ── */}
+          {}
           {pocketItems.length > 0 && (
             <div className="shrink-0 px-3">
-              {/* Divider — pemisah tegas antar section */}
+              {}
               <div className="border-t border-[var(--border-main)] mt-3" />
               <div
                 role="button"
@@ -289,7 +287,7 @@ export function Sidebar({
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
                             className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-8 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
-                            {/* Label ringkas: 2 kata pertama jawaban AI */}
+                            {}
                             <span className="block truncate text-[12.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
                             </span>
@@ -313,9 +311,9 @@ export function Sidebar({
             </div>
           )}
 
-          {/* ── History header ── */}
+          {}
           <div className="shrink-0 px-3">
-            {/* Divider — pemisah tegas antar section */}
+            {}
             <div className="border-t border-[var(--border-main)] mt-3" />
             <div
               role="button"
@@ -337,7 +335,7 @@ export function Sidebar({
             </div>
           </div>
 
-          {/* ── Riwayat items (scrollable) ── */}
+          {}
           <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-2">
             <AnimatePresence initial={false}>
               {showHistory && (
@@ -366,7 +364,6 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                // Dot + tint, no border.
                                 "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
                                 isActive
                                   ? "bg-[var(--accent-active)]/8 text-[var(--text-primary)] font-medium"
@@ -404,7 +401,7 @@ export function Sidebar({
             </AnimatePresence>
           </div>
 
-          {/* ── Footer ── */}
+          {}
           <div className="shrink-0 px-3 pt-1 pb-3 sidebar-footer-safe">
             <div className="relative">
               <button
@@ -465,7 +462,7 @@ export function Sidebar({
                 )}
               </AnimatePresence>
 
-              {/* ── Change Password Modal ── */}
+              {}
               <AnimatePresence>
                 {showChangePw && (
                   <m.div

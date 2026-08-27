@@ -3,11 +3,9 @@ import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { deps } from './deps';
 
-// 3.7 returns 429 on shared global capacity. Rollback: VERTEX_MODEL=gemini-3.7-flash.
 export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
 
-// Must round-trip intact.
 interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
 interface InlineDataPart      { inlineData: { mimeType: string; data: string } }
 interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
@@ -17,7 +15,6 @@ export type Part = TextPart | InlineDataPart | FunctionCallPart | FunctionRespon
 
 export interface VContent { role: 'user' | 'model'; parts: Part[] }
 
-// Schema subset only.
 export interface FunctionDeclaration {
   name: string;
   description: string;
@@ -64,7 +61,6 @@ function clampThinking(body: VRequest, model: string): VRequest {
 }
 
 export interface VResponse {
-  // 200 without candidates is possible.
   candidates?: Array<{
     content?: { role: string; parts: Part[] };
     finishReason?: string;
@@ -77,10 +73,8 @@ interface IntentAnalysis {
   optimizedQuery: string;
 }
 
-// UI progress.
 type AgentEventEmit = (event: import('./react-agent').AgentEvent) => void;
 
-// Already base64.
 function toInlineData(img: InlineImage): InlineDataPart {
   return { inlineData: { mimeType: img.mimeType, data: img.data } };
 }
@@ -92,7 +86,6 @@ export function resetUsage(): void {
 export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
   return { ...deps().usage, model: MODEL };
 }
-// Thinking billed as output.
 function addUsage(input?: number, output?: number, thoughts?: number, cached?: number): void {
   const u = deps().usage;
   u.input    += input || 0;
@@ -117,7 +110,6 @@ export function getText(parts: Part[]): string {
     .join('');
 }
 
-/** Dedup + cap 10 words. */
 function cleanOptimizedQuery(query: string): string {
   if (!query.trim()) return query;
 
@@ -129,7 +121,6 @@ function cleanOptimizedQuery(query: string): string {
     press: 'pressure', tekanan: 'pressure',
     vol: 'volume', cap: 'capacity', kapasitas: 'capacity',
   };
-  // 'specification' deliberately absent.
   const STOPWORDS = new Set(['the', 'and', 'for', 'of', 'in', 'on', 'at', 'with',
     'information', 'data', 'detail', 'value']);
 
@@ -143,7 +134,7 @@ function cleanOptimizedQuery(query: string): string {
     if (lower.length < 2 || seen.has(canonical) || STOPWORDS.has(lower)) continue;
     seen.add(canonical);
     clean.push(word);
-    if (clean.length >= 10) break;  // Emergency stop.
+    if (clean.length >= 10) break;
   }
 
   return clean.join(' ');
@@ -152,7 +143,7 @@ function cleanOptimizedQuery(query: string): string {
 async function analyzeIntent(
   userInput: string,
   history: Message[],
-  _model: UnitModel,  // Reserved.
+  _model: UnitModel,
 ): Promise<IntentAnalysis> {
   const ctx = history.slice(-6)
     .filter(m => m.content?.trim())
@@ -292,7 +283,6 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
       generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-    // Tolerate leaked text.
     const jsonStart = raw.indexOf('{');
     const jsonEnd   = raw.lastIndexOf('}');
     const jsonStr   = jsonStart !== -1 && jsonEnd > jsonStart ? raw.slice(jsonStart, jsonEnd + 1) : '';
@@ -404,7 +394,6 @@ export async function callProxyStream(
   const ctrl = new AbortController();
   const hardTimer = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
 
-  // Zero chunks, not slow thinking.
   let firstTokenSeen = false;
   let streamHidup    = false;
   const watchdog = setTimeout(() => {
@@ -424,7 +413,7 @@ export async function callProxyStream(
       }
       // Thinking chunks prove liveness.
       if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
-      if (c.usageMetadata) usageBox.last = c.usageMetadata;  // Last wins.
+      if (c.usageMetadata) usageBox.last = c.usageMetadata;
       if (c.text) {
         firstTokenSeen = true;
         fullText += c.text; onChunk(c.text);
@@ -435,7 +424,6 @@ export async function callProxyStream(
       }
     }, { enableGoogleSearch, signal: ctrl.signal });
   } catch (err) {
-    // Our own aborts handled elsewhere.
     if (!ctrl.signal.aborted) upstreamError = (err as Error)?.message ?? 'Stream gagal';
   } finally {
     clearTimeout(watchdog);
@@ -450,9 +438,8 @@ export async function callProxyStream(
       fullText += STREAM_CUT_NOTE;
       onChunk(STREAM_CUT_NOTE);
     } else if (attempt < MAX_ATTEMPT) {
-      // No text yet, safe to retry.
       console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
-      await new Promise(r => setTimeout(r, attempt * 900));  // Backoff.
+      await new Promise(r => setTimeout(r, attempt * 900));
       retryNeeded = true;
     } else {
       throw new Error(`Stream terputus: ${upstreamError}`);
@@ -473,7 +460,7 @@ export async function callProxyStream(
     continue;
   }
 
-  if (retryNeeded) continue;  // Retry.
+  if (retryNeeded) continue;
   break;
   }
 
@@ -483,7 +470,6 @@ export async function callProxyStream(
     const inp = usageBox.last?.promptTokenCount ?? 0;
     const cache = usageBox.last?.cachedContentTokenCount ?? 0;
     const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
-    // Vertex prompt cache, not the answer cache.
     console.info('[tokens] model=%s think=%s%s in=%d (prompt-cache %d%%) out=%d thinking=%d',
       MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
       inp, inp ? Math.round((cache / inp) * 100) : 0,
@@ -493,10 +479,8 @@ export async function callProxyStream(
 }
 
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
-  // Keep section context.
   const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Chunk berisi PROSEDUR/langkah troubleshooting/tabel troubleshooting → salin SEMUA langkah & SEMUA baris penyebab UTUH, jangan diringkas/di-skip/digabung — langkah yang hilang di sini tidak bisa dipulihkan lagi.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
-  // flash-lite ~8K input.
   const MAX_CHUNK_FOR_COMPRESS = 8000;
 
   const buildPrompt = (chunk: string) => {
@@ -507,7 +491,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
   };
 
   const compressOne = async (chunk: string): Promise<string> => {
-    if (chunk.length < 500) return chunk;  // Already compact.
+    if (chunk.length < 500) return chunk;
     try {
       const res = await callProxy({
         contents: [{ role: 'user', parts: [{ text: buildPrompt(chunk) }] }],
@@ -515,7 +499,7 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
         generationConfig: { maxOutputTokens: 600, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
       }, false, INTENT_MODEL);
       const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-      if (compressed.length < 30) return chunk;  // Over-stripped.
+      if (compressed.length < 30) return chunk;
       return compressed;
     } catch (err) {
       console.warn('[compressChunks] failed for one chunk, fallback to original:', (err as Error)?.message);
@@ -530,7 +514,6 @@ async function compressChunks(chunks: string[], userQuery: string): Promise<stri
 export function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
   const pCodes: string[] = [];
-  // Suffix stripped.
   const P_CODE_RE = /\bP\d{4}\b/gi;
   for (const line of lines) {
     const lineUpper = line.toUpperCase();
@@ -540,20 +523,16 @@ export function extractRelatedPCodes(content: string, searchTerms: string[]): st
       pCodes.push(...matches);
     }
   }
-  // Cap 3 embeds.
   return [...new Set(pCodes)].slice(0, 3);
 }
 
-/** Non-empty BLOCKS the answer. */
 function ragErrorTemplate(errorMsg: string): string {
   if (errorMsg.toLowerCase().includes('rerank')) return '';
-  // No data at all.
   return `Sistem pencarian data sedang mengalami gangguan sementara. Jawaban ditahan dulu untuk menghindari informasi yang keliru.\n\nCoba kirim ulang pertanyaanmu dalam beberapa saat.`;
 }
 
 const isRerankError = (msg?: string): boolean => !!msg && msg.toLowerCase().includes('rerank');
 
-/** Rerank failed — AI must say so. */
 const RERANK_DEGRADED_NOTE =
   '\n\n[PERINGATAN SISTEM — WAJIB DISAMPAIKAN] Mesin pemeringkat (reranker) sedang tidak bisa dihubungi, '
   + 'kemungkinan kena batas pemakaian. Data manual di bawah TETAP ASLI dan boleh dipakai, tapi URUTANNYA '
@@ -591,8 +570,6 @@ const KIT_HINT =
   '(PN + nama + qty apa adanya), lalu jelaskan singkat katalog tak mencantumkan satu PN kit-bundel. ' +
   'HARAM mengarang PN kit yang tidak ada di data.';
 
-// Web fallback, still no invented numbers.
-
 const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
 const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
 const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
@@ -600,16 +577,15 @@ const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|
 const SUPPORTED_MODELS = ['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140'] as const;
 const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
 
-/** Foreign model mentioned. */
 function detectForeignModel(query: string, activeModel: string): string | null {
   const norm = (s: string) => s.toUpperCase().replace(/[\s-]/g, '');
   const active = norm(activeModel);
   for (const m of query.matchAll(new RegExp(OTHER_MODEL_RE.source, 'gi'))) {
     const hit = m[0].trim();
     const n = norm(hit);
-    if (n === active || active.includes(n) || n.includes(active)) continue;  // Active unit.
-    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;  // Supported, not selected.
-    if (/\d{2,}/.test(n)) return hit;  // Foreign model.
+    if (n === active || active.includes(n) || n.includes(active)) continue;
+    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;
+    if (/\d{2,}/.test(n)) return hit;
   }
   return null;
 }
@@ -642,8 +618,6 @@ Apa ada yang bisa aku bantu cek?`;
 
 const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
-// Konstanta
-
 const RAG_LABEL = {
   manual: 'DATA MANUAL TERSEDIA',
   parts:  'DATA PARTS CATALOG TERSEDIA',
@@ -658,17 +632,11 @@ const EXTERNAL_DIRECTIVE = (model: string): string =>
 - Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
 - Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;
 
-// Tipe routing
-
-/** Routing result before AI. */
 type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
-  | { type: 'rag_canned'; text: string }   // bypass AI, kirim teks langsung
+  | { type: 'rag_canned'; text: string }
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
-// Helper
-
-/** Canned text, streamed. */
 function streamCanned(text: string, onChunk: (text: string) => void): string {
   const CHUNK_SIZE = 80;
   for (let i = 0; i < text.length; i += CHUNK_SIZE) {
@@ -687,7 +655,6 @@ function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQ
   return { isFaultCode: looksLike || !!embeddedCode, faultQuery: embeddedCode ?? trimmed };
 }
 
-/** P-code enrichment. Non-fatal. */
 async function augmentWithEngineManual(
   tmContent: string,
   faultQuery: string,
@@ -708,8 +675,6 @@ async function augmentWithEngineManual(
     return tmContent;
   }
 }
-
-// Routing resolvers
 
 async function resolveFaultCodeQuery(
   faultQuery: string,
@@ -752,11 +717,10 @@ function extractCpmPartsForInterval(content: string, hours: number): string {
 
   for (const line of lines) {
     if (!line.trim()) continue;
-    // Split on 2+ spaces.
     const fields = line.trim().split(/\s{2,}/);
     if (fields.length < 4) continue;
     const no = fields[0];
-    if (!/^\d+$/.test(no)) continue;  // Not data.
+    if (!/^\d+$/.test(no)) continue;
 
     const desc = fields[1];
     const pn   = fields[2];
@@ -792,7 +756,7 @@ async function resolvePartsQuery(
     const optWords = opt?.trim().split(/\s+/).length ?? 0;
     if (opt && opt !== trimmed && optWords >= 3) {
       searchQuery = opt;
-      usedOptimized = true;  // Already English.
+      usedOptimized = true;
     }
   }
 
@@ -821,7 +785,6 @@ async function resolvePartsQuery(
       const cpmPNs = partsList.split('\n')
         .map(l => l.split('|')[0].trim())
         .filter(pn => pn.length >= 4);
-      // Tolerate promo suffix.
       const promoLines = [...new Set(
         ragResult.content.split('\n')
           .map(l => l.trim())
@@ -836,14 +799,12 @@ async function resolvePartsQuery(
         : cpmHeader;
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
-    // See KIT_HINT.
     finalContent = `${KIT_HINT}\n\n${finalContent}`;
   }
 
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
 }
 
-// Whole-message match only.
 const CASUAL_EXACT = new Set([
   'halo', 'hallo', 'hai', 'hi', 'hei', 'hey', 'helo',
   'pagi', 'siang', 'sore', 'malam',
@@ -858,10 +819,9 @@ const CASUAL_EXACT = new Set([
   'bye', 'dadah', 'sampai jumpa',
 ]);
 
-/** Normalise greeting. */
 function normalizeCasual(s: string): string {
   return s.toLowerCase()
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')   // tanda baca & emoji → spasi
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 }
@@ -872,7 +832,6 @@ async function resolveNaturalLanguageQuery(
   model: UnitModel,
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
-  // Zero LLM calls.
   if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
     console.info('[intent] sapaan terdeteksi deterministik — analyzeIntent dilewati');
     return { type: 'google_search', mode: 'casual' };
@@ -889,7 +848,6 @@ async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  // HyDE off; hydeExpand() still exists.
   let ragResult = await searchTechnicalManualMulti([query], model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
@@ -901,7 +859,6 @@ async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
-  // Lossy and serial — jumbo content only.
   const totalBefore = ragResult.content.length;
   const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
 
@@ -933,13 +890,10 @@ async function resolveNaturalLanguageQuery(
   };
 }
 
-
 // "sama" also means IDENTICAL — comparisons excluded.
 const MULTI_CONNECTOR_RE =
   /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\byang\s+)\b(?:sama|ama)\b(?!\s+(?:dengan|persis|kaya|seperti))/i;
-// Tolerate Indonesian suffixes.
 const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
-// Measurable attributes.
 const MULTI_ATTR_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|tekanan|pressure|torque|torsi|clearance|displacement|kapasitas|capacity|rpm|harga|price|part\s*number|partnumber|pn|spec|ukuran|size)\w*/gi;
 
 function isMultiAspectQuery(q: string): boolean {
@@ -947,7 +901,6 @@ function isMultiAspectQuery(q: string): boolean {
   if (!MULTI_TECH_RE.test(q)) return false;
   const words = q.split(/\s+/).filter(Boolean).length;
   const attrCount = (q.match(MULTI_ATTR_RE) ?? []).length;
-  // 5+ words or 2+ attributes.
   return words >= 5 || attrCount >= 2;
 }
 
@@ -1003,12 +956,10 @@ async function resolveMultiAspectQuery(
 ): Promise<RagRouteResult> {
   emit({ type: 'thinking', message: 'Memecah query jadi beberapa aspek…' });
   const subs = await decomposeAspects(trimmed, history);
-  // Fall back to single search.
   if (subs.length < 2) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
   emit({ type: 'thinking', message: `Mencari ${subs.length} aspek paralel…` });
 
-  // TM + Parts in parallel.
   const tasks = subs.flatMap(sub => {
     const clean = stripModelFromQuery(sub);
     return [
@@ -1029,7 +980,6 @@ async function resolveMultiAspectQuery(
 
   const results = await Promise.all(tasks);
 
-  // Dedup exact.
   const seen = new Set<string>();
   const blocks: string[] = [];
   for (const r of results) {
@@ -1061,8 +1011,6 @@ function verifyGrounding(answer: string, context: string): void {
   }
 }
 
-// Public API
-
 export async function generateResponseStream(
   model: UnitModel,
   userName: string,
@@ -1071,15 +1019,13 @@ export async function generateResponseStream(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage();  // Token ledger.
-  // UI progress.
+  resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
 
-  // Anti prompt-injection.
   const sanitized = userInput
     .slice(0, 4000)
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
-    .replace(/<\|[^|]*\|>/g, '[blocked]'); // ChatML-style tokens
+    .replace(/<\|[^|]*\|>/g, '[blocked]');
   const trimmed  = sanitized.trim();
 
   const contents = historyToContents(history, 20);
@@ -1096,7 +1042,6 @@ export async function generateResponseStream(
 
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
 
-  // Before parts-routing.
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
     : isMultiAspectQuery(trimmed)
@@ -1115,9 +1060,7 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  // No manual data.
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  // 'low' everywhere — measure via ?think= before raising.
   const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
@@ -1140,24 +1083,20 @@ export async function generateResponseStream(
     ? SYSTEM_PROMPT_CASUAL(model, userName)
     : SYSTEM_PROMPT(model, userName);
 
-  // Web-technical fallback only.
   const fullText = await callProxyStream({
     contents,
     systemInstruction: { parts: [{ text: systemText }] },
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
-  // Client-side answer cache.
   if (routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
     deps().meta.cacheable = true;
   }
 
-  // Anti-halu telemetry.
   if (ragContent && fullText) verifyGrounding(fullText, ragContent);
 
   return fullText || FALLBACK_RESPONSE;
 }
-
 
 export type { AgentEvent } from './react-agent';
 
@@ -1169,19 +1108,17 @@ export async function generateResponseAgentic(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage();  // Token ledger.
+  resetUsage();
   const sanitized = userInput
     .slice(0, 4000)
     .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
     .replace(/<\|[^|]*\|>/g, '[blocked]');
   const trimmed = sanitized.trim() || 'Halo';
 
-  // Greetings skip the agent loop entirely.
   if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
     return generateResponseStream(model, userName, history, userInput, onChunk, onAgentEvent);
   }
 
-  // Lazy import breaks circular deps.
   const { runReActAgent } = await import('./react-agent');
 
   const result = await runReActAgent(trimmed, model, userName, history, {
@@ -1201,8 +1138,7 @@ export async function generateResponse(
   onChunk?: (text: string) => void,
   onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
 ): Promise<string> {
-  resetUsage();  // Token ledger.
-  // Slowest path.
+  resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
   const systemInstruction = SYSTEM_PROMPT(model, userName);
   const contents: VContent[] = historyToContents(history);
@@ -1214,7 +1150,6 @@ export async function generateResponse(
       .filter(a => a?.mimeType && a?.data)
       .map(toInlineData);
     if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-// Sent twice unless OCR succeeded.
     let sendImageToModel = true;
 
     try {
@@ -1236,7 +1171,6 @@ export async function generateResponse(
             let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
             let content = result.content;
 
-            // Relevant lines only.
             if (result.hasResults) {
               const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
               if (pCodes.length > 0) {
@@ -1266,13 +1200,11 @@ export async function generateResponse(
 
         emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
 
-        // All codes missing -> canned.
         if (found.length === 0 && notFound.length > 0) {
           const lines = notFound.map(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`).join('\n');
           return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
         }
 
-        // Heading per code.
         const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
         const note = `Fault code terdeteksi dari gambar: **${faultCodes.join(', ')}**\n\n` +
           `INSTRUKSI: Jelaskan SETIAP fault code di atas dalam heading terpisah (## Kode X). ` +
@@ -1286,7 +1218,6 @@ export async function generateResponse(
           injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
         }
 
-        // Photo not resent.
         sendImageToModel = false;
         currentParts.push({ text: `${note}\n\n${injection}` });
       } else {
@@ -1301,7 +1232,6 @@ export async function generateResponse(
 
     if (sendImageToModel) currentParts.unshift(...imageParts);
 
-    // User-turn timestamp.
     contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
 
     emit({ type: 'thinking', message: 'Menyusun diagnosis…' });

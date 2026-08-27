@@ -11,7 +11,7 @@ export interface Message {
 
 export interface SessionMeta {
   id: string;
-  title: string;  // First message.
+  title: string;
   model: UnitModel;
   updatedAt: number;
 }

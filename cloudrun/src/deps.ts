@@ -1,4 +1,3 @@
-// Seam to server.js: reuse its upstream path, never duplicate it.
 
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './orchestrator';
@@ -7,22 +6,16 @@ import type { ThinkingLevel } from './orchestrator';
 export interface RerankOut { results: { index: number; score: number }[]; error?: string }
 
 export interface Deps {
-  /** JWT-scoped, RLS still applies. */
   supabase: any;
   embed(text: string): Promise<number[]>;
   rerank(query: string, docs: string[], topN: number): Promise<RerankOut>;
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
-  /** SSE parsed by server.js. */
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
-  /** ?think= override. */
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
-  /** Per-request token ledger. */
   usage: Usage;
-  /** Written by orchestrator, read by server.js. */
   meta: { cacheable?: boolean };
 }
 
-/** live: any chunk, thinking included. */
 export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean }
 export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 

@@ -21,23 +21,19 @@ export interface Tool {
   execute: (args: Record<string, unknown>, model: UnitModel) => Promise<ToolResult>;
 }
 
-// Helpers
-
 function toStrArray(val: unknown): string[] {
   if (!Array.isArray(val)) return [];
   return val.filter((v): v is string => typeof v === 'string');
 }
 
-/** Typed sub-query — calls only the relevant tool. */
 export interface SubQuery { q: string; type: 'technical' | 'parts' }
 
-/** Tolerates plain strings too. */
 export function toSubQueries(val: unknown): SubQuery[] {
   if (!Array.isArray(val)) return [];
   const out: SubQuery[] = [];
   for (const v of val) {
     if (typeof v === 'string' && v.trim()) {
-      out.push({ q: v.trim(), type: 'technical' });   // tak bertipe → jalur teknis lebih luas cakupannya
+      out.push({ q: v.trim(), type: 'technical' });
     } else if (v && typeof v === 'object') {
       const o = v as { q?: unknown; query?: unknown; type?: unknown };
       const q = typeof o.q === 'string' ? o.q : typeof o.query === 'string' ? o.query : '';
@@ -46,8 +42,6 @@ export function toSubQueries(val: unknown): SubQuery[] {
   }
   return out;
 }
-
-// search_technical_manual
 
 const searchTechnicalManualTool: Tool = {
   declaration: {
@@ -80,8 +74,6 @@ const searchTechnicalManualTool: Tool = {
   },
 };
 
-// search_parts_catalog
-
 const searchPartsCatalogTool: Tool = {
   declaration: {
     name: 'search_parts_catalog',
@@ -101,7 +93,6 @@ const searchPartsCatalogTool: Tool = {
   execute: async (args, model) => {
     const query = String(args.query ?? '').trim();
     if (!query) return { toolName: 'search_parts_catalog', content: '', hasResults: false, error: 'empty query' };
-    // Already English-optimized.
     const result = await searchPartsCatalog(query, model, true);
     return {
       toolName: 'search_parts_catalog',
@@ -112,8 +103,6 @@ const searchPartsCatalogTool: Tool = {
     };
   },
 };
-
-// search_engine_manual
 
 const searchEngineManualTool: Tool = {
   declaration: {
@@ -148,8 +137,6 @@ const searchEngineManualTool: Tool = {
   },
 };
 
-// search_circuit_diagram
-
 const searchCircuitDiagramTool: Tool = {
   declaration: {
     name: 'search_circuit_diagram',
@@ -183,8 +170,6 @@ const searchCircuitDiagramTool: Tool = {
     };
   },
 };
-
-// decompose_query
 
 const DECOMPOSE_SYSTEM = `You are a query decomposition specialist for Hitachi/KCM heavy equipment diagnostics.
 
@@ -285,8 +270,6 @@ const decomposeQueryTool: Tool = {
     }
   },
 };
-
-// Catalog
 
 export const TOOLS: Record<string, Tool> = {
   search_technical_manual: searchTechnicalManualTool,

@@ -5,7 +5,7 @@ import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
-  const baseEnv = loadEnv('', '.', '');        // .env.local — untuk proxy target (selalu full URL)
+  const baseEnv = loadEnv('', '.', '');
   return {
     plugins: [
       react(),
@@ -29,12 +29,10 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             },
             {
-              // POST, not cacheable.
               urlPattern: /^https:\/\/dash5\.my\.id\/(api|v1)\//i,
               handler: 'NetworkOnly',
             },
             {
-              // Fonts, 1 year.
               urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
               handler: 'CacheFirst',
               options: {

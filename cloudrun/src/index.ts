@@ -1,4 +1,3 @@
-// Bundle entry point.
 export { runWithDeps, newUsage } from './deps';
 export type { Deps, StreamChunk, StreamOpts, RerankOut, Usage } from './deps';
 export {

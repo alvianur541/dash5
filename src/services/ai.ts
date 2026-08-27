@@ -1,4 +1,3 @@
-// Thin client for /v1/ask. Orchestration lives in cloudrun/src/.
 
 import { UnitModel, Message } from '../types';
 import { getAuthToken } from './supabase';
@@ -15,7 +14,6 @@ export interface AgentEvent {
 
 type ThinkLevel = 'low' | 'medium' | 'high';
 
-/** ?think= — main model only, bypasses the answer cache. */
 const THINK_OVERRIDE: ThinkLevel | null = (() => {
   try {
     const v = new URLSearchParams(window.location.search).get('think')?.toLowerCase();
@@ -24,19 +22,16 @@ const THINK_OVERRIDE: ThinkLevel | null = (() => {
 })();
 
 export function warmupProxy(): void {
-  fetch(`${PROXY_URL}/health`).catch(() => { /* offline / blocked — abaikan */ });
+  fetch(`${PROXY_URL}/health`).catch(() => { });
 }
-
-// Answer cache
-// Stays client-side: a hit means zero round-trips.
 
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
 function answerCacheKey(model: string, userName: string, query: string): string | null {
   const q = query.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (q.length < 6 || q.length > 300) return null;   // terlalu pendek (casual) / panjang
-  if (CONTEXT_REF_RE.test(q)) return null;            // context-dependent → jangan cache
+  if (q.length < 6 || q.length > 300) return null;
+  if (CONTEXT_REF_RE.test(q)) return null;
   return `${ANSWER_CACHE_PREFIX}${model}::${userName.toLowerCase()}::${q}`;
 }
 
@@ -55,12 +50,11 @@ function readAnswerCache(key: string): string | null {
 
 function writeAnswerCache(key: string, text: string): void {
   try {
-    if (text.length < 40 || text.length > 20000) return; // jangan cache jawaban sampah/kepanjangan
+    if (text.length < 40 || text.length > 20000) return;
     localStorage.setItem(key, JSON.stringify({ text, exp: Date.now() + ANSWER_CACHE_TTL_MS }));
-  } catch { /* localStorage quota / disabled — abaikan, cache opsional */ }
+  } catch { }
 }
 
-/** Replay with streaming rhythm. */
 async function streamCanned(text: string, onChunk: (t: string) => void): Promise<string> {
   const CHUNK = 24;
   for (let i = 0; i < text.length; i += CHUNK) {
@@ -69,8 +63,6 @@ async function streamCanned(text: string, onChunk: (t: string) => void): Promise
   }
   return text;
 }
-
-// /v1/ask
 
 interface AskBody {
   model: UnitModel;
@@ -99,7 +91,7 @@ async function ask(
   });
   if (!res.ok) {
     let detail = '';
-    try { detail = (await res.json())?.error ?? ''; } catch { /* body bukan JSON */ }
+    try { detail = (await res.json())?.error ?? ''; } catch { }
     throw new Error(`Ask error ${res.status}${detail ? `: ${detail}` : ''}`);
   }
   if (!res.body) throw new Error('Ask response has no body');
@@ -132,7 +124,6 @@ async function ask(
           break;
         case 'meta':
           cacheable = frame.cacheable === true;
-          // Server full text wins.
           if (typeof frame.full === 'string' && frame.full.length > text.length) text = frame.full;
           break;
         case 'error':
@@ -145,8 +136,6 @@ async function ask(
   if (serverError && !text.trim()) throw new Error(serverError);
   return { text: text || FALLBACK_RESPONSE, cacheable };
 }
-
-// Public API — signatures unchanged
 
 export async function generateResponseStream(
   model: UnitModel,
@@ -193,7 +182,6 @@ function fileToInline(file: File): Promise<{ mimeType: string; data: string }> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onloadend = () => {
-      // null on empty or failed read.
       const result = reader.result;
       if (typeof result !== 'string') { reject(new Error('FileReader result bukan string')); return; }
       const [, base64] = result.split(',');

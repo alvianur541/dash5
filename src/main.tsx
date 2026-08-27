@@ -9,7 +9,6 @@ import './index.css';
 import { registerSW } from 'virtual:pwa-register';
 registerSW({ immediate: true });
 
-// See CACHE_GEN.
 import { purgeStaleAnswerCaches } from './services/cacheGen';
 purgeStaleAnswerCaches();
 

@@ -27,7 +27,7 @@ function getAgenticPreference(): AgenticPreference {
     param === 'false' || param === '0' || param === 'never'  ? 'never'  : null;
 
   if (dariUrl) {
-    try { localStorage.setItem(AGENTIC_KEY, dariUrl); } catch { /* storage mati — abaikan */ }
+    try { localStorage.setItem(AGENTIC_KEY, dariUrl); } catch { }
     console.info('[agentic] mode=%s (dari URL, disimpan)', dariUrl);
     return dariUrl;
   }
@@ -38,7 +38,7 @@ function getAgenticPreference(): AgenticPreference {
       console.info('[agentic] mode=%s (tersimpan — matikan dengan ?agentic=false)', tersimpan);
       return tersimpan;
     }
-  } catch { /* storage mati — abaikan */ }
+  } catch { }
 
   const envMode = String(import.meta.env.VITE_AGENTIC_MODE ?? 'adaptive').toLowerCase();
   if (envMode === 'always' || envMode === 'true') return 'always';
@@ -64,7 +64,6 @@ export default function App() {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
-  // Saku — offline per user.
   const [pocket, setPocket] = useState<PocketItem[]>([]);
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
@@ -79,19 +78,15 @@ export default function App() {
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const mountedRef = useRef(true);
-  // Ref, stays out of deps.
   const abortStreamRef = useRef<AbortController | null>(null);
-  // Feeds --input-bar-h.
   const mainRef = useRef<HTMLElement | null>(null);
   const inputBarRef = useRef<HTMLDivElement | null>(null);
 
-
   useEffect(() => {
     mountedRef.current = true;
-    warmupProxy(); // bangunkan proxy Cloud Run — pertanyaan pertama tidak kena cold start
+    warmupProxy();
     return () => { mountedRef.current = false; };
   }, []);
-
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const stored = localStorage.getItem('dash-theme');
@@ -129,7 +124,7 @@ export default function App() {
       const freshLocal = loadPocket(uid).filter(i => !tomb[i.id]);
 
       const remoteItems: PocketItem[] = remote
-        .filter(r => !tomb[r.message_id])          // dihapus lokal → JANGAN dihidupkan lagi
+        .filter(r => !tomb[r.message_id])
         .map(r => ({
           id: r.message_id, model: r.model, question: r.question ?? '',
           answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(),
@@ -138,7 +133,6 @@ export default function App() {
       remote.filter(r => tomb[r.message_id])
         .forEach(r => { deleteBookmarkRemote(uid, r.message_id).catch(() => {}); });
 
-      // Local-only = made offline -> push.
       const remoteIds = new Set(remoteItems.map(i => i.id));
       const localOnly = freshLocal.filter(i => !remoteIds.has(i.id));
       localOnly.forEach(i => { upsertBookmarkRemote(uid, i).catch(() => {}); });
@@ -159,12 +153,12 @@ export default function App() {
     const asst = msgs[idx];
     if (asst.role !== 'assistant' || !asst.content?.trim()) return;
     if (loadPocket(user.uid).some(p => p.id === messageId)) {
-      addPocketTombstone(user.uid, messageId);   // catat SEBELUM async — merge tak bisa menghidupkan lagi
+      addPocketTombstone(user.uid, messageId);
       setPocket(removePocketItem(user.uid, messageId));
       deleteBookmarkRemote(user.uid, messageId).catch(() => {});
       return;
     }
-    clearPocketTombstone(user.uid, messageId);   // disimpan ulang → batalkan tombstone lama
+    clearPocketTombstone(user.uid, messageId);
     let question = '';
     for (let i = idx - 1; i >= 0; i--) {
       if (msgs[i].role === 'user') { question = msgs[i].content; break; }
@@ -182,7 +176,7 @@ export default function App() {
 
   const deletePocketItem = useCallback((id: string) => {
     if (!user) return;
-    addPocketTombstone(user.uid, id);            // tombstone dulu, baru hapus (urutan penting)
+    addPocketTombstone(user.uid, id);
     setPocket(removePocketItem(user.uid, id));
     deleteBookmarkRemote(user.uid, id).catch(() => {});
   }, [user]);
@@ -212,7 +206,7 @@ export default function App() {
     setError(null);
     setCurrentSessionId(null);
     sessionIdRef.current = null;
-  }, []); // deps tetap [] — tidak ada perubahan pada Effect chain
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -224,8 +218,8 @@ export default function App() {
     startNewSession();
 
     fetchUserSessionList(user.uid).then(list => {
-      if (list === null) return; // error jaringan — jangan sentuh localStorage
-      if (isSessionsCleared(user.uid)) return; // baru hapus di browser ini
+      if (list === null) return;
+      if (isSessionsCleared(user.uid)) return;
       if (list.length > 0) {
         setSessionList(list);
         localStorage.setItem(listKey(user.uid), JSON.stringify(list));
@@ -246,7 +240,7 @@ export default function App() {
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
     let session = await fetchSessionData(id, user.uid);
-    if (!mountedRef.current) return; // unmount guard setelah async
+    if (!mountedRef.current) return;
     if (!session) {
       session = loadSessionData(user.uid, id);
     }
@@ -297,17 +291,16 @@ export default function App() {
       if ('serviceWorker' in navigator) {
         const reg = await navigator.serviceWorker.getRegistration();
         if (reg) {
-          await reg.update(); // cek SW versi baru dari server
-          // Wait for the new SW to take over.
+          await reg.update();
           if (reg.waiting || reg.installing) {
             await new Promise<void>((resolve) => {
               navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
-              setTimeout(resolve, 3000); // fallback: jangan hang kalau tidak ada perubahan
+              setTimeout(resolve, 3000);
             });
           }
         }
       }
-    } catch { /* abaikan — tetap reload */ }
+    } catch { }
     window.location.reload();
   }, [isRefreshing]);
 
@@ -345,7 +338,7 @@ export default function App() {
     setIsTyping(true);
     setIsStreaming(true);
     setError(null);
-    setAgentEvents([]); // reset progress display untuk message baru
+    setAgentEvents([]);
 
     const userName = (user.displayName || 'Operator').split(' ')[0];
     const rawTitle = content.trim() || (attachmentUrls.length > 0 ? '[Gambar]' : 'New chat');
@@ -365,7 +358,7 @@ export default function App() {
     try {
       const assistantId = crypto.randomUUID();
       const assistantTs = Date.now();
-      const sessionSnapshot = sessionId; // capture — guard ghost content jika session switch
+      const sessionSnapshot = sessionId;
       let displayed = '';
       let buffered = '';
       let timerId: ReturnType<typeof setTimeout> | null = null;
@@ -376,7 +369,7 @@ export default function App() {
       const drip = () => {
         timerId = null;
         if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch
+        if (sessionIdRef.current !== sessionSnapshot) return;
         if (streamCtrl.signal.aborted) return;
         if (!buffered.length) return;
         const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
@@ -394,7 +387,7 @@ export default function App() {
       let streamedAny = false;
       const onChunkCb = (chunk: string) => {
         if (!mountedRef.current) return;
-        if (sessionIdRef.current !== sessionSnapshot) return; // ghost content guard
+        if (sessionIdRef.current !== sessionSnapshot) return;
         if (streamCtrl.signal.aborted) return;
         setIsTyping(false);
         streamedAny = true;
@@ -410,7 +403,6 @@ export default function App() {
 
       let fullText: string;
       if (attachments && attachments.length > 0) {
-        // Photo path streams too.
         fullText = await generateResponse(
           selectedModel, userName, currentMessages, content, attachments,
           onChunkCb, onAgentEventCb,
@@ -435,9 +427,9 @@ export default function App() {
 
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current) return;
-      if (sessionIdRef.current !== sessionSnapshot) return; // session sudah switch, skip persist
+      if (sessionIdRef.current !== sessionSnapshot) return;
       if (streamCtrl.signal.aborted) fullText = displayed + buffered;
-      if (!fullText.trim()) return; // stop sebelum ada teks → tak ada yang perlu disimpan
+      if (!fullText.trim()) return;
       setMessages(prev => {
         const exists = prev.some(m => m.id === assistantId);
         if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
@@ -494,7 +486,7 @@ export default function App() {
 
       <main ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
 
-        {/* Top bar — shown when sidebar is collapsed */}
+        {}
         <AnimatePresence>
           {isSidebarCollapsed && (
             <m.div
@@ -547,7 +539,7 @@ export default function App() {
         </AnimatePresence>
         {isSidebarCollapsed && <div className="topbar-spacer" aria-hidden="true" />}
 
-        {/* ── Offline Banner (auto-dismiss 4s) ── */}
+        {}
         <AnimatePresence>
           {showOffline && (
             <m.div
@@ -571,7 +563,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* ── Back Online Toast (auto-dismiss 3.5s) ── */}
+        {}
         <AnimatePresence>
           {showBackOnline && (
             <m.div
@@ -594,7 +586,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* Error Banner */}
+        {}
         <AnimatePresence>
           {error && (
             <m.div
@@ -612,7 +604,7 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {/* ChatWindow tanpa bottom constraint — content scroll di bawah input bar */}
+        {}
         <ChatWindow
           messages={messages}
           isTyping={isTyping}
@@ -625,7 +617,7 @@ export default function App() {
           agentEvents={agentEvents}
         />
 
-        {/* Input bar absolute floating di bottom — scroll konten ke baliknya */}
+        {}
         <div ref={inputBarRef} className="input-bar-float">
           <MessageInput
             onSendMessage={handleSendMessage}
@@ -639,14 +631,14 @@ export default function App() {
 
       </main>
 
-      {/* ── Saku viewer — baca jawaban tersimpan (offline-ready) ── */}
+      {}
       <PocketModal
         item={pocketView}
         onClose={() => setPocketView(null)}
         onDelete={deletePocketItem}
       />
 
-      {/* ── Delete All Confirmation Dialog ── */}
+      {}
       <AnimatePresence>
         {deleteAllConfirm && (
           <m.div
@@ -685,7 +677,7 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {/* ── Delete Confirmation Dialog ── */}
+      {}
       <AnimatePresence>
         {deleteConfirmId && (
           <m.div

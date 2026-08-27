@@ -1,10 +1,8 @@
 const express = require('express');
 const { GoogleAuth } = require('google-auth-library');
 const { setGlobalDispatcher, Agent } = require('undici');
-// Required early so UNIT_MODELS feeds every allowlist.
 const orch = require('./dist/orchestrator.cjs');
 
-// Single source: cloudrun/src/types.ts.
 const UNIT_MODELS = new Set(orch.UNIT_MODELS);
 
 // Idle pooled connections die silently; drop them after 10s.
@@ -30,7 +28,6 @@ if (ALLOWED_ORIGINS.length === 0) {
   console.error('ALLOWED_ORIGIN kosong / hanya "*" — CORS ditutup total. Set origin eksplisit.');
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
-// Keep below client STREAM_TIMEOUT_MS.
 const UPSTREAM_TIMEOUT_MS = 35_000;
 // One retry only: retrying a full quota just deepens it.
 const UPSTREAM_429_BACKOFF_MS = [1_500];
@@ -57,7 +54,6 @@ const ALLOWED_MODELS = new Set(
 const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
 const _rateBuckets = new Map();
 function rateLimit(req, res, next) {
-  // User id, not the raw token — a refresh would reset the bucket.
   const key = (req.authUser && req.authUser.id) || req.headers['authorization'] || req.ip || 'anon';
   const now = Date.now();
   let b = _rateBuckets.get(key);
@@ -76,7 +72,7 @@ app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
     res.setHeader('Access-Control-Allow-Origin', origin);
-    res.setHeader('Vary', 'Origin'); // jangan biarkan cache menyilangkan ACAO antar origin
+    res.setHeader('Vary', 'Origin');
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -96,9 +92,8 @@ async function verifyToken(req, res, next) {
   try {
     const user = await fetchAuthUser(authHeader.slice(7));
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
-    // Verified identity — never trust body.
     req.authUser = user;
-    req.authToken = authHeader.slice(7);  // RLS.
+    req.authToken = authHeader.slice(7);
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -110,7 +105,6 @@ const auth = new GoogleAuth({
   scopes: ['https://www.googleapis.com/auth/cloud-platform'],
 });
 
-// Library caches and refreshes.
 async function getAccessToken() {
   const client = await auth.getClient();
   const { token } = await client.getAccessToken();
@@ -148,15 +142,10 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// Shared upstream
-// One copy of retry, key rotation, endpoint choice.
-
-// Vertex stalls at CONNECTION level; a new one cures it. Header phase only.
 // 20s, NOT 8 — streaming headers arrive only after thinking finishes.
-// Split per call type: one threshold is wrong for one of them.
 const STALL_MS_NONSTREAM     = 8_000;
-const STALL_MS_STREAM_CEPAT  = 10_000;  // low/minimal.
-const STALL_MS_STREAM_MIKIR  = 30_000;  // medium/high.
+const STALL_MS_STREAM_CEPAT  = 10_000;
+const STALL_MS_STREAM_MIKIR  = 30_000;
 const STALL_MAX = 3;
 
 async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
@@ -169,7 +158,6 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
     try {
       return await fetch(url, { ...opts, signal: ctrl.signal });
     } catch (err) {
-      // Client disconnect is a decision, not a stall.
       if (signal && signal.aborted) throw err;
       if (i === STALL_MAX) throw err;
       console.warn('[upstream] %s macet >%d dtk — buka koneksi baru (%d/%d)',
@@ -182,13 +170,11 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
 }
 
 async function vertexFetch(model, body, { stream, signal, label }) {
-  // auth vs fetch: two different illnesses.
   const tAuth = Date.now();
   const { url, headers } = await resolveUpstream(model, { stream });
   const msAuth = Date.now() - tAuth;
   const payload = JSON.stringify(body);
   const tFetch = Date.now();
-  // Threshold follows thinking level, not just stream/non-stream.
   const lvl = body && body.generationConfig && body.generationConfig.thinkingConfig
     ? body.generationConfig.thinkingConfig.thinkingLevel : undefined;
   const mikirPanjang = lvl === 'medium' || lvl === 'high';
@@ -210,7 +196,6 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   return upstream;
 }
 
-// AI Studio path — its own quota pool, far above Vertex's hard 5/min cap.
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 async function geminiEmbed(query, taskType = 'RETRIEVAL_QUERY') {
   const tEmb = Date.now();
@@ -361,14 +346,10 @@ const upstream = await fetch(url, {
     const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
     return res.json({ text });
   } catch (err) {
-    // Details to log only.
     console.error('Transcribe error:', err);
     return res.status(500).json({ error: 'Transcribe gagal. Coba lagi.' });
   }
 });
-
-// /v1/ask — server-side RAG
-// Whole pipeline here. Was 5-7 round-trips from the browser, now one.
 
 // PostgREST direct: supabase-js needs a global WebSocket, absent in Node 20.
 const { PostgrestClient } = require('@supabase/postgrest-js');
@@ -380,9 +361,7 @@ function sseWrite(res, event, payload) {
   res.write(`data: ${JSON.stringify({ ev: event, ...payload })}\n\n`);
 }
 
-// SSE -> structured chunks.
 async function vertexStreamParsed(model, body, onChunk, signal) {
-  // Hanging connection vs silent model.
   const t0 = Date.now();
   let tHeader = 0, tChunk1 = 0;
   const upstream = await vertexFetch(model, body, { stream: true, signal, label: '/v1/ask' });
@@ -423,7 +402,6 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
         }
         const parts = (cand && cand.content && cand.content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
-        // Thinking chunks count as alive, else the watchdog kills them.
         onChunk({ text, usageMetadata: json.usageMetadata, live: true });
       }
     }
@@ -445,7 +423,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     ? b.attachments.filter(a => a && typeof a.mimeType === 'string' && typeof a.data === 'string').slice(0, 1)
     : [];
 
-  // Photo without text is normal for OCR.
   const userInput = typeof b.userInput === 'string' ? b.userInput : '';
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
@@ -460,7 +437,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const ctrl = new AbortController();
   res.on('close', () => { if (!res.writableFinished) ctrl.abort(); });
 
-  // JWT passed through, RLS still applies.
   const supabase = new PostgrestClient(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1`, {
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.authToken}` },
   });
@@ -483,7 +459,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
-      // Per-call: one slow compress must not kill the request.
       const callCtrl = new AbortController();
       const timer = setTimeout(() => callCtrl.abort(), UPSTREAM_TIMEOUT_MS);
       const signal = AbortSignal.any([callCtrl.signal, ctrl.signal]);
@@ -498,13 +473,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
-      // Orchestrator signal + client disconnect.
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
       await vertexStreamParsed(model, payload, onChunk, signal);
     },
   };
 
-  // ttft is what the technician feels.
   const tMulai = Date.now();
   let ttft = 0;
   const onChunk = (text) => {
@@ -543,7 +516,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`Dash⁵ proxy :${PORT}`);
-  // Warm credentials at boot, off the hot path.
   getAccessToken()
     .then(() => console.log('[boot] kredensial GCP siap'))
     .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));

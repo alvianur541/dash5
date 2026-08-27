@@ -12,17 +12,17 @@ export const isSessionsCleared = (uid: string): boolean => {
   const v = localStorage.getItem(clearedKey(uid));
   if (!v) return false;
   const ts = parseInt(v, 10);
-  if (!Number.isFinite(ts)) return false; // format lama ('1') → anggap stale, biarkan sync jalan
+  if (!Number.isFinite(ts)) return false;
   return Date.now() - ts < CLEARED_TTL_MS;
 };
 
-const MAX_EVICTION_ATTEMPTS = 5; // maksimal hapus 5 sesi lama sebelum give up
+const MAX_EVICTION_ATTEMPTS = 5;
 
 function safeSetItem(key: string, value: string): void {
   for (let attempt = 0; attempt <= MAX_EVICTION_ATTEMPTS; attempt++) {
     try {
       localStorage.setItem(key, value);
-      return; // sukses — keluar
+      return;
     } catch (e) {
       const isQuotaError = e instanceof DOMException &&
         (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED');
@@ -37,7 +37,6 @@ function safeSetItem(key: string, value: string): void {
         try {
           const list: { id: string; updatedAt?: number }[] = JSON.parse(localStorage.getItem(lk) || '[]');
           if (!Array.isArray(list) || list.length === 0) continue;
-          // Newest-first, so last is oldest.
           const oldest = list[list.length - 1];
           if (!oldest?.id) continue;
           const uid = lk.replace('dash-session-list-', '');
@@ -47,7 +46,6 @@ function safeSetItem(key: string, value: string): void {
         } catch { continue; }
       }
       if (!evicted) {
-        // Fallback: drop the first one found.
         const fallback = Object.keys(localStorage)
           .find(k => k.startsWith('dash-session-') && !k.includes('-list-'));
         if (fallback) localStorage.removeItem(fallback);
@@ -70,7 +68,6 @@ export function loadSessionData(uid: string, id: string): ChatSession | null {
     const raw = localStorage.getItem(dataKey(uid, id));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    // Corrupted localStorage can crash render.
     if (!parsed || typeof parsed !== 'object') return null;
     if (typeof parsed.id !== 'string' || typeof parsed.model !== 'string') return null;
     if (!Array.isArray(parsed.messages)) return null;
@@ -81,7 +78,7 @@ export function loadSessionData(uid: string, id: string): ChatSession | null {
 }
 
 export function saveSession(uid: string, id: string, model: UnitModel, messages: Message[], firstMessage: string): SessionMeta[] {
-  localStorage.removeItem(clearedKey(uid)); // batal flag cleared saat ada sesi baru
+  localStorage.removeItem(clearedKey(uid));
   const sessionData: ChatSession = { id, model, messages };
   safeSetItem(dataKey(uid, id), JSON.stringify(sessionData));
 
@@ -107,9 +104,8 @@ export function deleteSessionData(uid: string, id: string): SessionMeta[] {
   return updated;
 }
 
-
 export interface PocketItem {
-  id: string;  // Source messageId.
+  id: string;
   model: string;
   question: string;
   answer: string;
@@ -141,16 +137,13 @@ export function removePocketItem(uid: string, id: string): PocketItem[] {
   return updated;
 }
 
-/** Overwrite with merged result. */
 export function replacePocket(uid: string, items: PocketItem[]): void {
   safeSetItem(pocketKey(uid), JSON.stringify(items.slice(0, MAX_POCKET_ITEMS)));
 }
 
-
 const tombKey = (uid: string) => `dash-pocket-del-${uid}`;
 const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
-/** id -> deletion time. */
 export function loadPocketTombstones(uid: string): Record<string, number> {
   try {
     const parsed = JSON.parse(localStorage.getItem(tombKey(uid)) || '{}');
@@ -172,7 +165,6 @@ export function addPocketTombstone(uid: string, id: string): void {
   safeSetItem(tombKey(uid), JSON.stringify(t));
 }
 
-/** Re-saving a deleted id clears its tombstone. */
 export function clearPocketTombstone(uid: string, id: string): void {
   const t = loadPocketTombstones(uid);
   if (!(id in t)) return;
@@ -184,5 +176,5 @@ export function deleteAllSessionData(uid: string, setFlag = true): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));
   localStorage.removeItem(listKey(uid));
-  if (setFlag) localStorage.setItem(clearedKey(uid), String(Date.now()));  // Auto-stale.
+  if (setFlag) localStorage.setItem(clearedKey(uid), String(Date.now()));
 }

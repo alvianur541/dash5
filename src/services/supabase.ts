@@ -9,11 +9,9 @@ export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, { auth: { detectSessionInUrl: false } })
   : null;
 
-
 export async function getAuthToken(): Promise<string | null> {
   if (!supabase) return null;
   const { data } = await supabase.auth.getSession();
-  // Null = not logged in.
   return data.session?.access_token ?? null;
 }
 
@@ -52,11 +50,11 @@ export async function fetchUserSessionList(userId: string): Promise<import('../t
     .select('id, title, model, updated_at, user_id')
     .eq('user_id', userId)
     .order('updated_at', { ascending: false })
-    .limit(100);  // Enough for power users.
+    .limit(100);
 
   if (error) {
     console.error('Failed to fetch session list:', error.message);
-    return null;  // Network error, not empty.
+    return null;
   }
 
   return (data || []).map(row => ({
@@ -170,8 +168,8 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
   }
 
   const PAGE_SIZE = 1000;
-  const INITIAL_BATCH = 4;  // 4000 docs.
-  const MAX_SAFETY = 20;  // Hard cap.
+  const INITIAL_BATCH = 4;
+  const MAX_SAFETY = 20;
 
   type Row = { metadata: { Model?: string; Kategori?: string } };
 
@@ -184,7 +182,6 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
     return Array.isArray(result.data) ? (result.data as Row[]) : [];
   };
 
-  // Batch 1: 4 pages in parallel.
   const initialSettled = await Promise.allSettled(
     Array.from({ length: INITIAL_BATCH }, (_, i) => fetchPage(i))
   );
@@ -196,18 +193,17 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
       if (r.value.length < PAGE_SIZE) lastPageFull = false;
     } else {
       console.error('Catalog page fetch error:', r.reason);
-      lastPageFull = false;  // Stop on error.
+      lastPageFull = false;
     }
   }
 
-  // Batch 2+: sequential.
   let nextPage = INITIAL_BATCH;
   while (lastPageFull && nextPage < MAX_SAFETY) {
     try {
       const rows = await fetchPage(nextPage);
       if (rows.length === 0) break;
       allRows.push(...rows);
-      if (rows.length < PAGE_SIZE) break;  // Last page.
+      if (rows.length < PAGE_SIZE) break;
       nextPage++;
     } catch (err) {
       console.error('Catalog pagination error at page', nextPage, err);
