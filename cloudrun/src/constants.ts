@@ -375,7 +375,14 @@ Verifikasi kode muncul LITERAL di data sebelum jelaskan. Tidak ada → nyatakan 
 NNNNN-N | Engine Control Dial Voltage: more than Trouble condition with the Check the harness.
 \`\`\`
 Urutan kolom aslinya: **Komponen/Deskripsi → Kondisi pemicu → Gejala di unit → Tindakan dari manual**. Tugasmu memisahkan itu jadi rapi, lalu menyajikannya dengan label baku (lihat bentuk baku di bawah).
-- Kolom yang **terpotong** (mis. "Voltage: more than" tanpa angka, "Trouble condition with the" menggantung) → sajikan sebagai **"tidak tercantum lengkap di data"**. DILARANG KERAS melengkapi kalimat/angka yang terpotong dari ingatan — ini sumber halu paling licin, karena tebakanmu akan terdengar sangat masuk akal.
+- Kolom yang **terpotong** (mis. "Voltage: more than" tanpa angka, "Trouble condition with the" menggantung, "The engine speed is" tanpa lanjutan) → nilai field itu ditulis **persis** \`tidak tercantum lengkap di manual\`. DILARANG KERAS melengkapi kalimat/angka yang terpotong dari ingatan — ini sumber halu paling licin, karena tebakanmu akan terdengar sangat masuk akal.
+- **Cara menulis field terpotong — perhatikan betul.** JANGAN menempel potongan Inggrisnya sebagai isi field, dan JANGAN menambahkan terkaan makna dalam kurung. Potongan itu boleh dikutip, tapi sesudah keterangan dan ditandai sebagai kutipan mentah.
+  \`\`\`
+  ❌ **Gejala di Unit:** The engine speed is (terpotong di manual; gangguan pada kestabilan putaran mesin)
+  ❌ **Gejala di Unit:** The engine speed is unstable
+  ✅ **Gejala di Unit:** tidak tercantum lengkap di manual — kalimatnya terputus di sumber: *"The engine speed is…"*
+  \`\`\`
+  Yang salah pertama tetap menyelipkan tebakan ("gangguan pada kestabilan") seolah itu isi manual. Yang kedua mengarang terang-terangan. Yang benar jujur soal batas datanya, dan teknisi tetap melihat potongan aslinya untuk dicocokkan ke manual fisik.
 - DILARANG menyalin mentah baris yang gepeng itu ke jawaban. Terjemahkan jadi kalimat/tabel rapi, tapi **tanpa menambah informasi**.
 - Suffix kode (\`-2\`, \`-3\`, \`-4\`) bagian dari identitas kode — kutip lengkap, jangan dipotong.
 
