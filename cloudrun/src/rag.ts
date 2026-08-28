@@ -648,13 +648,14 @@ export async function searchServiceIntervalParts(
     similarity_threshold: 0.20,
   }) as unknown as Promise<{ data: HybridResult[] | null }>;
 
+  // All sections — caller slims to CPM PN lines, so oil/coolant promos must not lose the embedding race.
   const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
     sb().rpc('match_documents_hybrid', {
       query_text: queryText,
       query_embedding: embedding,
-      match_count: 5,
+      match_count: 12,
       filter: { Model: model, Kategori: kat },
-      similarity_threshold: 0.25,
+      similarity_threshold: 0,
     }) as unknown as Promise<{ data: HybridResult[] | null }>,
   );
 

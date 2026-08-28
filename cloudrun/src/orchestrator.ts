@@ -715,17 +715,27 @@ function extractCpmPartsForInterval(content: string, hours: number): string {
 
   const parts: string[] = [];
 
+  const qtyCount = intervals.length;
   for (const line of lines) {
     if (!line.trim()) continue;
     const fields = line.trim().split(/\s{2,}/);
-    if (fields.length < 4) continue;
-    const no = fields[0];
-    if (!/^\d+$/.test(no)) continue;
+    if (fields.length < qtyCount + 2) continue;
+    if (!/^\d+$/.test(fields[0])) continue;
 
-    const desc = fields[1];
-    const pn   = fields[2];
-    const vals = fields[3].trim().split(/\s+/);
-    const qty  = vals[colIdx];
+    // Anchor on the qty tail — a long description can collide into the PN column and merge fields.
+    const vals = fields.slice(fields.length - qtyCount);
+    if (!vals.every(v => v === '-' || /^\d+$/.test(v))) continue;
+    const head = fields.slice(1, fields.length - qtyCount);
+    let desc: string, pn: string;
+    if (head.length >= 2) {
+      desc = head[0];
+      pn   = head.slice(1).join(' ');
+    } else {
+      const toks = head[0].split(/\s+/);
+      pn   = toks.pop() ?? '';
+      desc = toks.join(' ');
+    }
+    const qty = vals[colIdx];
     if (!qty || qty === '-') continue;
 
     parts.push(`${pn} | ${desc} | qty:${qty}`);
@@ -791,13 +801,19 @@ async function resolvePartsQuery(
           .map(l => l.trim())
           .filter(l => /Promo:\s*Rp/i.test(l) && cpmPNs.some(pn => l.includes(pn))),
       )];
-      const periodeLine = (ragResult.content.match(/Periode Promo\s*:[^\n]*/i) || [null])[0];
+      // Start dates differ per section (filter 15 Jul, oil/coolant 5 Aug) — list every unique one.
+      const periodeLines = [...new Set(
+        Array.from(ragResult.content.matchAll(/Periode Promo\s*:[^\n]*/gi), m => m[0].trim()),
+      )];
 
       const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (CPM resmi Hitachi):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
 
       finalContent = promoLines.length > 0
-        ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[periodeLine, ...promoLines].filter(Boolean).join('\n')}`
+        ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[...periodeLines, ...promoLines].join('\n')}`
         : cpmHeader;
+    } else {
+      // Slimming failed — cap raw promo payload at pre-fix size (CPM + 5 chunks).
+      finalContent = ragResult.content.split('\n\n---\n\n').slice(0, 6).join('\n\n---\n\n');
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
     finalContent = `${KIT_HINT}\n\n${finalContent}`;
