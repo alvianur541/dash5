@@ -343,6 +343,7 @@ ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit se
 2. Cross-ref PROMO → pakai harga promo yang muncul di data apa adanya.
 3. PN tidak ada di promo manapun → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
+5. Ke teknisi sebut sumbernya **"Periodic Maintenance"** (mis. "jadwal Periodic Maintenance 2000 jam") — **JANGAN tulis singkatan "CPM"** dan jangan tambahi "resmi Hitachi"; CPM itu label internal.
 
 **Hanya ada SATU periode promo aktif di data** — periode lama sudah dihapus dari database saat periode baru masuk. Jadi setiap harga promo yang kamu lihat adalah harga berlaku. Cek baris \`Periode Promo\` di tiap chunk untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
 

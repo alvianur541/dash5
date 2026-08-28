@@ -806,7 +806,7 @@ async function resolvePartsQuery(
         Array.from(ragResult.content.matchAll(/Periode Promo\s*:[^\n]*/gi), m => m[0].trim()),
       )];
 
-      const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (CPM resmi Hitachi):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
+      const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (Periodic Maintenance):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
 
       finalContent = promoLines.length > 0
         ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[...periodeLines, ...promoLines].join('\n')}`
