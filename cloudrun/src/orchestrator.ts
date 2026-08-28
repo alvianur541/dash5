@@ -701,7 +701,7 @@ async function resolveFaultCodeQuery(
   };
 }
 
-const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b/i;
+const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b|\b(?:servis|service|maintenance|perawatan|pm)\s+(\d{3,5})\b/i;
 
 function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
@@ -747,8 +747,9 @@ async function resolvePartsQuery(
   let usedOptimized  = false;
 
   const intervalMatch = !hasLiteralPN && trimmed.match(SERVICE_INTERVAL_RE);
-  if (intervalMatch) {
-    searchQuery = `${intervalMatch[1]} hour service maintenance schedule parts`;
+  const intervalHours = intervalMatch ? (intervalMatch[1] ?? intervalMatch[2]) : null;
+  if (intervalHours) {
+    searchQuery = `${intervalHours} hour service maintenance schedule parts`;
   } else if (!hasLiteralPN && (precomputedOpt !== undefined || isLongQuery)) {
     const opt = precomputedOpt !== undefined
       ? precomputedOpt
@@ -761,7 +762,7 @@ async function resolvePartsQuery(
   }
 
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-  const ragResult = intervalMatch
+  const ragResult = intervalHours
     ? await searchServiceIntervalParts(searchQuery, model)
     : await searchPartsCatalog(searchQuery, model, usedOptimized);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
@@ -778,8 +779,8 @@ async function resolvePartsQuery(
   }
 
   let finalContent = ragResult.content;
-  if (intervalMatch) {
-    const hours    = parseInt(intervalMatch[1]);
+  if (intervalHours) {
+    const hours    = parseInt(intervalHours);
     const partsList = extractCpmPartsForInterval(ragResult.content, hours);
     if (partsList) {
       const cpmPNs = partsList.split('\n')
