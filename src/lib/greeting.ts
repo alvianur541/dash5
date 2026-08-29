@@ -5,13 +5,13 @@ export interface GreetingContext {
 }
 
 const GREETINGS = {
-  monday:  ['Senin, gaskeun', 'Balik ngegas', 'Senin lagi euy'],
-  friday:  ['Dikit lagi weekend', 'Tinggal separuh jalan', 'Bentar lagi bebas'],
-  weekend: ['Waduh lembur nih', 'Weekend tetap gas', 'Libur kok manggil'],
-  pagi:    ['Pagi, sat set ya', 'Cus pagi ini', 'Pagi udah gercep'],
-  siang:   ['Siang masih kuat', 'Siang gas terus', 'Siang santuy dulu'],
-  sore:    ['Sore, dikit lagi', 'Sore hampir kelar', 'Sore sisa tenaga'],
-  malam:   ['Masih gaskeun', 'Lembur ya', 'Malam masih kuat'],
+  monday:  ['Awal minggu, semangat baru', 'Selamat memulai minggu', 'Senin penuh energi'],
+  friday:  ['Jumat, tuntaskan dengan baik', 'Akhiri minggu dengan kuat', 'Jumat tetap fokus'],
+  weekend: ['Akhir pekan tetap siaga', 'Siap mendampingi hari ini', 'Siap kapan pun dibutuhkan'],
+  pagi:    ['Selamat pagi, siap membantu', 'Pagi yang produktif', 'Pagi, mari kita mulai'],
+  siang:   ['Selamat siang, tetap fokus', 'Siang tetap produktif', 'Siang, mari lanjutkan'],
+  sore:    ['Selamat sore, hampir tuntas', 'Sore, selesaikan dengan baik', 'Sore tetap produktif'],
+  malam:   ['Selamat malam, tetap siaga', 'Malam, tetap semangat', 'Siap membantu malam ini'],
 } as const;
 
 const EMOJI = {
