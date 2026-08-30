@@ -2,7 +2,7 @@
 
 Live app: [dash5.my.id](https://dash5.my.id)
 
-Dash⁵ is a RAG-based (Retrieval-Augmented Generation) AI assistant built to help Hitachi/KCM heavy equipment technicians find technical information faster — fault code diagnosis, component specifications, parts lookup, and maintenance schedules — sourced directly from official manuals, without having to dig through hundreds of pages of PDF documentation by hand.
+Dash⁵ is a RAG-based (Retrieval-Augmented Generation) AI assistant built to help Hitachi Heavy Equipment technicians find technical information faster — fault code diagnosis, component specifications, parts lookup, and maintenance schedules — sourced directly from official manuals, without having to dig through hundreds of pages of PDF documentation by hand.
 
 ---
 
