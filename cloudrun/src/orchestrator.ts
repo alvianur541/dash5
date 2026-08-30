@@ -728,9 +728,9 @@ async function resolveFaultCodeQuery(
   };
 }
 
-const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b|\b(?:servis|service|maintenance|perawatan|pm)\s+(\d{3,5})\b/i;
+export const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b|\b(?:servis|service|maintenance|perawatan|pm)\s+(\d{3,5})\b/i;
 
-function extractCpmPartsForInterval(content: string, hours: number): string {
+export function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
 
   const headerLine = lines.find(l => /\b500hr\b/.test(l) && /\b1000hr\b/.test(l));

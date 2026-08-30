@@ -16,3 +16,4 @@ CLAUDE.md
 # Kunci service account Google Cloud — jangan pernah di-commit.
 secrets/*
 !secrets/.gitkeep
+cloudrun/test/.build/
