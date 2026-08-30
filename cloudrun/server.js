@@ -353,57 +353,91 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
   const t0 = Date.now();
 
   try {
-    // Dedicated transcribe models (gemini-*-transcribe) live only on the AI Studio
-    // (generativelanguage) API, reachable with GEMINI_API_KEY — the same key path as embeddings.
-    // Everything else keeps going through Vertex via resolveUpstream.
     const isStudioTranscribe = /transcribe/.test(TRANSCRIBE_MODEL);
-    let url, headers, bodyObj;
+    let text;
     if (isStudioTranscribe) {
+      // Dedicated transcribe models use the Interactions API (not generateContent):
+      // upload audio via the Files API, then reference it by URI. generateContent returns
+      // an empty STOP for these models. GEMINI_API_KEY reaches AI Studio, same as embeddings.
       if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY env var not set' });
-      url = `https://generativelanguage.googleapis.com/v1beta/models/${TRANSCRIBE_MODEL}:generateContent`;
-      headers = { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY };
-      bodyObj = {
-        contents: [{
-          role: 'user',
-          parts: [
-            { inline_data: { mime_type: cleanMimeType, data: audio } },
-            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
-          ],
-        }],
-        generationConfig: { maxOutputTokens: 1024 },
+      const bytes = Buffer.from(audio, 'base64');
+      // 1) Resumable upload: start -> get upload URL.
+      const startRes = await fetch(
+        `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`,
+        { method: 'POST',
+          headers: {
+            'X-Goog-Upload-Protocol': 'resumable',
+            'X-Goog-Upload-Command': 'start',
+            'X-Goog-Upload-Header-Content-Length': String(bytes.length),
+            'X-Goog-Upload-Header-Content-Type': cleanMimeType,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ file: { display_name: 'dash5-audio' } }),
+        });
+      const uploadUrl = startRes.headers.get('x-goog-upload-url');
+      if (!uploadUrl) { console.error('Transcribe: no upload URL', startRes.status); return res.status(502).json({ error: 'Transcribe gagal (upload init).' }); }
+      // 2) Upload the bytes and finalize.
+      const upRes = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: { 'Content-Length': String(bytes.length), 'X-Goog-Upload-Offset': '0', 'X-Goog-Upload-Command': 'upload, finalize' },
+        body: bytes,
+      });
+      const upJson = await upRes.json();
+      const fileUri = upJson?.file?.uri;
+      if (!fileUri) { console.error('Transcribe: no file URI', JSON.stringify(upJson)); return res.status(502).json({ error: 'Transcribe gagal (upload).' }); }
+      // 3) Interactions API. Optional custom_vocabulary via env for heavy-equipment jargon.
+      const vocab = (process.env.TRANSCRIBE_VOCAB || '').split(',').map(v => v.trim()).filter(Boolean);
+      const interBody = {
+        model: TRANSCRIBE_MODEL,
+        input: [{ type: 'audio', uri: fileUri, mime_type: cleanMimeType }],
+        ...(vocab.length ? { generation_config: { transcription_config: { custom_vocabulary: vocab.slice(0, 1000) } } } : {}),
       };
+      const inter = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
+        method: 'POST',
+        headers: { 'x-goog-api-key': GEMINI_API_KEY, 'Content-Type': 'application/json' },
+        body: JSON.stringify(interBody),
+      });
+      if (!inter.ok) { const e = await inter.json().catch(() => ({})); console.error('Transcribe error:', JSON.stringify(e)); return res.status(inter.status).json(e); }
+      const data = await inter.json();
+      // Text lives in steps[].content[].text (output_text is not populated for transcription).
+      text = (data.output_text || '').trim();
+      if (!text && Array.isArray(data.steps)) {
+        text = data.steps
+          .filter(st => st.type === 'model_output')
+          .flatMap(st => (st.content || []))
+          .filter(c => c.type === 'text' && c.text)
+          .map(c => c.text).join('').trim();
+      }
     } else {
-      const up = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
-      url = up.url; headers = up.headers;
-      bodyObj = {
-        contents: [{
-          role: 'user',
-          parts: [
-            { inline_data: { mime_type: cleanMimeType, data: audio } },
-            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
-          ],
-        }],
-        generationConfig: {
-          maxOutputTokens: 1024,
-          // 3.x rejects 'minimal'; 2.5 uses thinkingBudget instead.
-          ...(TRANSCRIBE_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
-        },
-      };
+      // Vertex path (multimodal LLM used as transcriber): plain fetch, not vertexFetch —
+      // its 8s stall guard would kill long recordings.
+      const { url, headers } = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
+      const upstream = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contents: [{
+            role: 'user',
+            parts: [
+              { inline_data: { mime_type: cleanMimeType, data: audio } },
+              { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
+            ],
+          }],
+          generationConfig: {
+            maxOutputTokens: 1024,
+            ...(TRANSCRIBE_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
+          },
+        }),
+      });
+      if (!upstream.ok) {
+        const err = await upstream.json();
+        console.error('Transcribe error:', JSON.stringify(err));
+        return res.status(upstream.status).json(err);
+      }
+      const data = await upstream.json();
+      const parts = data.candidates?.[0]?.content?.parts ?? [];
+      text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
     }
-    // Plain fetch, not vertexFetch — its 8s stall guard would kill long recordings.
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(bodyObj),
-    });
-    if (!upstream.ok) {
-      const err = await upstream.json();
-      console.error('Transcribe error:', JSON.stringify(err));
-      return res.status(upstream.status).json(err);
-    }
-    const data = await upstream.json();
-    const parts = data.candidates?.[0]?.content?.parts ?? [];
-    const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
     console.info('[transcribe] model=%s ms=%d chars=%d', TRANSCRIBE_MODEL, Date.now() - t0, text.length);
     return res.json({ text });
   } catch (err) {
