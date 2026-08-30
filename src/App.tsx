@@ -600,7 +600,7 @@ export default function App() {
               onClick={e => e.stopPropagation()}
             >
               <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-1">Hapus semua riwayat?</p>
-              <p className="text-[var(--text-muted)] text-[13px] mb-5">Seluruh percakapan akan dihapus permanen. Tindakan ini tidak bisa dibatalkan.</p>
+              <p className="text-[var(--text-muted)] text-[13px] mb-5">Seluruh riwayat hilang dari akunmu dan tidak bisa dikembalikan. Data percakapan tetap disimpan Hexindo untuk peningkatan layanan.</p>
               <div className="flex gap-2.5">
                 <button
                   onClick={() => setDeleteAllConfirm(false)}
@@ -639,7 +639,7 @@ export default function App() {
               onClick={e => e.stopPropagation()}
             >
               <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-1">Hapus percakapan?</p>
-              <p className="text-[var(--text-muted)] text-[13px] mb-5">Tindakan ini tidak bisa dibatalkan.</p>
+              <p className="text-[var(--text-muted)] text-[13px] mb-5">Percakapan hilang dari riwayatmu dan tidak bisa dikembalikan. Datanya tetap disimpan Hexindo untuk peningkatan layanan.</p>
               <div className="flex gap-2.5">
                 <button
                   onClick={() => setDeleteConfirmId(null)}

@@ -49,6 +49,7 @@ export async function fetchUserSessionList(userId: string): Promise<import('../t
     .from('chat_sessions')
     .select('id, title, model, updated_at, user_id')
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .order('updated_at', { ascending: false })
     .limit(100);
 
@@ -73,6 +74,7 @@ export async function fetchSessionData(sessionId: string, userId: string): Promi
     .select('id, model, messages')
     .eq('id', sessionId)
     .eq('user_id', userId)
+    .is('deleted_at', null)
     .single();
 
   if (error || !data) {
@@ -87,15 +89,20 @@ export async function fetchSessionData(sessionId: string, userId: string): Promi
   };
 }
 
+// Soft delete: rows stay in Supabase for analysis, hidden from the technician.
 export async function deleteChatSession(id: string, userId: string): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.from('chat_sessions').delete().eq('id', id).eq('user_id', userId);
+  const { error } = await supabase.from('chat_sessions')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('id', id).eq('user_id', userId);
   if (error) console.error('Failed to delete chat session from Supabase:', error.message);
 }
 
 export async function deleteAllChatSessions(userId: string): Promise<void> {
   if (!supabase) return;
-  const { error } = await supabase.from('chat_sessions').delete().eq('user_id', userId);
+  const { error } = await supabase.from('chat_sessions')
+    .update({ deleted_at: new Date().toISOString() })
+    .eq('user_id', userId).is('deleted_at', null);
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
 }
 
