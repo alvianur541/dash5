@@ -497,9 +497,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       if (images.length > 0) {
         return orch.generateResponse(unit, userName, history, userInput, images, onChunk, onEvent);
       }
-      if (b.agentic === true) {
-        return orch.generateResponseAgentic(unit, userName, history, userInput, onChunk, onEvent);
-      }
       return orch.generateResponseStream(unit, userName, history, userInput, onChunk, onEvent);
     });
     console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',

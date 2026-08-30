@@ -1,5 +1,5 @@
 
-export interface GreetingContext {
+interface GreetingContext {
   name: string;
   date?: Date;
 }

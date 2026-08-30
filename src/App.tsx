@@ -5,7 +5,7 @@ import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { UnitModel, Message, SessionMeta } from './types';
-import { generateResponse, generateResponseStream, generateResponseAgentic, warmupProxy, type AgentEvent } from './services/ai';
+import { generateResponse, generateResponseStream, warmupProxy, type AgentEvent } from './services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, loadPocketTombstones, addPocketTombstone, clearPocketTombstone, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
@@ -14,41 +14,6 @@ import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
 import { useNetwork } from './hooks/useNetwork';
-
-type AgenticPreference = 'adaptive' | 'always' | 'never';
-
-const AGENTIC_KEY = 'dash-agentic';
-
-// Persisted: manifest start_url drops ?agentic on PWA launch.
-function getAgenticPreference(): AgenticPreference {
-  const param = new URLSearchParams(window.location.search).get('agentic')?.toLowerCase();
-  const dariUrl: AgenticPreference | null =
-    param === 'true'  || param === '1' || param === 'always' ? 'always' :
-    param === 'false' || param === '0' || param === 'never'  ? 'never'  : null;
-
-  if (dariUrl) {
-    try { localStorage.setItem(AGENTIC_KEY, dariUrl); } catch { }
-    console.info('[agentic] mode=%s (dari URL, disimpan)', dariUrl);
-    return dariUrl;
-  }
-
-  try {
-    const tersimpan = localStorage.getItem(AGENTIC_KEY);
-    if (tersimpan === 'always' || tersimpan === 'never') {
-      console.info('[agentic] mode=%s (tersimpan — matikan dengan ?agentic=false)', tersimpan);
-      return tersimpan;
-    }
-  } catch { }
-
-  const envMode = String(import.meta.env.VITE_AGENTIC_MODE ?? 'adaptive').toLowerCase();
-  if (envMode === 'always' || envMode === 'true') return 'always';
-  if (envMode === 'never' || envMode === 'false') return 'never';
-  return 'adaptive';
-}
-
-function shouldUseAgenticForQuery(_input: string): boolean {
-  return false;
-}
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -68,12 +33,6 @@ export default function App() {
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const agenticPreference = useRef(getAgenticPreference()).current;
-  const shouldUseAgentic = useCallback((content: string) => {
-    if (agenticPreference === 'always') return true;
-    if (agenticPreference === 'never') return false;
-    return shouldUseAgenticForQuery(content);
-  }, [agenticPreference]);
 
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -384,13 +343,11 @@ export default function App() {
         });
         if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
       };
-      let streamedAny = false;
       const onChunkCb = (chunk: string) => {
         if (!mountedRef.current) return;
         if (sessionIdRef.current !== sessionSnapshot) return;
         if (streamCtrl.signal.aborted) return;
         setIsTyping(false);
-        streamedAny = true;
         buffered += chunk;
         if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
       };
@@ -408,21 +365,7 @@ export default function App() {
           onChunkCb, onAgentEventCb,
         );
       } else {
-        const useAgentic = shouldUseAgentic(content);
-        try {
-          fullText = useAgentic
-            ? await generateResponseAgentic(
-                selectedModel, userName, currentMessages, content,
-                onChunkCb, onAgentEventCb,
-              )
-            : await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
-        } catch (agErr) {
-          const aborted = (agErr as Error)?.name === 'AbortError' || (agErr as Error)?.message?.includes('abort');
-          if (!useAgentic || streamedAny || aborted) throw agErr;
-          console.warn('[agentic] gagal sebelum streaming, fallback ke single-pass:', (agErr as Error)?.message);
-          setAgentEvents([]);
-          fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
-        }
+        fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
       }
 
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }

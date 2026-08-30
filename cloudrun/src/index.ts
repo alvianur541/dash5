@@ -3,7 +3,6 @@ export type { Deps, StreamChunk, StreamOpts, RerankOut, Usage } from './deps';
 export {
   generateResponse,
   generateResponseStream,
-  generateResponseAgentic,
   getQuestionUsage,
   MODEL,
   INTENT_MODEL,

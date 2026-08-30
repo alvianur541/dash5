@@ -73,7 +73,7 @@ interface IntentAnalysis {
   optimizedQuery: string;
 }
 
-type AgentEventEmit = (event: import('./react-agent').AgentEvent) => void;
+type AgentEventEmit = (event: import('./types').AgentEvent) => void;
 
 function toInlineData(img: InlineImage): InlineDataPart {
   return { inlineData: { mimeType: img.mimeType, data: img.data } };
@@ -1034,7 +1034,7 @@ export async function generateResponseStream(
   history: Message[],
   userInput: string,
   onChunk: (text: string) => void,
-  onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
+  onAgentEvent?: (event: import('./types').AgentEvent) => void,
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
@@ -1115,37 +1115,6 @@ export async function generateResponseStream(
   return fullText || FALLBACK_RESPONSE;
 }
 
-export type { AgentEvent } from './react-agent';
-
-export async function generateResponseAgentic(
-  model: UnitModel,
-  userName: string,
-  history: Message[],
-  userInput: string,
-  onChunk: (text: string) => void,
-  onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
-): Promise<string> {
-  resetUsage();
-  const sanitized = userInput
-    .slice(0, 4000)
-    .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
-    .replace(/<\|[^|]*\|>/g, '[blocked]');
-  const trimmed = sanitized.trim() || 'Halo';
-
-  if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
-    return generateResponseStream(model, userName, history, userInput, onChunk, onAgentEvent);
-  }
-
-  const { runReActAgent } = await import('./react-agent');
-
-  const result = await runReActAgent(trimmed, model, userName, history, {
-    onChunk,
-    onAgentEvent,
-  });
-
-  return result || FALLBACK_RESPONSE;
-}
-
 export async function generateResponse(
   model: UnitModel,
   userName: string,
@@ -1153,7 +1122,7 @@ export async function generateResponse(
   userInput: string,
   attachments?: InlineImage[],
   onChunk?: (text: string) => void,
-  onAgentEvent?: (event: import('./react-agent').AgentEvent) => void,
+  onAgentEvent?: (event: import('./types').AgentEvent) => void,
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});

@@ -1,5 +1,5 @@
 // Bump when ANSWER CONTENT changes. Not for UI.
-export const CACHE_GEN = 8;
+const CACHE_GEN = 8;
 
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
 

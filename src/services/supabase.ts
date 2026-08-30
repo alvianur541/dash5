@@ -99,7 +99,7 @@ export async function deleteAllChatSessions(userId: string): Promise<void> {
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
 }
 
-export interface RemoteBookmark { message_id: string; model: string; question: string; answer: string; saved_at: string }
+interface RemoteBookmark { message_id: string; model: string; question: string; answer: string; saved_at: string }
 
 export async function fetchBookmarksRemote(userId: string): Promise<RemoteBookmark[] | null> {
   if (!supabase) return null;

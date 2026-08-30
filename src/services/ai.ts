@@ -69,7 +69,6 @@ interface AskBody {
   userName: string;
   history: Message[];
   userInput: string;
-  agentic?: boolean;
   think?: ThinkLevel;
   attachments?: Array<{ mimeType: string; data: string }>;
 }
@@ -160,21 +159,6 @@ export async function generateResponseStream(
     onChunk, onAgentEvent,
   );
   if (cacheKey && cacheable) writeAnswerCache(cacheKey, text);
-  return text;
-}
-
-export async function generateResponseAgentic(
-  model: UnitModel,
-  userName: string,
-  history: Message[],
-  userInput: string,
-  onChunk: (text: string) => void,
-  onAgentEvent?: (event: AgentEvent) => void,
-): Promise<string> {
-  const { text } = await ask(
-    { model, userName, history, userInput, agentic: true, think: THINK_OVERRIDE ?? undefined },
-    onChunk, onAgentEvent,
-  );
   return text;
 }
 
