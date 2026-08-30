@@ -1,4 +1,17 @@
 import { deps } from './deps';
+
+// Provenance for the eval harness: what reached the model, by header fields only.
+function noteChunks(kind: string, docs: Array<{ content: string; score?: number }>): void {
+  const meta = deps().meta;
+  if (!meta.chunks) meta.chunks = [];
+  for (const d of docs) {
+    const field = (k: string) => d.content.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim() ?? '';
+    meta.chunks.push({
+      kind, model: field('Model'), kategori: field('Kategori'), section: field('Section').slice(0, 120),
+      ...(typeof d.score === 'number' ? { score: Number(d.score.toFixed(3)) } : {}),
+    });
+  }
+}
 import { UNIT_MODELS } from './types';
 
 const sb = () => deps().supabase as any;
@@ -59,7 +72,7 @@ function isFaultCode(query: string): boolean {
 
 const PARTS_KEYWORDS_RE = /\b(part\s*number|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
 
-const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft)\b/i;
+const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|oli|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft|roller|idler|sprocket|track|link|shoe|tooth|teeth|adapter|cutting\s*edge|undercarriage|bucket)\b/i;
 
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
@@ -534,6 +547,7 @@ export async function searchTechnicalManualMulti(
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
+  noteChunks('tm', top);
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
@@ -578,6 +592,7 @@ export async function searchEngineManual(
   const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
   console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
     effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);
+  noteChunks('em', top);
   return {
     content: top.map(t => t.content).join('\n\n---\n\n'),
     hasResults: top.length > 0,
@@ -672,6 +687,7 @@ export async function searchServiceIntervalParts(
   }
 
   const all = [...cpmData, ...promoData];
+  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity })));
   return {
     content: all.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
@@ -867,6 +883,7 @@ export async function searchPartsCatalog(
   console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
     cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
     partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
+  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity })));
 
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),

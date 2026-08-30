@@ -555,6 +555,8 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       model: orch.MODEL,
       cacheable: deps.meta.cacheable === true,
       full: answer,
+      // Evaluation harness only: which chunks reached the model.
+      ...(b.debug === true ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),
     });
   } catch (err) {
     const kuota = err && err.message === 'KUOTA_PENUH';

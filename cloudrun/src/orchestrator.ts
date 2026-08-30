@@ -643,7 +643,8 @@ Maaf aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshoot
 Apa ada yang bisa aku bantu cek?`;
 }
 
-const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
+// Yanmar codes carry hex letters (ENG:0001D-02, ENG:0006E-00) — allowed only behind a letter prefix and only with a digit inside, so words like "cafe" never match.
+const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
 const RAG_LABEL = {
   manual: 'DATA MANUAL TERSEDIA',
@@ -672,9 +673,9 @@ function streamCanned(text: string, onChunk: (text: string) => void): string {
   return text;
 }
 
-const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/i;
+const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/i;
 
-function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
+export function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
   const looksLike    = new RegExp(`^${FAULT_CODE_PATTERN.source}$`, 'i').test(trimmed);
   const embeddedCode = !looksLike
     ? trimmed.match(EMBEDDED_FAULT_CODE_RE)?.[1]?.trim()

@@ -13,7 +13,11 @@ export interface Deps {
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
-  meta: { cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean };
+  meta: {
+    cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean;
+    /** Provenance of what reached the model — filled by rag.ts, surfaced only with `debug:true`. */
+    chunks?: Array<{ kind: string; model: string; kategori: string; section: string; score?: number }>;
+  };
   /** Epoch ms; retries must not start past it. */
   deadlineAt?: number;
 }
