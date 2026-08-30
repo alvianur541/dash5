@@ -32,6 +32,38 @@ const UPSTREAM_TIMEOUT_MS = 35_000;
 // One retry only: retrying a full quota just deepens it.
 const UPSTREAM_429_BACKOFF_MS = [1_500];
 const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
+
+const REQUEST_DEADLINE_MS = Number(process.env.REQUEST_DEADLINE_MS) || 75_000;
+const IMAGE_MAX_BYTES     = 8 * 1024 * 1024;
+const IMAGE_MIME_ALLOWED  = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif']);
+const IMAGE_MAGIC = {
+  'image/jpeg': [[0xFF, 0xD8, 0xFF]],
+  'image/png':  [[0x89, 0x50, 0x4E, 0x47]],
+  'image/webp': [[0x52, 0x49, 0x46, 0x46]],
+  'image/heic': [], 'image/heif': [],
+};
+// Client MIME is untrusted — check the first bytes of the decoded payload.
+function imageMagicMatches(mime, base64) {
+  const sigs = IMAGE_MAGIC[mime];
+  if (!sigs || sigs.length === 0) return true;
+  const head = Buffer.from(base64.slice(0, 16), 'base64');
+  return sigs.some(sig => sig.every((byte, i) => head[i] === byte));
+}
+
+const crypto = require('crypto');
+function logAskTelemetry({ requestId, unit, userId, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok, error }) {
+  const m = deps.meta || {};
+  console.info(JSON.stringify({
+    evt: 'ask', rid: requestId, ok, error: error || null,
+    user: userId ? crypto.createHash('sha256').update(String(userId)).digest('hex').slice(0, 12) : null,
+    unit, route: m.route || null, label: m.label || null, confidence: m.confidence || null,
+    degraded: m.degraded === true, cacheable: m.cacheable === true,
+    image: images.length > 0, history: history.length, chars: userInput.length,
+    ttft_ms: ttft, total_ms: Date.now() - tMulai, deadline_hit: deadlineHit,
+    in: deps.usage.input, out: deps.usage.output, thinking: deps.usage.thinking, cached: deps.usage.cached,
+    calls: deps.usage.calls, model: orch.MODEL,
+  }));
+}
 const SUPABASE_URL      = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 
@@ -425,14 +457,24 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const userName = typeof b.userName === 'string' ? b.userName.slice(0, 80) : 'Teknisi';
   const history  = Array.isArray(b.history) ? b.history.slice(-40) : [];
   const think    = ['low', 'medium', 'high'].includes(b.think) ? b.think : null;
-  const images   = Array.isArray(b.attachments)
-    ? b.attachments.filter(a => a && typeof a.mimeType === 'string' && typeof a.data === 'string').slice(0, 1)
-    : [];
+  const rawImages = Array.isArray(b.attachments) ? b.attachments.slice(0, 1) : [];
+  const images = [];
+  for (const a of rawImages) {
+    if (!a || typeof a.mimeType !== 'string' || typeof a.data !== 'string') continue;
+    const mime = a.mimeType.split(';')[0].trim().toLowerCase();
+    if (!IMAGE_MIME_ALLOWED.has(mime)) return res.status(415).json({ error: `Format gambar tidak didukung: ${mime}` });
+    if (!/^[A-Za-z0-9+/=\s]+$/.test(a.data)) return res.status(400).json({ error: 'Data gambar bukan base64' });
+    const decodedBytes = Math.floor(a.data.replace(/\s/g, '').length * 3 / 4);
+    if (decodedBytes > IMAGE_MAX_BYTES) return res.status(413).json({ error: `Gambar terlalu besar (${Math.round(decodedBytes / 1048576)} MB, maks ${IMAGE_MAX_BYTES / 1048576} MB)` });
+    if (!imageMagicMatches(mime, a.data)) return res.status(415).json({ error: 'Isi gambar tidak cocok dengan formatnya' });
+    images.push({ mimeType: mime, data: a.data });
+  }
 
   const userInput = typeof b.userInput === 'string' ? b.userInput : '';
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }
+  const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -442,6 +484,10 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   // res, NOT req — req 'close' fires when the body is read, aborting everything.
   const ctrl = new AbortController();
   res.on('close', () => { if (!res.writableFinished) ctrl.abort(); });
+  // One request-wide deadline: every Vertex call and every retry inherits ctrl, so nothing outlives it.
+  const deadlineAt = Date.now() + REQUEST_DEADLINE_MS;
+  let deadlineHit = false;
+  const deadlineTimer = setTimeout(() => { deadlineHit = true; ctrl.abort(); }, REQUEST_DEADLINE_MS);
 
   const supabase = new PostgrestClient(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1`, {
     headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.authToken}` },
@@ -452,6 +498,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     thinkOverride: think,
     usage: orch.newUsage(),
     meta: {},
+    deadlineAt,
     embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
     rerank: async (query, documents, topN) => {
       try {
@@ -502,6 +549,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',
       ttft, Date.now() - tMulai, deps.usage.input, deps.usage.output,
       deps.usage.thinking, deps.usage.calls);
+    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: true });
     sseWrite(res, 'meta', {
       usage: deps.usage,
       model: orch.MODEL,
@@ -509,17 +557,24 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       full: answer,
     });
   } catch (err) {
-    console.error('/v1/ask error:', (err && err.stack) || err);
-    sseWrite(res, 'error', { message: err && err.message === 'KUOTA_PENUH' ? 'KUOTA_PENUH' : 'Gagal memproses pertanyaan.' });
+    const kuota = err && err.message === 'KUOTA_PENUH';
+    console.error('/v1/ask error:', deadlineHit ? `deadline ${REQUEST_DEADLINE_MS}ms terlewati` : (err && err.stack) || err);
+    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: false, error: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'DEADLINE' : String(err && err.message) });
+    sseWrite(res, 'error', { message: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'Waktu proses habis — coba kirim ulang pertanyaanmu.' : 'Gagal memproses pertanyaan.' });
   } finally {
+    clearTimeout(deadlineTimer);
     if (!res.writableEnded) { sseWrite(res, 'done', {}); res.end(); }
   }
 });
 
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-  console.log(`Dash⁵ proxy :${PORT}`);
-  getAccessToken()
-    .then(() => console.log('[boot] kredensial GCP siap'))
-    .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));
-});
+if (require.main === module) {
+  const PORT = process.env.PORT || 8080;
+  app.listen(PORT, () => {
+    console.log(`Dash⁵ proxy :${PORT}`);
+    getAccessToken()
+      .then(() => console.log('[boot] kredensial GCP siap'))
+      .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));
+  });
+}
+
+module.exports = { imageMagicMatches, IMAGE_MIME_ALLOWED, IMAGE_MAX_BYTES, REQUEST_DEADLINE_MS };

@@ -13,7 +13,9 @@ export interface Deps {
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
-  meta: { cacheable?: boolean };
+  meta: { cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean };
+  /** Epoch ms; retries must not start past it. */
+  deadlineAt?: number;
 }
 
 export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string }

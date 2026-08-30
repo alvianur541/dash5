@@ -367,6 +367,12 @@ export const STREAM_CUT_NOTE =
 export const STREAM_HALT_NOTE =
   '\n\n> ⚠️ Jawaban terhenti sebelum selesai. Kirim ulang pertanyaanmu, atau ubah sedikit kalimatnya.';
 
+// A retry needs a few seconds of runway; past this, fail fast instead.
+function pastDeadline(): boolean {
+  const at = deps().deadlineAt;
+  return typeof at === 'number' && Date.now() > at - 5_000;
+}
+
 // Short answer that stops mid-sentence = model halted, never cache it.
 function looksComplete(text: string): boolean {
   const t = text.trim();
@@ -447,7 +453,7 @@ export async function callProxyStream(
       console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
       fullText += STREAM_CUT_NOTE;
       onChunk(STREAM_CUT_NOTE);
-    } else if (attempt < MAX_ATTEMPT) {
+    } else if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
       await new Promise(r => setTimeout(r, attempt * 900));
       retryNeeded = true;
@@ -456,13 +462,13 @@ export async function callProxyStream(
     }
   }
 
-  if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT) {
+  if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
     await new Promise(r => setTimeout(r, attempt * 900));
     continue;
   }
   // Stream closed cleanly without the usage stamp = upstream dropped, not done (26 Aug: 5 chars; 30 Aug: 169 chars).
-  if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT) {
+  if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
     if (fullText) onChunk('\n\n');
     await new Promise(r => setTimeout(r, attempt * 900));
@@ -470,7 +476,7 @@ export async function callProxyStream(
   }
   // Model halted (SAFETY/RECITATION/OTHER): the stream closes cleanly WITH a usage stamp, so the guards above miss it.
   if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
-    if (attempt < MAX_ATTEMPT) {
+    if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
       if (fullText) onChunk('\n\n');
       await new Promise(r => setTimeout(r, attempt * 900));
@@ -1098,6 +1104,10 @@ export async function generateResponseStream(
     : '';
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
+  deps().meta.route      = routeResult.type === 'google_search' ? `google_${routeResult.mode}` : routeResult.type;
+  deps().meta.label      = routeResult.type === 'rag_found' ? routeResult.dataLabel : undefined;
+  deps().meta.confidence = ragConfidence;
+  deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const thinkingLevel: ThinkingLevel = 'low';
   const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
@@ -1157,6 +1167,7 @@ export async function generateResponse(
 
   if (attachments && attachments.length > 0) {
     emit({ type: 'thinking', message: 'Membaca foto…' });
+    deps().meta.route = 'image';
     const imageParts = attachments
       .filter(a => a?.mimeType && a?.data)
       .map(toInlineData);
