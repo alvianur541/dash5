@@ -16,7 +16,7 @@ export interface Deps {
   meta: { cacheable?: boolean };
 }
 
-export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean }
+export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string }
 export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 
 export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number }

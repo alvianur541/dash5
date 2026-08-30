@@ -408,7 +408,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
         }
         const parts = (cand && cand.content && cand.content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
-        onChunk({ text, usageMetadata: json.usageMetadata, live: true });
+        onChunk({ text, usageMetadata: json.usageMetadata, live: true, finishReason: cand && cand.finishReason });
       }
     }
   } finally {

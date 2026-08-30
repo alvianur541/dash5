@@ -364,6 +364,14 @@ const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
 
 export const STREAM_CUT_NOTE =
   '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
+export const STREAM_HALT_NOTE =
+  '\n\n> ⚠️ Jawaban terhenti sebelum selesai. Kirim ulang pertanyaanmu, atau ubah sedikit kalimatnya.';
+
+// Short answer that stops mid-sentence = model halted, never cache it.
+function looksComplete(text: string): boolean {
+  const t = text.trim();
+  return t.length >= 300 || /[.!?…:)\]`|*_]$/.test(t);
+}
 
 export async function callProxyStream(
   body: VRequest,
@@ -390,6 +398,7 @@ export async function callProxyStream(
   let upstreamError: string | null = null;
   let retryNeeded = false;
   let quotaFull = false;
+  let finishReason: string | null = null;
 
   const ctrl = new AbortController();
   const hardTimer = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
@@ -414,6 +423,7 @@ export async function callProxyStream(
       // Thinking chunks prove liveness.
       if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
       if (c.usageMetadata) usageBox.last = c.usageMetadata;
+      if (c.finishReason) finishReason = c.finishReason;
       if (c.text) {
         firstTokenSeen = true;
         fullText += c.text; onChunk(c.text);
@@ -458,6 +468,18 @@ export async function callProxyStream(
     if (fullText) onChunk('\n\n');
     await new Promise(r => setTimeout(r, attempt * 900));
     continue;
+  }
+  // Model halted (SAFETY/RECITATION/OTHER): the stream closes cleanly WITH a usage stamp, so the guards above miss it.
+  if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
+    if (attempt < MAX_ATTEMPT) {
+      console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
+      if (fullText) onChunk('\n\n');
+      await new Promise(r => setTimeout(r, attempt * 900));
+      continue;
+    }
+    console.warn('[stream] finishReason=%s tetap setelah %d percobaan — beri catatan', finishReason, attempt);
+    fullText += STREAM_HALT_NOTE;
+    onChunk(STREAM_HALT_NOTE);
   }
 
   if (retryNeeded) continue;
@@ -1106,8 +1128,12 @@ export async function generateResponseStream(
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
-  if (routeResult.type === 'rag_found' && fullText && !fullText.includes(STREAM_CUT_NOTE.trim())) {
+  if (routeResult.type === 'rag_found' && fullText
+      && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
+      && looksComplete(fullText)) {
     deps().meta.cacheable = true;
+  } else if (routeResult.type === 'rag_found' && fullText) {
+    console.warn('[cache] jawaban tidak di-cache (%d huruf, tampak tidak utuh)', fullText.trim().length);
   }
 
   if (ragContent && fullText) verifyGrounding(fullText, ragContent);
