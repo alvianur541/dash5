@@ -353,12 +353,29 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
   const t0 = Date.now();
 
   try {
-    // Plain fetch, not vertexFetch — its 8s stall guard would kill long recordings.
-    const { url, headers } = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
-    const upstream = await fetch(url, {
-      method: 'POST',
-      headers,
-      body: JSON.stringify({
+    // Dedicated transcribe models (gemini-*-transcribe) live only on the AI Studio
+    // (generativelanguage) API, reachable with GEMINI_API_KEY — the same key path as embeddings.
+    // Everything else keeps going through Vertex via resolveUpstream.
+    const isStudioTranscribe = /transcribe/.test(TRANSCRIBE_MODEL);
+    let url, headers, bodyObj;
+    if (isStudioTranscribe) {
+      if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY env var not set' });
+      url = `https://generativelanguage.googleapis.com/v1beta/models/${TRANSCRIBE_MODEL}:generateContent`;
+      headers = { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY };
+      bodyObj = {
+        contents: [{
+          role: 'user',
+          parts: [
+            { inline_data: { mime_type: cleanMimeType, data: audio } },
+            { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
+          ],
+        }],
+        generationConfig: { maxOutputTokens: 1024 },
+      };
+    } else {
+      const up = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
+      url = up.url; headers = up.headers;
+      bodyObj = {
         contents: [{
           role: 'user',
           parts: [
@@ -371,7 +388,13 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
           // 3.x rejects 'minimal'; 2.5 uses thinkingBudget instead.
           ...(TRANSCRIBE_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
         },
-      }),
+      };
+    }
+    // Plain fetch, not vertexFetch — its 8s stall guard would kill long recordings.
+    const upstream = await fetch(url, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(bodyObj),
     });
     if (!upstream.ok) {
       const err = await upstream.json();
