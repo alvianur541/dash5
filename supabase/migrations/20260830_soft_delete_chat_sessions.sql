@@ -11,6 +11,10 @@ create index if not exists chat_sessions_active_idx
 -- Tutup pintu hapus permanen dari klien (anon key + JWT tidak bisa DELETE lagi).
 drop policy if exists allow_delete on public.chat_sessions;
 
+-- Cegah pemindahan kepemilikan baris saat UPDATE (WITH CHECK menutup celah).
+alter policy allow_update on public.chat_sessions
+  with check ((auth.uid())::text = (user_id)::text);
+
 -- Verifikasi:
 --   select count(*) filter (where deleted_at is null) as aktif,
 --          count(*) filter (where deleted_at is not null) as dihapus
