@@ -310,21 +310,22 @@ async function fetchAuthUser(token) {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+const TRANSCRIBE_MODEL = process.env.TRANSCRIBE_MODEL || 'gemini-3.7-flash';
+
 app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
   const { audio, mimeType } = req.body;
   if (!audio || !mimeType) return res.status(400).json({ error: 'audio and mimeType are required' });
 
   const cleanMimeType = mimeType.split(';')[0].trim();
-  const url =
-    `https://${LOCATION}-aiplatform.googleapis.com/v1/projects/${PROJECT_ID}` +
-    `/locations/${LOCATION}/publishers/google/models/gemini-2.5-flash:generateContent`;
+  const t0 = Date.now();
 
   try {
-    const gToken = await getAccessToken();
-const upstream = await fetch(url, {
+    // Plain fetch, not vertexFetch — its 8s stall guard would kill long recordings.
+    const { url, headers } = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
+    const upstream = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${gToken}` },
+      headers,
       body: JSON.stringify({
         contents: [{
           role: 'user',
@@ -333,7 +334,11 @@ const upstream = await fetch(url, {
             { text: 'Transcribe this audio accurately. Use the same language as spoken. Return only the transcribed text, no explanations or punctuation notes.' },
           ],
         }],
-        generationConfig: { maxOutputTokens: 1024 },
+        generationConfig: {
+          maxOutputTokens: 1024,
+          // 3.x rejects 'minimal'; 2.5 uses thinkingBudget instead.
+          ...(TRANSCRIBE_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
+        },
       }),
     });
     if (!upstream.ok) {
@@ -344,6 +349,7 @@ const upstream = await fetch(url, {
     const data = await upstream.json();
     const parts = data.candidates?.[0]?.content?.parts ?? [];
     const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('').trim();
+    console.info('[transcribe] model=%s ms=%d chars=%d', TRANSCRIBE_MODEL, Date.now() - t0, text.length);
     return res.json({ text });
   } catch (err) {
     console.error('Transcribe error:', err);
