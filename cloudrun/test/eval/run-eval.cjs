@@ -53,7 +53,10 @@ function score(c, r) {
   const models = new Set(chunks.map(k => k.model).filter(Boolean));
   const catHit = c.expected_categories.length === 0 ? null : c.expected_categories.some(k => kats.has(k));
   const litHit = c.expect_literal ? chunks.some(k => (k.section || '').includes(c.expect_literal)) || (r.text || '').includes(c.expect_literal) : null;
-  const leak   = [...models].some(m => m !== c.model);
+  // Sebagian chunk sengaja ditag untuk beberapa unit sekaligus (mis. engine Yanmar yang sama):
+  // "ZX48U-5A / ZX65USB-5A". Itu bukan kebocoran selama unit yang diminta ada di daftar.
+  const leak   = [...models].some(m =>
+    !String(m).split('/').map(x => x.trim()).includes(c.model));
   const routeOk = c.expected_route === 'any' ? null
     : c.expected_route === 'casual' ? (chunks.length === 0)
     : route === c.expected_route;
