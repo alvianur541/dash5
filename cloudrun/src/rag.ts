@@ -1,11 +1,25 @@
 import { deps } from './deps';
 
 // Provenance for the eval harness: what reached the model, by header fields only.
-function noteChunks(kind: string, docs: Array<{ content: string; score?: number }>): void {
+// Provenance only: remembers the metadata row each chunk text came from, because the
+// TM pipeline passes plain strings through rerank/MMR and drops the metadata on the way.
+const metaByContent = new Map<string, any>();
+function rememberMeta(content?: string, metadata?: any): void {
+  if (content && metadata && !metaByContent.has(content)) metaByContent.set(content, metadata);
+}
+
+function noteChunks(
+  kind: string,
+  docs: Array<{ content: string; score?: number; metadata?: any }>,
+): void {
   const meta = deps().meta;
   if (!meta.chunks) meta.chunks = [];
   for (const d of docs) {
-    const field = (k: string) => d.content.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim() ?? '';
+    // Prefer the row's metadata; not every chunk repeats its header inside the text.
+    const md = d.metadata || metaByContent.get(d.content) || {};
+    const field = (k: string) =>
+      (md[k] ?? '').toString().trim() ||
+      (d.content.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim() ?? '');
     meta.chunks.push({
       kind, model: field('Model'), kategori: field('Kategori'), section: field('Section').slice(0, 120),
       ...(typeof d.score === 'number' ? { score: Number(d.score.toFixed(3)) } : {}),
@@ -454,12 +468,12 @@ export async function searchTechnicalManualMulti(
   if (kwSettled.status === 'fulfilled') {
     for (const r of kwSettled.value) {
       if (r.status !== 'fulfilled') continue;
-      for (const d of r.value.data ?? []) if (d?.content) kwDocs.push(d.content);
+      for (const d of r.value.data ?? []) if (d?.content) { rememberMeta(d.content, (d as any).metadata); kwDocs.push(d.content); }
     }
   }
 
   if (vectorSettled.status === 'fulfilled') {
-    for (const d of vectorSettled.value) if (d.content) vecDocs.push(d.content);
+    for (const d of vectorSettled.value) if (d.content) { rememberMeta(d.content, (d as any).metadata); vecDocs.push(d.content); }
   }
 
   const seen  = new Set<string>();
@@ -484,7 +498,7 @@ export async function searchTechnicalManualMulti(
     for (const r of fbResults) {
       if (r.status !== 'fulfilled') continue;
       for (const d of r.value.data ?? []) {
-        if (d?.content && !seen.has(d.content)) { seen.add(d.content); allDocs.push(d.content); usedLooseFallback = true; }
+        if (d?.content && !seen.has(d.content)) { rememberMeta(d.content, (d as any).metadata); seen.add(d.content); allDocs.push(d.content); usedLooseFallback = true; }
       }
     }
   }
@@ -687,7 +701,7 @@ export async function searchServiceIntervalParts(
   }
 
   const all = [...cpmData, ...promoData];
-  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity })));
+  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity, metadata: (d as any).metadata })));
   return {
     content: all.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
@@ -883,7 +897,7 @@ export async function searchPartsCatalog(
   console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
     cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
     partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
-  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity })));
+  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity, metadata: (d as any).metadata })));
 
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),
