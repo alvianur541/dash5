@@ -356,12 +356,9 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
     const isStudioTranscribe = /transcribe/.test(TRANSCRIBE_MODEL);
     let text;
     if (isStudioTranscribe) {
-      // Dedicated transcribe models use the Interactions API (not generateContent):
-      // upload audio via the Files API, then reference it by URI. generateContent returns
-      // an empty STOP for these models. GEMINI_API_KEY reaches AI Studio, same as embeddings.
+      // Model transcribe khusus: wajib Files API + Interactions API (generateContent balik kosong).
       if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY env var not set' });
       const bytes = Buffer.from(audio, 'base64');
-      // 1) Resumable upload: start -> get upload URL.
       const startRes = await fetch(
         `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${GEMINI_API_KEY}`,
         { method: 'POST',
@@ -376,7 +373,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
         });
       const uploadUrl = startRes.headers.get('x-goog-upload-url');
       if (!uploadUrl) { console.error('Transcribe: no upload URL', startRes.status); return res.status(502).json({ error: 'Transcribe gagal (upload init).' }); }
-      // 2) Upload the bytes and finalize.
       const upRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Length': String(bytes.length), 'X-Goog-Upload-Offset': '0', 'X-Goog-Upload-Command': 'upload, finalize' },
@@ -385,7 +381,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
       const upJson = await upRes.json();
       const fileUri = upJson?.file?.uri;
       if (!fileUri) { console.error('Transcribe: no file URI', JSON.stringify(upJson)); return res.status(502).json({ error: 'Transcribe gagal (upload).' }); }
-      // 3) Interactions API. Optional custom_vocabulary via env for heavy-equipment jargon.
       const vocab = (process.env.TRANSCRIBE_VOCAB || '').split(',').map(v => v.trim()).filter(Boolean);
       const interBody = {
         model: TRANSCRIBE_MODEL,
@@ -399,7 +394,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
       });
       if (!inter.ok) { const e = await inter.json().catch(() => ({})); console.error('Transcribe error:', JSON.stringify(e)); return res.status(inter.status).json(e); }
       const data = await inter.json();
-      // Text lives in steps[].content[].text (output_text is not populated for transcription).
       text = (data.output_text || '').trim();
       if (!text && Array.isArray(data.steps)) {
         text = data.steps
@@ -409,8 +403,7 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
           .map(c => c.text).join('').trim();
       }
     } else {
-      // Vertex path (multimodal LLM used as transcriber): plain fetch, not vertexFetch —
-      // its 8s stall guard would kill long recordings.
+      // Vertex: plain fetch, bukan vertexFetch (stall guard 8s memotong rekaman panjang).
       const { url, headers } = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
       const upstream = await fetch(url, {
         method: 'POST',

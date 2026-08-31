@@ -1,8 +1,6 @@
 import { deps } from './deps';
 
-// Provenance for the eval harness: what reached the model, by header fields only.
-// Provenance only: remembers the metadata row each chunk text came from, because the
-// TM pipeline passes plain strings through rerank/MMR and drops the metadata on the way.
+// Provenance untuk eval: chunk mana yang sampai ke model.
 const metaByContent = new Map<string, any>();
 function rememberMeta(content?: string, metadata?: any): void {
   if (content && metadata && !metaByContent.has(content)) metaByContent.set(content, metadata);
@@ -15,7 +13,6 @@ function noteChunks(
   const meta = deps().meta;
   if (!meta.chunks) meta.chunks = [];
   for (const d of docs) {
-    // Prefer the row's metadata; not every chunk repeats its header inside the text.
     const md = d.metadata || metaByContent.get(d.content) || {};
     const field = (k: string) =>
       (md[k] ?? '').toString().trim() ||

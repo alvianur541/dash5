@@ -25,7 +25,6 @@ async function ask(c) {
   if (!res.ok) return { error: `HTTP ${res.status}`, ms: Date.now() - t0 };
   const raw = await res.text();
   let meta = null, text = '', ttft = 0, errorMsg = null;
-  // Backend mengirim SSE bergaya `data: {"ev": "..."} ` (bukan `event: <nama>`).
   for (const block of raw.split('\n\n')) {
     const line = block.match(/^data: (.*)$/m)?.[1];
     if (!line) continue;
@@ -44,7 +43,6 @@ async function ask(c) {
   return { meta, text: meta?.full || text, ttft, ms: Date.now() - t0, error: errorMsg };
 }
 
-// Penolakan bisa datang dalam beberapa bahasa/gaya kalimat; semuanya dihitung abstain.
 const ABSTAIN_RE = /tidak (tercantum|tersedia|ada) di (data|database|manual)|tidak ditemukan|di luar (cakupan|lingkup|topik)|out of (topic|my lane|scope)|not (in|within) my (lane|scope)|can'?t help with (that|this)|ngga bisa (jawab|bantu)|nggak bisa (jawab|bantu)|maaf,? (aku|saya) (ngga|nggak|tidak)|対応範囲外|konfirmasi (langsung )?ke (tim )?(sales|parts counter|technical support)/i;
 
 function score(c, r) {
@@ -54,8 +52,7 @@ function score(c, r) {
   const models = new Set(chunks.map(k => k.model).filter(Boolean));
   const catHit = c.expected_categories.length === 0 ? null : c.expected_categories.some(k => kats.has(k));
   const litHit = c.expect_literal ? chunks.some(k => (k.section || '').includes(c.expect_literal)) || (r.text || '').includes(c.expect_literal) : null;
-  // Sebagian chunk sengaja ditag untuk beberapa unit sekaligus (mis. engine Yanmar yang sama):
-  // "ZX48U-5A / ZX65USB-5A". Itu bukan kebocoran selama unit yang diminta ada di daftar.
+  // Tag "ZX48U-5A / ZX65USB-5A" = sengaja dipakai 2 unit, bukan kebocoran.
   const leak   = [...models].some(m =>
     !String(m).split('/').map(x => x.trim()).includes(c.model));
   const routeOk = c.expected_route === 'any' ? null
