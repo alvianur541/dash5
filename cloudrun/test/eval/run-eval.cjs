@@ -44,7 +44,8 @@ async function ask(c) {
   return { meta, text: meta?.full || text, ttft, ms: Date.now() - t0, error: errorMsg };
 }
 
-const ABSTAIN_RE = /tidak (tercantum|tersedia|ada) di (data|database|manual)|tidak ditemukan|di luar (cakupan|lingkup)|out of topic|konfirmasi (langsung )?ke (tim )?(sales|parts counter|technical support)/i;
+// Penolakan bisa datang dalam beberapa bahasa/gaya kalimat; semuanya dihitung abstain.
+const ABSTAIN_RE = /tidak (tercantum|tersedia|ada) di (data|database|manual)|tidak ditemukan|di luar (cakupan|lingkup|topik)|out of (topic|my lane|scope)|not (in|within) my (lane|scope)|can'?t help with (that|this)|ngga bisa (jawab|bantu)|nggak bisa (jawab|bantu)|maaf,? (aku|saya) (ngga|nggak|tidak)|対応範囲外|konfirmasi (langsung )?ke (tim )?(sales|parts counter|technical support)/i;
 
 function score(c, r) {
   const chunks = r.meta?.debug?.chunks || [];
