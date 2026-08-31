@@ -25,14 +25,21 @@ async function ask(c) {
   if (!res.ok) return { error: `HTTP ${res.status}`, ms: Date.now() - t0 };
   const raw = await res.text();
   let meta = null, text = '', ttft = 0, errorMsg = null;
+  // Backend mengirim SSE bergaya `data: {"ev": "..."} ` (bukan `event: <nama>`).
   for (const block of raw.split('\n\n')) {
-    const ev = block.match(/^event: (\w+)/m)?.[1];
-    const data = block.match(/^data: (.*)$/m)?.[1];
-    if (!ev || !data) continue;
-    let json; try { json = JSON.parse(data); } catch { continue; }
-    if (ev === 'text') { if (!ttft) ttft = Date.now() - t0; text += json.text || ''; }
-    if (ev === 'meta') meta = json;
-    if (ev === 'error') errorMsg = json.message;
+    const line = block.match(/^data: (.*)$/m)?.[1];
+    if (!line) continue;
+    let obj;
+    try { obj = JSON.parse(line); } catch { continue; }
+    const ev = obj.ev || obj.event?.type;
+    if (ev === 'text' && typeof obj.text === 'string') {
+      if (!ttft) ttft = Date.now() - t0;
+      text += obj.text;
+    } else if (ev === 'error') {
+      errorMsg = obj.message || obj.error || 'error';
+    } else if (obj.debug || obj.usage || obj.full !== undefined) {
+      meta = obj;                       // frame terakhir membawa debug/usage
+    }
   }
   return { meta, text: meta?.full || text, ttft, ms: Date.now() - t0, error: errorMsg };
 }
