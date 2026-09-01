@@ -51,10 +51,10 @@ function imageMagicMatches(mime, base64) {
 }
 
 const crypto = require('crypto');
-function logAskTelemetry({ requestId, unit, userId, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok, error, origin }) {
+function logAskTelemetry({ requestId, unit, userId, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok, error }) {
   const m = deps.meta || {};
   console.info(JSON.stringify({
-    evt: 'ask', rid: requestId, ok, error: error || null, origin: origin || null,
+    evt: 'ask', rid: requestId, ok, error: error || null,
     user: userId ? crypto.createHash('sha256').update(String(userId)).digest('hex').slice(0, 12) : null,
     unit, route: m.route || null, label: m.label || null, confidence: m.confidence || null,
     degraded: m.degraded === true, cacheable: m.cacheable === true,
@@ -599,7 +599,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',
       ttft, Date.now() - tMulai, deps.usage.input, deps.usage.output,
       deps.usage.thinking, deps.usage.calls);
-    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: true, origin: req.headers.origin || req.headers.referer || null });
+    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: true });
     sseWrite(res, 'meta', {
       usage: deps.usage,
       model: orch.MODEL,
@@ -611,7 +611,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   } catch (err) {
     const kuota = err && err.message === 'KUOTA_PENUH';
     console.error('/v1/ask error:', deadlineHit ? `deadline ${REQUEST_DEADLINE_MS}ms terlewati` : (err && err.stack) || err);
-    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: false, error: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'DEADLINE' : String(err && err.message), origin: req.headers.origin || req.headers.referer || null });
+    logAskTelemetry({ requestId, unit, userId: req.authUser && req.authUser.id, userInput, images, history, deps, ttft, tMulai, deadlineHit, ok: false, error: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'DEADLINE' : String(err && err.message) });
     sseWrite(res, 'error', { message: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'Waktu proses habis — coba kirim ulang pertanyaanmu.' : 'Gagal memproses pertanyaan.' });
   } finally {
     clearTimeout(deadlineTimer);
