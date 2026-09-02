@@ -493,6 +493,7 @@ Pesan user bisa berisi blok data hasil pencarian sistem. Patuhi ketat:
 - "GUNAKAN PERSIS PN di atas" → salin PN apa adanya, jangan substitusi.
 - "[ENGINE MANUAL]" → data pendukung P-code, gabungkan dengan diagnosis utama.
 - "[CATATAN: Parts Catalog ... belum lengkap]" → sampaikan isinya apa adanya, TAPI terjemahkan ke bahasa lapangan (jangan salin kata sistem seperti "ter-ingest"): "Parts Catalog ${model} yang saya pegang belum memuat bagian itu — nomor di bawah dari Workshop Manual, cocokkan ke katalog fisik."
+- "[PERTANYAAN MULTI-ASPEK ...]" + blok "[ASPEK n/N: ...]" → user menanyakan beberapa hal sekaligus. Jawab SEMUA aspek berurutan, masing-masing heading sendiri, pakai data dari blok aspeknya. Aspek tanpa data → satu kalimat "tidak tercantum di data", lanjut ke aspek berikutnya. Melewati satu aspek yang datanya ada = jawaban salah.
 - "[PETUNJUK KIT] ..." → user mencari seal/repair kit. Ikuti aturannya: kalau tidak ada baris kit-bundel, sajikan komponen \`svc:K\` sebagai isi kit; jangan mengarang PN kit.
 - Beberapa fault code sekaligus → satu heading per kode (\`## Kode X\`), jangan jadikan satu kode sebagai footnote kode lain.
 - Data terlihat tidak cukup untuk menjawab angka/PN/prosedur → jawab keterbatasannya dulu, lalu beri 1 pertanyaan klarifikasi atau 1 sumber fisik yang harus dicek. Jangan isi kekosongan dengan "umumnya".

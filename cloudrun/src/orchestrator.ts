@@ -932,6 +932,44 @@ function isMultiAspectQuery(q: string): boolean {
   return words >= 5 || attrCount >= 2;
 }
 
+const ASPECT_PARTS_RE = /\b(part\s*number|partnumber|part\s*no|pn|price|harga|promo|catalog|kit|reman)\b/i;
+const ASPECT_SPEC_RE  = /\b(weight|berat|diameter|length|panjang|width|lebar|height|tinggi|thickness|tebal|pressure|tekanan|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|stroke|bore|procedure|prosedur|removal|installation|disassembly|assembly|adjust\w*|interval|slow|leak|bocor|lambat|overheat|noise|vibrat\w*|not\s+working|troubleshoot\w*|symptom|spec\w*)\b/i;
+
+type AspectKind = 'parts' | 'spec' | 'both';
+
+export function classifyAspect(sub: string): AspectKind {
+  const p = ASPECT_PARTS_RE.test(sub);
+  const t = ASPECT_SPEC_RE.test(sub);
+  if (p && !t) return 'parts';
+  if (t && !p) return 'spec';
+  return 'both';
+}
+
+const ATTR_EN: Record<string, string> = {
+  berat: 'weight', weight: 'weight', diameter: 'diameter', panjang: 'length', length: 'length',
+  lebar: 'width', width: 'width', tinggi: 'height', height: 'height', tebal: 'thickness', thickness: 'thickness',
+  tekanan: 'pressure', pressure: 'pressure', torque: 'torque', torsi: 'torque', clearance: 'clearance',
+  displacement: 'displacement', kapasitas: 'capacity', capacity: 'capacity', rpm: 'rpm', spec: 'specification',
+  ukuran: 'size', size: 'size', harga: 'price', price: 'price', promo: 'promo price',
+  pn: 'part number', partnumber: 'part number', 'part number': 'part number',
+};
+
+export function fallbackDecompose(query: string): string[] {
+  const attrs = [...new Set((query.match(MULTI_ATTR_RE) ?? []).map(a => {
+    const k = a.toLowerCase().replace(/\s+/g, ' ').replace(/(nya|ny|s)$/, '');
+    return ATTR_EN[k] ?? ATTR_EN[a.toLowerCase()] ?? k;
+  }))];
+  if (attrs.length < 2) return [];
+  const subject = query
+    .replace(MULTI_ATTR_RE, ' ')
+    .replace(MULTI_CONNECTOR_RE, ' ')
+    .replace(/\b(nya|itu|ini|berapa|apa|tolong|cari\w*|carikan|minta|mau|dong|sih|ya)\b/gi, ' ')
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .replace(/\s+/g, ' ').trim();
+  if (!subject) return [];
+  return attrs.slice(0, 4).map(a => `${subject} ${a}`);
+}
+
 async function decomposeAspects(query: string, history: Message[] = []): Promise<string[]> {
   const SYS = `Break a heavy-equipment query into independent English sub-queries — ONE information-need each. Translate Indonesian → English technical terms. NO model names. Output ONLY a JSON array of strings (max 4), no markdown, no preamble.
 
@@ -946,6 +984,7 @@ Examples:
 "carikan part number valve swing motor sama cara pasangnya" -> ["swing valve part number","swing device removal installation procedure"]
 "PN seal kit swing trus langkah bongkarnya" -> ["swing motor seal kit part number","swing motor disassembly procedure"]
 "berat swing motor dan partnumber rotor" -> ["swing motor weight","rotor part number"]
+"part number travel device dan beratnya" -> ["travel device part number","travel device weight"]
 "diameter pin bucket dan part numbernya" -> ["bucket pin diameter","bucket pin part number"]
 "harga filter oli sekalian interval gantinya" -> ["engine oil filter price","engine oil filter replacement interval"]
 "swing lambat dan pump bocor" -> ["swing motor slow response","hydraulic pump leak"]
@@ -959,6 +998,7 @@ Single information-need → return ONE item:
     .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
     .join('\n');
   const userMsg = ctx ? `Conversation so far:\n${ctx}\n\nDecompose this latest query: "${query}"` : `Decompose: "${query}"`;
+  let subs: string[] = [];
   try {
     const res = await callProxy({
       contents: [{ role: 'user', parts: [{ text: userMsg }] }],
@@ -967,14 +1007,23 @@ Single information-need → return ONE item:
     }, false, INTENT_MODEL);
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
     const m = raw.match(/\[[\s\S]*?\]/);
-    if (!m) return [];
-    const arr = JSON.parse(m[0]);
-    return Array.isArray(arr) ? arr.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 4) : [];
+    const arr = m ? JSON.parse(m[0]) : [];
+    subs = Array.isArray(arr) ? arr.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 4) : [];
   } catch (err) {
     console.warn('[decomposeAspects] failed:', (err as Error)?.message);
-    return [];
   }
+  if (subs.length < 2) {
+    const fb = fallbackDecompose(query);
+    if (fb.length >= 2) {
+      console.info('[decomposeAspects] model → %d, fallback regex → %d: %s', subs.length, fb.length, fb.join(' | '));
+      subs = fb;
+    }
+  }
+  return subs;
 }
+
+const MULTI_ASPECT_TM_TOP    = 3;
+const MULTI_ASPECT_PARTS_TOP = 6;
 
 async function resolveMultiAspectQuery(
   trimmed: string,
@@ -988,37 +1037,56 @@ async function resolveMultiAspectQuery(
 
   emit({ type: 'thinking', message: `Mencari ${subs.length} aspek paralel…` });
 
-  const tasks = subs.flatMap(sub => {
+  const empty = { content: '', hasResults: false } as const;
+  const perAspect = await Promise.all(subs.map(async sub => {
+    const kind  = classifyAspect(sub);
     const clean = stripModelFromQuery(sub);
-    return [
-      (async () => {
+    const wantTm    = kind !== 'parts';
+    const wantParts = kind !== 'spec';
+    const [tm, parts] = await Promise.all([
+      wantTm ? (async () => {
         emit({ type: 'tool_call', tool: 'search_technical_manual' });
-        const r = await searchTechnicalManualMulti([clean], model).catch(() => ({ content: '', hasResults: false }));
+        const r = await searchTechnicalManualMulti([clean], model, MULTI_ASPECT_TM_TOP).catch(() => empty);
         emit({ type: 'tool_result', tool: 'search_technical_manual', found: r.hasResults });
         return r;
-      })(),
-      (async () => {
+      })() : Promise.resolve(empty),
+      wantParts ? (async () => {
         emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-        const r = await searchPartsCatalog(sub, model, true).catch(() => ({ content: '', hasResults: false }));
+        const r = await searchPartsCatalog(sub, model, true, MULTI_ASPECT_PARTS_TOP).catch(() => empty);
         emit({ type: 'tool_result', tool: 'search_parts_catalog', found: r.hasResults });
         return r;
-      })(),
-    ];
-  });
-
-  const results = await Promise.all(tasks);
+      })() : Promise.resolve(empty),
+    ]);
+    return { sub, kind, tm, parts };
+  }));
 
   const seen = new Set<string>();
   const blocks: string[] = [];
-  for (const r of results) {
-    if (r.hasResults && r.content && !seen.has(r.content)) {
-      seen.add(r.content);
-      blocks.push(r.content);
+  const missing: string[] = [];
+  perAspect.forEach((a, idx) => {
+    const parts: string[] = [];
+    for (const r of [a.tm, a.parts]) {
+      if (!r.hasResults || !r.content) continue;
+      const fresh = r.content.split('\n\n---\n\n').filter(c => c.trim() && !seen.has(c));
+      fresh.forEach(c => seen.add(c));
+      if (fresh.length) parts.push(fresh.join('\n\n---\n\n'));
     }
-  }
+    if (parts.length === 0) { missing.push(a.sub); return; }
+    blocks.push(`[ASPEK ${idx + 1}/${subs.length}: ${a.sub}]\n${parts.join('\n\n---\n\n')}`);
+  });
+
+  console.info('[multi-aspect] %d aspek (%s) → %d blok, %d chunk unik, %d tanpa data',
+    subs.length, perAspect.map(a => a.kind).join('/'), blocks.length, seen.size, missing.length);
 
   if (blocks.length === 0) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
-  return { type: 'rag_found', content: blocks.join('\n\n---\n\n'), dataLabel: RAG_LABEL.manual };
+
+  const directive =
+    `[PERTANYAAN MULTI-ASPEK — ${subs.length} aspek: ${subs.map((s, i) => `(${i + 1}) ${s}`).join(', ')}]\n` +
+    `WAJIB jawab SEMUA aspek, satu bagian per aspek dengan heading sendiri, urutan sesuai nomor. ` +
+    `Data tiap aspek ada di blok [ASPEK n/${subs.length}]. Aspek yang datanya ada tapi kamu lewati = jawaban tidak lengkap.` +
+    (missing.length ? ` Untuk aspek berikut TIDAK ADA data: ${missing.join('; ')} — nyatakan singkat tidak tercantum di data ${model}, jangan dikarang.` : '');
+
+  return { type: 'rag_found', content: `${directive}\n\n${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual };
 }
 
 const GROUNDING_SPEC_RE = /(\d+(?:[.,]\d+)?)\s*(N·?m|Nm|MPa|kPa|bar|psi|kgf?|mm|cm|rpm|°C|kW|HP|L\b|Ω|μm)\b/gi;

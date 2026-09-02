@@ -680,6 +680,7 @@ export async function searchPartsCatalog(
   query: string,
   model: string,
   skipExpand = false,
+  maxTop = 12,
 ): Promise<RAGResult> {
   if (!sb()) return { content: '', hasResults: false };
 
@@ -815,7 +816,7 @@ export async function searchPartsCatalog(
     }
   }
 
-  const top = merged.slice(0, 12);
+  const top = merged.slice(0, maxTop);
   if (top.length === 0) return { content: '', hasResults: false };
 
   const partsConfidence: 'high' | 'medium' | 'low' = partNum
