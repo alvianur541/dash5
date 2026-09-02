@@ -14,11 +14,6 @@ const GREETINGS = {
   malam:   ['Selamat malam, tetap siaga', 'Malam, tetap semangat', 'Siap membantu malam ini'],
 } as const;
 
-const EMOJI = {
-  monday: '💪', friday: '🎯', weekend: '🛠️',
-  pagi: '🌅', siang: '☀️', sore: '🌇', malam: '🌙',
-} as const;
-
 type Slot = keyof typeof GREETINGS;
 
 export function getGreeting({ name, date = new Date() }: GreetingContext): string {
@@ -36,5 +31,5 @@ export function getGreeting({ name, date = new Date() }: GreetingContext): strin
 
   const variants = GREETINGS[slot];
   const text = variants[date.getDate() % variants.length];
-  return `${text}, ${name} ${EMOJI[slot]}`;
+  return `${text}, ${name}`;
 }

@@ -2,7 +2,8 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw, History, ChevronRight } from 'lucide-react';
+import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
 import { saveFeedback } from '../services/supabase';
@@ -23,6 +24,65 @@ export function stripLatex(text: string): string {
     .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
 
+const CUT_NOTE_RE = /\n\n> ⚠️ Jawaban ter(?:putus|henti)[^\n]*/;
+const PN_CODE_RE = /^[A-Z0-9][A-Z0-9.\/-]{4,}$/i;
+
+function hasPartNoHeader(children: ReactNode): boolean {
+  let text = '';
+  const walk = (n: unknown, depth: number): void => {
+    if (depth > 6 || text.length > 200) return;
+    if (typeof n === 'string') { text += n + ' '; return; }
+    if (Array.isArray(n)) { n.forEach(c => walk(c, depth + 1)); return; }
+    if (n && typeof n === 'object' && 'props' in n) walk((n as { props: { children?: unknown } }).props.children, depth + 1);
+  };
+  walk(children, 0);
+  const head = text.slice(0, 200);
+  const cols = head.trim().split(/\s{2,}|\s(?=\S)/).length;
+  return cols >= 4 && /\b(part\s*no|pn|part\s*number)\b/i.test(head);
+}
+
+function CodeSpan({ children }: { children?: ReactNode }) {
+  const toast = useToast();
+  const text = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : String(children ?? '');
+  const copyable = PN_CODE_RE.test(text.trim()) && /\d/.test(text);
+  if (!copyable) return <code>{children}</code>;
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(text.trim()); toast('Disalin: ' + text.trim()); try { navigator.vibrate?.(6); } catch { } } catch { }
+  };
+  return <code className="code-copy" onClick={copy} role="button" tabIndex={0} title="Ketuk untuk salin">{children}</code>;
+}
+
+function ShareButton({ text }: { text: string }) {
+  if (typeof navigator === 'undefined' || !navigator.share) return null;
+  const share = async () => {
+    try { await navigator.share({ text: text.replace(CUT_NOTE_RE, '') }); } catch { }
+  };
+  return (
+    <button onClick={share} className="action-btn" title="Bagikan" aria-label="Bagikan">
+      <Share2 size={14} />
+    </button>
+  );
+}
+
+export function SessionSkeleton() {
+  return (
+    <div className="chat-messages-list" aria-busy="true">
+      <div className="msg-user"><div className="skeleton skeleton-user" /></div>
+      <div className="skeleton-ai">
+        <div className="skeleton" style={{ width: '92%' }} />
+        <div className="skeleton" style={{ width: '78%' }} />
+        <div className="skeleton" style={{ width: '85%' }} />
+        <div className="skeleton" style={{ width: '40%' }} />
+      </div>
+      <div className="msg-user"><div className="skeleton skeleton-user" style={{ width: 120 }} /></div>
+      <div className="skeleton-ai">
+        <div className="skeleton" style={{ width: '88%' }} />
+        <div className="skeleton" style={{ width: '60%' }} />
+      </div>
+    </div>
+  );
+}
+
 interface ChatWindowProps {
   messages: Message[];
   isTyping: boolean;
@@ -33,6 +93,9 @@ interface ChatWindowProps {
   agentEvents?: AgentEvent[];
   pocketIds?: Set<string>;
   onTogglePocket?: (messageId: string) => void;
+  onResend?: (text: string) => void;
+  loadingSession?: boolean;
+  lastSession?: { title: string; model: string; when: string; open: () => void };
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -148,7 +211,7 @@ const CopyButton = memo(function CopyButton({ text }: { text: string }) {
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onExpandTable, inPocket = false, onTogglePocket,
+  message, feedback, onFeedback, isStreaming = false, onExpandTable, inPocket = false, onTogglePocket, resendText, onResend,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
@@ -157,7 +220,10 @@ const MessageItem = memo(function MessageItem({
   onExpandTable?: (table: ReactNode) => void;
   inPocket?: boolean;
   onTogglePocket?: (messageId: string) => void;
+  resendText?: string;
+  onResend?: (text: string) => void;
 }) {
+  const isCut = message.role === 'assistant' && CUT_NOTE_RE.test(message.content);
 
   if (message.role === 'user') {
     return (
@@ -193,7 +259,7 @@ const MessageItem = memo(function MessageItem({
                 components={{
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
-                      <div className="markdown-table-wrap"><table>{children}</table></div>
+                      <div className="markdown-table-wrap"><table className={hasPartNoHeader(children) ? 'sticky-pn' : undefined}>{children}</table></div>
                       {onExpandTable && !isStreaming && (
                         <button
                           className="table-expand-btn"
@@ -206,6 +272,7 @@ const MessageItem = memo(function MessageItem({
                       )}
                     </div>
                   ),
+                  code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
                   strong: ({ children }) => {
                     const text = typeof children === 'string'
                       ? children
@@ -231,8 +298,16 @@ const MessageItem = memo(function MessageItem({
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
 
+          {isCut && !isStreaming && onResend && resendText && (
+            <button className="resend-btn" onClick={() => onResend(resendText)}>
+              <RotateCcw size={14} />
+              <span>Kirim ulang pertanyaan</span>
+            </button>
+          )}
+
           <div className="ai-actions">
             <CopyButton text={message.content} />
+            <ShareButton text={message.content} />
             <span className="ai-actions-gap" />
             <button className="action-btn" title="Respons bagus"
               onClick={() => onFeedback(message.id, 'up')}>
@@ -260,7 +335,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket,
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false, lastSession,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -318,7 +393,7 @@ export function ChatWindow({
     }
   }, [messages, isTyping]);
 
-  const isWelcome = messages.length === 0 && !isTyping;
+  const isWelcome = messages.length === 0 && !isTyping && !loadingSession;
 
   return (
     <div
@@ -373,30 +448,45 @@ export function ChatWindow({
                     gap: '9px',
                   }}
                 >
-                  {hasHistory ? (
-                    <>
-                      <span>Mau lanjut obrolan sebelumnya, atau ada yang baru di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
-                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
-                    </>
-                  ) : (
-                    <>
-                      <span>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
-                      <span>Ketik aja langsung di bawah — fault code, part number, atau spec teknis.</span>
-                    </>
-                  )}
+                  <span>Ada yang mau dicek di unit <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong>?</span>
+                  <span>Ketik langsung di bawah — fault code, part number, atau spec teknis.</span>
                 </m.div>
               </div>
+
+              {hasHistory && lastSession && (
+                <m.button
+                  className="last-session-card"
+                  onClick={lastSession.open}
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.2 }}
+                >
+                  <History size={15} className="shrink-0 text-[var(--accent-main)]" />
+                  <span className="flex flex-col min-w-0 flex-1 text-left">
+                    <span className="last-session-label">Lanjutkan terakhir</span>
+                    <span className="last-session-title">{lastSession.title}</span>
+                    <span className="last-session-meta">{lastSession.model} · {lastSession.when}</span>
+                  </span>
+                  <ChevronRight size={15} className="shrink-0 text-[var(--text-muted)]" />
+                </m.button>
+              )}
 
             </div>
           </m.div>
         )}
       </AnimatePresence>
 
+      {loadingSession && messages.length === 0 && <SessionSkeleton />}
+
       {messages.length > 0 && (
         <div className="chat-messages-list">
           {messages.map((message, idx) => {
             const isLast = idx === messages.length - 1;
             const showCursor = isStreaming && isLast && message.role === 'assistant';
+            let prevUser = '';
+            if (message.role === 'assistant') {
+              for (let i = idx - 1; i >= 0; i--) if (messages[i].role === 'user') { prevUser = messages[i].content; break; }
+            }
             return (
               <MessageItem
                 key={message.id}
@@ -407,6 +497,8 @@ export function ChatWindow({
                 onExpandTable={openTable}
                 inPocket={pocketIds?.has(message.id) ?? false}
                 onTogglePocket={onTogglePocket}
+                resendText={isLast ? prevUser : undefined}
+                onResend={onResend}
               />
             );
           })}

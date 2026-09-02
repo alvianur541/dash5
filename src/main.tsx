@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import App from './App.tsx';
 import { AuthProvider } from './components/AuthProvider';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 import { LazyMotion, domAnimation } from 'motion/react';
 import './index.css';
 
@@ -17,7 +18,9 @@ createRoot(document.getElementById('root')!).render(
     <ErrorBoundary>
       <LazyMotion features={domAnimation}>
         <AuthProvider>
-          <App />
+          <ToastProvider>
+            <App />
+          </ToastProvider>
         </AuthProvider>
       </LazyMotion>
     </ErrorBoundary>

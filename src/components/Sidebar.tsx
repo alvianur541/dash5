@@ -2,7 +2,8 @@
 import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, Loader2, CheckCircle2, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
+import { relativeTime } from '../lib/relativeTime';
 import { supabase } from '../services/supabase';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
@@ -44,6 +45,7 @@ interface SidebarProps {
   pocketItems?: PocketItem[];
   onOpenPocketItem?: (item: PocketItem) => void;
   onDeletePocketItem?: (id: string) => void;
+  isOffline?: boolean;
 }
 
 export function Sidebar({
@@ -62,7 +64,12 @@ export function Sidebar({
   pocketItems = [],
   onOpenPocketItem,
   onDeletePocketItem,
+  isOffline = false,
 }: SidebarProps) {
+  const [historyQuery, setHistoryQuery] = useState('');
+  const filteredSessions = historyQuery.trim()
+    ? sessions.filter(s => (s.title + ' ' + s.model).toLowerCase().includes(historyQuery.trim().toLowerCase()))
+    : sessions;
   const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showChangePw, setShowChangePw] = useState(false);
@@ -72,7 +79,7 @@ export function Sidebar({
   const [pwError, setPwError] = useState<string | null>(null);
   const [pwSuccess, setPwSuccess] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
   const [expandedType, setExpandedType] = useState<string>(() => {
     const group = MODEL_GROUPS.find(g => g.models.includes(selectedModel));
     return group?.type ?? MODEL_GROUPS[0].type;
@@ -255,6 +262,7 @@ export function Sidebar({
               >
                 <p className="flex items-center gap-1.5 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
                   <Bookmark size={11} /> Bookmark
+                  {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
                 </p>
                 <ChevronRight
                   size={11}
@@ -335,13 +343,31 @@ export function Sidebar({
                   transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
+                  {sessions.length > 4 && (
+                    <div className="history-search">
+                      <Search size={12} className="shrink-0 text-[var(--text-muted)]" />
+                      <input
+                        value={historyQuery}
+                        onChange={e => setHistoryQuery(e.target.value)}
+                        placeholder="Cari riwayat…"
+                        aria-label="Cari riwayat"
+                      />
+                      {historyQuery && (
+                        <button onClick={() => setHistoryQuery('')} aria-label="Hapus pencarian" className="text-[var(--text-muted)]"><X size={12} /></button>
+                      )}
+                    </div>
+                  )}
                   {sessions.length === 0 ? (
                     <div className="px-2 py-3 text-center">
                       <p className="text-[11px] text-[var(--text-muted)]">Belum ada history chat</p>
                     </div>
+                  ) : filteredSessions.length === 0 ? (
+                    <div className="px-2 py-3 text-center">
+                      <p className="text-[11px] text-[var(--text-muted)]">Tidak ada yang cocok</p>
+                    </div>
                   ) : (
                     <div className="space-y-0.5">
-                      {sessions.map((session) => {
+                      {filteredSessions.map((session) => {
                         const isActive = session.id === currentSessionId;
                         return (
                           <div
@@ -360,10 +386,17 @@ export function Sidebar({
                               )}
                             >
                               <span className={cn(
-                                "w-1.5 h-1.5 rounded-full shrink-0",
+                                "w-1.5 h-1.5 rounded-full shrink-0 self-start mt-[7px]",
                                 isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
                               )} />
-                              <span className="block truncate">{session.title}</span>
+                              <span className="flex flex-col min-w-0 gap-[3px]">
+                                <span className="block truncate">{session.title}</span>
+                                <span className="history-meta">
+                                  <span className="history-model">{session.model}</span>
+                                  <span>·</span>
+                                  <span>{relativeTime(session.updatedAt)}</span>
+                                </span>
+                              </span>
                             </button>
                             <AnimatePresence>
                               {(isMobile || hoveredSession === session.id) && (

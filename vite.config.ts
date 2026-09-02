@@ -33,15 +33,6 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             },
             {
-              urlPattern: /^https:\/\/fonts\.(googleapis|gstatic)\.com\/.*/i,
-              handler: 'CacheFirst',
-              options: {
-                cacheName: 'google-fonts',
-                expiration: { maxEntries: 20, maxAgeSeconds: 60 * 60 * 24 * 365 },
-                cacheableResponse: { statuses: [0, 200] },
-              },
-            },
-            {
               urlPattern: /^https:\/\/dash5\.my\.id\/(?!api\/|v1\/|rest\/|auth\/|storage\/|realtime\/).*/i,
               handler: 'StaleWhileRevalidate',
               options: {

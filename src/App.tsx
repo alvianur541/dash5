@@ -2,6 +2,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
+import { relativeTime } from './lib/relativeTime';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { UnitModel, Message, SessionMeta } from './types';
@@ -36,12 +37,17 @@ export default function App() {
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [modelSheet, setModelSheet] = useState(false);
   const [switchConfirm, setSwitchConfirm] = useState<UnitModel | null>(null);
+  const [loadingSession, setLoadingSession] = useState(false);
+  const [queued, setQueued] = useState<{ content: string; attachments?: File[] } | null>(null);
+  const queuedRef = useRef<{ content: string; attachments?: File[] } | null>(null);
+  useEffect(() => { queuedRef.current = queued; }, [queued]);
 
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const mountedRef = useRef(true);
   const abortStreamRef = useRef<AbortController | null>(null);
   const mainRef = useRef<HTMLElement | null>(null);
+  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const inputBarRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -52,7 +58,9 @@ export default function App() {
 
   const [theme, setTheme] = useState<'dark' | 'light'>(() => {
     const stored = localStorage.getItem('dash-theme');
-    return stored === 'light' || stored === 'dark' ? stored : 'dark';
+    if (stored === 'light' || stored === 'dark') return stored;
+    const h = new Date().getHours();
+    return h >= 6 && h < 17 ? 'light' : 'dark';
   });
 
   useEffect(() => {
@@ -211,20 +219,29 @@ export default function App() {
     if (!user) return;
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
-    let session = await fetchSessionData(id, user.uid);
-    if (!mountedRef.current) return;
-    if (!session) {
-      session = loadSessionData(user.uid, id);
+    const local = loadSessionData(user.uid, id);
+    if (local) {
+      setMessages(local.messages);
+      setSelectedModel(local.model);
+      setCurrentSessionId(id);
+      sessionIdRef.current = id;
+      setError(null);
+    } else {
+      setMessages([]);
+      setCurrentSessionId(id);
+      sessionIdRef.current = id;
+      setLoadingSession(true);
     }
-    if (!session) {
+    const remote = await fetchSessionData(id, user.uid);
+    if (!mountedRef.current || sessionIdRef.current !== id) return;
+    setLoadingSession(false);
+    if (remote) {
+      setMessages(remote.messages);
+      setSelectedModel(remote.model);
+      setError(null);
+    } else if (!local) {
       setError('Gagal memuat percakapan ini. Coba lagi.');
-      return;
     }
-    setMessages(session.messages);
-    setSelectedModel(session.model);
-    setCurrentSessionId(id);
-    sessionIdRef.current = id;
-    setError(null);
   }, [user]);
 
   const handleDeleteSession = useCallback((id: string) => {
@@ -278,6 +295,7 @@ export default function App() {
 
   const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
     if (!user) return;
+    if (!navigator.onLine) { setQueued({ content, attachments }); return; }
 
     let sessionId = sessionIdRef.current;
     if (!sessionId) {
@@ -392,6 +410,7 @@ export default function App() {
         if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs }];
         return prev.map(m => m.id === assistantId ? { ...m, content: fullText } : m);
       });
+      try { navigator.vibrate?.([12, 40, 12]); } catch { }
       persist(fullText);
     } catch (err: any) {
       if ((err as Error)?.name === 'AbortError' || (err as Error)?.message?.includes('abort')) return;
@@ -407,6 +426,15 @@ export default function App() {
       setIsStreaming(false);
     }
   }, [user, selectedModel]);
+
+  useEffect(() => {
+    if (!isOnline || !queued) return;
+    const q = queued;
+    setQueued(null);
+    handleSendMessage(q.content, q.attachments);
+  }, [isOnline, queued, handleSendMessage]);
+
+  const lastSession = sessionList[0];
 
   if (authLoading) {
     return (
@@ -439,9 +467,24 @@ export default function App() {
         pocketItems={pocket}
         onOpenPocketItem={setPocketView}
         onDeletePocketItem={deletePocketItem}
+        isOffline={!isOnline}
       />
 
-      <main ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
+      <main
+        ref={mainRef}
+        className="flex-1 flex flex-col overflow-hidden min-w-0 relative"
+        onTouchStart={e => { const t = e.touches[0]; swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() }; }}
+        onTouchEnd={e => {
+          const s = swipeRef.current; swipeRef.current = null;
+          if (!s || window.innerWidth >= 768) return;
+          const t = e.changedTouches[0];
+          const dx = t.clientX - s.x, dy = t.clientY - s.y;
+          if (Date.now() - s.t > 600 || Math.abs(dy) > 60 || Math.abs(dx) < 70) return;
+          if (dx > 0 && s.x < 40 && isSidebarCollapsed) setIsSidebarCollapsed(false);
+          if (dx < 0 && !isSidebarCollapsed) setIsSidebarCollapsed(true);
+        }}
+      >
+        {(isTyping || isStreaming) && <div className="stream-progress" aria-hidden="true" />}
 
         <AnimatePresence>
           {isSidebarCollapsed && (
@@ -542,6 +585,28 @@ export default function App() {
         </AnimatePresence>
 
         <AnimatePresence>
+          {queued && !isOnline && (
+            <m.div
+              key="queued-banner"
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="shrink-0 overflow-hidden"
+            >
+              <div className="flex items-center gap-3 px-4 py-2.5 border-b"
+                style={{ background: 'rgba(245,158,11,0.08)', borderColor: 'rgba(245,158,11,0.15)' }}>
+                <Loader2 size={13} className="shrink-0 text-amber-400 animate-spin" />
+                <span className="text-[12.5px] flex-1 text-amber-300">
+                  <strong className="font-semibold">Menunggu sinyal</strong>
+                  {' '}— pertanyaan akan terkirim otomatis saat online.
+                </span>
+                <button onClick={() => setQueued(null)} className="text-[11px] underline text-amber-300/80">Batal</button>
+              </div>
+            </m.div>
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {error && (
             <m.div
               initial={{ opacity: 0, height: 0 }}
@@ -568,6 +633,9 @@ export default function App() {
           pocketIds={pocketIds}
           onTogglePocket={togglePocket}
           agentEvents={agentEvents}
+          onResend={text => handleSendMessage(text)}
+          loadingSession={loadingSession}
+          lastSession={messages.length === 0 && !currentSessionId && lastSession ? { title: lastSession.title, model: lastSession.model, when: relativeTime(lastSession.updatedAt), open: () => handleSelectSession(lastSession.id) } : undefined}
         />
 
         <div ref={inputBarRef} className="input-bar-float">
@@ -681,16 +749,16 @@ export default function App() {
               <p className="text-[var(--text-muted)] text-[13px] mb-5">Seluruh riwayat hilang dari akunmu dan tidak bisa dikembalikan. Data percakapan tetap disimpan Hexindo untuk peningkatan layanan.</p>
               <div className="flex gap-2.5">
                 <button
-                  onClick={() => setDeleteAllConfirm(false)}
-                  className="flex-1 h-9 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button
                   onClick={confirmDeleteAll}
-                  className="flex-1 h-9 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-semibold transition-colors"
+                  className="flex-1 h-10 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-semibold transition-colors"
                 >
                   Hapus Semua
+                </button>
+                <button
+                  onClick={() => setDeleteAllConfirm(false)}
+                  className="flex-1 h-10 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
+                >
+                  Batal
                 </button>
               </div>
             </m.div>
@@ -719,16 +787,16 @@ export default function App() {
               <p className="text-[var(--text-muted)] text-[13px] mb-5">Percakapan hilang dari riwayatmu dan tidak bisa dikembalikan. Datanya tetap disimpan Hexindo untuk peningkatan layanan.</p>
               <div className="flex gap-2.5">
                 <button
-                  onClick={() => setDeleteConfirmId(null)}
-                  className="flex-1 h-9 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
-                >
-                  Batal
-                </button>
-                <button
                   onClick={confirmDelete}
-                  className="flex-1 h-9 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-semibold transition-colors"
+                  className="flex-1 h-10 rounded-xl bg-red-500 hover:bg-red-600 text-white text-[13px] font-semibold transition-colors"
                 >
                   Hapus
+                </button>
+                <button
+                  onClick={() => setDeleteConfirmId(null)}
+                  className="flex-1 h-10 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
+                >
+                  Batal
                 </button>
               </div>
             </m.div>
