@@ -39,7 +39,6 @@ export interface VRequest {
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
-// 3.7 rejects 'minimal' with HTTP 400.
 const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
 
 function clampThinking(body: VRequest, model: string): VRequest {
@@ -113,7 +112,6 @@ export function getText(parts: Part[]): string {
 function cleanOptimizedQuery(query: string): string {
   if (!query.trim()) return query;
 
-  // Never map units.
   const SYNONYMS: Record<string, string> = {
     mass: 'weight', berat: 'weight',
     spec: 'specification', specs: 'specification',
@@ -367,13 +365,11 @@ export const STREAM_CUT_NOTE =
 export const STREAM_HALT_NOTE =
   '\n\n> ⚠️ Jawaban terhenti sebelum selesai. Kirim ulang pertanyaanmu, atau ubah sedikit kalimatnya.';
 
-// A retry needs a few seconds of runway; past this, fail fast instead.
 function pastDeadline(): boolean {
   const at = deps().deadlineAt;
   return typeof at === 'number' && Date.now() > at - 5_000;
 }
 
-// Short answer that stops mid-sentence = model halted, never cache it.
 function looksComplete(text: string): boolean {
   const t = text.trim();
   return t.length >= 300 || /[.!?…:)\]`|*_]$/.test(t);
@@ -384,9 +380,7 @@ export async function callProxyStream(
   onChunk: (text: string) => void,
   enableGoogleSearch = false,
 ): Promise<string> {
-// Anti-runaway only. Never lower to 40s.
   const STREAM_TIMEOUT_MS = 90_000;
-// 45s, not 25 — Vertex stalls ~24s at connection level.
   const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 
   const MAX_ATTEMPT = 3;
@@ -426,7 +420,6 @@ export async function callProxyStream(
         ctrl.abort();
         return;
       }
-      // Thinking chunks prove liveness.
       if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
       if (c.usageMetadata) usageBox.last = c.usageMetadata;
       if (c.finishReason) finishReason = c.finishReason;
@@ -467,14 +460,12 @@ export async function callProxyStream(
     await new Promise(r => setTimeout(r, attempt * 900));
     continue;
   }
-  // Stream closed cleanly without the usage stamp = upstream dropped, not done (26 Aug: 5 chars; 30 Aug: 169 chars).
   if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
     if (fullText) onChunk('\n\n');
     await new Promise(r => setTimeout(r, attempt * 900));
     continue;
   }
-  // Model halted (SAFETY/RECITATION/OTHER): the stream closes cleanly WITH a usage stamp, so the guards above miss it.
   if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
     if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
@@ -643,7 +634,6 @@ Maaf aku ngga bisa jawab, kamu bisa tanya seputar unit, fault code, troubleshoot
 Apa ada yang bisa aku bantu cek?`;
 }
 
-// Yanmar codes carry hex letters (ENG:0001D-02, ENG:0006E-00) — allowed only behind a letter prefix and only with a digit inside, so words like "cafe" never match.
 const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
 
 const RAG_LABEL = {
@@ -750,7 +740,6 @@ export function extractCpmPartsForInterval(content: string, hours: number): stri
     if (fields.length < qtyCount + 2) continue;
     if (!/^\d+$/.test(fields[0])) continue;
 
-    // Anchor on the qty tail — a long description can collide into the PN column and merge fields.
     const vals = fields.slice(fields.length - qtyCount);
     if (!vals.every(v => v === '-' || /^\d+$/.test(v))) continue;
     const head = fields.slice(1, fields.length - qtyCount);
@@ -829,7 +818,6 @@ async function resolvePartsQuery(
           .map(l => l.trim())
           .filter(l => /Promo:\s*Rp/i.test(l) && cpmPNs.some(pn => l.includes(pn))),
       )];
-      // Start dates differ per section (filter 15 Jul, oil/coolant 5 Aug) — list every unique one.
       const periodeLines = [...new Set(
         Array.from(ragResult.content.matchAll(/Periode Promo\s*:[^\n]*/gi), m => m[0].trim()),
       )];
@@ -840,7 +828,6 @@ async function resolvePartsQuery(
         ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[...periodeLines, ...promoLines].join('\n')}`
         : cpmHeader;
     } else {
-      // Slimming failed — cap raw promo payload at pre-fix size (CPM + 5 chunks).
       finalContent = ragResult.content.split('\n\n---\n\n').slice(0, 6).join('\n\n---\n\n');
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
@@ -935,7 +922,6 @@ async function resolveNaturalLanguageQuery(
   };
 }
 
-// "sama" also means IDENTICAL — comparisons excluded.
 const MULTI_CONNECTOR_RE =
   /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\byang\s+)\b(?:sama|ama)\b(?!\s+(?:dengan|persis|kaya|seperti))/i;
 const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
@@ -1125,7 +1111,6 @@ export async function generateResponseStream(
       ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (trimmed || 'Halo');
 
-  // User-turn: system prompt stays byte-identical for cache.
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
   const systemText = isCasual

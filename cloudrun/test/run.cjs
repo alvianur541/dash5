@@ -1,4 +1,3 @@
-// Runs every *.test.cjs in this folder against the freshly built test bundle.
 const fs = require('fs');
 const path = require('path');
 

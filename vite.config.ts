@@ -95,7 +95,6 @@ export default defineConfig(() => {
         output: {
           manualChunks(id) {
             if (!id.includes('/node_modules/')) return;
-            // React first, or its jsx-runtime leaks into whichever chunk claims it.
             if (/\/node_modules\/(react|react-dom|scheduler)\//.test(id)) return 'react-core';
             if (/\/node_modules\/(react-markdown|remark-gfm|rehype-sanitize)\//.test(id)) return 'markdown';
             if (id.includes('/node_modules/motion')) return 'motion';

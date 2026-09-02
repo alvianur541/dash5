@@ -3,7 +3,6 @@ const { detectFaultCodeInQuery, extractPartNumber, isPartsQuery, suite } = requi
 module.exports = async function () {
   const { t, done } = suite('router: fault-code detection & part-number extraction');
 
-  // Real formats per model family (see CLAUDE.md "Format fault code suffix").
   const faultYes = [
     ['11006-2', '11006-2'],                 // ZX200 (1-digit suffix, as stored)
     ['13006-02', '13006-02'],               // ZX200 monitor shows leading zero
@@ -27,7 +26,6 @@ module.exports = async function () {
     'berapa kapasitas oli mesin', 'swing lambat', 'PN YB60000068', 'valve clearance 4tnv88'];
   for (const q of faultNo) t(!detectFaultCodeInQuery(q).isFaultCode, `not a fault code: "${q}"`);
 
-  // Part numbers across catalogs.
   const pnYes = [
     ['PN YB60000068', 'YB60000068'],          // Hitachi body
     ['YNM129150-14200', 'YNM129150-14200'],   // Yanmar engine
@@ -40,8 +38,6 @@ module.exports = async function () {
   for (const q of ['berapa kapasitas oli mesin', 'swing lambat', 'service 2000 jam'])
     t(extractPartNumber(q) === null, `no PN in "${q}"`);
 
-  // Deterministic parts routing only fires on explicit keywords / PN / "harga <komponen>";
-  // phrasing like "cek part seal kit lift cylinder" is left to analyzeIntent on purpose.
   for (const q of ['part number seal dust swing bearing', 'berapa harga roller bawah', 'harga seal kit swing', 'harga promo idler', 'PN YB60000068'])
     t(isPartsQuery(q), `parts query: "${q}"`);
   for (const q of ['swing lambat', 'berapa kapasitas oli mesin', 'cek part seal kit lift cylinder'])

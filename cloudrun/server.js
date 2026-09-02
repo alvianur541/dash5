@@ -5,7 +5,6 @@ const orch = require('./dist/orchestrator.cjs');
 
 const UNIT_MODELS = new Set(orch.UNIT_MODELS);
 
-// Idle pooled connections die silently; drop them after 10s.
 setGlobalDispatcher(new Agent({
   keepAliveTimeout: 10_000,
   keepAliveMaxTimeout: 10_000,
@@ -14,7 +13,6 @@ setGlobalDispatcher(new Agent({
 
 const app = express();
 
-// Global parser MUST skip these, else bigJson never runs and photos 413.
 const BIG_BODY_PATHS = new Set(['/v1/transcribe', '/v1/ask']);
 const smallJson = express.json({ limit: '1mb' });
 const bigJson   = express.json({ limit: '20mb' });
@@ -29,7 +27,6 @@ if (ALLOWED_ORIGINS.length === 0) {
 }
 const VERTEX_API_KEY = process.env.VERTEX_API_KEY;
 const UPSTREAM_TIMEOUT_MS = 35_000;
-// One retry only: retrying a full quota just deepens it.
 const UPSTREAM_429_BACKOFF_MS = [1_500];
 const UPSTREAM_429_RETRIES = UPSTREAM_429_BACKOFF_MS.length;
 
@@ -42,7 +39,6 @@ const IMAGE_MAGIC = {
   'image/webp': [[0x52, 0x49, 0x46, 0x46]],
   'image/heic': [], 'image/heif': [],
 };
-// Client MIME is untrusted — check the first bytes of the decoded payload.
 function imageMagicMatches(mime, base64) {
   const sigs = IMAGE_MAGIC[mime];
   if (!sigs || sigs.length === 0) return true;
@@ -63,7 +59,6 @@ const COHERE_KEYS = [
 
 const COHERE_RERANK_MODEL = process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast';
 
-// Env var replaces this default entirely.
 const ALLOWED_MODELS = new Set(
   (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
@@ -160,7 +155,6 @@ async function resolveUpstream(model, { stream }) {
   };
 }
 
-// 20s, NOT 8 — streaming headers arrive only after thinking finishes.
 const STALL_MS_NONSTREAM     = 8_000;
 const STALL_MS_STREAM_CEPAT  = 10_000;
 const STALL_MS_STREAM_MIKIR  = 30_000;
@@ -242,7 +236,6 @@ async function geminiEmbed(query, taskType = 'RETRIEVAL_QUERY') {
   return values;
 }
 
-// Same model, two doors: AI Studio first, Vertex as fallback.
 async function embedQuery(query, taskType = 'RETRIEVAL_QUERY') {
   if (GEMINI_API_KEY) {
     try {
@@ -342,7 +335,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
     const isStudioTranscribe = /transcribe/.test(TRANSCRIBE_MODEL);
     let text;
     if (isStudioTranscribe) {
-      // Model transcribe khusus: wajib Files API + Interactions API (generateContent balik kosong).
       if (!GEMINI_API_KEY) return res.status(500).json({ error: 'GEMINI_API_KEY env var not set' });
       const bytes = Buffer.from(audio, 'base64');
       const startRes = await fetch(
@@ -389,7 +381,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
           .map(c => c.text).join('').trim();
       }
     } else {
-      // Vertex: plain fetch, bukan vertexFetch (stall guard 8s memotong rekaman panjang).
       const { url, headers } = await resolveUpstream(TRANSCRIBE_MODEL, { stream: false });
       const upstream = await fetch(url, {
         method: 'POST',
@@ -425,7 +416,6 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
   }
 });
 
-// PostgREST direct: supabase-js needs a global WebSocket, absent in Node 20.
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
 const ASK_MODELS = UNIT_MODELS;
@@ -517,10 +507,8 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   res.setHeader('X-Accel-Buffering', 'no');
   res.flushHeaders();
 
-  // res, NOT req — req 'close' fires when the body is read, aborting everything.
   const ctrl = new AbortController();
   res.on('close', () => { if (!res.writableFinished) ctrl.abort(); });
-  // One request-wide deadline: every Vertex call and every retry inherits ctrl, so nothing outlives it.
   const deadlineAt = Date.now() + REQUEST_DEADLINE_MS;
   let deadlineHit = false;
   const deadlineTimer = setTimeout(() => { deadlineHit = true; ctrl.abort(); }, REQUEST_DEADLINE_MS);
@@ -590,7 +578,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       model: orch.MODEL,
       cacheable: deps.meta.cacheable === true,
       full: answer,
-      // Evaluation harness only: which chunks reached the model.
       ...(b.debug === true ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),
     });
   } catch (err) {

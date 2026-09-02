@@ -3,7 +3,6 @@ const bundle = require(path.join(__dirname, '.build', 'entry.cjs'));
 
 const USAGE = { promptTokenCount: 10, candidatesTokenCount: 5 };
 
-// Fake deps: `script[i]` = chunks emitted on the i-th stream call (last one repeats).
 function mockDeps(script, extra = {}) {
   let n = 0;
   const d = {

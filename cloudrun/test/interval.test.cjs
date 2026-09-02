@@ -1,7 +1,5 @@
 const { SERVICE_INTERVAL_RE, extractCpmPartsForInterval, suite } = require('./helpers.cjs');
 
-// Same column layout as the real CPM chunks (qty columns 2+ spaces apart, one long
-// description colliding into the PN column). Values are placeholders, not prices.
 const CPM_FIXTURE = `Section: CPM MAINTENANCE SCHEDULE - TEST
 Model: TEST
 Kategori: CPM

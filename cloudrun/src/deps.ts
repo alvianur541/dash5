@@ -28,7 +28,6 @@ export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal
 export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number }
 export function newUsage(): Usage { return { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }
 
-// Per-request, NOT singleton — one instance serves many technicians.
 const store = new AsyncLocalStorage<Deps>();
 
 export function runWithDeps<T>(d: Deps, fn: () => Promise<T>): Promise<T> {

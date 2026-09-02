@@ -1,6 +1,3 @@
-// Live retrieval evaluation against a running backend (production or local).
-//   DASH5_API=https://dash5.my.id/api DASH5_JWT=<supabase access token> node test/eval/run-eval.cjs [--only FC] [--limit 20]
-// The JWT is a technician login token (app localStorage `sb-*-auth-token` -> access_token). Never commit it.
 const fs = require('fs');
 const path = require('path');
 
@@ -52,7 +49,6 @@ function score(c, r) {
   const models = new Set(chunks.map(k => k.model).filter(Boolean));
   const catHit = c.expected_categories.length === 0 ? null : c.expected_categories.some(k => kats.has(k));
   const litHit = c.expect_literal ? chunks.some(k => (k.section || '').includes(c.expect_literal)) || (r.text || '').includes(c.expect_literal) : null;
-  // Tag "ZX48U-5A / ZX65USB-5A" = sengaja dipakai 2 unit, bukan kebocoran.
   const leak   = [...models].some(m =>
     !String(m).split('/').map(x => x.trim()).includes(c.model));
   const routeOk = c.expected_route === 'any' ? null

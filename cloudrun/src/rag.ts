@@ -1,6 +1,5 @@
 import { deps } from './deps';
 
-// Provenance untuk eval: chunk mana yang sampai ke model.
 const metaByContent = new Map<string, any>();
 function rememberMeta(content?: string, metadata?: any): void {
   if (content && metadata && !metaByContent.has(content)) metaByContent.set(content, metadata);
@@ -198,7 +197,6 @@ function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedD
   return selected.map(s => s.d);
 }
 
-// Derived from UNIT_MODELS.
 const MODEL_NAMES_RE = new RegExp(
   '\\b(' + UNIT_MODELS
     .map(m => m.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+'))
@@ -387,10 +385,8 @@ export async function searchTechnicalManualMulti(
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .filter(w => w.length >= 3 && !STOP_WORDS.has(w));
     if (words.length === 0) return [];
-    // Stem: 'capacity' misses 'Capacities'.
     const stems = words.map(batangKata);
     const bigrams = stems.slice(0, -1).map((w, i) => `${w} ${stems[i + 1]}`);
-    // Full phrase stays whole.
     const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
     const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
     const wantsNumber = wantsNumericAnswer;
@@ -424,7 +420,6 @@ export async function searchTechnicalManualMulti(
     ? stripped
     : primaryQuery;
 
-  // Fault code: literal filter drops anything keyword can't find — embed is pure waste (quota 5/min).
   const vectorPromise: Promise<SearchResult[]> = faultCode
     ? Promise.resolve([])
     : getEmbedding(embeddingQuery).then(async emb => {
@@ -454,7 +449,6 @@ export async function searchTechnicalManualMulti(
   ]);
   const msCari = Date.now() - tMulai;
 
-// Interleave, never keyword-first.
   const kwDocs:  string[] = [];
   const vecDocs: string[] = [];
 
@@ -525,7 +519,6 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
-  // Bounded payload.
   const rerankInput = capRerankPayload(filteredDocs);
   const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
   const tRerank = Date.now();
@@ -674,7 +667,6 @@ export async function searchServiceIntervalParts(
     similarity_threshold: 0.20,
   }) as unknown as Promise<{ data: HybridResult[] | null }>;
 
-  // All sections — caller slims to CPM PN lines, so oil/coolant promos must not lose the embedding race.
   const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
     sb().rpc('match_documents_hybrid', {
       query_text: queryText,
@@ -870,7 +862,6 @@ export async function searchPartsCatalog(
 
   const merged = [...cpmData, ...orderedNonCpm];
 
-  // Literal PN required.
   if (partNum) {
     const pnUpper = partNum.toUpperCase();
     const adaLiteral = merged.some(d =>

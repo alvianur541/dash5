@@ -4,7 +4,6 @@ import { Message, UnitModel } from '../types';
 const supabaseUrl     = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-// Off: an old recovery link would become a passwordless login.
 export const supabase = (supabaseUrl && supabaseAnonKey)
   ? createClient(supabaseUrl, supabaseAnonKey, { auth: { detectSessionInUrl: false } })
   : null;
@@ -89,7 +88,6 @@ export async function fetchSessionData(sessionId: string, userId: string): Promi
   };
 }
 
-// Soft delete: rows stay in Supabase for analysis, hidden from the technician.
 export async function deleteChatSession(id: string, userId: string): Promise<void> {
   if (!supabase) return;
   const { error } = await supabase.from('chat_sessions')

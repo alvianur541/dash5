@@ -20,7 +20,6 @@ const SANITIZE_SCHEMA = {
   protocols: { href: ['http', 'https', 'mailto', 'tel'] },
 };
 
-// Whole markdown stack lives behind one lazy boundary — nothing here may be imported statically.
 export default function Markdown({ children, components }: { children: string; components?: Components }) {
   return (
     <ReactMarkdown
