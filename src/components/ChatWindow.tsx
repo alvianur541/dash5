@@ -268,7 +268,7 @@ const MessageItem = memo(function MessageItem({
                 components={{
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
-                      <div className="markdown-table-wrap"><table className={(c => c ? `sticky-pn sticky-col-${c}` : undefined)(partNoColumn(children))}>{children}</table></div>
+                      <div className="markdown-table-wrap" onScroll={e => e.currentTarget.classList.toggle('scrolled', e.currentTarget.scrollLeft > 2)}><table className={(c => c ? `sticky-pn sticky-col-${c}` : undefined)(partNoColumn(children))}>{children}</table></div>
                       {onExpandTable && !isStreaming && (
                         <button
                           className="table-expand-btn"

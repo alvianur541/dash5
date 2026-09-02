@@ -379,19 +379,15 @@ img {
   transition: background 0.12s;
 }
 
-.markdown-body tbody tr:nth-child(even) {
-  background: rgba(255, 255, 255, 0.02);
-}
-.light-theme .markdown-body tbody tr:nth-child(even) {
-  background: rgba(0, 0, 0, 0.02);
-}
+.markdown-body tbody td { background: var(--bg-app); }
+.markdown-body tbody tr:nth-child(even) td { background: color-mix(in srgb, var(--text-primary) 2.5%, var(--bg-app)); }
 
 .markdown-body tbody tr:last-child {
   border-bottom: none;
 }
 
-.markdown-body tbody tr:hover {
-  background: color-mix(in srgb, var(--accent-main) 3%, var(--bg-card));
+@media (hover: hover) {
+  .markdown-body tbody tr:hover td { background: color-mix(in srgb, var(--accent-main) 4%, var(--bg-app)); }
 }
 
 .markdown-body tbody td {
@@ -974,7 +970,7 @@ img {
 /* ── Tabel layar penuh ─────────────────────────────────────────────────── */
 .table-wrap-outer { position: relative; }
 .table-expand-btn {
-  position: absolute; top: 5px; right: 5px;
+  position: absolute; bottom: 6px; right: 6px;
   width: 30px; height: 30px; border-radius: 8px;
   border: 1px solid var(--border-main);
   background: color-mix(in srgb, var(--bg-app) 85%, transparent);
@@ -1137,14 +1133,18 @@ img {
 .code-copy { cursor: pointer; border-bottom: 1px dashed color-mix(in srgb, var(--accent-main) 55%, transparent); transition: background 0.12s; }
 .code-copy:active { background: color-mix(in srgb, var(--accent-main) 22%, transparent); }
 
+.markdown-table-wrap.scrolled table.sticky-col-1 th:nth-child(1), .markdown-table-wrap.scrolled table.sticky-col-1 td:nth-child(1),
+.markdown-table-wrap.scrolled table.sticky-col-2 th:nth-child(2), .markdown-table-wrap.scrolled table.sticky-col-2 td:nth-child(2),
+.markdown-table-wrap.scrolled table.sticky-col-3 th:nth-child(3), .markdown-table-wrap.scrolled table.sticky-col-3 td:nth-child(3) {
+  box-shadow: inset -1px 0 0 var(--border-main), 6px 0 10px -6px rgba(0,0,0,0.45);
+}
 .markdown-table-wrap table.sticky-col-1 th:nth-child(1), .markdown-table-wrap table.sticky-col-1 td:nth-child(1),
 .markdown-table-wrap table.sticky-col-2 th:nth-child(2), .markdown-table-wrap table.sticky-col-2 td:nth-child(2),
 .markdown-table-wrap table.sticky-col-3 th:nth-child(3), .markdown-table-wrap table.sticky-col-3 td:nth-child(3) {
   position: sticky; left: 0; z-index: 1;
-  background: var(--bg-card);
-  box-shadow: 2px 0 6px -2px rgba(0,0,0,0.35);
+  background: var(--bg-app);
 }
-.markdown-table-wrap table.sticky-pn th { background: var(--bg-card-hover); }
+.markdown-table-wrap table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body table .code-copy { border-bottom: none; }
 
 .app-toast {
