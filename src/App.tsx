@@ -568,7 +568,6 @@ export default function App() {
           pocketIds={pocketIds}
           onTogglePocket={togglePocket}
           agentEvents={agentEvents}
-          onPickExample={q => handleSendMessage(q)}
         />
 
         <div ref={inputBarRef} className="input-bar-float">

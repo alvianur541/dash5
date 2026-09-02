@@ -1103,18 +1103,6 @@ img {
 .input-tool-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .input-tool-btn-rec { color: #f87171; background: rgba(248,113,113,0.12); }
 
-.example-chips {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
-}
-.example-chip {
-  min-height: 40px; padding: 8px 14px; border-radius: 999px;
-  border: 1px solid var(--border-main); background: var(--bg-card);
-  color: var(--text-secondary); font-size: 13px; font-family: var(--font-sans);
-  cursor: pointer; transition: background 0.12s, color 0.12s, transform 0.12s;
-}
-.example-chip:hover { color: var(--text-primary); background: var(--bg-card-hover); }
-.example-chip:active { transform: scale(0.96); }
-
 .model-sheet {
   width: 100%; max-width: 480px;
   background: var(--bg-card); border: 1px solid var(--border-main);
