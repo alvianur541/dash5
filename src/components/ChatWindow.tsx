@@ -112,7 +112,6 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
           {view.icon === 'spark'   && <Sparkles size={12} className="text-[var(--accent-main)]" />}
           {view.icon === 'compose' && <Loader2 size={12} className="animate-spin text-[var(--accent-main)]" />}
           <span>{view.text}</span>
-          {}
           {view.icon !== 'check' && (
             <span className="typing-dots-inline">
               {[0, 1, 2].map(i => (
@@ -244,7 +243,6 @@ const MessageItem = memo(function MessageItem({
               <ThumbsDown size={14}
                 style={feedback === 'down' ? { fill: 'currentColor', color: 'var(--status-danger)' } : {}} />
             </button>
-            {}
             {onTogglePocket && !isStreaming && (
               <button className="action-btn" title={inPocket ? 'Hapus dari Bookmark' : 'Simpan ke Bookmark (bisa dibaca offline)'}
                 onClick={() => onTogglePocket(message.id)}>
@@ -338,11 +336,9 @@ export function ChatWindow({
             exit={{ opacity: 0 }}
             transition={{ duration: 0.3 }}
             className="welcome-screen"
-            style={{}}
           >
             <div style={{ width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '26px' }}>
 
-              {}
               <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', textAlign: 'center' }}>
                 <m.h1
                   className="welcome-greeting"
@@ -413,10 +409,8 @@ export function ChatWindow({
               />
             );
           })}
-          {}
           {isTyping && agentEvents.length > 0 && <AgentThinkingIndicator events={agentEvents} />}
 
-          {}
           <AnimatePresence>
             {isTyping && agentEvents.length === 0 && (
               <m.div
@@ -440,7 +434,6 @@ export function ChatWindow({
         </div>
       )}
 
-      {}
       <AnimatePresence>
         {expandedTable && (
           <m.div

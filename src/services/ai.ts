@@ -3,7 +3,7 @@ import { UnitModel, Message } from '../types';
 import { getAuthToken } from './supabase';
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
-const PROXY_URL = (import.meta.env.VITE_VERTEX_PROXY_URL as string).replace(/\/$/, '');
+export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
 
 export interface AgentEvent {
   type: 'thinking' | 'tool_call' | 'tool_result' | 'done';
@@ -21,6 +21,13 @@ const THINK_OVERRIDE: ThinkLevel | null = (() => {
   } catch { return null; }
 })();
 
+export async function authHeaders(): Promise<Record<string, string>> {
+  const token = await getAuthToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+  return headers;
+}
+
 export function warmupProxy(): void {
   fetch(`${PROXY_URL}/health`).catch(() => { });
 }
@@ -28,11 +35,11 @@ export function warmupProxy(): void {
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
-function answerCacheKey(model: string, userName: string, query: string): string | null {
+function answerCacheKey(model: string, query: string): string | null {
   const q = query.toLowerCase().replace(/\s+/g, ' ').trim();
   if (q.length < 6 || q.length > 300) return null;
   if (CONTEXT_REF_RE.test(q)) return null;
-  return `${ANSWER_CACHE_PREFIX}${model}::${userName.toLowerCase()}::${q}`;
+  return `${ANSWER_CACHE_PREFIX}${model}::${q}`;
 }
 
 function readAnswerCache(key: string): string | null {
@@ -81,12 +88,8 @@ async function ask(
   onAgentEvent?: (e: AgentEvent) => void,
 ): Promise<{ text: string; cacheable: boolean }> {
 
-  const token = await getAuthToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
   const res = await fetch(`${PROXY_URL}/v1/ask`, {
-    method: 'POST', headers, body: JSON.stringify(body),
+    method: 'POST', headers: await authHeaders(), body: JSON.stringify(body),
   });
   if (!res.ok) {
     let detail = '';
@@ -145,7 +148,7 @@ export async function generateResponseStream(
   onAgentEvent?: (event: AgentEvent) => void,
 ): Promise<string> {
   const trimmed = userInput.trim();
-  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, userName, trimmed);
+  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
     if (cached) {
@@ -182,24 +185,19 @@ export async function generateResponse(
   userName: string,
   history: Message[],
   userInput: string,
-  attachments?: File[],
-  onChunk?: (text: string) => void,
+  attachments: File[],
+  onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
 ): Promise<string> {
-  const emit = onChunk ?? (() => {});
-
-  let images: Array<{ mimeType: string; data: string }> | undefined;
-  if (attachments && attachments.length > 0) {
-    const settled = await Promise.allSettled(attachments.map(fileToInline));
-    images = settled
-      .filter((r): r is PromiseFulfilledResult<{ mimeType: string; data: string }> => r.status === 'fulfilled')
-      .map(r => r.value);
-    if (images.length === 0) return 'Maaf, gagal membaca file gambar.';
-  }
+  const settled = await Promise.allSettled(attachments.map(fileToInline));
+  const images = settled
+    .filter((r): r is PromiseFulfilledResult<{ mimeType: string; data: string }> => r.status === 'fulfilled')
+    .map(r => r.value);
+  if (images.length === 0) return 'Maaf, gagal membaca file gambar.';
 
   const { text } = await ask(
     { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined },
-    emit, onAgentEvent,
+    onChunk, onAgentEvent,
   );
   return text;
 }

@@ -2,7 +2,6 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './orchestrator';
 
-/** Index, not text — chunks can be identical. */
 export interface RerankOut { results: { index: number; score: number }[]; error?: string }
 
 export interface Deps {
@@ -15,10 +14,8 @@ export interface Deps {
   usage: Usage;
   meta: {
     cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean;
-    /** Provenance of what reached the model — filled by rag.ts, surfaced only with `debug:true`. */
     chunks?: Array<{ kind: string; model: string; kategori: string; section: string; score?: number }>;
   };
-  /** Epoch ms; retries must not start past it. */
   deadlineAt?: number;
 }
 

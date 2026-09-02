@@ -109,7 +109,6 @@ export function Sidebar({
 
   return (
     <>
-      {}
       <AnimatePresence>
         {isMobile && !isCollapsed && (
           <m.div
@@ -139,7 +138,6 @@ export function Sidebar({
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
-          {}
           <div className="sidebar-header flex items-center justify-between px-4 pb-3 shrink-0">
             <div className="flex items-center gap-2">
               <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-[var(--accent-main)] flex items-center justify-center">
@@ -148,7 +146,6 @@ export function Sidebar({
               <span className="text-[15px] font-medium text-[var(--text-primary)] tracking-tight">Dash⁵</span>
             </div>
             <div className="flex items-center gap-1">
-              {}
               {!isMobile && onThemeToggle && (
                 <button
                   onClick={onThemeToggle}
@@ -168,7 +165,6 @@ export function Sidebar({
             </div>
           </div>
 
-          {}
           <div className="px-3 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
@@ -179,7 +175,6 @@ export function Sidebar({
             </button>
           </div>
 
-          {}
           <div className="shrink-0 px-3 pb-1">
             <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
               <Tractor size={12} /> Model Unit
@@ -248,10 +243,8 @@ export function Sidebar({
             })}
           </div>
 
-          {}
           {pocketItems.length > 0 && (
             <div className="shrink-0 px-3">
-              {}
               <div className="border-t border-[var(--border-main)] mt-3" />
               <div
                 role="button"
@@ -287,7 +280,6 @@ export function Sidebar({
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
                             className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-8 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
-                            {}
                             <span className="block truncate text-[12.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
                             </span>
@@ -311,9 +303,7 @@ export function Sidebar({
             </div>
           )}
 
-          {}
           <div className="shrink-0 px-3">
-            {}
             <div className="border-t border-[var(--border-main)] mt-3" />
             <div
               role="button"
@@ -335,7 +325,6 @@ export function Sidebar({
             </div>
           </div>
 
-          {}
           <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-2">
             <AnimatePresence initial={false}>
               {showHistory && (
@@ -401,7 +390,6 @@ export function Sidebar({
             </AnimatePresence>
           </div>
 
-          {}
           <div className="shrink-0 px-3 pt-1 pb-3 sidebar-footer-safe">
             <div className="relative">
               <button
@@ -462,7 +450,6 @@ export function Sidebar({
                 )}
               </AnimatePresence>
 
-              {}
               <AnimatePresence>
                 {showChangePw && (
                   <m.div

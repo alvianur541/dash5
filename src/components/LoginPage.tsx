@@ -39,7 +39,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
     <div className={cn(
       "min-h-screen w-screen flex flex-col items-center justify-center px-4 transition-colors duration-400 bg-[var(--bg-app)] relative"
     )}>
-      {}
       <button
         onClick={onThemeToggle}
         className={cn(
@@ -58,7 +57,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
         transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
         className="w-full max-w-[360px] flex flex-col items-center gap-8"
       >
-        {}
         <div className="flex flex-col items-center gap-3">
           <div className="w-14 h-14 rounded-[14px] overflow-hidden bg-[var(--accent-main)] shadow-[0_1px_2px_rgba(0,0,0,0.15)] flex items-center justify-center">
             <img src={LOGO_BASE64} alt="Dash⁵" width={56} height={56} className="w-full h-full object-cover" decoding="sync" fetchPriority="high" />
@@ -122,9 +120,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
         </m.form>
       </m.div>
 
-      <p className="absolute bottom-6 text-[11px] opacity-50 text-[var(--text-muted)]">
-        Dash⁵ · AI Agent v2.0
-      </p>
     </div>
   );
 }

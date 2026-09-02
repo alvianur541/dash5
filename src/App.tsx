@@ -292,6 +292,7 @@ export default function App() {
     };
 
     const currentMessages = messagesRef.current;
+    const historyForAi = currentMessages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }));
     setMessages(prev => [...prev, userMessage]);
     setIsTyping(true);
     setIsStreaming(true);
@@ -360,11 +361,11 @@ export default function App() {
       let fullText: string;
       if (attachments && attachments.length > 0) {
         fullText = await generateResponse(
-          selectedModel, userName, currentMessages, content, attachments,
+          selectedModel, userName, historyForAi, content, attachments,
           onChunkCb, onAgentEventCb,
         );
       } else {
-        fullText = await generateResponseStream(selectedModel, userName, currentMessages, content, onChunkCb, onAgentEventCb);
+        fullText = await generateResponseStream(selectedModel, userName, historyForAi, content, onChunkCb, onAgentEventCb);
       }
 
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
@@ -428,7 +429,6 @@ export default function App() {
 
       <main ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0 relative">
 
-        {}
         <AnimatePresence>
           {isSidebarCollapsed && (
             <m.div
@@ -481,7 +481,6 @@ export default function App() {
         </AnimatePresence>
         {isSidebarCollapsed && <div className="topbar-spacer" aria-hidden="true" />}
 
-        {}
         <AnimatePresence>
           {showOffline && (
             <m.div
@@ -505,7 +504,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {}
         <AnimatePresence>
           {showBackOnline && (
             <m.div
@@ -528,7 +526,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {}
         <AnimatePresence>
           {error && (
             <m.div
@@ -546,7 +543,6 @@ export default function App() {
           )}
         </AnimatePresence>
 
-        {}
         <ChatWindow
           messages={messages}
           isTyping={isTyping}
@@ -559,7 +555,6 @@ export default function App() {
           agentEvents={agentEvents}
         />
 
-        {}
         <div ref={inputBarRef} className="input-bar-float">
           <MessageInput
             onSendMessage={handleSendMessage}
@@ -573,14 +568,12 @@ export default function App() {
 
       </main>
 
-      {}
       <PocketModal
         item={pocketView}
         onClose={() => setPocketView(null)}
         onDelete={deletePocketItem}
       />
 
-      {}
       <AnimatePresence>
         {deleteAllConfirm && (
           <m.div
@@ -619,7 +612,6 @@ export default function App() {
         )}
       </AnimatePresence>
 
-      {}
       <AnimatePresence>
         {deleteConfirmId && (
           <m.div

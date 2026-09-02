@@ -1,5 +1,5 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
-import { UnitModel, Message, InlineImage } from './types';
+import { UnitModel, Message, InlineImage, AgentEvent, UNIT_MODELS } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { deps } from './deps';
 
@@ -72,7 +72,7 @@ interface IntentAnalysis {
   optimizedQuery: string;
 }
 
-type AgentEventEmit = (event: import('./types').AgentEvent) => void;
+type AgentEventEmit = (event: AgentEvent) => void;
 
 function toInlineData(img: InlineImage): InlineDataPart {
   return { inlineData: { mimeType: img.mimeType, data: img.data } };
@@ -81,9 +81,6 @@ function toInlineData(img: InlineImage): InlineDataPart {
 export function resetUsage(): void {
   const u = deps().usage;
   u.input = 0; u.output = 0; u.calls = 0; u.thinking = 0; u.cached = 0;
-}
-export function getQuestionUsage(): { input: number; output: number; calls: number; model: string } {
-  return { ...deps().usage, model: MODEL };
 }
 function addUsage(input?: number, output?: number, thoughts?: number, cached?: number): void {
   const u = deps().usage;
@@ -141,7 +138,6 @@ function cleanOptimizedQuery(query: string): string {
 async function analyzeIntent(
   userInput: string,
   history: Message[],
-  _model: UnitModel,
 ): Promise<IntentAnalysis> {
   const ctx = history.slice(-6)
     .filter(m => m.content?.trim())
@@ -358,6 +354,8 @@ function collapseDegenerateLoops(text: string): string {
   return out;
 }
 
+const tunggu = (ms: number) => new Promise(r => setTimeout(r, ms));
+
 const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
 
 export const STREAM_CUT_NOTE =
@@ -448,7 +446,7 @@ export async function callProxyStream(
       onChunk(STREAM_CUT_NOTE);
     } else if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
-      await new Promise(r => setTimeout(r, attempt * 900));
+      await tunggu(attempt * 900);
       retryNeeded = true;
     } else {
       throw new Error(`Stream terputus: ${upstreamError}`);
@@ -457,20 +455,20 @@ export async function callProxyStream(
 
   if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
-    await new Promise(r => setTimeout(r, attempt * 900));
+    await tunggu(attempt * 900);
     continue;
   }
   if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
     if (fullText) onChunk('\n\n');
-    await new Promise(r => setTimeout(r, attempt * 900));
+    await tunggu(attempt * 900);
     continue;
   }
   if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
     if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
       if (fullText) onChunk('\n\n');
-      await new Promise(r => setTimeout(r, attempt * 900));
+      await tunggu(attempt * 900);
       continue;
     }
     console.warn('[stream] finishReason=%s tetap setelah %d percobaan — beri catatan', finishReason, attempt);
@@ -592,7 +590,6 @@ const JP_CHARS_RE = /[぀-ヿ一-鿿]/;
 const EN_HINT_RE  = /\b(what|who|whose|how|why|when|where|which|can|could|do|does|did|is|are|was|were|please|tell|the)\b/i;
 const ID_HINT_RE  = /\b(apa|siapa|kenapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya)\b/i;
 
-const SUPPORTED_MODELS = ['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G', 'KCM 60ZV', 'ZW140'] as const;
 const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
 
 function detectForeignModel(query: string, activeModel: string): string | null {
@@ -602,17 +599,17 @@ function detectForeignModel(query: string, activeModel: string): string | null {
     const hit = m[0].trim();
     const n = norm(hit);
     if (n === active || active.includes(n) || n.includes(active)) continue;
-    if (SUPPORTED_MODELS.some(s => norm(s) === n)) return hit;
+    if (UNIT_MODELS.some(s => norm(s) === n)) return hit;
     if (/\d{2,}/.test(n)) return hit;
   }
   return null;
 }
 
 function foreignModelTemplate(foreign: string, activeModel: string): string {
-  const supported = SUPPORTED_MODELS.some(s => s.toUpperCase().replace(/[\s-]/g, '') === foreign.toUpperCase().replace(/[\s-]/g, ''));
+  const supported = UNIT_MODELS.some(s => s.toUpperCase().replace(/[\s-]/g, '') === foreign.toUpperCase().replace(/[\s-]/g, ''));
   return supported
     ? `Pertanyaan kamu soal **${foreign}**, tapi chat ini di-set ke **${activeModel}** 😅\n\nGanti dulu unitnya di menu sebelah kiri ke ${foreign}, baru aku bisa jawab dari manual unit itu.\n\nAda yang mau dicek di ${activeModel}?`
-    : `Waduh, manual **${foreign}** belum ada di sistemku 😅 Aku cuma pegang data unit: ${SUPPORTED_MODELS.join(', ')}.\n\nAku ngga bisa bantu diagnosa unit itu — jawabanku harus dari manual resmi, bukan kira-kira.\n\nAda yang mau dicek di **${activeModel}**?`;
+    : `Waduh, manual **${foreign}** belum ada di sistemku 😅 Aku cuma pegang data unit: ${UNIT_MODELS.join(', ')}.\n\nAku ngga bisa bantu diagnosa unit itu — jawabanku harus dari manual resmi, bukan kira-kira.\n\nAda yang mau dicek di **${activeModel}**?`;
 }
 
 function offTopicTemplate(query = ''): string {
@@ -780,7 +777,7 @@ async function resolvePartsQuery(
   } else if (!hasLiteralPN && (precomputedOpt !== undefined || isLongQuery)) {
     const opt = precomputedOpt !== undefined
       ? precomputedOpt
-      : (await analyzeIntent(trimmed, history, model)).optimizedQuery;
+      : (await analyzeIntent(trimmed, history)).optimizedQuery;
     const optWords = opt?.trim().split(/\s+/).length ?? 0;
     if (opt && opt !== trimmed && optWords >= 3) {
       searchQuery = opt;
@@ -869,7 +866,7 @@ async function resolveNaturalLanguageQuery(
     return { type: 'google_search', mode: 'casual' };
   }
 
-  const intent = await analyzeIntent(trimmed, history, model);
+  const intent = await analyzeIntent(trimmed, history);
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
@@ -1048,7 +1045,7 @@ export async function generateResponseStream(
   history: Message[],
   userInput: string,
   onChunk: (text: string) => void,
-  onAgentEvent?: (event: import('./types').AgentEvent) => void,
+  onAgentEvent?: AgentEventEmit,
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
@@ -1141,9 +1138,9 @@ export async function generateResponse(
   userName: string,
   history: Message[],
   userInput: string,
-  attachments?: InlineImage[],
-  onChunk?: (text: string) => void,
-  onAgentEvent?: (event: import('./types').AgentEvent) => void,
+  attachments: InlineImage[],
+  onChunk: (text: string) => void,
+  onAgentEvent?: AgentEventEmit,
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
@@ -1151,120 +1148,109 @@ export async function generateResponse(
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
 
-  if (attachments && attachments.length > 0) {
-    emit({ type: 'thinking', message: 'Membaca foto…' });
-    deps().meta.route = 'image';
-    const imageParts = attachments
-      .filter(a => a?.mimeType && a?.data)
-      .map(toInlineData);
-    if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
-    let sendImageToModel = true;
+  emit({ type: 'thinking', message: 'Membaca foto…' });
+  deps().meta.route = 'image';
+  const imageParts = attachments
+    .filter(a => a?.mimeType && a?.data)
+    .map(toInlineData);
+  if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
+  let sendImageToModel = true;
 
-    try {
-      emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
-      const faultCodes = await extractFaultCodes(imageParts);
+  try {
+    emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
+    const faultCodes = await extractFaultCodes(imageParts);
 
-      if (faultCodes.length > 0) {
-        emit({
-          type: 'thinking',
-          message: faultCodes.length === 1
-            ? `Terbaca kode ${faultCodes[0]} — mencocokkan ke manual…`
-            : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
-        });
-        emit({ type: 'tool_call', tool: 'search_technical_manual' });
-        const perCodeTopN = faultCodes.length >= 3 ? 2 : 3;
-        const settled = await Promise.allSettled(
-          faultCodes.map(async code => {
-            const terms = extractSearchTerms(code);
-            let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
-            let content = result.content;
+    if (faultCodes.length > 0) {
+      emit({
+        type: 'thinking',
+        message: faultCodes.length === 1
+          ? `Terbaca kode ${faultCodes[0]} — mencocokkan ke manual…`
+          : `Terbaca ${faultCodes.length} kode: ${faultCodes.join(', ')} — mencocokkan ke manual…`,
+      });
+      emit({ type: 'tool_call', tool: 'search_technical_manual' });
+      const perCodeTopN = faultCodes.length >= 3 ? 2 : 3;
+      const settled = await Promise.allSettled(
+        faultCodes.map(async code => {
+          const terms = extractSearchTerms(code);
+          let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
+          let content = result.content;
 
-            if (result.hasResults) {
-              const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
-              if (pCodes.length > 0) {
-                emit({ type: 'tool_call', tool: 'search_engine_manual' });
-                const emResult = await searchEngineManual(pCodes, model);
-                emit({ type: 'tool_result', tool: 'search_engine_manual', found: emResult.hasResults });
-                if (emResult.hasResults) {
-                  content += '\n\n[ENGINE MANUAL]\n' + emResult.content;
-                }
+          if (result.hasResults) {
+            const pCodes = extractRelatedPCodes(content, extractSearchTerms(code));
+            if (pCodes.length > 0) {
+              emit({ type: 'tool_call', tool: 'search_engine_manual' });
+              const emResult = await searchEngineManual(pCodes, model);
+              emit({ type: 'tool_result', tool: 'search_engine_manual', found: emResult.hasResults });
+              if (emResult.hasResults) {
+                content += '\n\n[ENGINE MANUAL]\n' + emResult.content;
               }
             }
-
-            return { code, found: result.hasResults, content };
-          }),
-        );
-
-        const found: Array<{ code: string; content: string }> = [];
-        const notFound: string[] = [];
-        for (const r of settled) {
-          if (r.status === 'fulfilled') {
-            if (r.value.found) found.push({ code: r.value.code, content: r.value.content });
-            else notFound.push(r.value.code);
-          } else {
-            console.warn('[generateResponse] Fault code search failed for one code:', r.reason instanceof Error ? r.reason.message : String(r.reason));
           }
+
+          return { code, found: result.hasResults, content };
+        }),
+      );
+
+      const found: Array<{ code: string; content: string }> = [];
+      const notFound: string[] = [];
+      for (const r of settled) {
+        if (r.status === 'fulfilled') {
+          if (r.value.found) found.push({ code: r.value.code, content: r.value.content });
+          else notFound.push(r.value.code);
+        } else {
+          console.warn('[generateResponse] Fault code search failed for one code:', r.reason instanceof Error ? r.reason.message : String(r.reason));
         }
-
-        emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
-
-        if (found.length === 0 && notFound.length > 0) {
-          const lines = notFound.map(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`).join('\n');
-          return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
-        }
-
-        const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
-        const note = `Fault code terdeteksi dari gambar: **${faultCodes.join(', ')}**\n\n` +
-          `INSTRUKSI: Jelaskan SETIAP fault code di atas dalam heading terpisah (## Kode X). ` +
-          `Jangan jadikan satu kode sebagai catatan/footnote kode lain. ` +
-          `Kalau beberapa kode muncul di timestamp yang sama, analisa hubungannya setelah penjelasan masing-masing. ` +
-          noteBase;
-
-        let injection = `[DATA MANUAL TERSEDIA]\n${found.map(f => `[Fault Code: ${f.code}]\n${f.content}`).join('\n\n===\n\n')}`;
-
-        if (notFound.length > 0) {
-          injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
-        }
-
-        sendImageToModel = false;
-        currentParts.push({ text: `${note}\n\n${injection}` });
-      } else {
-        emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
-        currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
       }
-    } catch (err) {
-      console.error('Image fault code extraction failed:', err);
-      emit({ type: 'thinking', message: 'Pembacaan kode gagal — menganalisa gambar langsung…' });
-      currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
+
+      emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
+
+      if (found.length === 0 && notFound.length > 0) {
+        const lines = notFound.map(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`).join('\n');
+        return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
+      }
+
+      const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
+      const note = `Fault code terdeteksi dari gambar: **${faultCodes.join(', ')}**\n\n` +
+        `INSTRUKSI: Jelaskan SETIAP fault code di atas dalam heading terpisah (## Kode X). ` +
+        `Jangan jadikan satu kode sebagai catatan/footnote kode lain. ` +
+        `Kalau beberapa kode muncul di timestamp yang sama, analisa hubungannya setelah penjelasan masing-masing. ` +
+        noteBase;
+
+      let injection = `[DATA MANUAL TERSEDIA]\n${found.map(f => `[Fault Code: ${f.code}]\n${f.content}`).join('\n\n===\n\n')}`;
+
+      if (notFound.length > 0) {
+        injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
+      }
+
+      sendImageToModel = false;
+      currentParts.push({ text: `${note}\n\n${injection}` });
+    } else {
+      emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
+      currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
     }
-
-    if (sendImageToModel) currentParts.unshift(...imageParts);
-
-    contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
-
-    emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
-
-    const body: VRequest = {
-      contents,
-      systemInstruction: { parts: [{ text: systemInstruction }] },
-      generationConfig: {
-        maxOutputTokens: sendImageToModel ? 8192 : 4096,
-        temperature: 0.3,
-        thinkingConfig: { thinkingLevel: 'low' },
-      },
-    };
-
-    if (onChunk) {
-      const streamed = await callProxyStream(body, onChunk);
-      emit({ type: 'done' });
-      return streamed || 'Maaf, sistem tidak bisa memproses permintaan ini.';
-    }
-
-    const res = await callProxy(body);
-    emit({ type: 'done' });
-    const text = collapseDegenerateLoops(getText(res.candidates?.[0]?.content?.parts ?? []));
-    return text || 'Maaf, sistem tidak bisa memproses permintaan ini.';
+  } catch (err) {
+    console.error('Image fault code extraction failed:', err);
+    emit({ type: 'thinking', message: 'Pembacaan kode gagal — menganalisa gambar langsung…' });
+    currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
   }
 
-  return 'Maaf, sistem tidak bisa memproses permintaan ini.';
+  if (sendImageToModel) currentParts.unshift(...imageParts);
+
+  contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
+
+  emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
+
+  const body: VRequest = {
+    contents,
+    systemInstruction: { parts: [{ text: systemInstruction }] },
+    generationConfig: {
+      maxOutputTokens: sendImageToModel ? 8192 : 4096,
+      temperature: 0.3,
+      thinkingConfig: { thinkingLevel: 'low' },
+    },
+  };
+
+  const streamed = await callProxyStream(body, onChunk);
+  emit({ type: 'done' });
+  return streamed || FALLBACK_RESPONSE;
 }

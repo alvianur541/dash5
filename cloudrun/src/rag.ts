@@ -1,8 +1,11 @@
 import { deps } from './deps';
 
+const META_CACHE_MAX = 500;
 const metaByContent = new Map<string, any>();
 function rememberMeta(content?: string, metadata?: any): void {
-  if (content && metadata && !metaByContent.has(content)) metaByContent.set(content, metadata);
+  if (!content || !metadata || metaByContent.has(content)) return;
+  if (metaByContent.size >= META_CACHE_MAX) metaByContent.delete(metaByContent.keys().next().value as string);
+  metaByContent.set(content, metadata);
 }
 
 function noteChunks(
@@ -34,7 +37,6 @@ interface SearchResult {
 
 const VECTOR_SIMILARITY_THRESHOLD = 0.30;
 const RERANK_INPUT_CAP = 30;
-/** Must exceed topN, else MMR has no choice. */
 const RERANK_RETURN_N = 10;
 const VECTOR_MATCH_COUNT = 20;
 const RERANK_PAYLOAD_BUDGET_CHARS = 500_000;
@@ -205,7 +207,7 @@ const MODEL_NAMES_RE = new RegExp(
 );
 
 function escapeLike(s: string): string {
-  return s.replace(/[\\%_]/g, m => `\\${m}`);
+  return s.replace(/[\\%_]/g, m => `\\${m}`).replace(/[,()]/g, ' ');
 }
 
 export function stripModelFromQuery(query: string): string {
@@ -351,12 +353,12 @@ export async function searchTechnicalManualMulti(
   const tMulai = Date.now();
   const primaryQuery = queries[0].trim();
   const faultCode    = isFaultCode(primaryQuery);
-  const strictFilter = forceKategori
+  const strictFilter: Record<string, string> = forceKategori
     ? { Model: model, Kategori: forceKategori }
     : faultCode
       ? { Model: model, Kategori: getTroubleshootingKategori(model) }
       : { Model: model };
-  const looseFilter  = { Model: model };
+  const looseFilter: Record<string, string> = { Model: model };
 
   const normalizedQueries = queries.map(q =>
     faultCode
@@ -364,14 +366,15 @@ export async function searchTechnicalManualMulti(
       : q.trim(),
   );
 
-  const kwPromises = faultCode
-    ? normalizedQueries.map(sq =>
-        sb().from('documents').select('content, metadata')
-          .ilike('content', `%${escapeLike(sq)}%`)
-          .contains('metadata', strictFilter)
-          .limit(5),
-      )
-    : [];
+  const ilikeAny = (filter: Record<string, string>, limit: number): Promise<{ data: Array<{ content?: string; metadata?: any }> | null }> =>
+    sb().from('documents').select('content, metadata')
+      .or(normalizedQueries.map(sq => `content.ilike.%${escapeLike(sq)}%`).join(','))
+      .contains('metadata', filter)
+      .limit(limit);
+
+  const kwPromise = faultCode
+    ? ilikeAny(strictFilter, 5 * normalizedQueries.length)
+    : Promise.resolve({ data: [] as Array<{ content?: string; metadata?: any }> });
 
   const wantsNumericAnswer =
     primaryQuery.toLowerCase().split(/\s+/)
@@ -423,15 +426,9 @@ export async function searchTechnicalManualMulti(
   const vectorPromise: Promise<SearchResult[]> = faultCode
     ? Promise.resolve([])
     : getEmbedding(embeddingQuery).then(async emb => {
-    let { data: vecData } = await sb().rpc('match_documents', {
+    const { data: vecData } = await sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
     });
-    if (faultCode && (!Array.isArray(vecData) || vecData.length === 0)) {
-      const { data: vecFallback } = await sb().rpc('match_documents', {
-        query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: looseFilter,
-      });
-      vecData = vecFallback;
-    }
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
     console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
@@ -443,7 +440,7 @@ export async function searchTechnicalManualMulti(
   });
 
   const [kwSettled, rankedSettled, vectorSettled] = await Promise.allSettled([
-    Promise.allSettled(kwPromises),
+    kwPromise,
     rankedPromise,
     vectorPromise,
   ]);
@@ -457,10 +454,7 @@ export async function searchTechnicalManualMulti(
   }
 
   if (kwSettled.status === 'fulfilled') {
-    for (const r of kwSettled.value) {
-      if (r.status !== 'fulfilled') continue;
-      for (const d of r.value.data ?? []) if (d?.content) { rememberMeta(d.content, (d as any).metadata); kwDocs.push(d.content); }
-    }
+    for (const d of kwSettled.value.data ?? []) if (d?.content) { rememberMeta(d.content, d.metadata); kwDocs.push(d.content); }
   }
 
   if (vectorSettled.status === 'fulfilled') {
@@ -479,18 +473,9 @@ export async function searchTechnicalManualMulti(
 
   let usedLooseFallback = false;
   if (faultCode && allDocs.length === 0) {
-    const fbPromises = normalizedQueries.map(sq =>
-      sb().from('documents').select('content, metadata')
-        .ilike('content', `%${escapeLike(sq)}%`)
-        .contains('metadata', looseFilter)
-        .limit(5),
-    );
-    const fbResults = await Promise.allSettled(fbPromises);
-    for (const r of fbResults) {
-      if (r.status !== 'fulfilled') continue;
-      for (const d of r.value.data ?? []) {
-        if (d?.content && !seen.has(d.content)) { rememberMeta(d.content, (d as any).metadata); seen.add(d.content); allDocs.push(d.content); usedLooseFallback = true; }
-      }
+    const fb = await ilikeAny(looseFilter, 5 * normalizedQueries.length).then(r => r.data ?? []).catch(() => []);
+    for (const d of fb) {
+      if (d?.content && !seen.has(d.content)) { rememberMeta(d.content, d.metadata); pushUnik(d.content); usedLooseFallback = true; }
     }
   }
 
@@ -633,6 +618,18 @@ function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
   return out;
 }
 
+type HybridResult = { content: string; similarity?: number; match_type?: string; metadata?: any };
+
+function hybrid(
+  queryText: string, embedding: number[], matchCount: number,
+  filter: Record<string, string>, threshold: number,
+): Promise<{ data: HybridResult[] | null }> {
+  return sb().rpc('match_documents_hybrid', {
+    query_text: queryText, query_embedding: embedding, match_count: matchCount,
+    filter, similarity_threshold: threshold,
+  }) as unknown as Promise<{ data: HybridResult[] | null }>;
+}
+
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 
 const ENGINE_CATALOG_MODELS = new Set(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
@@ -646,35 +643,17 @@ export async function searchServiceIntervalParts(
   if (!sb()) return { content: '', hasResults: false };
 
   const stripped = stripModelFromQuery(query.trim());
-  let embedding: number[] | null = null;
+  let embedding: number[];
   try {
     embedding = await getEmbedding(stripped);
   } catch (err) {
     console.warn('Embed failed for interval parts search:', err);
     return { content: '', hasResults: false };
   }
-  if (!embedding) return { content: '', hasResults: false };
 
-  type HybridResult = { content: string; similarity?: number; match_type?: string };
-
-  const queryText = stripModelFromQuery(query.trim());
-
-  const cpmPromise = sb().rpc('match_documents_hybrid', {
-    query_text: queryText,
-    query_embedding: embedding,
-    match_count: 1,
-    filter: { Model: model, Kategori: 'CPM' },
-    similarity_threshold: 0.20,
-  }) as unknown as Promise<{ data: HybridResult[] | null }>;
-
+  const cpmPromise = hybrid(stripped, embedding, 1, { Model: model, Kategori: 'CPM' }, 0.20);
   const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
-    sb().rpc('match_documents_hybrid', {
-      query_text: queryText,
-      query_embedding: embedding,
-      match_count: 12,
-      filter: { Model: model, Kategori: kat },
-      similarity_threshold: 0,
-    }) as unknown as Promise<{ data: HybridResult[] | null }>,
+    hybrid(stripped, embedding, 12, { Model: model, Kategori: kat }, 0),
   );
 
   const [cpmRes, ...promoSettled] = await Promise.allSettled([cpmPromise, ...promoPromises]);
@@ -690,7 +669,7 @@ export async function searchServiceIntervalParts(
   }
 
   const all = [...cpmData, ...promoData];
-  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity, metadata: (d as any).metadata })));
+  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity, metadata: d.metadata })));
   return {
     content: all.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
@@ -711,16 +690,13 @@ export async function searchPartsCatalog(
   const embedQuery = partNum
     ? stripped
     : (skipExpand ? stripped : expandQuery(stripped));
-  let embedding: number[] | null = null;
+  let embedding: number[];
   try {
     embedding = await getEmbedding(embedQuery);
   } catch (err) {
     console.warn('Embed failed for parts search:', err);
     return { content: '', hasResults: false };
   }
-  if (!embedding) return { content: '', hasResults: false };
-
-  type HybridResult = { content: string; similarity?: number; match_type?: string };
 
   const hasEngineCatalog = ENGINE_CATALOG_MODELS.has(model);
 
@@ -729,7 +705,7 @@ export async function searchPartsCatalog(
   const promoCount = 5;
   const cpmCount = 1;
 
-  const queryText = stripModelFromQuery(query.trim());
+  const queryText = stripped;
 
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
@@ -737,46 +713,12 @@ export async function searchPartsCatalog(
   const PROMO_END_IDX   = PROMO_START_IDX + ACTIVE_PROMO_KATEGORI.length;
   const ENGINE_IDX = hasEngineCatalog ? PROMO_END_IDX : -1;
 
-  const queries: Promise<{ data: HybridResult[] | null }>[] = [
-    sb().rpc('match_documents_hybrid', {
-      query_text: queryText,
-      query_embedding: embedding,
-      match_count: bodyCount,
-      filter: { Model: model, Kategori: 'PARTS CATALOG' },
-      similarity_threshold: 0.28,
-    }) as unknown as Promise<{ data: HybridResult[] | null }>,
-    sb().rpc('match_documents_hybrid', {
-      query_text: queryText,
-      query_embedding: embedding,
-      match_count: cpmCount,
-      filter: { Model: model, Kategori: 'CPM' },
-      similarity_threshold: 0.30,
-    }) as unknown as Promise<{ data: HybridResult[] | null }>,
+  const queries = [
+    hybrid(queryText, embedding, bodyCount, { Model: model, Kategori: 'PARTS CATALOG' }, 0.28),
+    hybrid(queryText, embedding, cpmCount, { Model: model, Kategori: 'CPM' }, 0.30),
+    ...ACTIVE_PROMO_KATEGORI.map(kat => hybrid(queryText, embedding, promoCount, { Model: model, Kategori: kat }, 0.25)),
+    ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
   ];
-
-  for (const promoKat of ACTIVE_PROMO_KATEGORI) {
-    queries.push(
-      sb().rpc('match_documents_hybrid', {
-        query_text: queryText,
-        query_embedding: embedding,
-        match_count: promoCount,
-        filter: { Model: model, Kategori: promoKat },
-        similarity_threshold: 0.25,
-      }) as unknown as Promise<{ data: HybridResult[] | null }>,
-    );
-  }
-
-  if (hasEngineCatalog) {
-    queries.push(
-      sb().rpc('match_documents_hybrid', {
-        query_text: queryText,
-        query_embedding: embedding,
-        match_count: engineCount,
-        filter: { Model: model, Kategori: 'ENGINE PARTS CATALOG' },
-        similarity_threshold: 0.28,
-      }) as unknown as Promise<{ data: HybridResult[] | null }>,
-    );
-  }
 
   const settled = await Promise.allSettled(queries);
   const getData = (idx: number): HybridResult[] =>
@@ -885,7 +827,7 @@ export async function searchPartsCatalog(
   console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
     cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
     partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
-  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity, metadata: (d as any).metadata })));
+  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity, metadata: d.metadata })));
 
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),

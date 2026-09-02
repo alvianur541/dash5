@@ -4,16 +4,16 @@ module.exports = async function () {
   const { t, done } = suite('router: fault-code detection & part-number extraction');
 
   const faultYes = [
-    ['11006-2', '11006-2'],                 // ZX200 (1-digit suffix, as stored)
-    ['13006-02', '13006-02'],               // ZX200 monitor shows leading zero
-    ['11302-4', '11302-4'],                 // ZX138
-    ['ENG:00436-04', 'ENG:00436-04'],       // Yanmar 2-digit suffix
-    ['ENG:0001D-02', 'ENG:0001D-02'],       // hex letter inside (Yanmar)
+    ['11006-2', '11006-2'],
+    ['13006-02', '13006-02'],
+    ['11302-4', '11302-4'],
+    ['ENG:00436-04', 'ENG:00436-04'],
+    ['ENG:0001D-02', 'ENG:0001D-02'],
     ['ENG:0006E-00', 'ENG:0006E-00'],
     ['fault engine eng:0001d-02 muncul, maksudnya apa', 'eng:0001d-02'],
     ['W:1208', 'W:1208'],
     ['CA2769', 'CA2769'],
-    ['524286', '524286'],                   // ZW140 6-digit
+    ['524286', '524286'],
     ['fault 11302-4 kadang muncul pas boom raise', '11302-4'],
     ['kode 11006-2 muncul kadang-kadang, unit jadi lambat', '11006-2'],
     ['di menu informasi 20101-02', '20101-02'],
@@ -27,12 +27,12 @@ module.exports = async function () {
   for (const q of faultNo) t(!detectFaultCodeInQuery(q).isFaultCode, `not a fault code: "${q}"`);
 
   const pnYes = [
-    ['PN YB60000068', 'YB60000068'],          // Hitachi body
-    ['YNM129150-14200', 'YNM129150-14200'],   // Yanmar engine
-    ['harga 1153004210', '1153004210'],       // Isuzu pure 10-digit
-    ['YZ0108060850', 'YZ0108060850'],         // KCM Isuzu
-    ['34820-66720', '34820-66720'],           // KCM body 5-5
-    ['263E7-17091 ada stok?', '263E7-17091'], // ZW140 body
+    ['PN YB60000068', 'YB60000068'],
+    ['YNM129150-14200', 'YNM129150-14200'],
+    ['harga 1153004210', '1153004210'],
+    ['YZ0108060850', 'YZ0108060850'],
+    ['34820-66720', '34820-66720'],
+    ['263E7-17091 ada stok?', '263E7-17091'],
   ];
   for (const [q, pn] of pnYes) t(extractPartNumber(q) === pn, `PN: "${q}" -> ${extractPartNumber(q)}`);
   for (const q of ['berapa kapasitas oli mesin', 'swing lambat', 'service 2000 jam'])

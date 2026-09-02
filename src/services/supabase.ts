@@ -171,70 +171,12 @@ export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
   if (_catalogCache && Date.now() < _catalogCache.expiresAt && _catalogCache.data.length > 0) {
     return _catalogCache.data;
   }
-
-  const PAGE_SIZE = 1000;
-  const INITIAL_BATCH = 4;
-  const MAX_SAFETY = 20;
-
-  type Row = { metadata: { Model?: string; Kategori?: string } };
-
-  const fetchPage = async (pageIdx: number): Promise<Row[]> => {
-    const result = await supabase!
-      .from('documents')
-      .select('metadata')
-      .order('id', { ascending: true })
-      .range(pageIdx * PAGE_SIZE, (pageIdx + 1) * PAGE_SIZE - 1);
-    return Array.isArray(result.data) ? (result.data as Row[]) : [];
-  };
-
-  const initialSettled = await Promise.allSettled(
-    Array.from({ length: INITIAL_BATCH }, (_, i) => fetchPage(i))
-  );
-  const allRows: Row[] = [];
-  let lastPageFull = true;
-  for (const r of initialSettled) {
-    if (r.status === 'fulfilled') {
-      allRows.push(...r.value);
-      if (r.value.length < PAGE_SIZE) lastPageFull = false;
-    } else {
-      console.error('Catalog page fetch error:', r.reason);
-      lastPageFull = false;
-    }
+  const { data, error } = await supabase.rpc('document_catalog');
+  if (error || !Array.isArray(data)) {
+    console.error('Catalog fetch error:', error?.message);
+    return [];
   }
-
-  let nextPage = INITIAL_BATCH;
-  while (lastPageFull && nextPage < MAX_SAFETY) {
-    try {
-      const rows = await fetchPage(nextPage);
-      if (rows.length === 0) break;
-      allRows.push(...rows);
-      if (rows.length < PAGE_SIZE) break;
-      nextPage++;
-    } catch (err) {
-      console.error('Catalog pagination error at page', nextPage, err);
-      break;
-    }
-  }
-
-  if (nextPage >= MAX_SAFETY) {
-    console.warn('[fetchDocumentCatalog] hit safety cap', MAX_SAFETY, 'pages — DB may need pagination upgrade');
-  }
-
-  if (allRows.length === 0) return [];
-
-  const counts = new Map<string, number>();
-  for (const row of allRows) {
-    const model = row.metadata?.Model;
-    const kategori = row.metadata?.Kategori;
-    if (!model || !kategori) continue;
-    const key = `${model}||${kategori}`;
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-
-  const result = Array.from(counts.entries()).map(([key, count]) => {
-    const [model, kategori] = key.split('||');
-    return { model, kategori, count };
-  });
+  const result = (data as CatalogEntry[]).filter(r => r.model && r.kategori);
   _catalogCache = { data: result, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS };
   return result;
 }

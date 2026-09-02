@@ -4,7 +4,7 @@ import { ArrowUp, Paperclip, Mic, MicOff, Loader2, WifiOff, Square } from 'lucid
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
-import { getAuthToken } from '../services/supabase';
+import { authHeaders, PROXY_URL } from '../services/ai';
 
 interface MessageInputProps {
   onSendMessage: (content: string, attachments?: File[]) => void;
@@ -33,15 +33,11 @@ function blobToBase64(blob: Blob): Promise<string> {
 const TRANSCRIBE_TIMEOUT_MS = 15_000;
 
 async function transcribeWithProxy(base64Audio: string, mimeType: string): Promise<string> {
-  const proxyUrl = import.meta.env.VITE_VERTEX_PROXY_URL ?? '';
-  const token    = await getAuthToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TRANSCRIBE_TIMEOUT_MS);
   try {
-    const res = await fetch(`${proxyUrl}/v1/transcribe`, {
-      method: 'POST', headers,
+    const res = await fetch(`${PROXY_URL}/v1/transcribe`, {
+      method: 'POST', headers: await authHeaders(),
       body: JSON.stringify({ audio: base64Audio, mimeType }),
       signal: ctrl.signal,
     });
@@ -125,7 +121,7 @@ export function MessageInput({
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!e.target.files || disabled) return;
-    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+    const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
     const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
     const file = e.target.files[0];
@@ -222,7 +218,6 @@ export function MessageInput({
         style={{ maxWidth: 'var(--input-content-max)' }}
       >
 
-        {}
         <div className={cn(
           "relative rounded-[22px] transition-all duration-150 shadow-sm",
           "bg-[var(--bg-card)] border",
@@ -232,7 +227,6 @@ export function MessageInput({
           disabled && "opacity-60"
         )}>
 
-          {}
           <AnimatePresence>
             {(isRecording || isTranscribing) && (
               <m.div
@@ -260,7 +254,6 @@ export function MessageInput({
             )}
           </AnimatePresence>
 
-          {}
           <div className="px-5 pt-[14px] pb-[4px] flex flex-col justify-center">
             <textarea
               ref={textareaRef}
@@ -281,10 +274,8 @@ export function MessageInput({
             />
           </div>
 
-          {}
           <div className="flex items-center px-3.5 pb-[13px] pt-0 gap-0.5">
 
-            {}
             {isOffline ? (
               <WifiOff size={15} className="text-amber-400 mx-1.5 shrink-0" />
             ) : (
@@ -307,7 +298,6 @@ export function MessageInput({
               </>
             )}
 
-            {}
             {!isOffline && (
               <button
                 onClick={toggleRecording}
@@ -329,7 +319,6 @@ export function MessageInput({
 
             <div className="flex-1" />
 
-            {}
             {isStreaming && onStop ? (
               <button
                 onClick={onStop}
@@ -357,7 +346,6 @@ export function MessageInput({
           </div>
         </div>
 
-        {}
         <AnimatePresence>
           {transcribeError && (
             <m.p
@@ -369,13 +357,11 @@ export function MessageInput({
           )}
         </AnimatePresence>
 
-        {}
         <div className="hidden md:flex items-center justify-center mt-2 text-[11px] text-[var(--text-muted)] opacity-70">
           <span>Dash⁵ dapat keliru — verifikasi info penting.</span>
         </div>
 
       </div>
-      {}
       <div className="safe-area-spacer" />
     </div>
   );

@@ -67,7 +67,7 @@ const ALLOWED_MODELS = new Set(
 const RATE_LIMIT_PER_MIN = parseInt(process.env.RATE_LIMIT_PER_MIN || '150', 10);
 const _rateBuckets = new Map();
 function rateLimit(req, res, next) {
-  const key = (req.authUser && req.authUser.id) || req.headers['authorization'] || req.ip || 'anon';
+  const key = (req.authUser && req.authUser.id) || req.ip || 'anon';
   const now = Date.now();
   let b = _rateBuckets.get(key);
   if (!b || now >= b.reset) { b = { count: 0, reset: now + 60_000 }; _rateBuckets.set(key, b); }
@@ -81,6 +81,7 @@ function rateLimit(req, res, next) {
   next();
 }
 
+app.disable('x-powered-by');
 app.use((req, res, next) => {
   const origin = req.headers.origin;
   if (origin && ALLOWED_ORIGINS.includes(origin)) {
@@ -89,6 +90,9 @@ app.use((req, res, next) => {
   }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Max-Age', '600');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', 'no-store');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -99,7 +103,7 @@ async function verifyToken(req, res, next) {
     return res.status(503).json({ error: 'Auth service misconfigured' });
   }
   const authHeader = req.headers['authorization'];
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+  if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.length > 4096) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
   try {
@@ -311,6 +315,7 @@ async function fetchAuthUser(token) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
+    signal: AbortSignal.timeout(8_000),
   });
   if (!r.ok) { _userCache.delete(token); return null; }
   const user = await r.json();
@@ -322,13 +327,21 @@ async function fetchAuthUser(token) {
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 const TRANSCRIBE_MODEL = process.env.TRANSCRIBE_MODEL || 'gemini-3.7-flash';
+const AUDIO_MAX_BYTES  = 6 * 1024 * 1024;
+const AUDIO_MIME_RE    = /^audio\/[a-z0-9.+-]+$/i;
+const BASE64_RE        = /^[A-Za-z0-9+/=\s]+$/;
 
 app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
-  const { audio, mimeType } = req.body;
-  if (!audio || !mimeType) return res.status(400).json({ error: 'audio and mimeType are required' });
+  const { audio, mimeType } = req.body || {};
+  if (typeof audio !== 'string' || typeof mimeType !== 'string' || !audio || !mimeType) {
+    return res.status(400).json({ error: 'audio and mimeType are required' });
+  }
 
-  const cleanMimeType = mimeType.split(';')[0].trim();
+  const cleanMimeType = mimeType.split(';')[0].trim().toLowerCase();
+  if (!AUDIO_MIME_RE.test(cleanMimeType)) return res.status(415).json({ error: 'Format audio tidak didukung' });
+  if (!BASE64_RE.test(audio)) return res.status(400).json({ error: 'Data audio bukan base64' });
+  if (Math.floor(audio.length * 3 / 4) > AUDIO_MAX_BYTES) return res.status(413).json({ error: 'Audio terlalu besar (maks 6 MB)' });
   const t0 = Date.now();
 
   try {
@@ -370,7 +383,7 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
         headers: { 'x-goog-api-key': GEMINI_API_KEY, 'Content-Type': 'application/json' },
         body: JSON.stringify(interBody),
       });
-      if (!inter.ok) { const e = await inter.json().catch(() => ({})); console.error('Transcribe error:', JSON.stringify(e)); return res.status(inter.status).json(e); }
+      if (!inter.ok) { const e = await inter.json().catch(() => ({})); console.error('Transcribe error:', JSON.stringify(e)); return res.status(502).json({ error: 'Transcribe gagal. Coba lagi.' }); }
       const data = await inter.json();
       text = (data.output_text || '').trim();
       if (!text && Array.isArray(data.steps)) {
@@ -400,9 +413,9 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
         }),
       });
       if (!upstream.ok) {
-        const err = await upstream.json();
+        const err = await upstream.json().catch(() => ({}));
         console.error('Transcribe error:', JSON.stringify(err));
-        return res.status(upstream.status).json(err);
+        return res.status(502).json({ error: 'Transcribe gagal. Coba lagi.' });
       }
       const data = await upstream.json();
       const parts = data.candidates?.[0]?.content?.parts ?? [];
@@ -419,6 +432,8 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
 const ASK_MODELS = UNIT_MODELS;
+const HISTORY_MAX_MSG   = 40;
+const HISTORY_MAX_CHARS = 6000;
 
 function sseWrite(res, event, payload) {
   if (res.writableEnded) return;
@@ -480,8 +495,10 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!ASK_MODELS.has(unit)) return res.status(400).json({ error: 'Model unit tidak dikenal' });
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Supabase belum dikonfigurasi' });
 
-  const userName = typeof b.userName === 'string' ? b.userName.slice(0, 80) : 'Teknisi';
-  const history  = Array.isArray(b.history) ? b.history.slice(-40) : [];
+  const userName = (typeof b.userName === 'string' ? b.userName.replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 40) : '') || 'Teknisi';
+  const history  = (Array.isArray(b.history) ? b.history.slice(-HISTORY_MAX_MSG) : [])
+    .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
+    .map(m => ({ role: m.role, content: m.content.slice(0, HISTORY_MAX_CHARS) }));
   const think    = ['low', 'medium', 'high'].includes(b.think) ? b.think : null;
   const rawImages = Array.isArray(b.attachments) ? b.attachments.slice(0, 1) : [];
   const images = [];
@@ -489,7 +506,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     if (!a || typeof a.mimeType !== 'string' || typeof a.data !== 'string') continue;
     const mime = a.mimeType.split(';')[0].trim().toLowerCase();
     if (!IMAGE_MIME_ALLOWED.has(mime)) return res.status(415).json({ error: `Format gambar tidak didukung: ${mime}` });
-    if (!/^[A-Za-z0-9+/=\s]+$/.test(a.data)) return res.status(400).json({ error: 'Data gambar bukan base64' });
+    if (!BASE64_RE.test(a.data)) return res.status(400).json({ error: 'Data gambar bukan base64' });
     const decodedBytes = Math.floor(a.data.replace(/\s/g, '').length * 3 / 4);
     if (decodedBytes > IMAGE_MAX_BYTES) return res.status(413).json({ error: `Gambar terlalu besar (${Math.round(decodedBytes / 1048576)} MB, maks ${IMAGE_MAX_BYTES / 1048576} MB)` });
     if (!imageMagicMatches(mime, a.data)) return res.status(415).json({ error: 'Isi gambar tidak cocok dengan formatnya' });
@@ -501,6 +518,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  const debug = b.debug === true;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -578,7 +596,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       model: orch.MODEL,
       cacheable: deps.meta.cacheable === true,
       full: answer,
-      ...(b.debug === true ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),
+      ...(debug ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),
     });
   } catch (err) {
     const kuota = err && err.message === 'KUOTA_PENUH';
