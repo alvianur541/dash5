@@ -23,6 +23,15 @@ export function stripLatex(text: string): string {
     .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'));
 }
 
+const EXAMPLE_QUERIES: Record<UnitModel, string[]> = {
+  'ZX48U-5A':   ['Fault code ENG:00436-04', 'Parts service 500 jam', 'Kapasitas oli engine', 'PN filter hydraulic'],
+  'ZX65USB-5A': ['Fault code ENG:0001D-02', 'Parts service 1000 jam', 'Kapasitas oli engine', 'Tekanan main pump'],
+  'ZX138MF-5G': ['Fault code 11302-4', 'Parts service 1000 jam', 'Swing lambat kenapa', 'Berat swing device'],
+  'ZX200-5G':   ['Fault code 11006-2', 'Parts service 2000 jam', 'Harga promo filter', 'Tekanan main pump'],
+  'KCM 60ZV':   ['PN filter transmisi', 'Steering berat sebelah', 'Kapasitas oli axle', 'Harga oli promo'],
+  'ZW140':      ['Fault code 524286', 'Parking brake tidak ngunci', 'PN filter hydraulic', 'Transmisi selip maju'],
+};
+
 interface ChatWindowProps {
   messages: Message[];
   isTyping: boolean;
@@ -33,6 +42,7 @@ interface ChatWindowProps {
   agentEvents?: AgentEvent[];
   pocketIds?: Set<string>;
   onTogglePocket?: (messageId: string) => void;
+  onPickExample?: (text: string) => void;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -233,6 +243,7 @@ const MessageItem = memo(function MessageItem({
 
           <div className="ai-actions">
             <CopyButton text={message.content} />
+            <span className="ai-actions-gap" />
             <button className="action-btn" title="Respons bagus"
               onClick={() => onFeedback(message.id, 'up')}>
               <ThumbsUp size={14}
@@ -259,7 +270,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket,
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket, onPickExample,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -385,6 +396,19 @@ export function ChatWindow({
                   )}
                 </m.div>
               </div>
+
+              {onPickExample && (
+                <m.div
+                  className="example-chips"
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, delay: 0.2 }}
+                >
+                  {EXAMPLE_QUERIES[selectedModel].map(q => (
+                    <button key={q} className="example-chip" onClick={() => onPickExample(q)}>{q}</button>
+                  ))}
+                </m.div>
+              )}
 
             </div>
           </m.div>
