@@ -1133,18 +1133,26 @@ img {
 .code-copy { cursor: pointer; border-bottom: 1px dashed color-mix(in srgb, var(--accent-main) 55%, transparent); transition: background 0.12s; }
 .code-copy:active { background: color-mix(in srgb, var(--accent-main) 22%, transparent); }
 
-.markdown-table-wrap.scrolled table.sticky-col-1 th:nth-child(1), .markdown-table-wrap.scrolled table.sticky-col-1 td:nth-child(1),
-.markdown-table-wrap.scrolled table.sticky-col-2 th:nth-child(2), .markdown-table-wrap.scrolled table.sticky-col-2 td:nth-child(2),
-.markdown-table-wrap.scrolled table.sticky-col-3 th:nth-child(3), .markdown-table-wrap.scrolled table.sticky-col-3 td:nth-child(3) {
-  box-shadow: inset -1px 0 0 var(--border-main), 6px 0 10px -6px rgba(0,0,0,0.45);
-}
-.markdown-table-wrap table.sticky-col-1 th:nth-child(1), .markdown-table-wrap table.sticky-col-1 td:nth-child(1),
-.markdown-table-wrap table.sticky-col-2 th:nth-child(2), .markdown-table-wrap table.sticky-col-2 td:nth-child(2),
-.markdown-table-wrap table.sticky-col-3 th:nth-child(3), .markdown-table-wrap table.sticky-col-3 td:nth-child(3) {
+table.sticky-col-1 th:nth-child(1), table.sticky-col-1 td:nth-child(1),
+table.sticky-col-2 th:nth-child(2), table.sticky-col-2 td:nth-child(2),
+table.sticky-col-3 th:nth-child(3), table.sticky-col-3 td:nth-child(3) {
   position: sticky; left: 0; z-index: 1;
   background: var(--bg-app);
 }
-.markdown-table-wrap table.sticky-pn thead th { background: var(--bg-card-hover); }
+.scrolled table.sticky-col-1 th:nth-child(1), .scrolled table.sticky-col-1 td:nth-child(1),
+.scrolled table.sticky-col-2 th:nth-child(2), .scrolled table.sticky-col-2 td:nth-child(2),
+.scrolled table.sticky-col-3 th:nth-child(3), .scrolled table.sticky-col-3 td:nth-child(3) {
+  box-shadow: inset -1px 0 0 var(--border-main), 6px 0 10px -6px rgba(0,0,0,0.45);
+}
+table.sticky-pn thead th { background: var(--bg-card-hover); }
+.table-modal-scroll { padding: 0 0 28px; }
+.table-modal-body table { margin-left: 0; }
+.table-modal-body table th:first-child, .table-modal-body table td:first-child { padding-left: 14px; }
+.table-modal-body table.sticky-pn thead th { position: sticky; top: 0; z-index: 2; }
+.table-modal-body table.sticky-col-1 thead th:nth-child(1),
+.table-modal-body table.sticky-col-2 thead th:nth-child(2),
+.table-modal-body table.sticky-col-3 thead th:nth-child(3) { z-index: 3; }
+.table-modal-body .markdown-table-wrap, .table-modal-body table { margin-top: 14px; }
 .markdown-body table .code-copy { border-bottom: none; }
 
 .app-toast {

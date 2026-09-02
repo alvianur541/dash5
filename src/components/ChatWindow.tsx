@@ -51,6 +51,11 @@ function partNoColumn(children: ReactNode): number {
   return idx < 0 ? 0 : idx + 1;
 }
 
+function stickyClass(children: ReactNode): string | undefined {
+  const c = partNoColumn(children);
+  return c ? `sticky-pn sticky-col-${c}` : undefined;
+}
+
 function CodeSpan({ children }: { children?: ReactNode }) {
   const toast = useToast();
   const text = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : String(children ?? '');
@@ -268,11 +273,11 @@ const MessageItem = memo(function MessageItem({
                 components={{
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
-                      <div className="markdown-table-wrap" onScroll={e => e.currentTarget.classList.toggle('scrolled', e.currentTarget.scrollLeft > 2)}><table className={(c => c ? `sticky-pn sticky-col-${c}` : undefined)(partNoColumn(children))}>{children}</table></div>
+                      <div className="markdown-table-wrap" onScroll={e => e.currentTarget.classList.toggle('scrolled', e.currentTarget.scrollLeft > 2)}><table className={stickyClass(children)}>{children}</table></div>
                       {onExpandTable && !isStreaming && (
                         <button
                           className="table-expand-btn"
-                          onClick={() => onExpandTable(<table>{children}</table>)}
+                          onClick={() => onExpandTable(<table className={stickyClass(children)}>{children}</table>)}
                           aria-label="Buka tabel layar penuh"
                           title="Layar penuh"
                         >
@@ -546,7 +551,7 @@ export function ChatWindow({
                 </button>
               </div>
             </div>
-            <div className="table-modal-scroll">
+            <div className="table-modal-scroll" onScroll={e => e.currentTarget.classList.toggle('scrolled', e.currentTarget.scrollLeft > 2)}>
               <div className="markdown-body table-modal-body" style={{ fontSize: `${tableFont}px` }}>
                 {expandedTable}
               </div>
