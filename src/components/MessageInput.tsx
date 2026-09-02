@@ -1,6 +1,6 @@
 
-import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
+import { useState, useRef, useLayoutEffect } from 'react';
+import { ArrowUp, Paperclip, Mic, MicOff, Loader2, WifiOff, Square } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -31,7 +31,6 @@ function blobToBase64(blob: Blob): Promise<string> {
 }
 
 const TRANSCRIBE_TIMEOUT_MS = 15_000;
-const RECORD_MAX_SEC = 60;
 
 async function transcribeWithProxy(base64Audio: string, mimeType: string): Promise<string> {
   const ctrl  = new AbortController();
@@ -92,20 +91,6 @@ export function MessageInput({
   const [input, setInput] = useState('');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
-  const [recordSec, setRecordSec] = useState(0);
-  const [pending, setPending] = useState<{ file: File; url: string } | null>(null);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
-
-  useEffect(() => {
-    if (recordingState !== 'recording') { setRecordSec(0); return; }
-    const t = setInterval(() => setRecordSec(s => s + 1), 1000);
-    return () => clearInterval(t);
-  }, [recordingState]);
-
-  useEffect(() => {
-    if (recordingState === 'recording' && recordSec >= RECORD_MAX_SEC) mediaRecorderRef.current?.stop();
-  }, [recordSec, recordingState]);
-
 
   const fileInputRef     = useRef<HTMLInputElement>(null);
   const textareaRef      = useRef<HTMLTextAreaElement>(null);
@@ -126,24 +111,12 @@ export function MessageInput({
 
   const buzz = () => { try { navigator.vibrate?.(8); } catch { } };
 
-  const resetBox = () => {
+  const handleSend = () => {
+    if (!input.trim() || isOffline || isStreaming) return;
+    buzz();
+    onSendMessage(input.trim());
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = '24px';
-  };
-
-  const handleSend = () => {
-    if (isOffline || isStreaming || disabled) return;
-    const text = input.trim();
-    if (!text && !pending) return;
-    buzz();
-    onSendMessage(text, pending ? [pending.file] : undefined);
-    resetBox();
-    setPending(null);
-  };
-
-  const flash = (msg: string) => {
-    setTranscribeError(msg);
-    setTimeout(() => setTranscribeError(null), 3000);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -152,20 +125,40 @@ export function MessageInput({
     const MAX_SIZE_BYTES = 5 * 1024 * 1024;
 
     const file = e.target.files[0];
+    let errorMsg: string | null = null;
+    const valid: File[] = [];
+    if (!ALLOWED_TYPES.includes(file.type)) {
+      errorMsg = 'Hanya file gambar (JPG, PNG, WebP) yang diizinkan.';
+    } else if (file.size > MAX_SIZE_BYTES) {
+      errorMsg = `Gambar terlalu besar (maks 5MB). Ukuran file: ${(file.size / 1024 / 1024).toFixed(1)}MB.`;
+    } else {
+      valid.push(file);
+    }
+    if (errorMsg) {
+      setTranscribeError(errorMsg);
+      setTimeout(() => setTranscribeError(null), 3000);
+    }
     e.target.value = '';
-    if (!ALLOWED_TYPES.includes(file.type)) { flash('Hanya file gambar (JPG, PNG, WebP) yang diizinkan.'); return; }
-    if (file.size > MAX_SIZE_BYTES) { flash(`Gambar terlalu besar (maks 5MB). Ukuran file: ${(file.size / 1024 / 1024).toFixed(1)}MB.`); return; }
+    if (valid.length === 0) return;
 
-    const { file: ready, compressed } = await compressImage(file);
-    if (!compressed) flash('Compress gambar gagal — akan mengirim file original.');
-    const url = await new Promise<string>(resolve => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(typeof r.result === 'string' ? r.result : '');
-      r.onerror = () => resolve('');
-      r.readAsDataURL(ready);
-    });
-    setPending({ file: ready, url });
-    textareaRef.current?.focus();
+    const results = await Promise.allSettled(valid.map(compressImage));
+    const compressed = results
+      .filter((r): r is PromiseFulfilledResult<CompressResult> => r.status === 'fulfilled')
+      .map(r => r.value);
+    if (compressed.length === 0) return;
+
+    const anyFallback = compressed.some(r => !r.compressed);
+    if (anyFallback) {
+      setTranscribeError('Compress gambar gagal — mengirim file original.');
+      setTimeout(() => setTranscribeError(null), 3000);
+    }
+    const files = compressed.map(r => r.file);
+
+    const currentInput = input.trim();
+    setInput('');
+    if (textareaRef.current) textareaRef.current.style.height = '24px';
+    buzz();
+    onSendMessage(currentInput, files);
   };
 
   const startRecording = async () => {
@@ -186,14 +179,16 @@ export function MessageInput({
           const base64 = await blobToBase64(blob);
           const text = await transcribeWithProxy(base64, mimeType);
           if (text) {
-            setInput(prev => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            const currentInput = textareaRef.current?.value?.trim() || '';
+            const combined = currentInput ? `${currentInput} ${text}` : text;
+            setInput('');
+            if (textareaRef.current) textareaRef.current.style.height = '24px';
             buzz();
-            setTimeout(() => textareaRef.current?.focus(), 50);
-          } else {
-            flash('Suara tidak terbaca. Coba lagi.');
+            onSendMessage(combined);
           }
         } catch {
-          flash('Gagal transkripsi. Coba lagi.');
+          setTranscribeError('Gagal transkripsi. Coba lagi.');
+          setTimeout(() => setTranscribeError(null), 3000);
         } finally {
           setRecordingState('idle');
         }
@@ -201,7 +196,8 @@ export function MessageInput({
       recorder.start();
       setRecordingState('recording');
     } catch {
-      flash('Akses mikrofon ditolak.');
+      setTranscribeError('Akses mikrofon ditolak.');
+      setTimeout(() => setTranscribeError(null), 3000);
     }
   };
 
@@ -211,7 +207,7 @@ export function MessageInput({
     else if (recordingState === 'recording') stopRecording();
   };
 
-  const canSend      = (input.trim().length > 0 || !!pending) && !disabled && !isOffline;
+  const canSend      = input.trim().length > 0 && !disabled && !isOffline;
   const isRecording  = recordingState === 'recording';
   const isTranscribing = recordingState === 'transcribing';
 
@@ -246,7 +242,7 @@ export function MessageInput({
                       transition={{ duration: 1, repeat: Infinity }}
                       className="w-2 h-2 rounded-full bg-red-500 shrink-0"
                     />
-                    <span className="text-[11px] text-red-400 font-medium tabular-nums">Merekam {recordSec}s / {RECORD_MAX_SEC}s — ketuk stop</span>
+                    <span className="text-[11px] text-red-400 font-medium">Merekam… ketuk mic untuk berhenti</span>
                   </>
                 ) : (
                   <>
@@ -258,42 +254,17 @@ export function MessageInput({
             )}
           </AnimatePresence>
 
-          <AnimatePresence>
-            {pending && (
-              <m.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="px-4 pt-4 pb-1"
-              >
-                <div className="relative inline-block pt-2 pr-2">
-                  <img src={pending.url} alt="Preview" className="h-[72px] w-auto max-w-[160px] object-cover rounded-xl border border-[var(--border-main)]" />
-                  <button
-                    onClick={() => setPending(null)}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--text-primary)] text-[var(--bg-app)] flex items-center justify-center shadow"
-                    aria-label="Hapus foto"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              </m.div>
-            )}
-          </AnimatePresence>
-
           <div className="px-5 pt-[14px] pb-[4px] flex flex-col justify-center">
             <textarea
               ref={textareaRef}
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); handleSend(); }
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
-              enterKeyHint={isMobile ? 'enter' : 'send'}
               placeholder={
                 isRecording || isTranscribing ? '' :
                 isOffline ? 'Mode offline — chat aktif saat sinyal kembali…' :
-                pending ? 'Tambah keterangan foto (opsional)…' :
                 `Tanyakan tentang unit ${selectedModel}...`
               }
               rows={1}
@@ -312,11 +283,10 @@ export function MessageInput({
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={disabled}
-                  className="input-tool-btn"
+                  className="p-2 rounded-xl text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)] transition-all disabled:opacity-40"
                   title="Lampirkan gambar"
-                  aria-label="Lampirkan gambar"
                 >
-                  <Paperclip size={18} />
+                  <Paperclip size={17} />
                 </button>
                 <input
                   ref={fileInputRef}
@@ -332,13 +302,17 @@ export function MessageInput({
               <button
                 onClick={toggleRecording}
                 disabled={disabled || isTranscribing}
-                className={cn("input-tool-btn", isRecording && "input-tool-btn-rec")}
-                title={isRecording ? 'Berhenti merekam' : 'Input suara'}
-                aria-label={isRecording ? 'Berhenti merekam' : 'Input suara'}
+                className={cn(
+                  "p-2 rounded-xl transition-all disabled:opacity-40",
+                  isRecording
+                    ? "text-red-400"
+                    : "text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-card-hover)]"
+                )}
+                title={isRecording ? 'Stop recording' : 'Voice input'}
               >
                 {isTranscribing
-                  ? <Loader2 size={18} className="animate-spin" />
-                  : isRecording ? <Square size={14} fill="currentColor" /> : <Mic size={18} />
+                  ? <Loader2 size={17} className="animate-spin" />
+                  : isRecording ? <MicOff size={17} /> : <Mic size={17} />
                 }
               </button>
             )}

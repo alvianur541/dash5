@@ -233,7 +233,6 @@ const MessageItem = memo(function MessageItem({
 
           <div className="ai-actions">
             <CopyButton text={message.content} />
-            <span className="ai-actions-gap" />
             <button className="action-btn" title="Respons bagus"
               onClick={() => onFeedback(message.id, 'up')}>
               <ThumbsUp size={14}

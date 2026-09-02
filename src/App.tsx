@@ -9,8 +9,7 @@ import { generateResponse, generateResponseStream, warmupProxy, type AgentEvent 
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData, fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from './services/supabase';
 import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared, loadPocket, savePocketItem, removePocketItem, replacePocket, loadPocketTombstones, addPocketTombstone, clearPocketTombstone, type PocketItem } from './services/storage';
 import { PocketModal } from './components/PocketModal';
-import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw, ChevronDown, X } from 'lucide-react';
-import { MODEL_GROUPS } from './components/Sidebar';
+import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
@@ -34,8 +33,6 @@ export default function App() {
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [modelSheet, setModelSheet] = useState(false);
-  const [switchConfirm, setSwitchConfirm] = useState<UnitModel | null>(null);
 
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
@@ -192,20 +189,9 @@ export default function App() {
   }, [user?.uid, startNewSession]);
 
   const handleSelectModel = useCallback((model: UnitModel) => {
-    setModelSheet(false);
-    if (model === selectedModel) return;
-    if (messagesRef.current.length > 0) { setSwitchConfirm(model); return; }
     setSelectedModel(model);
     startNewSession();
-  }, [startNewSession, selectedModel]);
-
-  const confirmSwitch = useCallback(() => {
-    const model = switchConfirm;
-    setSwitchConfirm(null);
-    if (!model) return;
-    setSelectedModel(model);
-    startNewSession();
-  }, [switchConfirm, startNewSession]);
+  }, [startNewSession]);
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (!user) return;
@@ -401,7 +387,7 @@ export default function App() {
           ? 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.'
           : err.message?.includes('Stream terputus')
             ? 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.'
-            : 'Dash⁵ tidak bisa dihubungi. Cek sinyal kamu, lalu coba lagi.');
+            : 'Dash⁵ gagal merespon. Periksa API Key dan koneksi kamu.');
     } finally {
       setIsTyping(false);
       setIsStreaming(false);
@@ -470,10 +456,9 @@ export default function App() {
                 </button>
               </div>
 
-              <button className="topbar-center" onClick={() => setModelSheet(true)} aria-label="Ganti unit">
+              <div className="topbar-center">
                 <span className="topbar-model-name">{selectedModel}</span>
-                <ChevronDown size={14} className="text-[var(--text-muted)]" />
-              </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button
@@ -588,77 +573,6 @@ export default function App() {
         onClose={() => setPocketView(null)}
         onDelete={deletePocketItem}
       />
-
-      <AnimatePresence>
-        {modelSheet && (
-          <m.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
-            onClick={() => setModelSheet(false)}
-          >
-            <m.div
-              initial={{ y: 40, opacity: 0 }}
-              animate={{ y: 0, opacity: 1 }}
-              exit={{ y: 40, opacity: 0 }}
-              transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
-              className="model-sheet"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="flex justify-center pt-3 pb-1"><div className="w-9 h-1 rounded-full bg-[var(--border-main)]" /></div>
-              <div className="flex items-center justify-between px-5 pb-2">
-                <p className="text-[14px] font-semibold text-[var(--text-primary)]">Pilih unit</p>
-                <button onClick={() => setModelSheet(false)} className="topbar-hamburger" aria-label="Tutup"><X size={16} /></button>
-              </div>
-              {MODEL_GROUPS.map(({ type, models }) => (
-                <div key={type} className="px-3 pb-2">
-                  <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">{type}</p>
-                  {models.map(model => (
-                    <button
-                      key={model}
-                      onClick={() => handleSelectModel(model)}
-                      className={cn('model-sheet-item', model === selectedModel && 'model-sheet-item-active')}
-                    >
-                      <span className={cn('w-2 h-2 rounded-full shrink-0', model === selectedModel ? 'bg-[var(--accent-active)]' : 'bg-[var(--text-muted)]/40')} />
-                      <span>{model}</span>
-                    </button>
-                  ))}
-                </div>
-              ))}
-              <div className="safe-area-spacer" />
-            </m.div>
-          </m.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {switchConfirm && (
-          <m.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
-            onClick={() => setSwitchConfirm(null)}
-          >
-            <m.div
-              initial={{ opacity: 0, scale: 0.95, y: 8 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 8 }}
-              transition={{ duration: 0.15 }}
-              className="bg-[var(--bg-card)] border border-[var(--border-main)] rounded-2xl p-5 w-full max-w-[320px] shadow-2xl"
-              onClick={e => e.stopPropagation()}
-            >
-              <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-1">Ganti ke {switchConfirm}?</p>
-              <p className="text-[var(--text-muted)] text-[13px] mb-5">Chat ini tetap tersimpan di riwayat. Percakapan baru dimulai untuk unit {switchConfirm}.</p>
-              <div className="flex gap-2.5">
-                <button onClick={() => setSwitchConfirm(null)} className="flex-1 h-10 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors">Batal</button>
-                <button onClick={confirmSwitch} className="flex-1 h-10 rounded-xl bg-[var(--accent-main)] text-white text-[13px] font-semibold transition-colors">Ganti unit</button>
-              </div>
-            </m.div>
-          </m.div>
-        )}
-      </AnimatePresence>
 
       <AnimatePresence>
         {deleteAllConfirm && (
