@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw, History, ChevronRight } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -27,18 +27,28 @@ export function stripLatex(text: string): string {
 const CUT_NOTE_RE = /\n\n> ⚠️ Jawaban ter(?:putus|henti)[^\n]*/;
 const PN_CODE_RE = /^[A-Z0-9][A-Z0-9.\/-]{4,}$/i;
 
-function hasPartNoHeader(children: ReactNode): boolean {
-  let text = '';
-  const walk = (n: unknown, depth: number): void => {
-    if (depth > 6 || text.length > 200) return;
-    if (typeof n === 'string') { text += n + ' '; return; }
-    if (Array.isArray(n)) { n.forEach(c => walk(c, depth + 1)); return; }
-    if (n && typeof n === 'object' && 'props' in n) walk((n as { props: { children?: unknown } }).props.children, depth + 1);
+function partNoColumn(children: ReactNode): number {
+  const cells: string[] = [];
+  const text = (n: unknown, d = 0): string => {
+    if (d > 8) return '';
+    if (typeof n === 'string') return n;
+    if (Array.isArray(n)) return n.map(c => text(c, d + 1)).join('');
+    if (n && typeof n === 'object' && 'props' in n) return text((n as { props: { children?: unknown } }).props.children, d + 1);
+    return '';
   };
-  walk(children, 0);
-  const head = text.slice(0, 200);
-  const cols = head.trim().split(/\s{2,}|\s(?=\S)/).length;
-  return cols >= 4 && /\b(part\s*no|pn|part\s*number)\b/i.test(head);
+  const walk = (n: unknown, d = 0): void => {
+    if (cells.length >= 12 || d > 8) return;
+    if (Array.isArray(n)) { n.forEach(c => walk(c, d + 1)); return; }
+    if (!n || typeof n !== 'object' || !('props' in n)) return;
+    const el = n as { type?: unknown; props: { children?: unknown } };
+    if (el.type === 'th') { cells.push(text(el.props.children).trim()); return; }
+    if (el.type === 'tbody') return;
+    walk(el.props.children, d + 1);
+  };
+  walk(children);
+  if (cells.length < 3) return 0;
+  const idx = cells.findIndex(c => /\b(part\s*(no|number)|pn|nomor\s*part)\b/i.test(c));
+  return idx < 0 ? 0 : idx + 1;
 }
 
 function CodeSpan({ children }: { children?: ReactNode }) {
@@ -95,7 +105,6 @@ interface ChatWindowProps {
   onTogglePocket?: (messageId: string) => void;
   onResend?: (text: string) => void;
   loadingSession?: boolean;
-  lastSession?: { title: string; model: string; when: string; open: () => void };
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -259,7 +268,7 @@ const MessageItem = memo(function MessageItem({
                 components={{
                   table: ({ children }) => (
                     <div className="table-wrap-outer">
-                      <div className="markdown-table-wrap"><table className={hasPartNoHeader(children) ? 'sticky-pn' : undefined}>{children}</table></div>
+                      <div className="markdown-table-wrap"><table className={(c => c ? `sticky-pn sticky-col-${c}` : undefined)(partNoColumn(children))}>{children}</table></div>
                       {onExpandTable && !isStreaming && (
                         <button
                           className="table-expand-btn"
@@ -335,7 +344,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false, lastSession,
+  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -453,23 +462,6 @@ export function ChatWindow({
                 </m.div>
               </div>
 
-              {hasHistory && lastSession && (
-                <m.button
-                  className="last-session-card"
-                  onClick={lastSession.open}
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.3, delay: 0.2 }}
-                >
-                  <History size={15} className="shrink-0 text-[var(--accent-main)]" />
-                  <span className="flex flex-col min-w-0 flex-1 text-left">
-                    <span className="last-session-label">Lanjutkan terakhir</span>
-                    <span className="last-session-title">{lastSession.title}</span>
-                    <span className="last-session-meta">{lastSession.model} · {lastSession.when}</span>
-                  </span>
-                  <ChevronRight size={15} className="shrink-0 text-[var(--text-muted)]" />
-                </m.button>
-              )}
 
             </div>
           </m.div>

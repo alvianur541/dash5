@@ -2,7 +2,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
-import { relativeTime } from './lib/relativeTime';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { UnitModel, Message, SessionMeta } from './types';
@@ -434,8 +433,6 @@ export default function App() {
     handleSendMessage(q.content, q.attachments);
   }, [isOnline, queued, handleSendMessage]);
 
-  const lastSession = sessionList[0];
-
   if (authLoading) {
     return (
       <div className="h-dvh w-screen flex items-center justify-center bg-[var(--bg-app)]">
@@ -635,7 +632,6 @@ export default function App() {
           agentEvents={agentEvents}
           onResend={text => handleSendMessage(text)}
           loadingSession={loadingSession}
-          lastSession={messages.length === 0 && !currentSessionId && lastSession ? { title: lastSession.title, model: lastSession.model, when: relativeTime(lastSession.updatedAt), open: () => handleSelectSession(lastSession.id) } : undefined}
         />
 
         <div ref={inputBarRef} className="input-bar-float">
