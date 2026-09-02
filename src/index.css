@@ -661,7 +661,7 @@ img {
 }
 .msg-ai { display: flex; flex-direction: column; align-items: flex-start; width: 100%; }
 .ai-msg-wrap { width: 100%; cursor: pointer; }
-.ai-msg-wrap .markdown-body { font-family: var(--font-serif); font-size: 13.5px; line-height: 1.68; font-weight: 400; }
+.ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-family: var(--font-serif); font-size: 13.5px; line-height: 1.68; font-weight: 400; }
 .ai-actions {
   display: flex; align-items: center; gap: 4px;
   padding-top: 8px; overflow: hidden;
@@ -932,7 +932,7 @@ img {
 
   /* AI response — 14px di mobile: teknisi baca di lapangan (outdoor, silau, sarung
      tangan) — lebih besar dari desktop justru benar, bukan dikecilkan. */
-  .ai-msg-wrap .markdown-body { font-size: 14px; line-height: 1.7; }
+  .ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-size: 14px; line-height: 1.7; }
 
   /* Action buttons — lebih mudah di-tap */
   .action-btn { width: 36px; height: 36px; border-radius: 10px; }
@@ -1021,8 +1021,8 @@ img {
 .pocket-modal-inner { max-width: 720px; margin: 0 auto; }
 .pocket-question {
   font-family: var(--font-sans);
-  font-size: 13px; line-height: 1.5;
-  color: var(--text-secondary);
+  font-size: 14px; line-height: 1.5;
+  color: var(--text-primary);
   background: var(--bg-card-hover);
   border-radius: 14px;
   padding: 9px 13px;
@@ -1123,7 +1123,7 @@ img {
 
 @media (max-width: 767px) {
   .message-input-bar textarea { font-size: 16px !important; }
-  .ai-msg-wrap .markdown-body { font-family: var(--font-sans); font-size: 15px; line-height: 1.62; }
+  .ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-family: var(--font-sans); font-size: 15px; line-height: 1.62; }
   .markdown-body h2, .markdown-body h3 { font-size: 17px; }
   .user-bubble { font-size: 15px; }
   .chat-messages-list { padding-left: 14px; padding-right: 14px; }
