@@ -1,6 +1,6 @@
 
 import { AsyncLocalStorage } from 'node:async_hooks';
-import type { ThinkingLevel } from './orchestrator';
+import type { ThinkingLevel } from './vertex';
 
 export interface RerankOut { results: { index: number; score: number }[]; error?: string }
 

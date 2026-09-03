@@ -5,45 +5,32 @@
 @import "tailwindcss";
 
 @theme {
-  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;  /* hero/display — AndalAI-style */
-  --font-sans:    "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-display: "Sora", "Inter", ui-sans-serif, system-ui, sans-serif;  --font-sans:    "Inter", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-serif:   "Lora", ui-serif, Georgia, serif;
   --font-mono:    ui-monospace, "Cascadia Code", "SF Mono", "Segoe UI Mono", monospace;
 }
 
 :root {
-  /* Dark Mode — Claude.ai look: warm charcoal + terracotta */
-  --bg-app:         #1A1915;   /* near-black warm charcoal, NOT pure black */
-  --bg-sidebar:     #161512;
+  --bg-app:         #1A1915;  --bg-sidebar:     #161512;
   --bg-header:      rgba(26, 25, 21, 0.85);
-  --bg-card:        #232320;   /* cards, input bar */
-  --bg-card-hover:  #2E2D28;   /* hover states, pills */
-  --bg-input:       #232320;
-  --accent-main:    #D97757;   /* Claude terracotta/coral (was #F97316 orange) */
-  --accent-active:  #C2634A;   /* deeper terracotta for gradient/active */
-  --accent-glow:    rgba(217, 119, 87, 0.18);
-  --text-primary:   #E8E6DC;   /* warm off-white */
-  --text-secondary: #9B9A93;   /* muted gray */
-  --text-muted:     #6E6D66;   /* section headers, timestamps */
-  --border-main:    rgba(255, 255, 255, 0.06);
+  --bg-card:        #232320;  --bg-card-hover:  #2E2D28;  --bg-input:       #232320;
+  --accent-main:    #D97757;  --accent-active:  #C2634A;  --accent-glow:    rgba(217, 119, 87, 0.18);
+  --text-primary:   #E8E6DC;  --text-secondary: #9B9A93;  --text-muted:     #6E6D66;  --border-main:    rgba(255, 255, 255, 0.06);
   --border-glass:   rgba(255, 255, 255, 0.04);
   --glass-bg:       rgba(255, 255, 255, 0.02);
   --scroll-thumb:   rgba(255, 255, 255, 0.10);
   --scroll-thumb-hover: rgba(255, 255, 255, 0.18);
 
-  /* Status colors */
   --status-success: #4ade80;
   --status-danger:  #f87171;
   --status-warn:    #fbbf24;
 
-  /* Radii */
   --radius-xs:   6px;
   --radius-sm:   8px;
   --radius-md:   10px;
   --radius-lg:   16px;
   --radius-pill: 999px;
 
-  /* Spacing (4px base) */
   --space-1:  4px;
   --space-2:  8px;
   --space-3:  12px;
@@ -53,19 +40,14 @@
   --space-8:  32px;
   --space-10: 40px;
 
-  /* Content widths — pixel-fixed supaya konsisten cross-browser
-     (Tailwind max-w-* pakai rem yang Edge/Chrome bisa kalkulasi beda)
-     Sama-sama supaya input bar align dengan chat content */
   --chat-content-max:  820px;
   --input-content-max: 820px;
 
-  /* Shadows */
   --shadow-accent: 0 10px 30px -10px rgba(217, 119, 87, 0.30);
   --shadow-card:   0 1px 2px rgba(0,0,0,0.04), 0 4px 16px rgba(0,0,0,0.06);
   --shadow-modal:  0 25px 50px -12px rgba(0,0,0,0.50);
   --shadow-glow:   0 0 0 1px rgba(217, 119, 87, 0.20), 0 10px 24px -8px rgba(217, 119, 87, 0.25);
 
-  /* Motion */
   --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
   --ease-spring:   cubic-bezier(0.22, 1, 0.36, 1);
   --dur-fast: 120ms;
@@ -74,15 +56,12 @@
 }
 
 .light-theme {
-  /* Light Mode — Claude.ai cream + terracotta */
-  --bg-app:         #FAF9F5;   /* warm cream */
-  --bg-sidebar:     #F5F4EF;
+  --bg-app:         #FAF9F5;  --bg-sidebar:     #F5F4EF;
   --bg-header:      rgba(250, 249, 245, 0.85);
   --bg-card:        #FFFFFF;
   --bg-card-hover:  #F1EFE9;
   --bg-input:       #FFFFFF;
-  --accent-main:    #D97757;   /* Claude terracotta */
-  --accent-active:  #C2634A;
+  --accent-main:    #D97757;  --accent-active:  #C2634A;
   --accent-glow:    rgba(217, 119, 87, 0.14);
   --text-primary:   #1A1915;
   --text-secondary: #46443E;
@@ -96,18 +75,12 @@
 
 html {
   height: 100%;
-  overflow: hidden;       /* cegah document-level scroll di iOS */
-  overscroll-behavior: none;
-  /* iOS standalone bisa letterbox area bawah (viewport lama ke-cache sampai
-     app di-kill/reinstall). Pita itu dicat pakai background <html> — samakan
-     dengan bg app supaya menyatu, tidak terlihat seperti layar kepotong. */
+  overflow: hidden;  overscroll-behavior: none;
   background-color: var(--bg-app);
 }
 
 body {
-  height: 100%;           /* fixed height, bukan min-height — body tidak bisa tumbuh */
-  overflow: hidden;       /* cegah iOS scroll-to-focus menggeser seluruh layout */
-  overscroll-behavior: none;
+  height: 100%;  overflow: hidden;  overscroll-behavior: none;
   background-color: var(--bg-app);
   color: var(--text-primary);
   font-family: var(--font-sans);
@@ -122,20 +95,14 @@ body {
   -webkit-overflow-scrolling: auto;
 }
 
-/* Dynamic viewport height for min-h-screen (fixes mobile browser toolbar) */
 .min-h-screen {
   min-height: 100dvh;
 }
 
-/* ── Micro-detail global ── */
 ::selection {
   background: color-mix(in srgb, var(--accent-main) 26%, transparent);
   color: var(--text-primary);
 }
-/* Ring keyboard-focus HANYA untuk kontrol klik (button/link).
-   JANGAN global — textarea/input dapat kotak outline aneh di dalam pill
-   (container-nya sudah punya focus-within style sendiri), dan border-radius
-   di rule focus bisa menimpa radius asli elemen. */
 button:focus-visible,
 a:focus-visible,
 [role="button"]:focus-visible {
@@ -148,9 +115,6 @@ select:focus-visible {
   outline: none;
 }
 
-/* Quiet Claude: login polos di atas bg — ambient gradient dihapus */
-
-/* Scrollbar utilities */
 .scrollbar-hide {
   scrollbar-width: none;
   -ms-overflow-style: none;
@@ -159,7 +123,6 @@ select:focus-visible {
   display: none;
 }
 
-/* Thin scrollbar */
 * {
   scrollbar-width: thin;
   scrollbar-color: var(--scroll-thumb) transparent;
@@ -172,13 +135,11 @@ button, a, [role="button"] {
   user-select: none;
 }
 
-/* App-feel: gambar tidak bisa di-drag / long-press callout (logo, attachment preview) */
 img {
   -webkit-user-drag: none;
   -webkit-touch-callout: none;
 }
 
-/* Status pulse animation */
 @keyframes status-pulse {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.4; }
@@ -187,12 +148,6 @@ img {
   animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
-/* Markdown body — Inter sans untuk AI response (AndalAI-style modern, clean).
-   Previously used serif styling. Sans-serif is cleaner here.
-   + readability lebih bagus untuk technical content (tabel, kode, spec).
-   Digit-only mono dihilangkan supaya part number tidak terbelah
-   (YD + 00000075). PN/spec dirender mono via inline code (backtick)
-   atau di tabel (full mono). */
 .markdown-body {
   font-family: var(--font-serif);
   font-size: 13.5px;
@@ -233,7 +188,6 @@ img {
   line-height: 1.68;
 }
 
-/* Inline code: neutral mono, not accent colored. */
 .markdown-body code {
   font-family: var(--font-mono);
   font-size: 0.88em;
@@ -259,7 +213,6 @@ img {
   margin-bottom: 1rem;
 }
 
-/* Blockquote — kutipan spec/warning dari manual: aksen kiri + tint hangat */
 .markdown-body blockquote {
   margin: 0.6rem 0;
   padding: 0.55rem 0.95rem;
@@ -270,7 +223,6 @@ img {
 }
 .markdown-body blockquote p:last-child { margin-bottom: 0; }
 
-/* Link — accent dengan underline lembut */
 .markdown-body a {
   color: var(--accent-main);
   text-decoration: underline;
@@ -290,7 +242,6 @@ img {
   padding: 0;
 }
 
-/* h1 — judul utama (jarang dipakai AI, tapi kalau ada harus jelas) */
 .markdown-body h1 {
   font-family: var(--font-sans);
   font-size: 14px;
@@ -301,8 +252,6 @@ img {
   line-height: 1.4;
 }
 
-/* h2/h3 — penanda "bab baru": jarak atas 2rem (≈1.5× jarak paragraf-blok) supaya
-   mata teknisi langsung menangkap pergantian section tanpa harus membaca. */
 .markdown-body h2,
 .markdown-body h3 {
   font-family: "DM Serif Display", var(--font-serif);
@@ -316,41 +265,32 @@ img {
   line-height: 1.4;
 }
 
-/* First heading di response tidak perlu top margin */
 .markdown-body > h1:first-child,
 .markdown-body > h2:first-child,
 .markdown-body > h3:first-child {
   margin-top: 0.1rem;
 }
 
-/* Strong di Lora — font-weight 700 terlihat distinktif vs body 400 */
 .markdown-body strong {
   color: var(--text-primary);
   font-weight: 700;
 }
 
 .markdown-body em {
-  font-style: normal;       /* italic dinonaktifkan — AI tidak pakai italic untuk label teknis */
-}
+  font-style: normal;}
 
-/* ── Tables ── */
 .markdown-table-wrap {
   display: block;
   overflow-x: auto;
-  /* Tabel = blok data padat — beri napas ekstra vs paragraf (0.6rem) di atas & bawah */
   margin: 0.4rem 0 0.85rem;
   border-radius: 12px;
   border: 1px solid var(--border-main);
 }
 
-/* Tables — full monospace karena isinya teknis (PN, qty, item code).
-   Aligned & no fragmentation antar kolom. */
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
   font-size: 12.5px;
-  /* Serif (Lora) — sama dengan body jawaban AI. Mono HANYA untuk angka/satuan/PN dalam
-     backtick (via `code`). tabular-nums dipertahankan supaya kolom angka tetap rata. */
   font-family: var(--font-serif);
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -365,7 +305,6 @@ img {
   text-align: left;
   font-weight: 600;
   font-size: 12px;
-  /* Serif (Lora) — seragam dengan isi tabel & body jawaban AI */
   font-family: var(--font-serif);
   letter-spacing: 0.04em;
   text-transform: uppercase;
@@ -403,7 +342,6 @@ img {
   color: var(--text-secondary);
 }
 
-/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 5px;
 }
@@ -467,14 +405,12 @@ img {
   transform: scale(0.97);
 }
 
-/* Input bar floating wrapper */
 .input-bar-float {
   position: absolute;
   bottom: 0;
   left: 0;
   right: 0;
   z-index: 10;
-  /* Gradient: fade dari chat → solid di bawah input pill */
   background: linear-gradient(
     to bottom,
     transparent 0%,
@@ -484,11 +420,6 @@ img {
   );
 }
 
-/* Chat content bottom padding agar pesan terakhir tidak tertutup input bar */
-/* Clearance daftar chat terhadap input bar yang mengambang di atasnya.
-   --input-bar-h diisi ResizeObserver di App.tsx (tinggi bar sebenarnya); 140px hanya
-   fallback untuk render pertama sebelum observer jalan. +20px = napas antara pesan
-   terakhir/indikator loading dengan tepi atas bar. */
 .chat-messages-list {
   padding-bottom: calc(var(--input-bar-h, 140px) + 20px) !important;
 }
@@ -501,28 +432,20 @@ img {
   transition: background-color 0.3s;
 }
 
-/* Desktop: .input-bar-float solid, tidak perlu gradient */
 @media (min-width: 768px) {
   .input-bar-float {
     background: var(--bg-app);
   }
 }
 
-/* Safe area spacer di bawah input bar — nilai TETAP (tanpa env, lihat pitfall #14).
-   Browser: gap kecil 6px. Standalone: 10px (iOS auto-inset sudah urus home indicator). */
 .safe-area-spacer {
   height: 6px;
   flex-shrink: 0;
 }
 
-/* Standalone: nilai TETAP (tanpa env). Tanpa viewport-fit=cover iOS sudah
-   meng-inset webview di atas home indicator, jadi clearance 10px sudah cukup
-   & input tampak mentok ke bawah. JANGAN pakai env() di sini — device tertentu
-   return bogus ~83px → input menggantung (pitfall #14). */
 @media all and (display-mode: standalone) {
   .safe-area-spacer {
-    height: 24px;   /* napas dari home indicator — 10px terasa terlalu mepet */
-  }
+    height: 24px;  }
 }
 
 .mono-text {
@@ -532,7 +455,6 @@ img {
   font-size: 0.7rem;
 }
 
-/* ── Welcome screen ── */
 .welcome-screen {
   flex: 1;
   display: flex;
@@ -543,7 +465,6 @@ img {
   overflow-x: hidden;
   padding: 24px 24px 132px;
   scrollbar-width: none;
-  /* Quiet Claude: polos di atas bg — tanpa ambient gradient */
 }
 .welcome-screen::-webkit-scrollbar { display: none; }
 
@@ -553,14 +474,10 @@ img {
   }
 }
 
-/* Sidebar header */
 .sidebar-header {
   padding-top: 20px;
 }
 
-/* Standalone PWA: nilai tetap (tanpa env — cegah bogus ~83px di footer).
-   Tanpa viewport-fit=cover iOS tidak menaruh konten di bawah status bar/home
-   indicator, jadi 20px/14px sudah pas & konsisten. */
 @media all and (display-mode: standalone) {
   .sidebar-header {
     padding-top: 20px;
@@ -570,7 +487,6 @@ img {
   }
 }
 
-/* ── Topbar native ── */
 .topbar-native {
   display: flex; align-items: center; justify-content: space-between;
   padding: 10px 14px;
@@ -578,9 +494,6 @@ img {
   position: relative; flex-shrink: 0;
 }
 
-/* Mobile: topbar fixed — tidak bisa terseret oleh document scroll iOS.
-   Spacer (.topbar-spacer) mengganti ruang di flow agar ChatWindow tidak
-   mulai dari y=0. Hanya mobile karena desktop tidak punya keyboard issue. */
 @media (max-width: 767px) {
   .topbar-native {
     position: fixed;
@@ -602,7 +515,6 @@ img {
   cursor: pointer; flex-shrink: 0; transition: background 0.15s, transform 0.12s var(--ease-standard, ease);
 }
 .topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
-/* Pressed: bg naik satu step + scale — jari dapat konfirmasi taktil-visual */
 .topbar-hamburger:active { background: rgba(255,255,255,0.13); transform: scale(0.94); }
 .topbar-center {
   position: absolute; left: 50%; transform: translateX(-50%);
@@ -627,7 +539,6 @@ img {
 .topbar-newchat:hover { filter: brightness(1.08); }
 .topbar-newchat:active { transform: scale(0.92); opacity: 0.85; }
 
-/* ── Chat messages ── */
 .chat-messages-list {
   width: 100%; max-width: var(--chat-content-max); margin: 0 auto;
   padding: 24px 18px 8px;
@@ -639,12 +550,9 @@ img {
   flex-direction: column;
   align-items: flex-end;
   gap: 8px;
-  max-width: 72%;   /* constrains whole message group (text + attachments) */
-}
+  max-width: 72%;}
 .user-bubble {
   width: fit-content;
-  /* Quiet Claude: bubble user NETRAL (bukan accent) — signature Claude.ai.
-     Teks ink di atas bg-hover, tanpa gradient, tanpa shadow. */
   background: var(--bg-card-hover);
   border: none;
   border-radius: 18px;
@@ -677,16 +585,12 @@ img {
 .action-btn:active { transform: scale(0.88); background: rgba(255,255,255,0.10); color: var(--text-primary); }
 .action-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
-/* Action row SELALU tampil (desktop & mobile) — dulu desktop sembunyi sampai di-hover,
-   bikin tombol copy/rating/bookmark tak ketahuan ada. Subtle saat diam, penuh saat hover. */
 .ai-actions { opacity: 0.6; }
 @media (hover: hover) {
   .ai-msg-wrap:hover .ai-actions { opacity: 1; }
 }
 
-/* Typing indicator — 3 dot bounce (sebelum chunk pertama datang) */
 .typing-dots { display: flex; align-items: center; gap: 5px; padding: 10px 0 6px; }
-/* Varian sebaris untuk indikator agent — tanpa padding vertikal agar tinggi baris tetap. */
 .typing-dots-inline { display: inline-flex; align-items: center; gap: 4px; margin-left: 2px; }
 .typing-dots-inline .typing-dot { width: 4px; height: 4px; }
 .typing-dot {
@@ -694,7 +598,6 @@ img {
   background: color-mix(in srgb, var(--accent-main) 70%, var(--text-muted));
 }
 
-/* Typewriter cursor — blinking caret di akhir pesan AI saat streaming */
 .typewriter-cursor {
   display: inline-block;
   vertical-align: text-bottom;
@@ -713,7 +616,6 @@ img {
   51%, 100% { opacity: 0; }
 }
 
-/* -- Welcome -- */
 .welcome-subtitle {
   font-family: var(--font-sans);
   font-size: 15px;
@@ -723,7 +625,6 @@ img {
   text-align: center;
   margin-top: -4px;
 }
-/* Desktop: force subtitle ke 1 baris seperti AndalAI. Mobile: wrap natural supaya tidak overflow. */
 @media (min-width: 768px) {
   .welcome-subtitle-oneline {
     white-space: nowrap;
@@ -731,7 +632,6 @@ img {
 }
 
 .welcome-greeting {
-  /* DM Serif Display — editorial, memorable. Sudah dimuat untuk h2/h3 markdown. */
   font-family: "DM Serif Display", var(--font-serif);
   font-size: clamp(1.75rem, 4.2vw, 2.15rem);
   font-weight: 400;
@@ -740,7 +640,6 @@ img {
   color: var(--text-primary);
 }
 
-/* Judul editorial — serif display utk heading dashboard/modal, match welcome-greeting */
 .font-editorial {
   font-family: "DM Serif Display", var(--font-serif);
   font-weight: 400;
@@ -793,8 +692,6 @@ img {
   font-size: 11px; font-weight: 500;
   letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted);
 }
-/* Quiet Claude: pill teks-saja — tanpa ikon/emoji, tanpa lift, tanpa shadow.
-   Boundary cukup 1px line; hover = bg-hover + ink. */
 .suggestion-chip {
   display: block;
   padding: 12px 16px; border-radius: 16px;
@@ -809,7 +706,6 @@ img {
   background: var(--bg-card-hover);
   color: var(--text-primary);
 }
-/* Dark: border sedikit lebih terang supaya pill tidak menyatu dgn bg */
 .dark-theme .suggestion-chip { border-color: rgba(255, 255, 255, 0.10); }
 
 .input-pill-row { display: flex; align-items: flex-end; gap: 8px; max-width: 720px; margin: 0 auto; width: 100%; }
@@ -824,7 +720,6 @@ img {
 .input-pill {
   flex: 1; display: flex; align-items: flex-end; gap: 6px;
   background: var(--bg-card);
-  /* Idle lebih kalem (32%) — full accent disimpan untuk focus, kontras state lebih terasa */
   border: 1.5px solid color-mix(in srgb, var(--accent-main) 32%, transparent);
   border-radius: 18px; padding: 10px 10px 10px 16px;
   transition: border-color 0.18s, box-shadow 0.18s; min-height: 46px;
@@ -862,14 +757,12 @@ img {
 .pill-mic-btn--active { color: #ef4444; }
 .pill-mic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
-/* ── Send button states ── */
 .send-btn-inactive {
   background: transparent;
   color: var(--text-muted);
   opacity: 0.5;
 }
 
-/* ── Light theme overrides ── */
 .light-theme .topbar-hamburger { background: transparent; }
 .light-theme .topbar-hamburger:hover { background: rgba(0,0,0,0.06); }
 .light-theme .topbar-hamburger:active { background: rgba(0,0,0,0.10); }
@@ -881,26 +774,19 @@ img {
 .light-theme .action-btn:hover { background: rgba(0,0,0,0.05); }
 .light-theme .pill-mic-btn:hover { background: rgba(0,0,0,0.05); }
 
-/* ── Light theme: konversi bg-white/* hover/active ke bg-black/* ──
-   Tailwind bg-white/5 bg-white/8 invisible di light cream bg,
-   override jadi subtle dark tint supaya hover/active tetap kelihatan. */
 .light-theme .hover\:bg-white\/5:hover,
 .light-theme .hover\:bg-white\/8:hover { background-color: rgba(0,0,0,0.04); }
 .light-theme .active\:bg-white\/8:active { background-color: rgba(0,0,0,0.07); }
 .light-theme .bg-white\/5  { background-color: rgba(0,0,0,0.04); }
 .light-theme .bg-white\/8  { background-color: rgba(0,0,0,0.06); }
 
-/* Suggestion chip hover di light mode — accent border lebih visible */
 .light-theme .suggestion-chip:hover {
   background: var(--bg-card-hover);
   border-color: color-mix(in srgb, var(--accent-main) 30%, var(--border-main));
 }
 
-/* ── Mobile enhancements ────────────────────────────────────────────────── */
 @media (max-width: 767px) {
 
-  /* Topbar — solid background (bukan backdrop-filter) supaya status bar warna ikut tema instantly.
-     backdrop-filter blur body yg sedang transition 0.4s → status bar lag. Solid = instant. */
   .topbar-native {
     border-bottom: 1px solid var(--border-main);
     background: var(--bg-app);
@@ -921,42 +807,32 @@ img {
   .topbar-model-name { font-size: 14px; }
   .topbar-spacer { height: 58px; }
 
-  /* Chat list — tighter padding + smaller gap */
   .chat-messages-list {
     padding: 16px 14px 8px;
     gap: 18px;
   }
 
-  /* Message group — lebih wide di mobile */
   .msg-user-group { max-width: 85%; }
 
-  /* AI response — 14px di mobile: teknisi baca di lapangan (outdoor, silau, sarung
-     tangan) — lebih besar dari desktop justru benar, bukan dikecilkan. */
   .ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-size: 14px; line-height: 1.7; }
 
-  /* Action buttons — lebih mudah di-tap */
   .action-btn { width: 36px; height: 36px; border-radius: 10px; }
 
-  /* Scroll-FAB — touch target lebih besar di mobile (guideline ≥44px area efektif) */
   .scroll-fab { width: 42px; height: 42px; }
 
-  /* Suggestion chips — taller touch target (selaras tile ikon) */
   .suggestion-chip {
     padding: 10px 14px 10px 10px;
     border-radius: 14px;
   }
   .suggestion-chip:active { opacity: 0.7; background: var(--bg-card-hover); }
 
-  /* Input pill — boundary halus saja (quiet Claude: max shadow 0 1px 2px) */
   .input-pill {
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
   }
 
-  /* Welcome — sizing on mobile */
   .welcome-greeting { font-size: clamp(1.4rem, 6vw, 1.8rem); }
   .welcome-empty-hint { font-size: 13px; }
 
-  /* Chips container — full width on mobile (overrides 440px inline style) */
   .chips-container {
     max-width: 100% !important;
     padding: 0 2px;
@@ -967,7 +843,6 @@ img {
 
 }
 
-/* ── Tabel layar penuh ─────────────────────────────────────────────────── */
 .table-wrap-outer { position: relative; }
 .table-expand-btn {
   position: absolute; bottom: 6px; right: 6px;
@@ -1013,11 +888,9 @@ img {
   flex: 1; overflow: auto; overscroll-behavior: contain;
   padding: 14px 14px 28px;
 }
-/* Tabel di modal: lebar natural (boleh melebihi layar, scroll 2 arah), font ikut kontrol A−/A+ */
 .table-modal-body table { font-size: inherit; width: auto; min-width: 100%; }
 .table-modal-body th, .table-modal-body td { white-space: nowrap; }
 
-/* ── Saku viewer ── */
 .pocket-modal-inner { max-width: 720px; margin: 0 auto; padding: 16px 18px 28px; }
 .pocket-question {
   font-family: var(--font-sans);
@@ -1031,7 +904,6 @@ img {
 }
 .pocket-delete-btn:hover { color: #f87171; border-color: rgba(248, 113, 113, 0.4); }
 
-/* Scroll-to-bottom FAB — fixed position, hovers above input bar */
 .scroll-fab {
   position: fixed;
   bottom: 90px;
@@ -1055,7 +927,6 @@ img {
 }
 .scroll-fab:active { transform: scale(0.92); color: var(--text-primary); }
 
-/* Standalone PWA: safe-area-inset-top untuk notch/dynamic island */
 @media all and (display-mode: standalone) and (max-width: 767px) {
   .topbar-native {
     padding-top: max(10px, env(safe-area-inset-top));
@@ -1065,20 +936,16 @@ img {
   }
 }
 
-/* Standalone: FAB naik sedikit di atas input bar. Nilai tetap (tanpa env). */
 @media all and (display-mode: standalone) {
   .scroll-fab {
     bottom: 108px;
   }
 }
 
-/* Light theme mobile topbar */
 .light-theme .topbar-center {
   background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
 }
 
-/* ── Aksesibilitas: hormati preferensi reduce-motion (juga hemat baterai di mobile).
-   CSS animation dekoratif (kursor kedip, pulse, dot bounce) dimatikan; layout tetap utuh. */
 @media (prefers-reduced-motion: reduce) {
   .typewriter-cursor,
   .status-pulse,

@@ -1,0 +1,154 @@
+import { deps } from './deps';
+import { VRequest, clampThinking, addUsage, MODEL } from './vertex';
+
+function collapseDegenerateLoops(text: string): string {
+  let out = text;
+  let prev = '';
+  while (prev !== out) {
+    prev = out;
+    out = out
+      .replace(/([^\n]{8,160}?[.!?…]\s*)(?:\1){3,}/g, '$1')
+      .replace(/(^[^\n]{4,160}\n)(?:\1){3,}/gm, '$1');
+  }
+  return out;
+}
+
+const tunggu = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+const TAIL_LOOP_RE = /([^\n]{8,120}?[.!?…]\s*)(?:\1){5,}$/;
+
+export const STREAM_CUT_NOTE =
+  '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
+export const STREAM_HALT_NOTE =
+  '\n\n> ⚠️ Jawaban terhenti sebelum selesai. Kirim ulang pertanyaanmu, atau ubah sedikit kalimatnya.';
+
+function pastDeadline(): boolean {
+  const at = deps().deadlineAt;
+  return typeof at === 'number' && Date.now() > at - 5_000;
+}
+
+export function looksComplete(text: string): boolean {
+  const t = text.trim();
+  return t.length >= 300 || /[.!?…:)\]`|*_]$/.test(t);
+}
+
+export async function callProxyStream(
+  body: VRequest,
+  onChunk: (text: string) => void,
+  enableGoogleSearch = false,
+): Promise<string> {
+  const STREAM_TIMEOUT_MS = 90_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 45_000;
+
+  const MAX_ATTEMPT = 3;
+  let attempt = 0;
+  let fullText = '';
+  interface UsageMeta {
+    promptTokenCount?: number; candidatesTokenCount?: number;
+    thoughtsTokenCount?: number; cachedContentTokenCount?: number;
+  }
+  const usageBox: { last: UsageMeta | null } = { last: null };
+
+  while (true) {
+  attempt++;
+  fullText = '';
+  let upstreamError: string | null = null;
+  let retryNeeded = false;
+  let quotaFull = false;
+  let finishReason: string | null = null;
+
+  const ctrl = new AbortController();
+  const hardTimer = setTimeout(() => ctrl.abort(), STREAM_TIMEOUT_MS);
+
+  let firstTokenSeen = false;
+  let streamHidup    = false;
+  const watchdog = setTimeout(() => {
+    if (!streamHidup) {
+      console.warn('[stream] %d dtk tanpa satu chunk pun — batalkan & ulang', FIRST_TOKEN_TIMEOUT_MS / 1000);
+      ctrl.abort();
+    }
+  }, FIRST_TOKEN_TIMEOUT_MS);
+
+  try {
+    await deps().stream(clampThinking(body, MODEL), MODEL, c => {
+      if (c.error) {
+        if (c.code === 429) { quotaFull = true; ctrl.abort(); return; }
+        upstreamError = String(c.error);
+        ctrl.abort();
+        return;
+      }
+      if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
+      if (c.usageMetadata) usageBox.last = c.usageMetadata;
+      if (c.finishReason) finishReason = c.finishReason;
+      if (c.text) {
+        firstTokenSeen = true;
+        fullText += c.text; onChunk(c.text);
+        if (fullText.length > 400 && TAIL_LOOP_RE.test(fullText.slice(-800))) {
+          console.warn('[stream] degenerate loop terdeteksi — stream dihentikan dini');
+          ctrl.abort();
+        }
+      }
+    }, { enableGoogleSearch, signal: ctrl.signal });
+  } catch (err) {
+    if (!ctrl.signal.aborted) upstreamError = (err as Error)?.message ?? 'Stream gagal';
+  } finally {
+    clearTimeout(watchdog);
+    clearTimeout(hardTimer);
+  }
+
+  if (quotaFull) throw new Error('KUOTA_PENUH');
+
+  if (upstreamError) {
+    if (fullText.trim()) {
+      console.warn('[stream] upstream error setelah sebagian teks:', upstreamError);
+      fullText += STREAM_CUT_NOTE;
+      onChunk(STREAM_CUT_NOTE);
+    } else if (attempt < MAX_ATTEMPT && !pastDeadline()) {
+      console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
+      await tunggu(attempt * 900);
+      retryNeeded = true;
+    } else {
+      throw new Error(`Stream terputus: ${upstreamError}`);
+    }
+  }
+
+  if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT && !pastDeadline()) {
+    console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
+    await tunggu(attempt * 900);
+    continue;
+  }
+  if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
+    console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
+    if (fullText) onChunk('\n\n');
+    await tunggu(attempt * 900);
+    continue;
+  }
+  if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
+    if (attempt < MAX_ATTEMPT && !pastDeadline()) {
+      console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
+      if (fullText) onChunk('\n\n');
+      await tunggu(attempt * 900);
+      continue;
+    }
+    console.warn('[stream] finishReason=%s tetap setelah %d percobaan — beri catatan', finishReason, attempt);
+    fullText += STREAM_HALT_NOTE;
+    onChunk(STREAM_HALT_NOTE);
+  }
+
+  if (retryNeeded) continue;
+  break;
+  }
+
+  addUsage(usageBox.last?.promptTokenCount, usageBox.last?.candidatesTokenCount,
+           usageBox.last?.thoughtsTokenCount, usageBox.last?.cachedContentTokenCount);
+  {
+    const inp = usageBox.last?.promptTokenCount ?? 0;
+    const cache = usageBox.last?.cachedContentTokenCount ?? 0;
+    const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
+    console.info('[tokens] model=%s think=%s%s in=%d (prompt-cache %d%%) out=%d thinking=%d',
+      MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
+      inp, inp ? Math.round((cache / inp) * 100) : 0,
+      usageBox.last?.candidatesTokenCount ?? 0, usageBox.last?.thoughtsTokenCount ?? 0);
+  }
+  return collapseDegenerateLoops(fullText);
+}

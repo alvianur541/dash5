@@ -342,22 +342,32 @@ function getTroubleshootingKategori(model: string): string {
   return TROUBLESHOOTING_KATEGORI_BY_MODEL[model] ?? DEFAULT_TROUBLESHOOTING_KATEGORI;
 }
 
-export async function searchTechnicalManualMulti(
+interface Candidates {
+  kwDocs: string[];
+  vecDocs: string[];
+  rankedDocs: string[];
+  allDocs: string[];
+  usedLooseFallback: boolean;
+  embedFailed: boolean;
+  embedError?: string;
+  msCari: number;
+}
+
+function wantsNumeric(primaryQuery: string): boolean {
+  return primaryQuery.toLowerCase().split(/\s+/)
+      .map(w => w.replace(/[^\w°·/-]/g, ''))
+      .some(w => SPEC_TERMS.has(w))
+    || NUMERIC_INTENT_RE.test(primaryQuery);
+}
+
+async function gatherCandidates(
   queries: string[],
   model: string,
-  topN = 4,
-  forceKategori?: string,
-): Promise<RAGResult> {
-  if (!sb() || queries.length === 0) return { content: '', hasResults: false };
-
+  faultCode: boolean,
+  strictFilter: Record<string, string>,
+): Promise<Candidates> {
   const tMulai = Date.now();
   const primaryQuery = queries[0].trim();
-  const faultCode    = isFaultCode(primaryQuery);
-  const strictFilter: Record<string, string> = forceKategori
-    ? { Model: model, Kategori: forceKategori }
-    : faultCode
-      ? { Model: model, Kategori: getTroubleshootingKategori(model) }
-      : { Model: model };
   const looseFilter: Record<string, string> = { Model: model };
 
   const normalizedQueries = queries.map(q =>
@@ -376,11 +386,7 @@ export async function searchTechnicalManualMulti(
     ? ilikeAny(strictFilter, 5 * normalizedQueries.length)
     : Promise.resolve({ data: [] as Array<{ content?: string; metadata?: any }> });
 
-  const wantsNumericAnswer =
-    primaryQuery.toLowerCase().split(/\s+/)
-      .map(w => w.replace(/[^\w°·/-]/g, ''))
-      .some(w => SPEC_TERMS.has(w))
-    || NUMERIC_INTENT_RE.test(primaryQuery);
+  const wantsNumericAnswer = wantsNumeric(primaryQuery);
 
   const rankedPromise: Promise<string[]> = (async () => {
     if (faultCode) return [];
@@ -448,6 +454,7 @@ export async function searchTechnicalManualMulti(
 
   const kwDocs:  string[] = [];
   const vecDocs: string[] = [];
+  const rankedDocs: string[] = rankedSettled.status === 'fulfilled' ? rankedSettled.value : [];
 
   if (rankedSettled.status === 'fulfilled') {
     for (const c of rankedSettled.value) if (c) kwDocs.push(c);
@@ -479,31 +486,33 @@ export async function searchTechnicalManualMulti(
     }
   }
 
-  if (allDocs.length === 0) return { content: '', hasResults: false };
+  const embedFailed = vectorSettled.status === 'rejected';
+  const embedError = embedFailed ? ((vectorSettled.reason as Error)?.message ?? 'Embedding service error') : undefined;
+  return { kwDocs, vecDocs, rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari };
+}
 
-  let filteredDocs = allDocs;
-  if (faultCode) {
-    const codeUpper = primaryQuery.toUpperCase();
-    const numOnly   = codeUpper.replace(/^[A-Z]{1,3}\s*:?\s*/i, '');
-    const stripped  = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1');
-    filteredDocs = allDocs.filter(text => {
-      const upper = text.toUpperCase();
-      if (upper.includes(codeUpper)) return true;
-      if (numOnly.length >= 4 && upper.includes(numOnly)) return true;
-      if (stripped !== numOnly && stripped.length >= 4 && upper.includes(stripped)) return true;
-      return false;
-    });
-  }
+function filterByFaultCode(docs: string[], primaryQuery: string): string[] {
+  const codeUpper = primaryQuery.toUpperCase();
+  const numOnly   = codeUpper.replace(/^[A-Z]{1,3}\s*:?\s*/i, '');
+  const stripped  = numOnly.replace(/-0+([0-9A-Fa-f]+)$/, '-$1');
+  return docs.filter(text => {
+    const upper = text.toUpperCase();
+    if (upper.includes(codeUpper)) return true;
+    if (numOnly.length >= 4 && upper.includes(numOnly)) return true;
+    if (stripped !== numOnly && stripped.length >= 4 && upper.includes(stripped)) return true;
+    return false;
+  });
+}
 
-  if (filteredDocs.length === 0) {
-    const embedFailed = vectorSettled.status === 'rejected';
-    if (embedFailed && allDocs.length === 0) {
-      const reason = (vectorSettled.reason as Error)?.message ?? 'Embedding service error';
-      return { content: '', hasResults: false, ragError: reason };
-    }
-    return { content: '', hasResults: false };
-  }
-
+async function rankAndSelect(
+  primaryQuery: string,
+  filteredDocs: string[],
+  rankedDocs: string[],
+  wantsNumericAnswer: boolean,
+  usedLooseFallback: boolean,
+  topN: number,
+  msCari: number,
+): Promise<RAGResult> {
   const rerankInput = capRerankPayload(filteredDocs);
   const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
   const tRerank = Date.now();
@@ -512,8 +521,8 @@ export async function searchTechnicalManualMulti(
   let top = mmrSelect(reranked, topN, 0.7);
 
   const KW_DIJAMIN = 2;
-  if (wantsNumericAnswer && rankedSettled.status === 'fulfilled' && top.length > 0) {
-    const kandidat = rankedSettled.value
+  if (wantsNumericAnswer && top.length > 0) {
+    const kandidat = rankedDocs
       .slice(0, KW_DIJAMIN)
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
@@ -539,6 +548,39 @@ export async function searchTechnicalManualMulti(
   noteChunks('tm', top);
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
+}
+
+export async function searchTechnicalManualMulti(
+  queries: string[],
+  model: string,
+  topN = 4,
+  forceKategori?: string,
+): Promise<RAGResult> {
+  if (!sb() || queries.length === 0) return { content: '', hasResults: false };
+
+  const primaryQuery = queries[0].trim();
+  const faultCode    = isFaultCode(primaryQuery);
+  const strictFilter: Record<string, string> = forceKategori
+    ? { Model: model, Kategori: forceKategori }
+    : faultCode
+      ? { Model: model, Kategori: getTroubleshootingKategori(model) }
+      : { Model: model };
+
+  const { rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari } =
+    await gatherCandidates(queries, model, faultCode, strictFilter);
+
+  if (allDocs.length === 0) return { content: '', hasResults: false };
+
+  const filteredDocs = faultCode ? filterByFaultCode(allDocs, primaryQuery) : allDocs;
+
+  if (filteredDocs.length === 0) {
+    if (embedFailed && allDocs.length === 0) {
+      return { content: '', hasResults: false, ragError: embedError };
+    }
+    return { content: '', hasResults: false };
+  }
+
+  return rankAndSelect(primaryQuery, filteredDocs, rankedDocs, wantsNumeric(primaryQuery), usedLooseFallback, topN, msCari);
 }
 
 const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
