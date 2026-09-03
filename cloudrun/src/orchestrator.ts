@@ -141,7 +141,7 @@ async function analyzeIntent(
 ): Promise<IntentAnalysis> {
   const ctx = history.slice(-6)
     .filter(m => m.content?.trim())
-    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
+    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${ctxSnippet(m)}`)
     .join('\n');
 
   const systemPrompt = `You are a query classifier and optimizer for Hitachi/KCM heavy equipment documentation search.
@@ -171,6 +171,8 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
              "translate to english", "pakai bahasa indo") — the assistant switches/translates itself.
              NOT off_topic.
 "off_topic" → Questions clearly about an UNRELATED domain: recipes, sports, politics, news, weather, cooking, entertainment, general internet trivia. ALSO company/organization matters (management names, direksi, stock, corporate news/rumor, "siapa presiden direktur X") and news/rumor about brands — the assistant has NO reliable data for these and must NOT answer. NOT for questions about the assistant/user/app/current time. Return shouldSearch=false.
+
+AFFIRMATIVE REPLY TO AN OFFER: if the query is a short yes ("mau", "ya", "boleh", "oke", "lanjut", "sekalian") and the previous AI turn ENDS with an offer question ("Mau sekalian cek X?", "Mau saya tampilkan Y?"), the user is accepting that offer → classify by the OFFERED item (parts/technical), shouldSearch=true, optimizedQuery = the offered item in English. NEVER "general" in that case.
 
 ═══ STEP 2: BUILD optimizedQuery (parts/technical only) ═══
 
@@ -294,6 +296,39 @@ shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" 
     console.warn('[analyzeIntent] failed, fallback to raw input:', (err as Error)?.message);
     return { shouldSearch: true, searchType: 'technical', optimizedQuery: userInput };
   }
+}
+
+function ctxSnippet(m: Message): string {
+  const c = m.content.trim();
+  if (m.role === 'user' || c.length <= 420) return c.slice(0, 420);
+  return `${c.slice(0, 200)} … ${c.slice(-220)}`;
+}
+
+const AFFIRM_RE = /^(?:(?:ya|iya|oke?|okay|okey|sip|siap|boleh|mau|yoi|yup|yes|yep|lanjut|lanjutkan|sekalian|tampilkan|coba|silakan|silahkan|gas|yuk|ayo|tolong|please|sure|dong|deh|aja|saja)[\s.!,]*){1,4}$/i;
+
+export function extractLastOffer(history: Message[]): string | null {
+  const last = [...history].reverse().find(m => m.role === 'assistant' && m.content?.trim());
+  if (!last) return null;
+  const tail = last.content.trim().split('\n').map(l => l.trim()).filter(Boolean).slice(-3).join(' ');
+  const m = tail.match(/([^.!?]*\?)\s*$/);
+  if (!m) return null;
+  const VERB = '(?:tampilkan|tampilin|cek(?:kan)?|carikan|cari|lihat|tarik|siapkan|bantu|jelaskan|lanjut(?:kan)?|kasih|beri(?:kan)?|tunjukkan|bahas|ambil|kita\\s+cek|kita\\s+lihat)';
+  let q = m[1].trim()
+    .replace(/\?$/, '')
+    .replace(new RegExp(`\\b(?:mau|perlu|ingin|butuh|apakah)\\s+(?:saya|aku|kita|kami)?\\s*(?:sekalian|juga)?\\s*${VERB}?\\s*(?:sekalian|juga)?`, 'gi'), ' ')
+    .replace(new RegExp(`^\\s*${VERB}\\s+`, 'i'), ' ')
+    .replace(/[-‐]?\bnya\b/gi, '')
+    .replace(/\b(?:sekalian|juga|dong|ya|deh|saja|aja|kalau|kalo|perlu)\b/gi, ' ')
+    .replace(/^[\s,;:–—-]+|[\s,;:–—-]+$/g, '')
+    .replace(/\s+/g, ' ').trim();
+  if (q.split(/\s+/).length < 2) return null;
+  if (/\satau\s/i.test(q)) q = q.split(/\s+atau\s+/i).join(' dan ');
+  return q;
+}
+
+export function resolveAffirmative(trimmed: string, history: Message[]): string | null {
+  if (!AFFIRM_RE.test(trimmed)) return null;
+  return extractLastOffer(history);
 }
 
 const HISTORY_FULL_TAIL = 6;
@@ -1128,23 +1163,27 @@ export async function generateResponseStream(
 
   emit({ type: 'thinking', message: 'Menganalisa query…' });
 
-  const foreignModel = detectForeignModel(trimmed, model);
+  const offer = resolveAffirmative(trimmed, history);
+  const q = offer ?? trimmed;
+  if (offer) console.info('[offer] "%s" → tawaran diterima: "%s"', trimmed, offer);
+
+  const foreignModel = detectForeignModel(q, model);
   if (foreignModel) {
     console.info('[scope] model asing terdeteksi: %s (aktif: %s)', foreignModel, model);
     return streamCanned(foreignModelTemplate(foreignModel, model), onChunk);
   }
 
-  const { isFaultCode, faultQuery } = detectFaultCodeInQuery(trimmed);
+  const { isFaultCode, faultQuery } = detectFaultCodeInQuery(q);
 
-  const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(trimmed);
+  const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(q);
 
   const routeResult = isFaultCode
     ? await resolveFaultCodeQuery(faultQuery, model, emit)
-    : isMultiAspectQuery(trimmed)
-      ? await resolveMultiAspectQuery(trimmed, history, model, emit)
-      : (isPartsQuery(trimmed) || hasServiceInterval)
-        ? await resolvePartsQuery(trimmed, history, model, emit)
-        : await resolveNaturalLanguageQuery(trimmed, history, model, emit);
+    : isMultiAspectQuery(q)
+      ? await resolveMultiAspectQuery(q, history, model, emit)
+      : (isPartsQuery(q) || hasServiceInterval)
+        ? await resolvePartsQuery(q, history, model, emit)
+        : await resolveNaturalLanguageQuery(q, history, model, emit);
 
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
@@ -1170,11 +1209,12 @@ export async function generateResponseStream(
       ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
+  const shownQuery = offer ? `${trimmed}\n[User menerima tawaranmu di jawaban sebelumnya → yang diminta: ${offer}. Jawab langsung permintaan itu, jangan minta klarifikasi.]` : trimmed;
   const userText         = ragContent
-    ? `${trimmed || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
+    ? `${shownQuery || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
     : gsTechnical
-      ? `${trimmed}\n\n${EXTERNAL_DIRECTIVE(model)}`
-      : (trimmed || 'Halo');
+      ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
+      : (shownQuery || 'Halo');
 
   contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
 
