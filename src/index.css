@@ -1018,7 +1018,7 @@ img {
 .table-modal-body th, .table-modal-body td { white-space: nowrap; }
 
 /* ── Saku viewer ── */
-.pocket-modal-inner { max-width: 720px; margin: 0 auto; }
+.pocket-modal-inner { max-width: 720px; margin: 0 auto; padding: 16px 18px 28px; }
 .pocket-question {
   font-family: var(--font-sans);
   font-size: 14px; line-height: 1.5;
