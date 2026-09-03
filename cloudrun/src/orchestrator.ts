@@ -1,12 +1,22 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
+
 import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery } from './rag';
 import { deps } from './deps';
-import { Part, VContent, VRequest, ThinkingLevel, resetUsage, toInlineData } from './vertex';
+import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery } from './routes';
+
+const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB]`;
+
+async function systemFor(model: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
+  const text = casual ? SYSTEM_PROMPT_CASUAL(model) : SYSTEM_PROMPT(model);
+  const key = `${casual ? 'casual' : 'main'}:${model}`;
+  const id = await deps().cacheFor?.(MODEL, key, text).catch(() => null);
+  return id ? { cachedContent: id } : { systemInstruction: { parts: [{ text }] } };
+}
 
 export { MODEL, INTENT_MODEL } from './vertex';
 export { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE } from './stream';
@@ -105,15 +115,11 @@ export async function generateResponseStream(
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
 
-  contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]\n${userText}` }] });
-
-  const systemText = isCasual
-    ? SYSTEM_PROMPT_CASUAL(model, userName)
-    : SYSTEM_PROMPT(model, userName);
+  contents.push({ role: 'user', parts: [{ text: `${userTag(userName)}\n${userText}` }] });
 
   const fullText = await callProxyStream({
     contents,
-    systemInstruction: { parts: [{ text: systemText }] },
+    ...(await systemFor(model, isCasual)),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical);
 
@@ -141,7 +147,7 @@ export async function generateResponse(
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
-  const systemInstruction = SYSTEM_PROMPT(model, userName);
+  const system = await systemFor(model, false);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
 
@@ -233,13 +239,13 @@ export async function generateResponse(
 
   if (sendImageToModel) currentParts.unshift(...imageParts);
 
-  contents.push({ role: 'user', parts: [{ text: `[${jakartaTime()} WIB]` }, ...currentParts] });
+  contents.push({ role: 'user', parts: [{ text: userTag(userName) }, ...currentParts] });
 
   emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
   const body: VRequest = {
     contents,
-    systemInstruction: { parts: [{ text: systemInstruction }] },
+    ...system,
     generationConfig: {
       maxOutputTokens: sendImageToModel ? 8192 : 4096,
       temperature: 0.3,

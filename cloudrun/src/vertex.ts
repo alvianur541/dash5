@@ -31,6 +31,7 @@ export interface VRequest {
     temperature?: number;
     thinkingConfig?: { thinkingLevel: ThinkingLevel };
   };
+  cachedContent?: string;
   tools?: Array<{ functionDeclarations: FunctionDeclaration[] }>;
   toolConfig?: { functionCallingConfig: { mode: 'AUTO' | 'ANY' | 'NONE' } };
 }

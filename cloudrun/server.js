@@ -430,6 +430,54 @@ app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => 
 });
 
 const { PostgrestClient } = require('@supabase/postgrest-js');
+const { createHash } = require('crypto');
+
+const CACHE_TTL_S      = parseInt(process.env.PROMPT_CACHE_TTL_S || '3600', 10);
+const CACHE_ENABLED    = process.env.PROMPT_CACHE !== 'off';
+const _promptCache = new Map();
+
+async function cacheFor(model, key, systemText) {
+  if (!CACHE_ENABLED || !PROJECT_ID) return null;
+  const hash = createHash('sha256').update(model + '\n' + systemText).digest('hex').slice(0, 16);
+  const id = `${key}:${hash}`;
+  const hit = _promptCache.get(id);
+  const now = Date.now();
+  if (hit && now < hit.expiresAt - 120_000) return hit.name;
+  if (hit && hit.inflight) return hit.inflight;
+  const inflight = (async () => {
+    const token = await getAccessToken();
+    const r = await fetch(`https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/global/cachedContents`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+      body: JSON.stringify({
+        model: `projects/${PROJECT_ID}/locations/global/publishers/google/models/${model}`,
+        displayName: `dash5:${id}`,
+        systemInstruction: { parts: [{ text: systemText }] },
+        ttl: `${CACHE_TTL_S}s`,
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok || !data.name) {
+      console.warn('[prompt-cache] gagal buat cache %s: %s', id, (data.error && data.error.message) || r.status);
+      _promptCache.set(id, { name: null, expiresAt: now + 300_000 });
+      return null;
+    }
+    const tokens = data.usageMetadata && data.usageMetadata.totalTokenCount;
+    console.info('[prompt-cache] dibuat %s (%d token, ttl %ds)', id, tokens || 0, CACHE_TTL_S);
+    _promptCache.set(id, { name: data.name, expiresAt: now + CACHE_TTL_S * 1000 });
+    return data.name;
+  })().catch(err => {
+    console.warn('[prompt-cache] error %s: %s', id, err && err.message);
+    _promptCache.set(id, { name: null, expiresAt: now + 300_000 });
+    return null;
+  });
+  _promptCache.set(id, { name: hit ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight });
+  const name = await inflight;
+  const cur = _promptCache.get(id);
+  if (cur) delete cur.inflight;
+  return name;
+}
 
 const ASK_MODELS = UNIT_MODELS;
 const HISTORY_MAX_MSG   = 40;
@@ -550,9 +598,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
         return { results: [], error: err.message || 'Rerank gagal' };
       }
     },
+    cacheFor,
     generate: async (body, model, enableGoogleSearch) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
+      if (payload.cachedContent && model !== orch.MODEL) { delete payload.cachedContent; }
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const callCtrl = new AbortController();
       const timer = setTimeout(() => callCtrl.abort(), UPSTREAM_TIMEOUT_MS);
@@ -567,6 +617,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     stream: async (body, model, onChunk, opts = {}) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
+      if (payload.cachedContent && model !== orch.MODEL) { delete payload.cachedContent; }
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
       await vertexStreamParsed(model, payload, onChunk, signal);

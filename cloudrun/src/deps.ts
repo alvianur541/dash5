@@ -10,6 +10,7 @@ export interface Deps {
   rerank(query: string, docs: string[], topN: number): Promise<RerankOut>;
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
+  cacheFor?(model: string, key: string, systemText: string): Promise<string | null>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
   meta: {
