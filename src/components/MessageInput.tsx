@@ -186,9 +186,12 @@ export function MessageInput({
           const base64 = await blobToBase64(blob);
           const text = await transcribeWithProxy(base64, mimeType);
           if (text) {
-            setInput(prev => (prev.trim() ? `${prev.trim()} ${text}` : text));
+            const currentInput = textareaRef.current?.value?.trim() || '';
+            const combined = currentInput ? `${currentInput} ${text}` : text;
+            resetBox();
             buzz();
-            setTimeout(() => textareaRef.current?.focus(), 50);
+            onSendMessage(combined, pending ? [pending.file] : undefined);
+            setPending(null);
           } else {
             flash('Suara tidak terbaca. Coba lagi.');
           }
