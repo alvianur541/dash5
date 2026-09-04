@@ -480,6 +480,18 @@ async function cacheFor(model, key, systemText) {
 }
 
 const ASK_MODELS = UNIT_MODELS;
+const CACHE_WARM_INTERVAL_MS = Math.max(60_000, (CACHE_TTL_S - 600) * 1000);
+
+async function warmPromptCaches(reason) {
+  if (!CACHE_ENABLED || !PROJECT_ID) return;
+  const t0 = Date.now();
+  let ok = 0;
+  for (const unit of UNIT_MODELS) {
+    const name = await cacheFor(orch.MODEL, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null);
+    if (name) ok++;
+  }
+  console.info('[prompt-cache] warm-up %s: %d/%d unit siap (%dms)', reason, ok, UNIT_MODELS.size, Date.now() - t0);
+}
 const HISTORY_MAX_MSG   = 40;
 const HISTORY_MAX_CHARS = 6000;
 
@@ -665,7 +677,9 @@ if (require.main === module) {
     console.log(`Dash⁵ proxy :${PORT}`);
     getAccessToken()
       .then(() => console.log('[boot] kredensial GCP siap'))
-      .catch(e => console.warn('[boot] warm-up kredensial gagal:', e && e.message));
+      .then(() => warmPromptCaches('boot'))
+      .catch(e => console.warn('[boot] warm-up gagal:', e && e.message));
+    setInterval(() => warmPromptCaches('refresh').catch(() => {}), CACHE_WARM_INTERVAL_MS).unref();
   });
 }
 

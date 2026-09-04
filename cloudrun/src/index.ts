@@ -7,4 +7,5 @@ export {
   INTENT_MODEL,
 } from './orchestrator';
 export { UNIT_MODELS } from './types';
+export { SYSTEM_PROMPT } from './constants';
 export type { UnitModel, Message, InlineImage, AgentEvent } from './types';

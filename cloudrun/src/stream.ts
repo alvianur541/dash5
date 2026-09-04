@@ -38,7 +38,7 @@ export async function callProxyStream(
   enableGoogleSearch = false,
 ): Promise<string> {
   const STREAM_TIMEOUT_MS = 90_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 45_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 12_000;
 
   const MAX_ATTEMPT = 3;
   let attempt = 0;
