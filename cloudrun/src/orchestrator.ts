@@ -9,7 +9,7 @@ import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery } from './routes';
 
-const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB]`;
+const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
 
 async function systemFor(model: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
   const text = casual ? SYSTEM_PROMPT_CASUAL(model) : SYSTEM_PROMPT(model);
