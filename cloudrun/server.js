@@ -455,7 +455,7 @@ async function cacheFor(model, key, systemText) {
         systemInstruction: { parts: [{ text: systemText }] },
         ttl: `${CACHE_TTL_S}s`,
       }),
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(45_000),
     });
     const data = await r.json().catch(() => ({}));
     if (!r.ok || !data.name) {
@@ -485,11 +485,8 @@ const CACHE_WARM_INTERVAL_MS = Math.max(60_000, (CACHE_TTL_S - 600) * 1000);
 async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
   const t0 = Date.now();
-  let ok = 0;
-  for (const unit of UNIT_MODELS) {
-    const name = await cacheFor(orch.MODEL, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null);
-    if (name) ok++;
-  }
+  const names = await Promise.all([...UNIT_MODELS].map(unit => cacheFor(orch.MODEL, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null)));
+  const ok = names.filter(Boolean).length;
   console.info('[prompt-cache] warm-up %s: %d/%d unit siap (%dms)', reason, ok, UNIT_MODELS.size, Date.now() - t0);
 }
 const HISTORY_MAX_MSG   = 40;
