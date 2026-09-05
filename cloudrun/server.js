@@ -521,11 +521,20 @@ const CACHE_WARM_INTERVAL_MS = Math.max(60_000, Math.floor(CACHE_TTL_S * 1000 / 
 async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
   const t0 = Date.now();
-  const jobs = [];
-  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) jobs.push(cacheFor(m, `main:${unit}`, orch.SYSTEM_PROMPT(unit), 60_000).catch(() => null));
-  const names = await Promise.all(jobs);
-  const ok = names.filter(Boolean).length;
-  console.info('[prompt-cache] warm-up %s: %d/%d cache siap (%s) (%dms)', reason, ok, jobs.length, orch.MODEL_CHAIN.join('→'), Date.now() - t0);
+  let pending = [];
+  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) pending.push([m, unit]);
+  const total = pending.length;
+  for (let attempt = 1; attempt <= 3 && pending.length; attempt++) {
+    if (attempt > 1) await new Promise(r => setTimeout(r, 30_000));
+    const failed = [];
+    for (let i = 0; i < pending.length; i += 3) {
+      const batch = pending.slice(i, i + 3);
+      const res = await Promise.all(batch.map(([m, unit]) => cacheFor(m, `main:${unit}`, orch.SYSTEM_PROMPT(unit), 60_000).catch(() => null)));
+      res.forEach((name, j) => { if (!name) failed.push(batch[j]); });
+    }
+    pending = failed;
+    console.info('[prompt-cache] warm-up %s#%d: %d/%d cache siap (%s) (%dms)', reason, attempt, total - pending.length, total, orch.MODEL_CHAIN.join('→'), Date.now() - t0);
+  }
 }
 const HISTORY_MAX_MSG   = 24;
 const HISTORY_MAX_CHARS = 4000;
