@@ -7,7 +7,23 @@ import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineDat
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate } from './templates';
-import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery } from './routes';
+import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact } from './routes';
+
+const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang "tidak tercantum di data manual" di kalimat PERTAMA, jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
+
+const LEAK_RE = /^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
+const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
+
+export function scrubLeaks(text: string): string {
+  if (!/\[(?:DATA |CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|Fault Code:)/.test(text)) return text;
+  const before = text.length;
+  let out = text.replace(LEAK_RE, '');
+  const head = out.slice(0, 400);
+  if (LEAK_META_RE.test(head)) out = head.replace(LEAK_META_RE, '') + out.slice(400);
+  out = out.replace(/^\s+/, '');
+  console.warn('[leak] label sistem dibersihkan dari output (%d → %d huruf)', before, out.length);
+  return out;
+}
 
 const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
 
@@ -105,28 +121,32 @@ export async function generateResponseStream(
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const thinkingLevel: ThinkingLevel = 'low';
-  const maxOutputTokens  = ragContent ? 4096 : gsTechnical ? 2048 : 1536;
+  const isFollowUp = history.length >= 2 && trimmed.split(/\s+/).length <= 8 && !detectFaultCodeInQuery(trimmed);
+  const maxOutputTokens  = ragContent ? (isFollowUp ? 1200 : 4096) : gsTechnical ? 2048 : 1536;
+  const followUpNote = isFollowUp && ragContent
+    ? '\n[Ini pertanyaan lanjutan pendek. Jawab LANGSUNG intinya dalam ≤ 8 kalimat atau 1 tabel kecil. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
+    : '';
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
     ? RERANK_DEGRADED_NOTE
     : ragConfidence === 'medium'
-      ? `\n\n[CONFIDENCE: MEDIUM — data relevan tapi mungkin bukan match persis. Jangan ngarang detail. Reminder verifikasi natural & sekali saja, hanya untuk angka/PN kritis yang langsung dieksekusi; JANGAN stempel kalimat template "verifikasi ke manual fisik" di tiap jawaban.]`
+      ? MEDIUM_CAVEAT
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
   const shownQuery = offer ? `${trimmed}\n[User menerima tawaranmu di jawaban sebelumnya → yang diminta: ${offer}. Jawab langsung permintaan itu, jangan minta klarifikasi.]` : trimmed;
   const userText         = ragContent
-    ? `${shownQuery || 'Halo'}${caveat}\n\n[${dataLabel}]\n${ragContent}`
+    ? `${shownQuery || 'Halo'}${followUpNote}${caveat}\n\n[${dataLabel}]\n${ragContent}`
     : gsTechnical
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
 
   contents.push({ role: 'user', parts: [{ text: `${userTag(userName)}\n${userText}` }] });
 
-  const fullText = await callProxyStream({
+  const fullText = scrubLeaks(await callProxyStream({
     contents,
     ...(await systemFor(model, isCasual)),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical);
+  }, onChunk, gsTechnical));
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
@@ -234,7 +254,23 @@ export async function generateResponse(
       currentParts.push({ text: `${note}\n\n${injection}` });
     } else {
       emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
-      currentParts.push({ text: userInput || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.' });
+      const q = userInput.trim();
+      let ragBlock = '';
+      if (q.split(/\s+/).length >= 3 && !isCasualExact(q)) {
+        const route = isPartsQuery(q)
+          ? await resolvePartsQuery(q, history, model, emit)
+          : await resolveNaturalLanguageQuery(q, history, model, emit);
+        if (route.type === 'rag_found') {
+          deps().meta.label = route.dataLabel;
+          deps().meta.confidence = route.confidence;
+          const caveat = route.confidence === 'medium' ? MEDIUM_CAVEAT : '';
+          ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
+        }
+      }
+      const ask = q || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.';
+      currentParts.push({ text: ragBlock
+        ? `${ask}\n[Foto terlampir sebagai konteks visual. Data manual di bawah adalah sumber angka/prosedur — foto hanya untuk membaca kondisi/nilai yang tampak.]${ragBlock}`
+        : `${ask}\n[Tidak ada data manual yang cocok untuk pertanyaan ini. Jelaskan HANYA apa yang tampak di foto. JANGAN mengutip prosedur, angka, atau nama section manual dari ingatan, dan JANGAN menulis label/format dokumen apa pun.]` });
     }
   } catch (err) {
     console.error('Image fault code extraction failed:', err);
@@ -258,7 +294,7 @@ export async function generateResponse(
     },
   };
 
-  const streamed = await callProxyStream(body, onChunk);
+  const streamed = scrubLeaks(await callProxyStream(body, onChunk));
   emit({ type: 'done' });
   return streamed || FALLBACK_RESPONSE;
 }

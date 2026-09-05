@@ -318,7 +318,10 @@ const CASUAL_EXACT = new Set([
   'ya', 'iya', 'yoi', 'betul', 'benar', 'baik', 'noted', 'paham', 'ngerti',
   'oke makasih', 'ok thanks', 'oke terima kasih', 'siap makasih',
   'bye', 'dadah', 'sampai jumpa',
+  'test', 'tes', 'tets', 'testing', 'tes tes', 'test test', 'cek', 'cek cek', 'ping', 'p', 'halo halo', 'coba', 'tes dulu', 'test dulu',
 ]);
+
+export function isCasualExact(s: string): boolean { return CASUAL_EXACT.has(normalizeCasual(s)); }
 
 function normalizeCasual(s: string): string {
   return s.toLowerCase()

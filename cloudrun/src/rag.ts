@@ -210,8 +210,15 @@ function escapeLike(s: string): string {
   return s.replace(/[\\%_]/g, m => `\\${m}`).replace(/[,()]/g, ' ');
 }
 
+const MEASURED_VALUE_RE = /\b\d+(?:[.,]\d+)?\s*(?:v|volt|voltage|a|amp|ampere|ma|ohm|Ω|mpa|kpa|bar|psi|kgf\/cm2|kgf\/cm²|rpm|°c|derajat|mm|cm|kg|liter|l|jam|hr|hours?|%)\b\.?/gi;
+
+export function stripMeasuredValues(query: string): string {
+  const out = query.replace(MEASURED_VALUE_RE, ' ').replace(/\s+/g, ' ').trim();
+  return out.split(/\s+/).length >= 2 ? out : query;
+}
+
 export function stripModelFromQuery(query: string): string {
-  return query.replace(MODEL_NAMES_RE, '').replace(/\s+/g, ' ').trim();
+  return stripMeasuredValues(query.replace(MODEL_NAMES_RE, '')).replace(/\s+/g, ' ').trim();
 }
 
 const EXPAND: Record<string, string> = {

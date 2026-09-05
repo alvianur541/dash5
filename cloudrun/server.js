@@ -508,8 +508,10 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
   tHeader = Date.now() - t0;
   if (!upstream.ok) {
     const errText = await upstream.text();
-    console.error('Vertex stream error (/v1/ask):', errText);
-    onChunk({ error: 'Upstream request failed', code: upstream.status });
+    let reason = '';
+    try { reason = JSON.parse(errText).error.status || ''; } catch { }
+    console.error('[upstream] %s HTTP %d %s: %s', model, upstream.status, reason, errText.slice(0, 160).replace(/\s+/g, ' '));
+    onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status });
     return;
   }
   const reader = upstream.body.getReader();
