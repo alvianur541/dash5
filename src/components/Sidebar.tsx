@@ -196,11 +196,12 @@ export function Sidebar({
                     className={cn(
                       "w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors duration-150 text-left",
                       hasActive
-                        ? "text-[var(--text-primary)]"
+                        ? "text-[var(--text-primary)] font-semibold"
                         : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                     )}
                   >
                     <span className="text-[13px] font-medium flex-1">{type}</span>
+                    {hasActive && !isOpen && <span className="nav-active-tag">{selectedModel}</span>}
                     <ChevronRight
                       size={12}
                       className={cn("shrink-0 transition-transform duration-200", isOpen ? "rotate-90" : "")}
@@ -222,20 +223,16 @@ export function Sidebar({
                             <button
                               key={model}
                               onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
+                              aria-current={isActive ? 'true' : undefined}
                               className={cn(
-                                "w-full flex items-center gap-2 pl-6 pr-3 py-2 rounded-xl transition-all text-left",
-                                isActive
-                                  ? "bg-[var(--accent-active)]/8"
-                                  : "hover:bg-white/5"
+                                "nav-item w-full flex items-center gap-2 pl-6 pr-3 py-2 rounded-xl text-left",
+                                isActive ? "nav-active" : "hover:bg-white/5"
                               )}
                             >
-                              <div className={cn(
-                                "w-1.5 h-1.5 rounded-full shrink-0",
-                                isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
-                              )} />
+                              {!isActive && <div className="w-1.5 h-1.5 rounded-full shrink-0 bg-[var(--text-muted)]/40" />}
                               <span className={cn(
                                 "text-[13px] truncate",
-                                isActive ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-primary)] font-normal"
+                                isActive ? "font-semibold" : "text-[var(--text-primary)] font-normal"
                               )}>
                                 {model}
                               </span>
@@ -378,17 +375,15 @@ export function Sidebar({
                           >
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
+                              aria-current={isActive ? 'true' : undefined}
                               className={cn(
-                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
+                                "nav-item w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] pr-8 active:bg-white/8",
                                 isActive
-                                  ? "bg-[var(--accent-active)]/8 text-[var(--text-primary)] font-medium"
+                                  ? "nav-active font-semibold"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                               )}
                             >
-                              <span className={cn(
-                                "w-1.5 h-1.5 rounded-full shrink-0 self-start mt-[7px]",
-                                isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
-                              )} />
+                              {!isActive && <span className="w-1.5 h-1.5 rounded-full shrink-0 self-start mt-[7px] bg-[var(--text-muted)]/40" />}
                               <span className="flex flex-col min-w-0 gap-[3px]">
                                 <span className="block truncate">{session.title}</span>
                                 <span className="history-meta">
