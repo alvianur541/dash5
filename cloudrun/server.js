@@ -490,16 +490,22 @@ async function cacheFor(model, key, systemText, waitMs = CACHE_WAIT_MS) {
   const now = Date.now();
   const fresh = hit && hit.name && now < hit.expiresAt - CACHE_SAFE_MARGIN_MS;
   if (fresh && !hit.inflight) return hit.name;
-  if (hit && hit.inflight) {
+  const inflightStale = hit && hit.inflight && now - (hit.inflightAt || 0) > 90_000;
+  if (hit && hit.inflight && !inflightStale) {
     if (fresh) return hit.name;
     return waitMs > 0 ? Promise.race([hit.inflight, new Promise(r => setTimeout(() => r(null), waitMs))]) : null;
   }
+  if (inflightStale) console.warn('[prompt-cache] permintaan %s macet >90 s — dibuat ulang', id);
   const canExtend = hit && hit.name && now < hit.expiresAt - 30_000;
   const inflight = (async () => {
     try {
-      const entry = canExtend
-        ? await cacheExtend(hit.name, id).catch(async err => { console.warn('[prompt-cache] perpanjang %s gagal (%s) — buat baru', id, err.message); return cacheCreate(model, id, systemText); })
-        : await cacheCreate(model, id, systemText);
+      const hardStop = new Promise((_, rej) => setTimeout(() => rej(new Error('batas 50 s terlampaui')), 50_000));
+      const entry = await Promise.race([
+        canExtend
+          ? cacheExtend(hit.name, id).catch(async err => { console.warn('[prompt-cache] perpanjang %s gagal (%s) — buat baru', id, err.message); return cacheCreate(model, id, systemText); })
+          : cacheCreate(model, id, systemText),
+        hardStop,
+      ]);
       _promptCache.set(id, entry);
       return entry.name;
     } catch (err) {
@@ -508,7 +514,7 @@ async function cacheFor(model, key, systemText, waitMs = CACHE_WAIT_MS) {
       return null;
     }
   })();
-  _promptCache.set(id, { name: canExtend ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight });
+  _promptCache.set(id, { name: canExtend ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight, inflightAt: now });
   inflight.finally(() => { const cur = _promptCache.get(id); if (cur) delete cur.inflight; });
   if (canExtend) return hit.name;
   if (waitMs <= 0) return null;
