@@ -436,14 +436,16 @@ const CACHE_TTL_S      = parseInt(process.env.PROMPT_CACHE_TTL_S || '3600', 10);
 const CACHE_ENABLED    = process.env.PROMPT_CACHE !== 'off';
 const _promptCache = new Map();
 
-async function cacheFor(model, key, systemText) {
+const CACHE_WAIT_MS = 1_500;
+
+async function cacheFor(model, key, systemText, waitMs = CACHE_WAIT_MS) {
   if (!CACHE_ENABLED || !PROJECT_ID) return null;
   const hash = createHash('sha256').update(model + '\n' + systemText).digest('hex').slice(0, 16);
   const id = `${key}:${hash}`;
   const hit = _promptCache.get(id);
   const now = Date.now();
   if (hit && now < hit.expiresAt - 120_000) return hit.name;
-  if (hit && hit.inflight) return hit.inflight;
+  if (hit && hit.inflight) return waitMs > 0 ? Promise.race([hit.inflight, new Promise(r => setTimeout(() => r(hit.name), waitMs))]) : hit.name;
   const inflight = (async () => {
     const token = await getAccessToken();
     const r = await fetch(`https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/global/cachedContents`, {
@@ -473,9 +475,9 @@ async function cacheFor(model, key, systemText) {
     return null;
   });
   _promptCache.set(id, { name: hit ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight });
-  const name = await inflight;
-  const cur = _promptCache.get(id);
-  if (cur) delete cur.inflight;
+  inflight.finally(() => { const cur = _promptCache.get(id); if (cur) delete cur.inflight; });
+  if (waitMs <= 0) return hit ? hit.name : null;
+  const name = await Promise.race([inflight, new Promise(r => setTimeout(() => r(hit ? hit.name : null), waitMs))]);
   return name;
 }
 
@@ -486,7 +488,7 @@ async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
   const t0 = Date.now();
   const jobs = [];
-  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) jobs.push(cacheFor(m, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null));
+  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) jobs.push(cacheFor(m, `main:${unit}`, orch.SYSTEM_PROMPT(unit), 60_000).catch(() => null));
   const names = await Promise.all(jobs);
   const ok = names.filter(Boolean).length;
   console.info('[prompt-cache] warm-up %s: %d/%d cache siap (%s) (%dms)', reason, ok, jobs.length, orch.MODEL_CHAIN.join('→'), Date.now() - t0);
