@@ -41,6 +41,7 @@ function errorMessage(err: unknown): string {
   const msg = (err as Error)?.message ?? '';
   if (msg.includes('KUOTA_PENUH')) return 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.';
   if (msg.includes('Stream terputus')) return 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.';
+  if (msg.includes('SERVER_DIAM')) return 'Server lama merespons (lebih dari 25 detik). Kirim ulang pertanyaanmu.';
   return 'Dash⁵ tidak bisa dihubungi. Cek sinyal kamu, lalu coba lagi.';
 }
 
@@ -53,6 +54,7 @@ export default function App() {
   const [isTyping, setIsTyping] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastSentRef = useRef<{ content: string; attachments?: File[] } | null>(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => window.innerWidth < 768);
   const [sessionList, setSessionList] = useState<SessionMeta[]>([]);
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
@@ -210,6 +212,7 @@ export default function App() {
   const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
     if (!user) return;
     if (!navigator.onLine) { setQueued({ content, attachments }); return; }
+    lastSentRef.current = { content, attachments };
 
     let sessionId = sessionIdRef.current;
     if (!sessionId) {
@@ -407,7 +410,12 @@ export default function App() {
           <strong className="font-semibold">Menunggu sinyal</strong> — pertanyaan akan terkirim otomatis saat online.
         </StatusBanner>
         <StatusBanner id="error" show={!!error} tone="error" icon={<AlertCircle size={15} className="text-red-400" />}
-          action={<button onClick={() => setError(null)} className="text-xs underline opacity-70 hover:opacity-100 text-red-400">Tutup</button>}>
+          action={<div className="flex items-center gap-3">
+            {lastSentRef.current && !isTyping && !isStreaming && (
+              <button onClick={() => { const q = lastSentRef.current; if (!q) return; setError(null); handleSendMessage(q.content, q.attachments); }} className="text-xs font-semibold underline text-red-400">Kirim ulang</button>
+            )}
+            <button onClick={() => setError(null)} className="text-xs underline opacity-70 hover:opacity-100 text-red-400">Tutup</button>
+          </div>}>
           {error}
         </StatusBanner>
 

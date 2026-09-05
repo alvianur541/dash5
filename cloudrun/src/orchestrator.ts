@@ -11,11 +11,16 @@ import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCo
 
 const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
 
-async function systemFor(model: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
-  const text = casual ? SYSTEM_PROMPT_CASUAL(model) : SYSTEM_PROMPT(model);
-  const key = `${casual ? 'casual' : 'main'}:${model}`;
-  const id = await deps().cacheFor?.(MODEL, key, text).catch(() => null);
+async function systemForModel(unit: UnitModel, casual: boolean, aiModel: string): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
+  const text = casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit);
+  const key = `${casual ? 'casual' : 'main'}:${unit}`;
+  const id = await deps().cacheFor?.(aiModel, key, text).catch(() => null);
   return id ? { cachedContent: id } : { systemInstruction: { parts: [{ text }] } };
+}
+
+async function systemFor(unit: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
+  deps().systemFor = (aiModel: string) => systemForModel(unit, casual, aiModel);
+  return systemForModel(unit, casual, MODEL);
 }
 
 export { MODEL, INTENT_MODEL } from './vertex';

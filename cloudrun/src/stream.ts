@@ -1,5 +1,5 @@
 import { deps } from './deps';
-import { VRequest, clampThinking, addUsage, MODEL } from './vertex';
+import { VRequest, clampThinking, addUsage, MODEL, MODEL_CHAIN } from './vertex';
 
 function collapseDegenerateLoops(text: string): string {
   let out = text;
@@ -38,11 +38,19 @@ export async function callProxyStream(
   enableGoogleSearch = false,
 ): Promise<string> {
   const STREAM_TIMEOUT_MS = 90_000;
-  const FIRST_TOKEN_TIMEOUT_MS = 12_000;
+  const FIRST_TOKEN_TIMEOUT_MS = 8_000;
 
-  const MAX_ATTEMPT = 3;
+  const MAX_ATTEMPT = Math.max(3, MODEL_CHAIN.length);
   let attempt = 0;
   let fullText = '';
+  let modelUsed = MODEL;
+  const modelAt = (n: number) => MODEL_CHAIN[Math.min(n - 1, MODEL_CHAIN.length - 1)];
+  const bodyFor = async (m: string): Promise<VRequest> => {
+    if (m === MODEL || !deps().systemFor) return body;
+    const sys = await deps().systemFor!(m);
+    const { cachedContent: _c, systemInstruction: _s, ...rest } = body;
+    return { ...rest, ...sys };
+  };
   interface UsageMeta {
     promptTokenCount?: number; candidatesTokenCount?: number;
     thoughtsTokenCount?: number; cachedContentTokenCount?: number;
@@ -52,6 +60,8 @@ export async function callProxyStream(
   while (true) {
   attempt++;
   fullText = '';
+  modelUsed = modelAt(attempt);
+  if (attempt > 1) console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
   let upstreamError: string | null = null;
   let retryNeeded = false;
   let quotaFull = false;
@@ -70,7 +80,7 @@ export async function callProxyStream(
   }, FIRST_TOKEN_TIMEOUT_MS);
 
   try {
-    await deps().stream(clampThinking(body, MODEL), MODEL, c => {
+    await deps().stream(clampThinking(await bodyFor(modelUsed), modelUsed), modelUsed, c => {
       if (c.error) {
         if (c.code === 429) { quotaFull = true; ctrl.abort(); return; }
         upstreamError = String(c.error);
@@ -96,7 +106,13 @@ export async function callProxyStream(
     clearTimeout(hardTimer);
   }
 
-  if (quotaFull) throw new Error('KUOTA_PENUH');
+  if (quotaFull) {
+    if (attempt < MAX_ATTEMPT && !pastDeadline()) {
+      console.warn('[fallback] %s 429 (kapasitas penuh) — pindah model', modelUsed);
+      continue;
+    }
+    throw new Error('KUOTA_PENUH');
+  }
 
   if (upstreamError) {
     if (fullText.trim()) {
@@ -104,8 +120,8 @@ export async function callProxyStream(
       fullText += STREAM_CUT_NOTE;
       onChunk(STREAM_CUT_NOTE);
     } else if (attempt < MAX_ATTEMPT && !pastDeadline()) {
-      console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, ulangi', upstreamError, attempt, MAX_ATTEMPT);
-      await tunggu(attempt * 900);
+      console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, pindah model', upstreamError, attempt, MAX_ATTEMPT);
+      await tunggu(300);
       retryNeeded = true;
     } else {
       throw new Error(`Stream terputus: ${upstreamError}`);
@@ -113,8 +129,8 @@ export async function callProxyStream(
   }
 
   if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT && !pastDeadline()) {
-    console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, ulangi', attempt, MAX_ATTEMPT);
-    await tunggu(attempt * 900);
+    console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, pindah model', attempt, MAX_ATTEMPT);
+    await tunggu(300);
     continue;
   }
   if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
@@ -144,9 +160,10 @@ export async function callProxyStream(
   {
     const inp = usageBox.last?.promptTokenCount ?? 0;
     const cache = usageBox.last?.cachedContentTokenCount ?? 0;
-    const lvlTerkirim = clampThinking(body, MODEL).generationConfig?.thinkingConfig?.thinkingLevel;
+    const lvlTerkirim = clampThinking(body, modelUsed).generationConfig?.thinkingConfig?.thinkingLevel;
+    deps().meta.modelUsed = modelUsed;
     console.info('[tokens] model=%s think=%s%s in=%d (prompt-cache %d%%) out=%d thinking=%d',
-      MODEL, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
+      modelUsed, lvlTerkirim, deps().thinkOverride ? ' (override, cache jawaban dilewati)' : '',
       inp, inp ? Math.round((cache / inp) * 100) : 0,
       usageBox.last?.candidatesTokenCount ?? 0, usageBox.last?.thoughtsTokenCount ?? 0);
   }

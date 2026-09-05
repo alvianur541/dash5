@@ -3,6 +3,9 @@ import { deps } from './deps';
 
 export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.6-flash';
 export const INTENT_MODEL = 'gemini-3.1-flash-lite';
+export const FALLBACK_MODELS: readonly string[] = (process.env.FALLBACK_MODELS ?? 'gemini-3.6-flash')
+  .split(',').map(s => s.trim()).filter(s => s && s !== MODEL);
+export const MODEL_CHAIN: readonly string[] = [MODEL, ...FALLBACK_MODELS];
 
 interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
 export interface InlineDataPart      { inlineData: { mimeType: string; data: string } }

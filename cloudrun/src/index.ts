@@ -8,4 +8,5 @@ export {
 } from './orchestrator';
 export { UNIT_MODELS } from './types';
 export { SYSTEM_PROMPT } from './constants';
+export { MODEL_CHAIN, FALLBACK_MODELS } from './vertex';
 export type { UnitModel, Message, InlineImage, AgentEvent } from './types';

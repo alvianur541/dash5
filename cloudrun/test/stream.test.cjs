@@ -1,4 +1,4 @@
-const { callProxyStream, runWithDeps, STREAM_HALT_NOTE, STREAM_CUT_NOTE, USAGE, mockDeps, suite, BODY } = require('./helpers.cjs');
+const { callProxyStream, runWithDeps, STREAM_HALT_NOTE, STREAM_CUT_NOTE, USAGE, mockDeps, suite, BODY, MODEL_CHAIN } = require('./helpers.cjs');
 
 const POTONG = 'Gejala engine sering ngedrop saat dibebani pada ZX200-5G menunjukkan ketidaksesuaian antara output tenaga engine dan beban hidrolik (pompa), atau pasokan bahan bakar dan';
 const UTUH   = 'Gejala engine ngedrop biasanya dari tiga sumber: bahan bakar, udara, atau beban hidrolik. Cek filter solar dulu.';
@@ -25,6 +25,28 @@ module.exports = async function () {
   { const { d, calls } = mockDeps([stop(UTUH)]);
     const r = await run(d);
     t(calls() === 1 && r === UTUH, 'STOP: single attempt'); }
+
+  { const models = [];
+    const { d, calls } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)]);
+    const origStream = d.stream; d.stream = (b, m, cb) => { models.push(m); return origStream(b, m, cb); };
+    const r = await run(d);
+    t(calls() === 2 && r === UTUH, '429 on primary: fell back, clean result');
+    t(models[0] === MODEL_CHAIN[0] && models[1] === MODEL_CHAIN[1] && models[1] !== models[0], `429: model switched ${models[0]} → ${models[1]}`); }
+
+  { const models = [];
+    const { d, calls } = mockDeps([[{ live: true }], stop(UTUH)]);
+    const origStream = d.stream; d.stream = (b, m, cb) => { models.push(m); return origStream(b, m, cb); };
+    const r = await run(d);
+    t(calls() === 2 && r === UTUH && models[1] !== models[0], 'empty stream on primary: switched model'); }
+
+  { const seen = [];
+    const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)], {
+      systemFor: async (m) => ({ systemInstruction: { parts: [{ text: `SYS-for-${m}` }] } }),
+    });
+    const origStream = d.stream; d.stream = (b, m, cb) => { seen.push(b); return origStream(b, m, cb); };
+    await runWithDeps(d, () => callProxyStream({ ...BODY, cachedContent: 'projects/x/cachedContents/1' }, () => {}));
+    t(seen[0].cachedContent === 'projects/x/cachedContents/1', 'primary keeps cachedContent');
+    t(!seen[1].cachedContent && seen[1].systemInstruction.parts[0].text === `SYS-for-${MODEL_CHAIN[1]}`, 'fallback swaps cache for its own system prompt'); }
 
   { const { d, calls } = mockDeps([[{ text: POTONG, live: true }], stop(UTUH)]);
     const r = await run(d);

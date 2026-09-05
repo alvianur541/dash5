@@ -11,9 +11,11 @@ export interface Deps {
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
   cacheFor?(model: string, key: string, systemText: string): Promise<string | null>;
+  systemFor?: (model: string) => Promise<Pick<any, 'systemInstruction' | 'cachedContent'>>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
   meta: {
+    modelUsed?: string;
     cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean;
     chunks?: Array<{ kind: string; model: string; kategori: string; section: string; score?: number }>;
   };

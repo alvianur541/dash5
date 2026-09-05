@@ -485,9 +485,11 @@ const CACHE_WARM_INTERVAL_MS = Math.max(60_000, (CACHE_TTL_S - 600) * 1000);
 async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
   const t0 = Date.now();
-  const names = await Promise.all([...UNIT_MODELS].map(unit => cacheFor(orch.MODEL, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null)));
+  const jobs = [];
+  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) jobs.push(cacheFor(m, `main:${unit}`, orch.SYSTEM_PROMPT(unit)).catch(() => null));
+  const names = await Promise.all(jobs);
   const ok = names.filter(Boolean).length;
-  console.info('[prompt-cache] warm-up %s: %d/%d unit siap (%dms)', reason, ok, UNIT_MODELS.size, Date.now() - t0);
+  console.info('[prompt-cache] warm-up %s: %d/%d cache siap (%s) (%dms)', reason, ok, jobs.length, orch.MODEL_CHAIN.join('→'), Date.now() - t0);
 }
 const HISTORY_MAX_MSG   = 40;
 const HISTORY_MAX_CHARS = 6000;
@@ -611,7 +613,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     generate: async (body, model, enableGoogleSearch) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
-      if (payload.cachedContent && model !== orch.MODEL) { delete payload.cachedContent; }
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const callCtrl = new AbortController();
       const timer = setTimeout(() => callCtrl.abort(), UPSTREAM_TIMEOUT_MS);
@@ -626,7 +627,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     stream: async (body, model, onChunk, opts = {}) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
-      if (payload.cachedContent && model !== orch.MODEL) { delete payload.cachedContent; }
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
       await vertexStreamParsed(model, payload, onChunk, signal);
@@ -653,7 +653,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       deps.usage.thinking, deps.usage.calls);
     sseWrite(res, 'meta', {
       usage: deps.usage,
-      model: orch.MODEL,
+      model: deps.meta.modelUsed || orch.MODEL,
       cacheable: deps.meta.cacheable === true,
       full: answer,
       ...(debug ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),

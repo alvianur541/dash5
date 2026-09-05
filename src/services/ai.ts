@@ -3,6 +3,7 @@ import { UnitModel, Message } from '../types';
 import { getAuthToken } from './supabase';
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
+export const ASK_IDLE_TIMEOUT_MS = 25_000;
 export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
 
 export interface AgentEvent {
@@ -88,9 +89,19 @@ async function ask(
   onAgentEvent?: (e: AgentEvent) => void,
 ): Promise<{ text: string; cacheable: boolean }> {
 
-  const res = await fetch(`${PROXY_URL}/v1/ask`, {
-    method: 'POST', headers: await authHeaders(), body: JSON.stringify(body),
-  });
+  const ctrl = new AbortController();
+  let idle = setTimeout(() => ctrl.abort(), ASK_IDLE_TIMEOUT_MS);
+  const tick = () => { clearTimeout(idle); idle = setTimeout(() => ctrl.abort(), ASK_IDLE_TIMEOUT_MS); };
+  let res: Response;
+  try {
+    res = await fetch(`${PROXY_URL}/v1/ask`, {
+      method: 'POST', headers: await authHeaders(), body: JSON.stringify(body), signal: ctrl.signal,
+    });
+  } catch (e) {
+    clearTimeout(idle);
+    if (ctrl.signal.aborted) throw new Error('SERVER_DIAM');
+    throw e;
+  }
   if (!res.ok) {
     let detail = '';
     try { detail = (await res.json())?.error ?? ''; } catch { }
@@ -106,8 +117,16 @@ async function ask(
   let serverError: string | null = null;
 
   while (true) {
-    const { done, value } = await reader.read();
+    let step: ReadableStreamReadResult<Uint8Array>;
+    try { step = await reader.read(); }
+    catch (e) {
+      clearTimeout(idle);
+      if (ctrl.signal.aborted) { if (text.trim()) break; throw new Error('SERVER_DIAM'); }
+      throw e;
+    }
+    const { done, value } = step;
     if (done) break;
+    tick();
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split('\n');
     buffer = lines.pop() ?? '';
@@ -135,6 +154,7 @@ async function ask(
     }
   }
 
+  clearTimeout(idle);
   if (serverError && !text.trim()) throw new Error(serverError);
   return { text: text || FALLBACK_RESPONSE, cacheable };
 }
