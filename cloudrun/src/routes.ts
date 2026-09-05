@@ -6,21 +6,48 @@ import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, off
 
 export type AgentEventEmit = (event: AgentEvent) => void;
 
-const HISTORY_FULL_TAIL = 6;
-const HISTORY_OLD_CAP   = 2500;
+const HISTORY_FULL_TAIL   = 4;
+const HISTORY_RECENT_CAP  = 3500;
+const HISTORY_OLD_CAP     = 700;
+const HISTORY_BUDGET_CHAR = 14000;
+const KEY_LINE_RE = /\b(?:[A-Z]{1,3}\d{5,}|\d{7,}|YA\d{6,}|\d+(?:[.,]\d+)?\s?(?:MPa|kPa|bar|psi|V|A|Ω|mm|L|jam|°C|rpm|Nm|kgf))\b|kesimpulan|penyebab|kemungkinan|solusi|rekomendasi|langkah pertama|tidak tercantum|\bPN\b|part number/i;
+const TABLE_LINE_RE = /^\s*\|/;
+
+function condenseOld(text: string, cap: number): string {
+  if (text.length <= cap) return text;
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !/^[-=*_]{3,}$/.test(l) && !/^\|?\s*:?-{2,}/.test(l))
+    .map(l => TABLE_LINE_RE.test(l) ? l.split('|').map(c => c.trim()).filter(Boolean).join(' · ') : l)
+    .filter(l => !TABLE_LINE_RE.test(l) || KEY_LINE_RE.test(l));
+  const keep: string[] = [];
+  let used = 0;
+  const push = (l: string) => {
+    const clean = l.replace(/^#+\s*/, '').replace(/\*\*/g, '');
+    if (used + clean.length + 1 > cap) return false;
+    keep.push(clean); used += clean.length + 1; return true;
+  };
+  for (const l of lines) if (KEY_LINE_RE.test(l) && !push(l)) break;
+  for (const l of lines) if (!KEY_LINE_RE.test(l) && !keep.includes(l.replace(/^#+\s*/, '').replace(/\*\*/g, '')) && !push(l)) break;
+  if (keep.length === 0) return text.slice(0, cap) + '…';
+  return keep.join('\n') + '\n…[ringkasan pesan lama]';
+}
 
 export function historyToContents(history: Message[], window = 20): VContent[] {
   const recent = history.slice(-window).filter(m => m.content?.trim());
-  return recent.map((m, i) => {
-    const isOld = i < recent.length - HISTORY_FULL_TAIL;
-    const text = isOld && m.content.length > HISTORY_OLD_CAP
-      ? m.content.slice(0, HISTORY_OLD_CAP) + '\n…[sisa pesan lama dipangkas]'
-      : m.content;
-    return {
-      role: m.role === 'user' ? 'user' : 'model',
-      parts: [{ text }] as Part[],
-    };
+  const tailStart = Math.max(0, recent.length - HISTORY_FULL_TAIL);
+  const out = recent.map((m, i) => {
+    const raw = m.content;
+    const text = i >= tailStart
+      ? (raw.length > HISTORY_RECENT_CAP ? condenseOld(raw, HISTORY_RECENT_CAP) : raw)
+      : (m.role === 'user' ? raw.slice(0, HISTORY_OLD_CAP) : condenseOld(raw, HISTORY_OLD_CAP));
+    return { role: m.role === 'user' ? 'user' : 'model', text };
   });
+  let total = out.reduce((s, c) => s + c.text.length, 0);
+  while (total > HISTORY_BUDGET_CHAR && out.length > 2) {
+    const dropped = out.shift()!;
+    total -= dropped.text.length;
+    if (out[0]?.role === 'model') { total -= out[0].text.length; out.shift(); }
+  }
+  return out.map(c => ({ role: c.role as 'user' | 'model', parts: [{ text: c.text }] as Part[] }));
 }
 
 export async function extractFaultCodes(imageParts: InlineDataPart[]): Promise<string[]> {

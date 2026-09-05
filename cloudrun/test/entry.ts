@@ -5,3 +5,4 @@ export { MODEL_CHAIN } from '../src/vertex';
 export { scrubLeaks } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
 export { isCasualExact } from '../src/routes';
+export { historyToContents } from '../src/routes';

@@ -527,8 +527,8 @@ async function warmPromptCaches(reason) {
   const ok = names.filter(Boolean).length;
   console.info('[prompt-cache] warm-up %s: %d/%d cache siap (%s) (%dms)', reason, ok, jobs.length, orch.MODEL_CHAIN.join('→'), Date.now() - t0);
 }
-const HISTORY_MAX_MSG   = 40;
-const HISTORY_MAX_CHARS = 6000;
+const HISTORY_MAX_MSG   = 24;
+const HISTORY_MAX_CHARS = 4000;
 
 function sseWrite(res, event, payload) {
   if (res.writableEnded) return;
