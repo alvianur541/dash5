@@ -11,7 +11,7 @@ export interface Deps {
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
   cacheFor?(model: string, key: string, systemText: string): Promise<string | null>;
-  systemFor?: (model: string) => Promise<Pick<any, 'systemInstruction' | 'cachedContent'>>;
+  systemFor?: (model: string, noCache?: boolean) => Promise<Pick<any, 'systemInstruction' | 'cachedContent'>>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
   meta: {
@@ -22,7 +22,8 @@ export interface Deps {
   deadlineAt?: number;
 }
 
-export interface StreamChunk { text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string }
+export interface StreamChunk {
+  cacheExpired?: boolean; text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string }
 export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 
 export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number }

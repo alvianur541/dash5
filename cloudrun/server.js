@@ -437,6 +437,50 @@ const CACHE_ENABLED    = process.env.PROMPT_CACHE !== 'off';
 const _promptCache = new Map();
 
 const CACHE_WAIT_MS = 1_500;
+const CACHE_SAFE_MARGIN_MS = 5 * 60_000;
+const CACHE_API = `https://aiplatform.googleapis.com/v1beta1`;
+
+function cacheHeaders(token) {
+  return { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` };
+}
+
+async function cacheCreate(model, id, systemText) {
+  const token = await getAccessToken();
+  const r = await fetch(`${CACHE_API}/projects/${PROJECT_ID}/locations/global/cachedContents`, {
+    method: 'POST', headers: cacheHeaders(token),
+    body: JSON.stringify({
+      model: `projects/${PROJECT_ID}/locations/global/publishers/google/models/${model}`,
+      displayName: `dash5:${id}`,
+      systemInstruction: { parts: [{ text: systemText }] },
+      ttl: `${CACHE_TTL_S}s`,
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.name) throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+  const tokens = data.usageMetadata && data.usageMetadata.totalTokenCount;
+  console.info('[prompt-cache] dibuat %s (%d token, ttl %ds)', id, tokens || 0, CACHE_TTL_S);
+  return { name: data.name, expiresAt: Date.parse(data.expireTime) || (Date.now() + CACHE_TTL_S * 1000) };
+}
+
+async function cacheExtend(name, id) {
+  const token = await getAccessToken();
+  const r = await fetch(`${CACHE_API}/${name}?updateMask=ttl`, {
+    method: 'PATCH', headers: cacheHeaders(token),
+    body: JSON.stringify({ ttl: `${CACHE_TTL_S}s` }),
+    signal: AbortSignal.timeout(20_000),
+  });
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok || !data.expireTime) throw new Error((data.error && data.error.message) || `HTTP ${r.status}`);
+  console.info('[prompt-cache] diperpanjang %s (+%ds)', id, CACHE_TTL_S);
+  return { name, expiresAt: Date.parse(data.expireTime) };
+}
+
+function cacheInvalidate(name) {
+  for (const [id, e] of _promptCache) {
+    if (e.name === name) { _promptCache.delete(id); console.warn('[prompt-cache] %s dibuang (expired di Google)', id); return; }
+  }
+}
 
 async function cacheFor(model, key, systemText, waitMs = CACHE_WAIT_MS) {
   if (!CACHE_ENABLED || !PROJECT_ID) return null;
@@ -444,45 +488,35 @@ async function cacheFor(model, key, systemText, waitMs = CACHE_WAIT_MS) {
   const id = `${key}:${hash}`;
   const hit = _promptCache.get(id);
   const now = Date.now();
-  if (hit && now < hit.expiresAt - 120_000) return hit.name;
-  if (hit && hit.inflight) return waitMs > 0 ? Promise.race([hit.inflight, new Promise(r => setTimeout(() => r(hit.name), waitMs))]) : hit.name;
+  const fresh = hit && hit.name && now < hit.expiresAt - CACHE_SAFE_MARGIN_MS;
+  if (fresh && !hit.inflight) return hit.name;
+  if (hit && hit.inflight) {
+    if (fresh) return hit.name;
+    return waitMs > 0 ? Promise.race([hit.inflight, new Promise(r => setTimeout(() => r(null), waitMs))]) : null;
+  }
+  const canExtend = hit && hit.name && now < hit.expiresAt - 30_000;
   const inflight = (async () => {
-    const token = await getAccessToken();
-    const r = await fetch(`https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}/locations/global/cachedContents`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-      body: JSON.stringify({
-        model: `projects/${PROJECT_ID}/locations/global/publishers/google/models/${model}`,
-        displayName: `dash5:${id}`,
-        systemInstruction: { parts: [{ text: systemText }] },
-        ttl: `${CACHE_TTL_S}s`,
-      }),
-      signal: AbortSignal.timeout(45_000),
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data.name) {
-      console.warn('[prompt-cache] gagal buat cache %s: %s', id, (data.error && data.error.message) || r.status);
-      _promptCache.set(id, { name: null, expiresAt: now + 300_000 });
+    try {
+      const entry = canExtend
+        ? await cacheExtend(hit.name, id).catch(async err => { console.warn('[prompt-cache] perpanjang %s gagal (%s) — buat baru', id, err.message); return cacheCreate(model, id, systemText); })
+        : await cacheCreate(model, id, systemText);
+      _promptCache.set(id, entry);
+      return entry.name;
+    } catch (err) {
+      console.warn('[prompt-cache] gagal %s: %s', id, err && err.message);
+      _promptCache.set(id, { name: null, expiresAt: now + 120_000 });
       return null;
     }
-    const tokens = data.usageMetadata && data.usageMetadata.totalTokenCount;
-    console.info('[prompt-cache] dibuat %s (%d token, ttl %ds)', id, tokens || 0, CACHE_TTL_S);
-    _promptCache.set(id, { name: data.name, expiresAt: now + CACHE_TTL_S * 1000 });
-    return data.name;
-  })().catch(err => {
-    console.warn('[prompt-cache] error %s: %s', id, err && err.message);
-    _promptCache.set(id, { name: null, expiresAt: now + 300_000 });
-    return null;
-  });
-  _promptCache.set(id, { name: hit ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight });
+  })();
+  _promptCache.set(id, { name: canExtend ? hit.name : null, expiresAt: hit ? hit.expiresAt : now, inflight });
   inflight.finally(() => { const cur = _promptCache.get(id); if (cur) delete cur.inflight; });
-  if (waitMs <= 0) return hit ? hit.name : null;
-  const name = await Promise.race([inflight, new Promise(r => setTimeout(() => r(hit ? hit.name : null), waitMs))]);
-  return name;
+  if (canExtend) return hit.name;
+  if (waitMs <= 0) return null;
+  return Promise.race([inflight, new Promise(r => setTimeout(() => r(null), waitMs))]);
 }
 
 const ASK_MODELS = UNIT_MODELS;
-const CACHE_WARM_INTERVAL_MS = Math.max(60_000, (CACHE_TTL_S - 600) * 1000);
+const CACHE_WARM_INTERVAL_MS = Math.max(60_000, Math.floor(CACHE_TTL_S * 1000 / 3));
 
 async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
@@ -508,10 +542,12 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
   tHeader = Date.now() - t0;
   if (!upstream.ok) {
     const errText = await upstream.text();
-    let reason = '';
-    try { reason = JSON.parse(errText).error.status || ''; } catch { }
-    console.error('[upstream] %s HTTP %d %s: %s', model, upstream.status, reason, errText.slice(0, 160).replace(/\s+/g, ' '));
-    onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status });
+    let reason = '', message = '';
+    try { const e = JSON.parse(errText).error; reason = e.status || ''; message = e.message || ''; } catch { }
+    console.error('[upstream] %s HTTP %d %s: %s', model, upstream.status, reason, (message || errText).slice(0, 160).replace(/\s+/g, ' '));
+    const cacheExpired = upstream.status === 400 && /cache content .* (expired|not found)/i.test(message);
+    if (cacheExpired && body.cachedContent) cacheInvalidate(body.cachedContent);
+    onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status, cacheExpired });
     return;
   }
   const reader = upstream.body.getReader();

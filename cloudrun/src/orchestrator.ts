@@ -27,15 +27,15 @@ export function scrubLeaks(text: string): string {
 
 const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
 
-async function systemForModel(unit: UnitModel, casual: boolean, aiModel: string): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
+async function systemForModel(unit: UnitModel, casual: boolean, aiModel: string, noCache = false): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
   const text = casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit);
   const key = `${casual ? 'casual' : 'main'}:${unit}`;
-  const id = await deps().cacheFor?.(aiModel, key, text).catch(() => null);
+  const id = noCache ? null : await deps().cacheFor?.(aiModel, key, text).catch(() => null);
   return id ? { cachedContent: id } : { systemInstruction: { parts: [{ text }] } };
 }
 
 async function systemFor(unit: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
-  deps().systemFor = (aiModel: string) => systemForModel(unit, casual, aiModel);
+  deps().systemFor = (aiModel: string, noCache?: boolean) => systemForModel(unit, casual, aiModel, noCache === true);
   return systemForModel(unit, casual, MODEL);
 }
 

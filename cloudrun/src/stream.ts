@@ -44,12 +44,21 @@ export async function callProxyStream(
   let attempt = 0;
   let fullText = '';
   let modelUsed = MODEL;
+  let noCache = false;
   const modelAt = (n: number) => MODEL_CHAIN[Math.min(n - 1, MODEL_CHAIN.length - 1)];
   const bodyFor = async (m: string): Promise<VRequest> => {
-    if (m === MODEL || !deps().systemFor) return body;
-    const sys = await deps().systemFor!(m);
-    const { cachedContent: _c, systemInstruction: _s, ...rest } = body;
-    return { ...rest, ...sys };
+    let b = body;
+    if (m !== MODEL && deps().systemFor) {
+      const sys = await deps().systemFor!(m);
+      const { cachedContent: _c, systemInstruction: _s, ...rest } = body;
+      b = { ...rest, ...sys };
+    }
+    if (noCache && b.cachedContent && deps().systemFor) {
+      const { cachedContent: _c, ...rest } = b;
+      const sys = await deps().systemFor!(m, true);
+      b = { ...rest, ...sys };
+    }
+    return b;
   };
   interface UsageMeta {
     promptTokenCount?: number; candidatesTokenCount?: number;
@@ -63,6 +72,7 @@ export async function callProxyStream(
   modelUsed = modelAt(attempt);
   if (attempt > 1) console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
   let upstreamError: string | null = null;
+  let cacheExpired = false;
   let retryNeeded = false;
   let quotaFull = false;
   let finishReason: string | null = null;
@@ -84,6 +94,7 @@ export async function callProxyStream(
       if (c.error) {
         if (c.code === 429) { quotaFull = true; ctrl.abort(); return; }
         upstreamError = String(c.error);
+        cacheExpired = c.cacheExpired === true;
         ctrl.abort();
         return;
       }
@@ -112,6 +123,13 @@ export async function callProxyStream(
       continue;
     }
     throw new Error('KUOTA_PENUH');
+  }
+
+  if (upstreamError && cacheExpired && !fullText.trim() && !noCache && !pastDeadline()) {
+    console.warn('[prompt-cache] cache expired di Google — ulang di %s tanpa cache', modelUsed);
+    noCache = true;
+    attempt--;
+    continue;
   }
 
   if (upstreamError) {

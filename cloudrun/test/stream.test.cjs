@@ -39,6 +39,16 @@ module.exports = async function () {
     const r = await run(d);
     t(calls() === 2 && r === UTUH && models[1] !== models[0], 'empty stream on primary: switched model'); }
 
+  { const seen = []; const models = [];
+    const { d, calls } = mockDeps([[{ error: 'Upstream 400 INVALID_ARGUMENT', code: 400, cacheExpired: true }], stop(UTUH)], {
+      systemFor: async (m, noCache) => ({ systemInstruction: { parts: [{ text: `SYS-${m}-${noCache ? 'nocache' : 'cache'}` }] } }),
+    });
+    const origStream = d.stream; d.stream = (b, m, cb) => { seen.push(b); models.push(m); return origStream(b, m, cb); };
+    const r = await runWithDeps(d, () => callProxyStream({ ...BODY, cachedContent: 'projects/x/cachedContents/9' }, () => {}));
+    t(calls() === 2 && r === UTUH, 'cache expired: retried once, clean result');
+    t(models[0] === models[1] && models[0] === MODEL_CHAIN[0], `cache expired: SAME model retried (${models.join(' → ')})`);
+    t(!seen[1].cachedContent && seen[1].systemInstruction.parts[0].text.endsWith('-nocache'), 'cache expired: retry sends full system prompt, no cachedContent'); }
+
   { const seen = [];
     const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)], {
       systemFor: async (m) => ({ systemInstruction: { parts: [{ text: `SYS-for-${m}` }] } }),
