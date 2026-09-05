@@ -225,7 +225,7 @@ export function Sidebar({
                               className={cn(
                                 "w-full flex items-center gap-2 pl-6 pr-3 py-2 rounded-xl transition-all text-left",
                                 isActive
-                                  ? "bg-[var(--accent-active)]/8"
+                                  ? "bg-[var(--accent-active)]/20"
                                   : "hover:bg-white/5"
                               )}
                             >
@@ -381,7 +381,7 @@ export function Sidebar({
                               className={cn(
                                 "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
                                 isActive
-                                  ? "bg-[var(--accent-active)]/8 text-[var(--text-primary)] font-medium"
+                                  ? "bg-[var(--accent-active)]/20 text-[var(--text-primary)] font-medium"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                               )}
                             >
