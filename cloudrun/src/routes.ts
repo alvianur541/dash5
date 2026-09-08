@@ -2,7 +2,8 @@ import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
-import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
+import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
+import type { Lang } from './templates';
 
 export type AgentEventEmit = (event: AgentEvent) => void;
 
@@ -194,18 +195,19 @@ export async function resolveFaultCodeQuery(
   faultQuery: string,
   model: UnitModel,
   emit: AgentEventEmit = () => {},
+  lang: Lang = 'id',
 ): Promise<RagRouteResult> {
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
   const ragResult = await searchTechnicalManualMulti(extractSearchTerms(faultQuery), model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
-    const errMsg = ragErrorTemplate(ragResult.ragError);
+    const errMsg = ragErrorTemplate(ragResult.ragError, lang);
     if (errMsg) return { type: 'rag_canned', text: errMsg };
   }
 
   if (!ragResult.hasResults) {
-    return { type: 'rag_canned', text: faultCodeNotFoundTemplate(faultQuery, model) };
+    return { type: 'rag_canned', text: faultCodeNotFoundTemplate(faultQuery, model, lang) };
   }
 
   const augmented = await augmentWithEngineManual(ragResult.content, faultQuery, model, emit);
@@ -298,7 +300,7 @@ export async function resolvePartsQuery(
         return { type: 'rag_found', content: note + wmResult.content, dataLabel: RAG_LABEL.parts, confidence: wmResult.confidence };
       }
     }
-    return { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model) };
+    return { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model, sessionLang(trimmed, history)) };
   }
 
   let finalContent = ragResult.content;
@@ -369,7 +371,7 @@ export async function resolveNaturalLanguageQuery(
   }
 
   const intent = await analyzeIntent(trimmed, history);
-  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed) };
+  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
@@ -383,7 +385,7 @@ export async function resolveNaturalLanguageQuery(
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
-    const errMsg = ragErrorTemplate(ragResult.ragError);
+    const errMsg = ragErrorTemplate(ragResult.ragError, sessionLang(trimmed, history));
     if (errMsg) return { type: 'rag_canned', text: errMsg };
   }
 

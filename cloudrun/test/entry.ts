@@ -6,3 +6,4 @@ export { scrubLeaks } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
 export { isCasualExact } from '../src/routes';
 export { historyToContents } from '../src/routes';
+export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate } from '../src/templates';

@@ -6,7 +6,7 @@ import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
-import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate } from './templates';
+import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact } from './routes';
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang "tidak tercantum di data manual" di kalimat PERTAMA, jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
@@ -87,10 +87,12 @@ export async function generateResponseStream(
   const q = offer ?? trimmed;
   if (offer) console.info('[offer] "%s" → tawaran diterima: "%s"', trimmed, offer);
 
+  const lang = sessionLang(q, history);
+
   const foreignModel = detectForeignModel(q, model);
   if (foreignModel) {
     console.info('[scope] model asing terdeteksi: %s (aktif: %s)', foreignModel, model);
-    return streamCanned(foreignModelTemplate(foreignModel, model), onChunk);
+    return streamCanned(foreignModelTemplate(foreignModel, model, lang), onChunk);
   }
 
   const { isFaultCode, faultQuery } = detectFaultCodeInQuery(q);
@@ -98,7 +100,7 @@ export async function generateResponseStream(
   const hasServiceInterval = !isFaultCode && SERVICE_INTERVAL_RE.test(q);
 
   const routeResult = isFaultCode
-    ? await resolveFaultCodeQuery(faultQuery, model, emit)
+    ? await resolveFaultCodeQuery(faultQuery, model, emit, lang)
     : isMultiAspectQuery(q)
       ? await resolveMultiAspectQuery(q, history, model, emit)
       : (isPartsQuery(q) || hasServiceInterval)
