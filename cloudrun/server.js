@@ -326,6 +326,73 @@ async function fetchAuthUser(token) {
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
+const _stat = { mulai: Date.now(), req: [], err: [] };
+const JENDELA_MS = 15 * 60 * 1000;
+
+function catatStat(arr, entri) {
+  const batas = Date.now() - JENDELA_MS;
+  arr.push(entri);
+  while (arr.length && arr[0].t < batas) arr.shift();
+  if (arr.length > 2000) arr.splice(0, arr.length - 2000);
+}
+
+function persentil(v, p) {
+  if (!v.length) return 0;
+  const s = [...v].sort((a, b) => a - b);
+  return s[Math.min(s.length - 1, Math.floor(s.length * p))];
+}
+
+app.get('/metrics', (_req, res) => {
+  const batas = Date.now() - JENDELA_MS;
+  const r = _stat.req.filter(x => x.t >= batas);
+  const e = _stat.err.filter(x => x.t >= batas);
+  const ttft = r.map(x => x.ttft).filter(Boolean);
+  const total = r.map(x => x.total);
+  const perUnit = {};
+  const perRoute = {};
+  let biaya = 0, tokenIn = 0, tokenOut = 0, fallback = 0, degraded = 0;
+  for (const x of r) {
+    perUnit[x.unit] = (perUnit[x.unit] || 0) + 1;
+    perRoute[x.route] = (perRoute[x.route] || 0) + 1;
+    biaya += x.cost; tokenIn += x.in; tokenOut += x.out;
+    if (x.fallback) fallback++;
+    if (x.degraded) degraded++;
+  }
+  const menit = Math.max(1, Math.min(15, (Date.now() - _stat.mulai) / 60000));
+  res.json({
+    status: 'ok',
+    uptime_detik: Math.round((Date.now() - _stat.mulai) / 1000),
+    jendela: '15 menit terakhir',
+    trafik: {
+      request: r.length,
+      per_menit: Number((r.length / menit).toFixed(2)),
+      per_unit: perUnit,
+      per_route: perRoute,
+    },
+    latensi_ms: {
+      ttft_p50: persentil(ttft, 0.5), ttft_p90: persentil(ttft, 0.9), ttft_max: ttft.length ? Math.max(...ttft) : 0,
+      total_p50: persentil(total, 0.5), total_p90: persentil(total, 0.9), total_max: total.length ? Math.max(...total) : 0,
+    },
+    kualitas: {
+      fallback_model: fallback,
+      rerank_degraded: degraded,
+      error: e.length,
+      error_terakhir: e.slice(-3).map(x => ({ sebab: x.sebab, unit: x.unit, menit_lalu: Math.round((Date.now() - x.t) / 60000) })),
+    },
+    biaya: {
+      token_in: tokenIn, token_out: tokenOut,
+      usd: Number(biaya.toFixed(4)),
+      idr: Math.round(biaya * 16300),
+    },
+    config: {
+      model: process.env.VERTEX_MODEL || '-',
+      fallback: process.env.FALLBACK_MODELS || '-',
+      prompt_cache: CACHE_ENABLED ? 'on' : 'off',
+      usage_log: USAGE_LOG_ON ? 'on' : 'off',
+    },
+  });
+});
+
 const TRANSCRIBE_MODEL = process.env.TRANSCRIBE_MODEL || 'gemini-3.7-flash';
 const AUDIO_MAX_BYTES  = 6 * 1024 * 1024;
 const AUDIO_MIME_RE    = /^audio\/[a-z0-9.+-]+$/i;
@@ -545,6 +612,46 @@ async function warmPromptCaches(reason) {
 const HISTORY_MAX_MSG   = 24;
 const HISTORY_MAX_CHARS = 4000;
 
+function ringkasTanya(teks, jumlahGambar) {
+  const bersih = (teks || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  const tag = jumlahGambar > 0 ? '[+foto] ' : '';
+  return tag + (bersih || '(tanpa teks)');
+}
+
+const USAGE_LOG_ON = process.env.USAGE_LOG !== 'off';
+
+async function catatPemakaian(req, d) {
+  if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken) return;
+  try {
+    const total = d.usage.input + d.usage.output + d.usage.thinking;
+    await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
+      method: 'POST',
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${req.authToken}`,
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      },
+      body: JSON.stringify({
+        user_name: d.userName,
+        user_nik: (req.authUser && req.authUser.email || '').split('@')[0] || null,
+        session_id: d.sessionId,
+        model: d.unit,
+        input_tokens: d.usage.input,
+        output_tokens: d.usage.output + d.usage.thinking,
+        total_tokens: total,
+        llm_calls: d.usage.calls,
+        tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
+        cost_usd: Number(d.biaya.toFixed(6)),
+        cost_idr: Math.round(d.biaya * 16300),
+      }),
+      signal: AbortSignal.timeout(5_000),
+    });
+  } catch (err) {
+    console.warn('[usage-log] gagal simpan rid=%s: %s', d.requestId, err && err.message);
+  }
+}
+
 function sseWrite(res, event, payload) {
   if (res.writableEnded) return;
   res.write(`data: ${JSON.stringify({ ev: event, ...payload })}\n\n`);
@@ -703,9 +810,28 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       }
       return orch.generateResponseStream(unit, userName, history, userInput, onChunk, onEvent);
     });
-    console.info('[ask] ttft=%dms total=%dms in=%d out=%d thinking=%d calls=%d',
-      ttft, Date.now() - tMulai, deps.usage.input, deps.usage.output,
-      deps.usage.thinking, deps.usage.calls);
+    const totalMs = Date.now() - tMulai;
+    const m = deps.meta;
+    const biaya = deps.usage.input / 1e6 * 0.30 + (deps.usage.output + deps.usage.thinking) / 1e6 * 2.50;
+    console.info(
+      '[ask] rid=%s user=%s unit=%s q="%s" route=%s conf=%s model=%s ' +
+      'ttft=%d rag=%d rerank=%d total=%d in=%d out=%d calls=%d cost=%s%s%s',
+      requestId, userName, unit, ringkasTanya(userInput, images.length),
+      m.route || '-', m.confidence || '-', m.modelUsed || orch.MODEL,
+      ttft, m.msRag || 0, m.msRerank || 0, totalMs,
+      deps.usage.input, deps.usage.output + deps.usage.thinking, deps.usage.calls,
+      biaya.toFixed(5),
+      m.degraded ? ' degraded=1' : '',
+      m.fallbackTo ? ` fallback=${m.fallbackTo}` : '');
+    catatPemakaian(req, {
+      requestId, userName, unit, usage: deps.usage, meta: m,
+      ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId : null,
+    });
+    catatStat(_stat.req, {
+      t: Date.now(), ttft, total: totalMs, unit, route: m.route || '-',
+      in: deps.usage.input, out: deps.usage.output + deps.usage.thinking,
+      cost: biaya, fallback: !!m.fallbackTo, degraded: m.degraded === true,
+    });
     sseWrite(res, 'meta', {
       usage: deps.usage,
       model: deps.meta.modelUsed || orch.MODEL,
@@ -715,7 +841,14 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     });
   } catch (err) {
     const kuota = err && err.message === 'KUOTA_PENUH';
-    console.error('/v1/ask error:', deadlineHit ? `deadline ${REQUEST_DEADLINE_MS}ms terlewati` : (err && err.stack) || err);
+    console.error('[ask-error] rid=%s user=%s unit=%s q="%s" after=%dms sebab=%s | %s',
+      requestId, userName, unit, ringkasTanya(userInput, images.length), Date.now() - tMulai,
+      deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception',
+      (err && err.stack) || err);
+    catatStat(_stat.err, {
+      t: Date.now(), unit,
+      sebab: deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception',
+    });
     sseWrite(res, 'error', { message: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'Waktu proses habis — coba kirim ulang pertanyaanmu.' : 'Gagal memproses pertanyaan.' });
   } finally {
     clearTimeout(deadlineTimer);
@@ -726,9 +859,9 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 if (require.main === module) {
   const PORT = process.env.PORT || 8080;
   app.listen(PORT, () => {
-    console.log(`Dash⁵ proxy :${PORT}`);
+    console.info('[boot] Dash5 proxy siap di port %d', PORT);
     getAccessToken()
-      .then(() => console.log('[boot] kredensial GCP siap'))
+      .then(() => console.info('[boot] kredensial GCP siap'))
       .then(() => warmPromptCaches('boot'))
       .catch(e => console.warn('[boot] warm-up gagal:', e && e.message));
     setInterval(() => warmPromptCaches('refresh').catch(() => {}), CACHE_WARM_INTERVAL_MS).unref();

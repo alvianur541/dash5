@@ -70,7 +70,10 @@ export async function callProxyStream(
   attempt++;
   fullText = '';
   modelUsed = modelAt(attempt);
-  if (attempt > 1) console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
+  if (attempt > 1) {
+    console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
+    try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+  }
   let upstreamError: string | null = null;
   let cacheExpired = false;
   let retryNeeded = false;

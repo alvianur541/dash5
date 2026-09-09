@@ -548,6 +548,12 @@ async function rankAndSelect(
   const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
   console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
     effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
+  try {
+    const m = deps().meta;
+    m.msRag = (m.msRag || 0) + msCari;
+    m.msRerank = (m.msRerank || 0) + msRerank;
+    m.topScore = topScore;
+  } catch { /* di luar konteks request */ }
 
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
