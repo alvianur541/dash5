@@ -623,8 +623,7 @@ const USAGE_LOG_ON = process.env.USAGE_LOG !== 'off';
 async function catatPemakaian(req, d) {
   if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken) return;
   try {
-    const total = d.usage.input + d.usage.output + d.usage.thinking;
-    await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
+    const r = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
       method: 'POST',
       headers: {
         apikey: SUPABASE_ANON_KEY,
@@ -639,7 +638,6 @@ async function catatPemakaian(req, d) {
         model: d.unit,
         input_tokens: d.usage.input,
         output_tokens: d.usage.output + d.usage.thinking,
-        total_tokens: total,
         llm_calls: d.usage.calls,
         tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
         cost_usd: Number(d.biaya.toFixed(6)),
@@ -647,6 +645,10 @@ async function catatPemakaian(req, d) {
       }),
       signal: AbortSignal.timeout(5_000),
     });
+    if (!r.ok) {
+      const teks = await r.text().catch(() => '');
+      console.warn('[usage-log] tolak rid=%s HTTP %d: %s', d.requestId, r.status, teks.slice(0, 200));
+    }
   } catch (err) {
     console.warn('[usage-log] gagal simpan rid=%s: %s', d.requestId, err && err.message);
   }
