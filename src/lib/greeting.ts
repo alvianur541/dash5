@@ -8,7 +8,7 @@ const GREETINGS = {
   monday:  ['Selamat datang kembali', 'Siap membantu awal minggu ini', 'Asisten teknis siap digunakan'],
   friday:  ['Selamat sore', 'Siap membantu menutup pekan ini', 'Asisten teknis siap digunakan'],
   weekend: ['Selamat datang', 'Siap membantu kapan pun dibutuhkan', 'Asisten teknis siap digunakan'],
-  pagi:    ['Selamat pagi', 'Selamat pagi, siap membantu', 'Asisten teknis siap digunakan'],
+  pagi:    ['Pagi yang produktif'],
   siang:   ['Selamat siang', 'Selamat siang, siap membantu', 'Asisten teknis siap digunakan'],
   sore:    ['Selamat sore', 'Selamat sore, siap membantu', 'Asisten teknis siap digunakan'],
   malam:   ['Selamat malam', 'Selamat malam, siap membantu', 'Asisten teknis siap digunakan'],

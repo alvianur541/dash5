@@ -93,7 +93,6 @@ export function MessageInput({
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [recordSec, setRecordSec] = useState(0);
-  const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   useEffect(() => {
     if (recordingState !== 'recording') { setRecordSec(0); return; }
@@ -260,9 +259,9 @@ export function MessageInput({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={e => {
-                if (e.key === 'Enter' && !e.shiftKey && !isMobile) { e.preventDefault(); handleSend(); }
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}
-              enterKeyHint={isMobile ? 'enter' : 'send'}
+              enterKeyHint="send"
               placeholder={
                 isRecording || isTranscribing ? '' :
                 isOffline ? 'Mode offline — chat aktif saat sinyal kembali…' :
