@@ -1,6 +1,6 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
+import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -93,7 +93,6 @@ export function MessageInput({
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [recordSec, setRecordSec] = useState(0);
-  const [pending, setPending] = useState<{ file: File; url: string } | null>(null);
   const isMobile = typeof window !== 'undefined' && window.innerWidth < 768;
 
   useEffect(() => {
@@ -134,11 +133,10 @@ export function MessageInput({
   const handleSend = () => {
     if (isOffline || isStreaming || disabled) return;
     const text = input.trim();
-    if (!text && !pending) return;
+    if (!text) return;
     buzz();
-    onSendMessage(text, pending ? [pending.file] : undefined);
+    onSendMessage(text);
     resetBox();
-    setPending(null);
   };
 
   const flash = (msg: string) => {
@@ -158,14 +156,10 @@ export function MessageInput({
 
     const { file: ready, compressed } = await compressImage(file);
     if (!compressed) flash('Compress gambar gagal — akan mengirim file original.');
-    const url = await new Promise<string>(resolve => {
-      const r = new FileReader();
-      r.onloadend = () => resolve(typeof r.result === 'string' ? r.result : '');
-      r.onerror = () => resolve('');
-      r.readAsDataURL(ready);
-    });
-    setPending({ file: ready, url });
-    textareaRef.current?.focus();
+    const teks = textareaRef.current?.value?.trim() || '';
+    resetBox();
+    buzz();
+    onSendMessage(teks, [ready]);
   };
 
   const startRecording = async () => {
@@ -190,13 +184,12 @@ export function MessageInput({
             const combined = currentInput ? `${currentInput} ${text}` : text;
             resetBox();
             buzz();
-            onSendMessage(combined, pending ? [pending.file] : undefined);
-            setPending(null);
+            onSendMessage(combined);
           } else {
-            flash('Suara tidak terbaca. Coba lagi.');
+            flash('Suara tidak tertangkap — coba bicara lebih dekat ke mikrofon.');
           }
         } catch {
-          flash('Gagal transkripsi. Coba lagi.');
+          flash('Suara gagal diproses. Coba ulangi.');
         } finally {
           setRecordingState('idle');
         }
@@ -214,7 +207,7 @@ export function MessageInput({
     else if (recordingState === 'recording') stopRecording();
   };
 
-  const canSend      = (input.trim().length > 0 || !!pending) && !disabled && !isOffline;
+  const canSend      = input.trim().length > 0 && !disabled && !isOffline;
   const isRecording  = recordingState === 'recording';
   const isTranscribing = recordingState === 'transcribing';
 
@@ -249,37 +242,14 @@ export function MessageInput({
                       transition={{ duration: 1, repeat: Infinity }}
                       className="w-2 h-2 rounded-full bg-red-500 shrink-0"
                     />
-                    <span className="text-[11px] text-red-400 font-medium tabular-nums">Merekam {recordSec}s / {RECORD_MAX_SEC}s — ketuk stop</span>
+                    <span className="text-[11px] text-red-400 font-medium tabular-nums">Mendengarkan · {recordSec}s / {RECORD_MAX_SEC}s · ketuk untuk selesai</span>
                   </>
                 ) : (
                   <>
                     <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
-                    <span className="text-[11px] text-[var(--accent-main)] font-medium">Mentranskrip suara…</span>
+                    <span className="text-[11px] text-[var(--accent-main)] font-medium">Menyusun pertanyaan…</span>
                   </>
                 )}
-              </m.div>
-            )}
-          </AnimatePresence>
-
-          <AnimatePresence>
-            {pending && (
-              <m.div
-                initial={{ opacity: 0, scale: 0.96 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.96 }}
-                transition={{ duration: 0.15 }}
-                className="px-4 pt-4 pb-1"
-              >
-                <div className="relative inline-block pt-2 pr-2">
-                  <img src={pending.url} alt="Preview" className="h-[72px] w-auto max-w-[160px] object-cover rounded-xl border border-[var(--border-main)]" />
-                  <button
-                    onClick={() => setPending(null)}
-                    className="absolute -top-2 -right-2 w-6 h-6 rounded-full bg-[var(--text-primary)] text-[var(--bg-app)] flex items-center justify-center shadow"
-                    aria-label="Hapus foto"
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
               </m.div>
             )}
           </AnimatePresence>
@@ -296,7 +266,6 @@ export function MessageInput({
               placeholder={
                 isRecording || isTranscribing ? '' :
                 isOffline ? 'Mode offline — chat aktif saat sinyal kembali…' :
-                pending ? 'Tambah keterangan foto (opsional)…' :
                 `Tanyakan tentang unit ${selectedModel}...`
               }
               rows={1}
@@ -336,8 +305,8 @@ export function MessageInput({
                 onClick={toggleRecording}
                 disabled={disabled || isTranscribing}
                 className={cn("input-tool-btn", isRecording && "input-tool-btn-rec")}
-                title={isRecording ? 'Berhenti merekam' : 'Input suara'}
-                aria-label={isRecording ? 'Berhenti merekam' : 'Input suara'}
+                title={isRecording ? 'Selesai bicara' : 'Bicara'}
+                aria-label={isRecording ? 'Selesai bicara' : 'Bicara'}
               >
                 {isTranscribing
                   ? <Loader2 size={18} className="animate-spin" />
