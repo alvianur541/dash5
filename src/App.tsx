@@ -341,7 +341,7 @@ export default function App() {
   const userName = (user.displayName || 'Operator').split(' ')[0];
 
   return (
-    <div className={cn('flex h-dvh overflow-hidden transition-colors duration-400', 'bg-[var(--bg-app)] text-[var(--text-primary)]')}>
+    <div className={cn('flex h-full overflow-hidden transition-colors duration-400', 'bg-[var(--bg-app)] text-[var(--text-primary)]')}>
       <Sidebar
         selectedModel={selectedModel}
         onSelectModel={handleSelectModel}
