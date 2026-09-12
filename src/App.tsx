@@ -18,6 +18,7 @@ import { useAuth } from './components/AuthProvider';
 import { useNetwork } from './hooks/useNetwork';
 import { useTheme } from './hooks/useTheme';
 import { usePocket } from './hooks/usePocket';
+import { makeThumbnails } from './lib/thumbnail';
 
 const FLUSH_INTERVAL = 40;
 const FLUSH_BATCH = 200;
@@ -27,15 +28,6 @@ const SWIPE_MAX_MS = 600;
 const SWIPE_EDGE = 40;
 
 type Queued = { content: string; attachments?: File[] };
-
-function readAsDataUrls(files: File[]): Promise<string[]> {
-  return Promise.allSettled(files.map(file => new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onloadend = () => resolve(reader.result as string);
-    reader.onerror = () => reject(new Error(`Gagal membaca: ${file.name}`));
-    reader.readAsDataURL(file);
-  }))).then(rs => rs.filter((r): r is PromiseFulfilledResult<string> => r.status === 'fulfilled').map(r => r.value));
-}
 
 function errorMessage(err: unknown): string {
   const msg = (err as Error)?.message ?? '';
@@ -221,7 +213,7 @@ export default function App() {
       sessionIdRef.current = sessionId;
     }
 
-    const attachmentUrls = attachments?.length ? await readAsDataUrls(attachments) : [];
+    const attachmentUrls = attachments?.length ? await makeThumbnails(attachments) : [];
     const userMessage: Message = {
       id: crypto.randomUUID(), role: 'user', content: content.trim(), timestamp: Date.now(), attachments: attachmentUrls,
     };
@@ -240,8 +232,7 @@ export default function App() {
 
     const persist = (fullText: string) => {
       const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
-      const messagesForStorage = [...currentMessages, userMessage, assistantMessage]
-        .map(m => m.attachments?.length ? { ...m, attachments: [] } : m);
+      const messagesForStorage = [...currentMessages, userMessage, assistantMessage];
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
       setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
