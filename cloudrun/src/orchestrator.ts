@@ -6,7 +6,7 @@ import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
-import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang } from './templates';
+import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact } from './routes';
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang "tidak tercantum di data manual" di kalimat PERTAMA, jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
@@ -177,6 +177,7 @@ export async function generateResponse(
   const system = await systemFor(model, false);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
+  const lang = sessionLang(userInput, history);
 
   emit({ type: 'thinking', message: 'Membaca foto…' });
   deps().meta.route = 'image';
@@ -235,8 +236,7 @@ export async function generateResponse(
       emit({ type: 'tool_result', tool: 'search_technical_manual', found: found.length > 0 });
 
       if (found.length === 0 && notFound.length > 0) {
-        const lines = notFound.map(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`).join('\n');
-        return `Fault code terdeteksi dari gambar: **${notFound.join(', ')}**\n\n${lines}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`;
+        return imageCodesNotFoundTemplate(notFound, model, lang);
       }
 
       const noteBase = userInput || 'Analisa fault code ini dan berikan diagnosis lengkap.';
@@ -280,6 +280,8 @@ export async function generateResponse(
     currentParts.push({ text: userInput || 'Analisa gambar ini, identifikasi fault code, dan berikan diagnosis.' });
   }
 
+  const directive = langDirective(lang);
+  if (directive) currentParts.push({ text: directive });
   if (sendImageToModel) currentParts.unshift(...imageParts);
 
   contents.push({ role: 'user', parts: [{ text: userTag(userName) }, ...currentParts] });

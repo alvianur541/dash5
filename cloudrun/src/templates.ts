@@ -31,6 +31,25 @@ function pick<T>(lang: Lang, opts: { id: T; en: T; ja: T }): T {
   return opts[lang];
 }
 
+// Photo turns wrap the caption in Indonesian instructions; without this the model answers in Indonesian.
+export function langDirective(lang: Lang): string {
+  return pick(lang, {
+    id: '',
+    en: '[LANGUAGE: The technician wrote in English. Write the ENTIRE answer in English — headings, explanations, steps, and closing. The instructions and manual data above are internal and may be in Indonesian; do not copy their language. Copy part numbers, codes, numbers, and units exactly.]',
+    ja: '[言語: 技術者は日本語で書いています。回答はすべて日本語で書いてください（見出し・説明・手順・締めくくりまで）。上の指示とマニュアルデータは内部用でインドネシア語の場合がありますが、その言語をまねしないでください。部品番号・コード・数値・単位はそのまま写してください。]',
+  });
+}
+
+export function imageCodesNotFoundTemplate(codes: string[], model: string, lang: Lang = 'id'): string {
+  const list = codes.join(', ');
+  const lines = (f: (c: string) => string) => codes.map(f).join('\n');
+  return pick(lang, {
+    id: `Fault code terdeteksi dari gambar: **${list}**\n\n${lines(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`)}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`,
+    en: `Fault codes read from the photo: **${list}**\n\n${lines(c => `- Code \`${c}\` is not in the **${model}** manual database I can access.`)}\n\nCheck that the codes were read correctly and that the unit model is right (this chat is set to ${model}).`,
+    ja: `写真から読み取ったフォルトコード: **${list}**\n\n${lines(c => `- コード \`${c}\` は **${model}** のマニュアルデータベースにありません。`)}\n\nコードの読み取りが正しいか、機種設定が合っているか確認してください（現在の設定: ${model}）。`,
+  });
+}
+
 export function ragErrorTemplate(errorMsg: string, lang: Lang = 'id'): string {
   if (errorMsg.toLowerCase().includes('rerank')) return '';
   return pick(lang, {
