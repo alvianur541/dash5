@@ -94,6 +94,20 @@ while IFS=$'\t' read -r _ email; do
     --format='value(name.basename(),validAfterTime)' 2>/dev/null | sed "s|^|${email}\t|" >> "$TMP/keys.tsv"
 done < "$TMP/sa.tsv"
 
+curl -s -G -H "Authorization: Bearer $TOKEN" "$MON/metricDescriptors" \
+  --data-urlencode 'filter=metric.type = starts_with("iam.googleapis.com/service_account/")' > "$TMP/iamdesc.json"
+j=0
+for itype in $(python3 -c 'import json,sys; print("\n".join(m["type"] for m in json.load(open(sys.argv[1])).get("metricDescriptors", []) if "authn" in m.get("type", "")))' "$TMP/iamdesc.json" 2>/dev/null); do
+  curl -s -G -H "Authorization: Bearer $TOKEN" "$MON/timeSeries" \
+    --data-urlencode "filter=metric.type=\"$itype\"" \
+    --data-urlencode "interval.startTime=$START" \
+    --data-urlencode "interval.endTime=$END" \
+    --data-urlencode "aggregation.alignmentPeriod=3600s" \
+    --data-urlencode "aggregation.perSeriesAligner=ALIGN_SUM" > "$TMP/iam_${j}.json"
+  printf '%s\t%s\n' "$j" "$itype" >> "$TMP/iam_index.tsv"
+  j=$((j + 1))
+done
+
 cat > "$TMP/report.py" <<'PY'
 import json, os, re, sys, glob
 from collections import defaultdict
@@ -349,6 +363,29 @@ if keys:
     print("    -> server mana pun yang memegang kunci ini memakai kuota & tagihan project ini.")
 else:
     print("    tidak ada")
+
+print("\n  Autentikasi akun & kunci (hitungan Google; kunci aktif = ada server yang memakainya):")
+found = False
+idx = os.path.join(tmp, "iam_index.tsv")
+if os.path.exists(idx):
+    for line in open(idx):
+        j, itype = line.rstrip("\n").split("\t")
+        short = itype.replace("iam.googleapis.com/service_account/", "")
+        try: d = json.load(open(os.path.join(tmp, f"iam_{j}.json")))
+        except Exception: continue
+        if "error" in d:
+            print(f"    ! {short}: {d['error'].get('message', '')[:100]}"); continue
+        for s in d.get("timeSeries", []):
+            lb = {**s.get("resource", {}).get("labels", {}), **s.get("metric", {}).get("labels", {})}
+            who = f"kunci {lb['key_id'][:12]}..." if lb.get("key_id") else sa.get(lb.get("unique_id", ""), lb.get("unique_id", "?"))
+            pts = [(pt.get("interval", {}).get("endTime", ""), float(pt.get("value", {}).get("int64Value", 0))) for pt in s.get("points", [])]
+            total = sum(v for _, v in pts)
+            last = wib(max((t for t, v in pts if v > 0), default=""))
+            when = f"terakhir {last:%d %b %H:%M} WIB" if last else ""
+            print(f"    {short:<24} {who[:52]:<52} {rb(total):>6}  {when}")
+            found = True
+if not found:
+    print("    (tidak ada data)")
 PY
 
 python3 "$TMP/report.py" "$TMP" "$HARI" "$PRICE_IN" "$PRICE_OUT" "$KURS" "$PROJECT" "$BILLING" "$PRICE_LITE_IN" "$PRICE_LITE_OUT"
