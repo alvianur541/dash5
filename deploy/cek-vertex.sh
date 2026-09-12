@@ -62,7 +62,7 @@ while IFS=$'\t' read -r mtype aligner; do
 done < "$TMP/metrics.tsv"
 
 gcloud logging read \
-  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND (textPayload:\"[ask]\" OR textPayload:\"[tokens]\" OR textPayload:\"[transcribe]\" OR textPayload:\"[stream]\" OR textPayload:\"[fallback]\" OR textPayload:\"[upstream]\")" \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND (textPayload:\"[ask]\" OR textPayload:\"[tokens]\" OR textPayload:\"[transcribe]\" OR textPayload:\"[stream]\" OR textPayload:\"[fallback]\" OR textPayload:\"[upstream]\" OR textPayload:\"[ask-error]\" OR textPayload:\"Vertex 429\")" \
   --project="$PROJECT" --freshness="${HARI}d" --limit=20000 \
   --format='value(timestamp,textPayload)' > "$TMP/logs.txt" 2>"$TMP/logs.err" || true
 
@@ -90,7 +90,7 @@ now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=7)
 print(f"\n=== Pemakaian Vertex AI - {project} - {hari} hari terakhir (sampai {now:%d %b %H:%M} WIB) ===")
 
 print("\n[1] Hitungan Google (Cloud Monitoring, semua panggilan Vertex)")
-NOISE = {"response_code", "input_token_size", "output_token_size"}
+NOISE = {"input_token_size", "output_token_size", "request_type", "shared_request_type", "source", "method"}
 index = os.path.join(tmp, "ts_index.tsv")
 rows = defaultdict(float)
 if os.path.exists(index):
@@ -117,6 +117,7 @@ if os.path.exists(index):
                     else: x = 0.0
                     rows[(short, model, extra)] += x
 g_tok = defaultdict(lambda: [0.0, 0.0, 0.0])
+g_calls = defaultdict(float)
 if rows:
     print(f"  {'metrik':<24} {'model':<24} {'total':>12}  label")
     for (m, model, extra), v in sorted(rows.items()):
@@ -125,6 +126,8 @@ if rows:
             low = extra.lower()
             slot = 0 if "input" in low else 1 if "output" in low else 2
             g_tok[model][slot] += v
+        elif m == "model_invocation_count":
+            g_calls[model] += v
 else:
     print("  (tidak ada data - metrik belum tersedia atau tidak ada pemakaian; lihat bagian [2])")
 
@@ -137,6 +140,8 @@ why_re = re.compile(r'\[stream\] (.*?) — percobaan')
 q429_re = re.compile(r'\[fallback\] (\S+) 429')
 halt_re = re.compile(r'\[stream\] finishReason=(\S+) tetap')
 stall_re = re.compile(r'\[upstream\] .*macet')
+err_re = re.compile(r'\[ask-error\] .*?user=(.*?) unit=(\S+) q="(.*?)" after=(\d+)ms sebab=(\S+)')
+v429_re = re.compile(r'Vertex 429 \((.*?)\)')
 n = foto = calls = tin = tout = 0
 per_hari = defaultdict(lambda: [0, 0, 0])
 per_user = defaultdict(lambda: [0, 0, 0])
@@ -144,6 +149,8 @@ per_route = defaultdict(int)
 per_model = defaultdict(lambda: [0, 0, 0, 0, 0.0])
 retry_to = defaultdict(int)
 why = defaultdict(int)
+v429 = defaultdict(int)
+errors = []
 tr_n = tr_ms = halted = stalls = 0
 logs = os.path.join(tmp, "logs.txt")
 for line in (open(logs, encoding="utf-8", errors="replace") if os.path.exists(logs) else []):
@@ -180,6 +187,14 @@ for line in (open(logs, encoding="utf-8", errors="replace") if os.path.exists(lo
     m = q429_re.search(text)
     if m:
         why[f"429 kapasitas penuh ({m.group(1)})"] += 1; continue
+    m = err_re.search(text)
+    if m:
+        t = wib(ts)
+        errors.append((f"{t:%d %b %H:%M}" if t else "?", m.group(5), int(m.group(4)), m.group(3)))
+        continue
+    m = v429_re.search(text)
+    if m:
+        v429[m.group(1)] += 1; continue
     if stall_re.search(text):
         stalls += 1
 
@@ -212,6 +227,18 @@ if halted:
     print(f"    {halted:>3}x  tetap terhenti -> teknisi dapat catatan 'jawaban terhenti'")
 if stalls:
     print(f"  Koneksi macet dibuka ulang: {rb(stalls)} kali")
+if v429:
+    print("  Vertex 429 lalu dicoba lagi oleh server: " + ", ".join(f"{k} {c}x" for k, c in sorted(v429.items())))
+if errors:
+    print(f"\n  Pertanyaan GAGAL (tidak masuk hitungan di atas): {len(errors)}")
+    for w, sebab, after, q in errors[:15]:
+        print(f"    {w}  {sebab:<12} {after / 1000:>5.1f} dtk  {q[:50]}")
+main_calls = sum(v for k, v in g_calls.items() if "lite" not in k)
+if main_calls:
+    logged = sum(pm[0] for pm in per_model.values()) + retries
+    gap = main_calls - logged
+    print(f"\n  Panggilan model utama: Google {rb(main_calls)} vs log {rb(logged)} (jawaban + ulangan)"
+          + (f" -> selisih {rb(gap)}" if gap else " -> cocok"))
 if tr_n:
     print(f"\n  Input suara (transcribe): {rb(tr_n)} rekaman, rata-rata {tr_ms / tr_n / 1000:.1f} dtk")
 
