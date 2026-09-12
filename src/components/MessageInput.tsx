@@ -1,6 +1,6 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square } from 'lucide-react';
+import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -93,6 +93,11 @@ export function MessageInput({
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [recordSec, setRecordSec] = useState(0);
+  const [pendingImage, setPendingImage] = useState<{ file: File; url: string } | null>(null);
+  const pendingRef = useRef<{ file: File; url: string } | null>(null);
+  pendingRef.current = pendingImage;
+
+  useEffect(() => () => { if (pendingImage) URL.revokeObjectURL(pendingImage.url); }, [pendingImage]);
 
   useEffect(() => {
     if (recordingState !== 'recording') { setRecordSec(0); return; }
@@ -132,9 +137,10 @@ export function MessageInput({
   const handleSend = () => {
     if (isOffline || isStreaming || disabled) return;
     const text = input.trim();
-    if (!text) return;
+    if (!text && !pendingImage) return;
     buzz();
-    onSendMessage(text);
+    onSendMessage(text, pendingImage ? [pendingImage.file] : undefined);
+    setPendingImage(null);
     resetBox();
   };
 
@@ -155,10 +161,9 @@ export function MessageInput({
 
     const { file: ready, compressed } = await compressImage(file);
     if (!compressed) flash('Compress gambar gagal — akan mengirim file original.');
-    const teks = textareaRef.current?.value?.trim() || '';
-    resetBox();
-    buzz();
-    onSendMessage(teks, [ready]);
+    // Hold the photo so the technician can add what to check before sending.
+    setPendingImage({ file: ready, url: URL.createObjectURL(ready) });
+    textareaRef.current?.focus();
   };
 
   const startRecording = async () => {
@@ -183,7 +188,8 @@ export function MessageInput({
             const combined = currentInput ? `${currentInput} ${text}` : text;
             resetBox();
             buzz();
-            onSendMessage(combined);
+            onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined);
+            setPendingImage(null);
           } else {
             flash('Suara tidak tertangkap — coba bicara lebih dekat ke mikrofon.');
           }
@@ -206,7 +212,7 @@ export function MessageInput({
     else if (recordingState === 'recording') stopRecording();
   };
 
-  const canSend      = input.trim().length > 0 && !disabled && !isOffline;
+  const canSend      = (input.trim().length > 0 || !!pendingImage) && !disabled && !isOffline;
   const isRecording  = recordingState === 'recording';
   const isTranscribing = recordingState === 'transcribing';
 
@@ -253,7 +259,24 @@ export function MessageInput({
             )}
           </AnimatePresence>
 
-          <div className="px-5 pt-[14px] pb-[4px] flex flex-col justify-center">
+          {pendingImage && (
+            <div className="px-4 pt-3 flex items-center gap-2.5">
+              <div className="relative shrink-0">
+                <img src={pendingImage.url} alt="Foto terlampir" className="w-14 h-14 rounded-xl object-cover border border-[var(--border-main)]" />
+                <button
+                  onClick={() => setPendingImage(null)}
+                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-[var(--text-primary)] text-[var(--bg-app)] flex items-center justify-center"
+                  title="Hapus foto"
+                  aria-label="Hapus foto"
+                >
+                  <X size={12} />
+                </button>
+              </div>
+              <span className="text-[12px] text-[var(--text-muted)] leading-snug">Tulis apa yang perlu dicek dari foto ini, lalu kirim.</span>
+            </div>
+          )}
+
+          <div className={cn("px-5 pb-[4px] flex flex-col justify-center", pendingImage ? "pt-2" : "pt-[14px]")}>
             <textarea
               ref={textareaRef}
               value={input}
@@ -265,6 +288,7 @@ export function MessageInput({
               placeholder={
                 isRecording || isTranscribing ? '' :
                 isOffline ? 'Mode offline — chat aktif saat sinyal kembali…' :
+                pendingImage ? 'Keterangan foto (opsional)…' :
                 `Tanyakan tentang unit ${selectedModel}...`
               }
               rows={1}
