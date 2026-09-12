@@ -71,6 +71,29 @@ curl -s -H "Authorization: Bearer $TOKEN" \
 
 BILLING="$(gcloud billing projects describe "$PROJECT" --format='value(billingAccountName)' 2>/dev/null || true)"
 
+page=""; n=0
+while :; do
+  curl -s -G -H "Authorization: Bearer $TOKEN" "$MON/timeSeries" \
+    --data-urlencode 'filter=metric.type="serviceruntime.googleapis.com/api/request_count" AND resource.type="consumed_api" AND resource.label.service="aiplatform.googleapis.com"' \
+    --data-urlencode "interval.startTime=$START" \
+    --data-urlencode "interval.endTime=$END" \
+    --data-urlencode "aggregation.alignmentPeriod=3600s" \
+    --data-urlencode "aggregation.perSeriesAligner=ALIGN_SUM" \
+    ${page:+--data-urlencode "pageToken=$page"} > "$TMP/cred_${n}.json"
+  page="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("nextPageToken",""))' "$TMP/cred_${n}.json" 2>/dev/null)"
+  n=$((n + 1))
+  if [ -z "$page" ] || [ "$n" -ge 20 ]; then break; fi
+done
+
+gcloud iam service-accounts list --project="$PROJECT" --format='value(uniqueId,email)' > "$TMP/sa.tsv" 2>/dev/null || true
+gcloud run services list --project="$PROJECT" --format=json > "$TMP/run.json" 2>/dev/null || echo '[]' > "$TMP/run.json"
+: > "$TMP/keys.tsv"
+while IFS=$'\t' read -r _ email; do
+  [ -n "$email" ] || continue
+  gcloud iam service-accounts keys list --iam-account="$email" --managed-by=user --project="$PROJECT" \
+    --format='value(name.basename(),validAfterTime)' 2>/dev/null | sed "s|^|${email}\t|" >> "$TMP/keys.tsv"
+done < "$TMP/sa.tsv"
+
 cat > "$TMP/report.py" <<'PY'
 import json, os, re, sys, glob
 from collections import defaultdict
@@ -274,6 +297,58 @@ except Exception:
 print("\n[5] Tagihan pasti (Rupiah): Billing -> Reports, filter Service = Vertex AI")
 acc = billing.split("/")[-1] if billing else ""
 print(f"  https://console.cloud.google.com/billing/{acc}/reports" if acc else "  https://console.cloud.google.com/billing")
+
+print("\n[6] Siapa yang memanggil Vertex (per kredensial, hitungan Google)")
+sa = {}
+p = os.path.join(tmp, "sa.tsv")
+if os.path.exists(p):
+    for line in open(p):
+        parts = line.rstrip("\n").split("\t")
+        if len(parts) == 2: sa[parts[0]] = parts[1]
+creds = defaultdict(float)
+for f in sorted(glob.glob(os.path.join(tmp, "cred_*.json"))):
+    try: d = json.load(open(f))
+    except Exception: continue
+    if "error" in d:
+        print("  !", d["error"].get("message", "")[:120]); continue
+    for s in d.get("timeSeries", []):
+        rl = s.get("resource", {}).get("labels", {})
+        cred = rl.get("credential_id", "-")
+        meth = rl.get("method", "-").split(".")[-1]
+        code = s.get("metric", {}).get("labels", {}).get("response_code", "")
+        total = sum(float(pt.get("value", {}).get("int64Value", 0)) for pt in s.get("points", []))
+        creds[(cred, meth, code)] += total
+if creds:
+    print(f"  {'kredensial':<56} {'method':<24} {'kode':>4} {'panggilan':>9}")
+    for (cred, meth, code), v in sorted(creds.items(), key=lambda kv: -kv[1]):
+        kind, _, cid = cred.partition(":")
+        who = sa.get(cid, cred) if kind == "serviceaccount" else cred
+        print(f"  {who[:56]:<56} {meth[:24]:<24} {code:>4} {rb(v):>9}")
+else:
+    print("  (tidak ada data)")
+
+try: runs = json.load(open(os.path.join(tmp, "run.json")))
+except Exception: runs = []
+print("\n  Layanan Cloud Run di project ini:")
+for r in runs or []:
+    md = r.get("metadata", {})
+    loc = md.get("labels", {}).get("cloud.googleapis.com/location", "?")
+    acct = r.get("spec", {}).get("template", {}).get("spec", {}).get("serviceAccountName") or "(default compute)"
+    print(f"    {md.get('name', '?'):<28} {loc:<18} {acct}")
+if not runs:
+    print("    (tidak bisa dibaca)")
+
+keys = []
+p = os.path.join(tmp, "keys.tsv")
+if os.path.exists(p):
+    keys = [l.rstrip("\n").split("\t") for l in open(p) if l.strip()]
+print("\n  Kunci service account buatan manual (bisa dipakai server di luar Google Cloud):")
+for k in keys:
+    print(f"    {k[0]:<52} kunci {k[1][:12]}...  dibuat {k[2][:10] if len(k) > 2 else '?'}")
+if keys:
+    print("    -> server mana pun yang memegang kunci ini memakai kuota & tagihan project ini.")
+else:
+    print("    tidak ada")
 PY
 
 python3 "$TMP/report.py" "$TMP" "$HARI" "$PRICE_IN" "$PRICE_OUT" "$KURS" "$PROJECT" "$BILLING" "$PRICE_LITE_IN" "$PRICE_LITE_OUT"
