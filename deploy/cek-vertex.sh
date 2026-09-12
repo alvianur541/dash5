@@ -7,6 +7,8 @@ PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
 SERVICE="${SERVICE:-dash5-vertexai-proxy}"
 PRICE_IN="${PRICE_IN:-1.50}"
 PRICE_OUT="${PRICE_OUT:-9.00}"
+PRICE_LITE_IN="${PRICE_LITE_IN:-$PRICE_IN}"
+PRICE_LITE_OUT="${PRICE_LITE_OUT:-$PRICE_OUT}"
 KURS="${KURS:-16300}"
 
 if ! [[ "$HARI" =~ ^[0-9]+$ ]] || (( HARI < 1 || HARI > 30 )); then
@@ -60,7 +62,7 @@ while IFS=$'\t' read -r mtype aligner; do
 done < "$TMP/metrics.tsv"
 
 gcloud logging read \
-  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND (textPayload:\"[ask]\" OR textPayload:\"[tokens]\" OR textPayload:\"[transcribe]\")" \
+  "resource.type=\"cloud_run_revision\" AND resource.labels.service_name=\"${SERVICE}\" AND (textPayload:\"[ask]\" OR textPayload:\"[tokens]\" OR textPayload:\"[transcribe]\" OR textPayload:\"[stream]\" OR textPayload:\"[fallback]\" OR textPayload:\"[upstream]\")" \
   --project="$PROJECT" --freshness="${HARI}d" --limit=20000 \
   --format='value(timestamp,textPayload)' > "$TMP/logs.txt" 2>"$TMP/logs.err" || true
 
@@ -74,8 +76,8 @@ import json, os, re, sys, glob
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
-tmp, hari, p_in, p_out, kurs, project, billing = sys.argv[1:8]
-hari, p_in, p_out, kurs = int(hari), float(p_in), float(p_out), float(kurs)
+tmp, hari, p_in, p_out, kurs, project, billing, pl_in, pl_out = sys.argv[1:10]
+hari, p_in, p_out, kurs, pl_in, pl_out = int(hari), float(p_in), float(p_out), float(kurs), float(pl_in), float(pl_out)
 
 def rb(n): return f"{int(round(n)):,}".replace(",", ".")
 def rp(usd): return "Rp" + rb(usd * kurs)
@@ -88,6 +90,7 @@ now = datetime.now(timezone.utc).replace(tzinfo=None) + timedelta(hours=7)
 print(f"\n=== Pemakaian Vertex AI - {project} - {hari} hari terakhir (sampai {now:%d %b %H:%M} WIB) ===")
 
 print("\n[1] Hitungan Google (Cloud Monitoring, semua panggilan Vertex)")
+NOISE = {"response_code", "input_token_size", "output_token_size"}
 index = os.path.join(tmp, "ts_index.tsv")
 rows = defaultdict(float)
 if os.path.exists(index):
@@ -104,7 +107,7 @@ if os.path.exists(index):
                 rl = s.get("resource", {}).get("labels", {})
                 ml = s.get("metric", {}).get("labels", {})
                 model = rl.get("model_user_id") or rl.get("model_version_id") or ml.get("model") or "-"
-                extra = ",".join(f"{k}={v}" for k, v in sorted(ml.items()) if k != "response_code")
+                extra = ",".join(f"{k}={v}" for k, v in sorted(ml.items()) if k not in NOISE)
                 for p in s.get("points", []):
                     v = p.get("value", {})
                     if "int64Value" in v: x = float(v["int64Value"])
@@ -113,10 +116,15 @@ if os.path.exists(index):
                         dv = v["distributionValue"]; x = float(dv.get("count", 0)) * float(dv.get("mean", 0))
                     else: x = 0.0
                     rows[(short, model, extra)] += x
+g_tok = defaultdict(lambda: [0.0, 0.0, 0.0])
 if rows:
-    print(f"  {'metrik':<26} {'model':<28} {'label':<30} {'total':>14}")
+    print(f"  {'metrik':<24} {'model':<24} {'total':>12}  label")
     for (m, model, extra), v in sorted(rows.items()):
-        print(f"  {m:<26} {model:<28} {extra[:30]:<30} {rb(v):>14}")
+        print(f"  {m:<24} {model:<24} {rb(v):>12}  {extra}")
+        if m == "token_count":
+            low = extra.lower()
+            slot = 0 if "input" in low else 1 if "output" in low else 2
+            g_tok[model][slot] += v
 else:
     print("  (tidak ada data - metrik belum tersedia atau tidak ada pemakaian; lihat bagian [2])")
 
@@ -124,12 +132,19 @@ print("\n[2] Hitungan aplikasi (log Cloud Run, per pertanyaan teknisi)")
 ask_re = re.compile(r'\[ask\] .*?user=(.*?) unit=(\S+) q="(.*?)" route=(\S+) .*?model=(\S+) .*?total=(\d+) in=(\d+) out=(\d+) calls=(\d+)')
 tok_re = re.compile(r'\[tokens\] model=(\S+) .*?in=(\d+) \(prompt-cache (\d+)%\) out=(\d+) thinking=(\d+)')
 tr_re = re.compile(r'\[transcribe\] model=(\S+) ms=(\d+)')
+retry_re = re.compile(r'\[fallback\] percobaan (\d+) → model (\S+)')
+why_re = re.compile(r'\[stream\] (.*?) — percobaan')
+q429_re = re.compile(r'\[fallback\] (\S+) 429')
+halt_re = re.compile(r'\[stream\] finishReason=(\S+) tetap')
+stall_re = re.compile(r'\[upstream\] .*macet')
 n = foto = calls = tin = tout = 0
 per_hari = defaultdict(lambda: [0, 0, 0])
 per_user = defaultdict(lambda: [0, 0, 0])
 per_route = defaultdict(int)
 per_model = defaultdict(lambda: [0, 0, 0, 0, 0.0])
-tr_n = tr_ms = 0
+retry_to = defaultdict(int)
+why = defaultdict(int)
+tr_n = tr_ms = halted = stalls = 0
 logs = os.path.join(tmp, "logs.txt")
 for line in (open(logs, encoding="utf-8", errors="replace") if os.path.exists(logs) else []):
     ts, _, text = line.rstrip("\n").partition("\t")
@@ -152,7 +167,21 @@ for line in (open(logs, encoding="utf-8", errors="replace") if os.path.exists(lo
         continue
     m = tr_re.search(text)
     if m:
-        tr_n += 1; tr_ms += int(m.group(2))
+        tr_n += 1; tr_ms += int(m.group(2)); continue
+    m = retry_re.search(text)
+    if m:
+        retry_to[m.group(2)] += 1; continue
+    m = halt_re.search(text)
+    if m:
+        halted += 1; continue
+    m = why_re.search(text)
+    if m:
+        why[re.sub(r"\d+", "N", m.group(1))[:70]] += 1; continue
+    m = q429_re.search(text)
+    if m:
+        why[f"429 kapasitas penuh ({m.group(1)})"] += 1; continue
+    if stall_re.search(text):
+        stalls += 1
 
 err = os.path.join(tmp, "logs.err")
 if n == 0 and os.path.exists(err) and os.path.getsize(err):
@@ -175,14 +204,32 @@ if per_model:
     for mdl, (c, i, o, th, cached) in sorted(per_model.items()):
         pct = f"{round(cached / i * 100)}%" if i else "-"
         print(f"  {mdl:<25} {c:>9} {rb(i):>12} {rb(o):>10} {rb(th):>9} {pct:>6}")
+retries = sum(retry_to.values())
+print(f"\n  Jawaban diulang otomatis: {rb(retries)} kali" + (" (" + ", ".join(f"ke {k} {v}x" for k, v in sorted(retry_to.items())) + ")" if retries else ""))
+for reason, c in sorted(why.items(), key=lambda kv: -kv[1]):
+    print(f"    {c:>3}x  {reason}")
+if halted:
+    print(f"    {halted:>3}x  tetap terhenti -> teknisi dapat catatan 'jawaban terhenti'")
+if stalls:
+    print(f"  Koneksi macet dibuka ulang: {rb(stalls)} kali")
 if tr_n:
     print(f"\n  Input suara (transcribe): {rb(tr_n)} rekaman, rata-rata {tr_ms / tr_n / 1000:.1f} dtk")
 
-print(f"\n[3] Perkiraan biaya token (tarif ${p_in}/${p_out} per 1 juta token input/output, kurs {rb(kurs)})")
+print(f"\n[3] Perkiraan biaya token (flash ${p_in}/${p_out}, flash-lite ${pl_in}/${pl_out} per 1 juta token input/output, kurs {rb(kurs)})")
+g_known = {mdl: t for mdl, t in g_tok.items() if t[0] or t[1]}
+if g_known:
+    g_usd = 0.0
+    for mdl, (gi, go, gu) in sorted(g_known.items()):
+        ci, co = (pl_in, pl_out) if "lite" in mdl else (p_in, p_out)
+        usd = gi / 1e6 * ci + go / 1e6 * co
+        g_usd += usd
+        print(f"  {mdl:<24} input {rb(gi):>10}  output {rb(go):>9}  = {rp(usd)}")
+    print(f"  Dari hitungan Google: ${g_usd:.4f} = {rp(g_usd)}" + (f"   per pertanyaan = {rp(g_usd / n)}" if n else ""))
+elif rows:
+    print("  (label jenis token input/output tidak dikenali di hitungan Google - pakai perkiraan dari log)")
 usd = cost(tin, tout)
-print(f"  Total: ${usd:.4f} = {rp(usd)}" + (f"   per pertanyaan = {rp(usd / n)}" if n else ""))
-print("  Semua token dihitung dengan tarif model utama (flash-lite untuk intent/OCR sebenarnya lebih murah),")
-print("  input suara & embedding tidak termasuk. Angka pasti hanya di halaman Billing.")
+print(f"  Dari log aplikasi:    ${usd:.4f} = {rp(usd)}" + (f"   per pertanyaan = {rp(usd / n)}" if n else ""))
+print("  Log aplikasi tidak menghitung jawaban yang diulang & input suara. Angka pasti hanya di halaman Billing.")
 
 print("\n[4] Prompt cache yang sedang tersimpan (ditagih per jam walau tidak dipakai)")
 try:
@@ -202,4 +249,4 @@ acc = billing.split("/")[-1] if billing else ""
 print(f"  https://console.cloud.google.com/billing/{acc}/reports" if acc else "  https://console.cloud.google.com/billing")
 PY
 
-python3 "$TMP/report.py" "$TMP" "$HARI" "$PRICE_IN" "$PRICE_OUT" "$KURS" "$PROJECT" "$BILLING"
+python3 "$TMP/report.py" "$TMP" "$HARI" "$PRICE_IN" "$PRICE_OUT" "$KURS" "$PROJECT" "$BILLING" "$PRICE_LITE_IN" "$PRICE_LITE_OUT"
