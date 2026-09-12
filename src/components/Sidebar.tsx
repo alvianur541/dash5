@@ -146,12 +146,7 @@ export function Sidebar({
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
           <div className="sidebar-header flex items-center justify-between px-4 pb-3 shrink-0">
-            <div className="flex items-center gap-2">
-              <div className="w-7 h-7 rounded-lg overflow-hidden shrink-0 bg-[var(--accent-main)] flex items-center justify-center">
-                <img src="/logo-64.png" alt="Dash⁵" className="w-full h-full object-cover" />
-              </div>
-              <span className="text-[15px] font-medium text-[var(--text-primary)] tracking-tight">Dash⁵</span>
-            </div>
+            <span className="sidebar-wordmark">Hexindo</span>
             <div className="flex items-center gap-1">
               {!isMobile && onThemeToggle && (
                 <button
