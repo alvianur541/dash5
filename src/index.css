@@ -1079,11 +1079,10 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
   background: rgba(245,158,11,0.12); color: #fbbf24;
 }
 
+/* Wordmark is single-color #373435; invert keeps it legible on the dark theme. */
 .sidebar-wordmark {
-  font-family: "DM Serif Display", var(--font-serif);
-  font-size: 24px;
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
+  display: block;
+  height: 16px;
+  width: auto;
 }
+.dark-theme .sidebar-wordmark { filter: invert(1); }

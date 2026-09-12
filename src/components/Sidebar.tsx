@@ -146,7 +146,7 @@ export function Sidebar({
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
           <div className="sidebar-header flex items-center justify-between px-4 pb-3 shrink-0">
-            <span className="sidebar-wordmark">Hexindo</span>
+            <img src="/hexindo-wordmark.png" alt="Hexindo" className="sidebar-wordmark" />
             <div className="flex items-center gap-1">
               {!isMobile && onThemeToggle && (
                 <button
@@ -170,10 +170,10 @@ export function Sidebar({
           <div className="px-3 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 rounded-xl hover:bg-white/5 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-all group"
+              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
             >
-              <Plus size={14} className="shrink-0 transition-colors text-[var(--accent-main)]" />
-              <span className="text-[13px] font-medium">New chat</span>
+              <Plus size={12} className="shrink-0" />
+              <span>New Chat</span>
             </button>
           </div>
 
