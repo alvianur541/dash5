@@ -275,7 +275,7 @@ if main_calls:
     logged = sum(pm[0] for pm in per_model.values()) + retries
     gap = main_calls - logged
     print(f"\n  Panggilan model utama: Google {rb(main_calls)} vs log {rb(logged)} (jawaban + ulangan)"
-          + (f" -> selisih {rb(gap)}" if gap else " -> cocok"))
+          + (f" -> selisih {rb(gap)} (panggilan di luar layanan ini, mis. server Hexindo lewat kunci SA)" if gap else " -> cocok"))
 if tr_n:
     print(f"\n  Input suara (transcribe): {rb(tr_n)} rekaman, rata-rata {tr_ms / tr_n / 1000:.1f} dtk")
 
