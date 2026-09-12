@@ -36,7 +36,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
 
   return (
     <div className={cn(
-      "min-h-screen w-screen flex flex-col items-center justify-center px-4 transition-colors duration-400 bg-[var(--bg-app)] relative"
+      "fixed inset-0 overflow-y-auto flex flex-col items-center justify-center px-4 transition-colors duration-400 bg-[var(--bg-app)]"
     )}>
       <button
         onClick={onThemeToggle}
