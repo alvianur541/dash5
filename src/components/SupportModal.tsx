@@ -12,7 +12,7 @@ interface SupportModalProps {
 const FAQS = [
   {
     q: 'Pertanyaan apa saja yang bisa diajukan?',
-    a: 'Dash⁵ dirancang untuk pertanyaan teknis alat berat Hitachi/KCM: analisa gejala kerusakan, arti fault code, troubleshooting sistem hydraulic/electrical/engine, spec detail komponen, kapasitas fluida, prosedur pengecekan, part number, harga promo jika tersedia, dan daftar parts service berkala.',
+    a: 'HTA dirancang untuk pertanyaan teknis alat berat Hitachi/KCM: analisa gejala kerusakan, arti fault code, troubleshooting sistem hydraulic/electrical/engine, spec detail komponen, kapasitas fluida, prosedur pengecekan, part number, harga promo jika tersedia, dan daftar parts service berkala.',
   },
   {
     q: 'Contoh pertanyaan yang ideal seperti apa?',
@@ -20,19 +20,19 @@ const FAQS = [
   },
   {
     q: 'Apa batasan pertanyaan yang bisa diajukan?',
-    a: 'Dash⁵ tidak ditujukan untuk pertanyaan umum di luar technical support alat berat, seperti berita, cuaca, hiburan, resep, atau topik non-unit. Dash⁵ juga tidak melakukan pemesanan parts, klaim warranty, keputusan komersial, atau instruksi kerja yang tidak memiliki dasar data manual.',
+    a: 'HTA tidak ditujukan untuk pertanyaan umum di luar technical support alat berat, seperti berita, cuaca, hiburan, resep, atau topik non-unit. HTA juga tidak melakukan pemesanan parts, klaim warranty, keputusan komersial, atau instruksi kerja yang tidak memiliki dasar data manual.',
   },
   {
-    q: 'Apa limitasi jawaban Dash⁵?',
-    a: 'Jawaban difilter berdasarkan model unit yang dipilih. Dash⁵ tidak menebak PN, torque, pressure, kapasitas, harga, atau prosedur yang tidak ada di data. Jika informasi belum tersedia, Dash⁵ akan menyebutkan keterbatasannya dan menyarankan verifikasi ke manual fisik atau referensi internal.',
+    q: 'Apa limitasi jawaban HTA?',
+    a: 'Jawaban difilter berdasarkan model unit yang dipilih. HTA tidak menebak PN, torque, pressure, kapasitas, harga, atau prosedur yang tidak ada di data. Jika informasi belum tersedia, HTA akan menyebutkan keterbatasannya dan menyarankan verifikasi ke manual fisik atau referensi internal.',
   },
   {
-    q: 'Data apa yang digunakan Dash⁵?',
-    a: 'Dash⁵ menggunakan data manual dan katalog yang sudah di-ingest per model unit: Technical Manual, Workshop Manual, Engine Manual, Operator Manual, Hydraulic Circuit Diagram, Parts Catalog, Engine Parts Catalog, CPM, dan data promo parts jika tersedia.',
+    q: 'Data apa yang digunakan HTA?',
+    a: 'HTA menggunakan data manual dan katalog yang sudah di-ingest per model unit: Technical Manual, Workshop Manual, Engine Manual, Operator Manual, Hydraulic Circuit Diagram, Parts Catalog, Engine Parts Catalog, CPM, dan data promo parts jika tersedia.',
   },
   {
-    q: 'Apakah Dash⁵ bisa membaca gambar fault code?',
-    a: 'Ya. Lampirkan foto layar monitor unit. Dash⁵ akan mengekstrak fault code yang terlihat, mencocokkan ke data manual, lalu memberi analisa per kode.',
+    q: 'Apakah HTA bisa membaca gambar fault code?',
+    a: 'Ya. Lampirkan foto layar monitor unit. HTA akan mengekstrak fault code yang terlihat, mencocokkan ke data manual, lalu memberi analisa per kode.',
   },
   {
     q: 'Apakah riwayat chat tersimpan?',
@@ -70,13 +70,13 @@ function CatalogPanel() {
     >
       <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer list-none select-none">
         <span className="text-[13px] font-medium text-[var(--text-primary)] pr-2">
-          Data yang digunakan Dash⁵?
+          Data yang digunakan HTA?
         </span>
         <span className="text-[var(--text-muted)] text-[11px] shrink-0 group-open:rotate-180 transition-transform">▾</span>
       </summary>
       <div className="px-3 pb-3 border-t border-[var(--border-main)] pt-2.5">
         <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed mb-2.5">
-          Dash⁵ menggunakan data internal yang sudah di-ingest per model unit. Daftar di bawah menunjukkan kategori dokumen yang tersedia untuk pencarian.
+          HTA menggunakan data internal yang sudah di-ingest per model unit. Daftar di bawah menunjukkan kategori dokumen yang tersedia untuk pencarian.
         </p>
 
         {loading && (

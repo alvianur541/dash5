@@ -10,7 +10,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[Dash⁵] Render error:', error.message, info.componentStack);
+    console.error('[HTA] Render error:', error.message, info.componentStack);
   }
 
   render() {

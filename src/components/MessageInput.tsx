@@ -355,7 +355,7 @@ export function MessageInput({
         </AnimatePresence>
 
         <div className="hidden md:flex items-center justify-center mt-2 text-[11px] text-[var(--text-muted)] opacity-70">
-          <span>Dash⁵ dapat keliru — verifikasi info penting.</span>
+          <span>Hexindo Technical Assistant dapat keliru — verifikasi info penting.</span>
         </div>
 
       </div>

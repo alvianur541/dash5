@@ -42,7 +42,7 @@ function errorMessage(err: unknown): string {
   if (msg.includes('KUOTA_PENUH')) return 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.';
   if (msg.includes('Stream terputus')) return 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.';
   if (msg.includes('SERVER_DIAM')) return 'Server lama merespons (lebih dari 25 detik). Kirim ulang pertanyaanmu.';
-  return 'Dash⁵ tidak bisa dihubungi. Cek sinyal kamu, lalu coba lagi.';
+  return 'HTA tidak bisa dihubungi. Cek sinyal kamu, lalu coba lagi.';
 }
 
 export default function App() {
@@ -403,7 +403,7 @@ export default function App() {
           <strong className="font-semibold">Sinyal hilang</strong> — Riwayat tersedia. Chat aktif kembali saat sinyal pulih.
         </StatusBanner>
         <StatusBanner id="online" show={showBackOnline} tone="ok" icon={<Wifi size={13} className="text-emerald-400" />}>
-          <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, Dash⁵ siap digunakan.
+          <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, HTA siap digunakan.
         </StatusBanner>
         <StatusBanner id="queued" show={!!queued && !isOnline} tone="warn" icon={<Loader2 size={13} className="text-amber-400 animate-spin" />}
           action={<button onClick={() => setQueued(null)} className="text-[11px] underline text-amber-300/80">Batal</button>}>

@@ -3,7 +3,6 @@ import React, { useState } from 'react';
 import { AlertCircle, LogIn, Loader2, Sun, Moon } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
-import { LOGO_BASE64 } from '../lib/logo';
 import { useAuth } from './AuthProvider';
 
 interface LoginPageProps {
@@ -58,11 +57,11 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
         className="w-full max-w-[360px] flex flex-col items-center gap-8"
       >
         <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-[14px] overflow-hidden bg-[var(--accent-main)] shadow-[0_1px_2px_rgba(0,0,0,0.15)] flex items-center justify-center">
-            <img src={LOGO_BASE64} alt="Dash⁵" width={56} height={56} className="w-full h-full object-cover" decoding="sync" fetchPriority="high" />
+          <div className="flex items-center justify-center">
+            <img src="/haplogo.png" alt="Hexindo Technical Assistant" className="h-14 w-auto" decoding="sync" fetchPriority="high" />
           </div>
-          <h1 className="text-[26px] font-bold tracking-tight text-[var(--text-primary)]">
-            Dash⁵
+          <h1 className="text-[20px] font-bold tracking-tight text-[var(--text-primary)]">
+            Hexindo Technical Assistant
           </h1>
         </div>
 
