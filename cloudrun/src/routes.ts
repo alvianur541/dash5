@@ -1,7 +1,7 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
-import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
+import { analyzeIntent, decomposeAspects, classifyAspect, carryForwardTopic } from './intent';
 import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
 import type { Lang } from './templates';
 
@@ -359,6 +359,86 @@ function normalizeCasual(s: string): string {
     .trim();
 }
 
+// Manual sering memisah prosedur dari angkanya: chunk "MACHINE TEST - HYDRAULIC
+// CYLINDER CYCLE TIME" hanya berisi langkah ukur lalu menutup dengan "Refer to
+// Operational Performance Standard." — tabel nilainya ada di chunk lain yang judulnya
+// tidak memuat kata "cycle time", jadi tidak pernah ikut terambil. Pointer itu
+// ditelusuri sekali, persis seperti 2nd-pass fault code → Engine Manual.
+const SECTION_REF_RE   = /refer to\s+(?:the\s+)?["'‘’“”]?([^.\n)]{3,70})/gi;
+const REF_TAIL_RE      = /\s+(?:in|on|of)\s+(?:group|page|chapter|the separated volume|[A-Z]{1,2}\d[-\d]*)\b.*$/i;
+const REF_PAGE_CODE_RE = /^[A-Z]{1,2}\d[-\d]*[A-Z]?$/i;
+const REF_DEICTIC = new Set([
+  'right illustration', 'left illustration', 'operator s manual', 'operator manual',
+  'next page', 'previous page', 'following table', 'table below', 'table above',
+]);
+const REF_MAX_WORDS = 6;
+const REF_MIN_WORDS = 2;
+
+function normalizeSectionRef(raw: string): string | null {
+  let s = raw.replace(/["'‘’“”]/g, ' ').replace(/\s+/g, ' ').trim();
+  s = s.replace(REF_TAIL_RE, '');
+  s = s.replace(/^the\s+/i, '').replace(/[\s,;:]+$/, '').replace(/\s+(?:on|in|at|of|to)$/i, '').trim();
+  if (!s || REF_PAGE_CODE_RE.test(s)) return null;
+  if (REF_DEICTIC.has(s.toLowerCase())) return null;
+  const words = s.split(' ').filter(Boolean);
+  if (words.length < REF_MIN_WORDS || words.length > REF_MAX_WORDS) return null;
+  if (!words.some(w => /^[A-Za-z]{4,}$/.test(w))) return null;
+  return s;
+}
+
+/** True kalau frasa muncul sebagai isi, bukan cuma sebagai pointer "Refer to ...". */
+function mentionedAsContent(content: string, phrase: string): boolean {
+  const hay = content.toLowerCase();
+  const needle = phrase.toLowerCase();
+  for (let i = hay.indexOf(needle); i !== -1; i = hay.indexOf(needle, i + needle.length)) {
+    const before = hay.slice(Math.max(0, i - 16), i);
+    if (!/refer to\s+(?:the\s+)?["'‘’“”]?$/.test(before)) return true;
+  }
+  return false;
+}
+
+export function extractSectionReferences(content: string): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const m of content.matchAll(SECTION_REF_RE)) {
+    const ref = normalizeSectionRef(m[1]);
+    if (!ref) continue;
+    const key = ref.toLowerCase();
+    if (seen.has(key) || mentionedAsContent(content, ref)) continue;
+    seen.add(key);
+    out.push(ref);
+  }
+  return out.slice(0, 1);
+}
+
+async function augmentWithReferencedSection(
+  tmContent: string,
+  model: UnitModel,
+  emit: AgentEventEmit = () => {},
+): Promise<string> {
+  const [ref] = extractSectionReferences(tmContent);
+  if (!ref) return tmContent;
+
+  emit({ type: 'tool_call', tool: 'search_referenced_section' });
+  try {
+    const res = await searchTechnicalManualMulti([ref], model, 2);
+    emit({ type: 'tool_result', tool: 'search_referenced_section', found: res.hasResults });
+    if (!res.hasResults || res.confidence === 'low') {
+      console.info('[refer-to] "%s" tidak ketemu (tier=%s)', ref, res.confidence ?? '-');
+      return tmContent;
+    }
+    const sudahAda = new Set(tmContent.split('\n\n---\n\n'));
+    const baru = res.content.split('\n\n---\n\n').filter(c => c.trim() && !sudahAda.has(c));
+    if (baru.length === 0) return tmContent;
+
+    console.info('[refer-to] pass kedua "%s" → %d chunk (tier=%s)', ref, baru.length, res.confidence);
+    return `${tmContent}\n\n---\n\n[RUJUKAN: ${ref}]\n${baru.join('\n\n---\n\n')}`;
+  } catch (err) {
+    console.warn('[refer-to] pass kedua dilewati:', err instanceof Error ? err.message : String(err));
+    return tmContent;
+  }
+}
+
 export async function resolveNaturalLanguageQuery(
   trimmed: string,
   history: Message[],
@@ -374,11 +454,13 @@ export async function resolveNaturalLanguageQuery(
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
+  const carried = carryForwardTopic(intent.optimizedQuery ?? '', trimmed, history);
+
   if (intent.searchType === 'parts') {
-    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
+    return resolvePartsQuery(trimmed, history, model, emit, carried);
   }
 
-  const rawOpt = intent.optimizedQuery?.trim() ?? '';
+  const rawOpt = carried.trim();
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
   let ragResult = await searchTechnicalManualMulti([query], model);
@@ -392,21 +474,23 @@ export async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
-  const totalBefore = ragResult.content.length;
+  const withRef = await augmentWithReferencedSection(ragResult.content, model, emit);
+
+  const totalBefore = withRef.length;
   const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
 
   if (skipCompress) {
     console.info('[compress] skip (confidence=%s totalChars=%d)', ragResult.confidence, totalBefore);
     return {
       type: 'rag_found',
-      content: ragResult.content,
+      content: withRef,
       dataLabel: RAG_LABEL.manual,
       confidence: ragResult.confidence,
       rerankDegraded: isRerankError(ragResult.ragError),
     };
   }
 
-  const chunks = ragResult.content.split('\n\n---\n\n');
+  const chunks = withRef.split('\n\n---\n\n');
   const compressed = await compressChunks(chunks, trimmed);
   const finalContent = compressed.filter(c => c.trim()).join('\n\n---\n\n');
 
@@ -416,7 +500,7 @@ export async function resolveNaturalLanguageQuery(
 
   return {
     type: 'rag_found',
-    content: finalContent || ragResult.content,
+    content: finalContent || withRef,
     dataLabel: RAG_LABEL.manual,
     confidence: ragResult.confidence,
     rerankDegraded: isRerankError(ragResult.ragError),

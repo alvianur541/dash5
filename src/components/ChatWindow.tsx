@@ -113,11 +113,12 @@ interface ChatWindowProps {
 }
 
 const TOOL_LABELS: Record<string, string> = {
-  search_technical_manual: 'Technical Manual',
-  search_parts_catalog:    'Parts Catalog',
-  search_engine_manual:    'Engine Manual',
-  search_circuit_diagram:  'Hydraulic Circuit',
-  decompose_query:         'memecah query',
+  search_technical_manual:   'Technical Manual',
+  search_parts_catalog:      'Parts Catalog',
+  search_engine_manual:      'Engine Manual',
+  search_referenced_section: 'Rujukan Manual',
+  search_circuit_diagram:    'Hydraulic Circuit',
+  decompose_query:           'memecah query',
 };
 
 function eventLabel(e: AgentEvent): { icon: 'search' | 'check' | 'spark'; text: string } | null {

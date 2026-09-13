@@ -279,6 +279,28 @@ const SPEC_TERMS = new Set([
   'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore',
 ]);
 
+// Basa-basi yang tidak membawa topik. Dipakai untuk mengenali follow-up pendek
+// ("brp nilainya", "coba cari") yang topiknya harus diwarisi dari turn sebelumnya.
+const FOLLOWUP_NOISE = new Set([
+  'cek', 'check', 'coba', 'cari', 'carikan', 'lihat', 'liat', 'minta', 'kasih', 'kasi',
+  'data', 'info', 'informasi', 'detail', 'nilai', 'nilainya', 'value', 'angka',
+  'berapa', 'brp', 'brpa', 'brapa', 'gimana', 'gmn', 'dong', 'sih', 'nya',
+  'lagi', 'terus', 'trus', 'ini', 'yg', 'yang', 'mana',
+]);
+
+/** Kata sisa setelah stopword & basa-basi dibuang — perkiraan "isi" sebuah query. */
+export function topicWords(text: string): string[] {
+  return text.toLowerCase()
+    .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
+    .split(/\s+/)
+    .filter(w => w.length >= 3 && !STOP_WORDS.has(w) && !FOLLOWUP_NOISE.has(w));
+}
+
+/** True kalau query menyebut komponen atau atribut spec — tanda query itu berdiri sendiri. */
+export function hasTopicTerm(text: string): boolean {
+  return topicWords(text).some(w => TECH_TERMS.has(w) || SPEC_TERMS.has(w));
+}
+
 function expandQuery(query: string): string {
   const seen = new Set<string>();
   const extras: string[] = [];

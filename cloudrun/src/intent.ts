@@ -1,5 +1,6 @@
 import { Message } from './types';
 import { callProxy, getText, INTENT_MODEL } from './vertex';
+import { topicWords, hasTopicTerm } from './rag';
 
 interface IntentAnalysis {
   shouldSearch: boolean;
@@ -34,6 +35,35 @@ function cleanOptimizedQuery(query: string): string {
   }
 
   return clean.join(' ');
+}
+
+// Follow-up pendek ("brp nilainy", "coba cari") tidak menyebut komponen apa pun,
+// jadi query retrieval-nya kosong makna dan reranker memilih chunk asal-asalan.
+// analyzeIntent memang diberi konteks percakapan, tapi itu tebakan LLM — tidak
+// deterministik. Di sini topik dari pertanyaan user sebelumnya diwariskan apa adanya.
+const CARRY_MAX_WORDS = 6;
+const THIN_QUERY_MAX_WORDS = 2;
+
+export function carryForwardTopic(optimizedQuery: string, rawInput: string, history: Message[]): string {
+  const probe = optimizedQuery.trim() || rawInput.trim();
+  const current = topicWords(probe);
+  if (current.length > THIN_QUERY_MAX_WORDS || hasTopicTerm(probe)) return optimizedQuery;
+
+  for (let i = history.length - 1; i >= 0; i--) {
+    const m = history[i];
+    if (m.role !== 'user' || !m.content?.trim()) continue;
+    if (!hasTopicTerm(m.content)) continue;
+
+    // Kata dari query sekarang sengaja dibuang: cabang ini hanya jalan kalau tidak
+    // satu pun di antaranya kata teknis, jadi menempelkannya cuma menambah derau
+    // buat reranker. Token berangka tetap dibawa — itu batasan nyata (jam, varian).
+    const prev = topicWords(m.content).slice(0, CARRY_MAX_WORDS);
+    const angka = current.filter(w => /\d/.test(w) && !prev.includes(w));
+    const merged = [...prev, ...angka].join(' ');
+    console.info('[carry-forward] "%s" topik kosong → warisi "%s"', probe, merged);
+    return merged;
+  }
+  return optimizedQuery;
 }
 
 export async function analyzeIntent(
