@@ -1,3 +1,4 @@
+import { deps } from './deps';
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
@@ -197,6 +198,7 @@ export async function resolveFaultCodeQuery(
   emit: AgentEventEmit = () => {},
   lang: Lang = 'id',
 ): Promise<RagRouteResult> {
+  recordSearchQuery(faultQuery);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
   const ragResult = await searchTechnicalManualMulti(extractSearchTerms(faultQuery), model);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
@@ -286,6 +288,7 @@ export async function resolvePartsQuery(
     }
   }
 
+  recordSearchQuery(searchQuery);
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
   const ragResult = intervalHours
     ? await searchServiceIntervalParts(searchQuery, model)
@@ -359,6 +362,12 @@ function normalizeCasual(s: string): string {
     .trim();
 }
 
+// Query hasil optimasi hanya ada di console Cloud Run, jadi menelusuri jawaban
+// melenceng berarti mencocokkan chunk manual satu per satu. Dicatat ke usage_logs.
+function recordSearchQuery(query: string): void {
+  try { deps().meta.searchQuery = query.slice(0, 200); } catch { /* di luar konteks request */ }
+}
+
 // Manual sering memisah prosedur dari angkanya: chunk "MACHINE TEST - HYDRAULIC
 // CYLINDER CYCLE TIME" hanya berisi langkah ukur lalu menutup dengan "Refer to
 // Operational Performance Standard." — tabel nilainya ada di chunk lain yang judulnya
@@ -415,13 +424,14 @@ async function augmentWithReferencedSection(
   tmContent: string,
   model: UnitModel,
   emit: AgentEventEmit = () => {},
+  rawInput?: string,
 ): Promise<string> {
   const [ref] = extractSectionReferences(tmContent);
   if (!ref) return tmContent;
 
   emit({ type: 'tool_call', tool: 'search_referenced_section' });
   try {
-    const res = await searchTechnicalManualMulti([ref], model, 2);
+    const res = await searchTechnicalManualMulti([ref], model, 2, undefined, rawInput);
     emit({ type: 'tool_result', tool: 'search_referenced_section', found: res.hasResults });
     if (!res.hasResults || res.confidence === 'low') {
       console.info('[refer-to] "%s" tidak ketemu (tier=%s)', ref, res.confidence ?? '-');
@@ -462,8 +472,9 @@ export async function resolveNaturalLanguageQuery(
 
   const rawOpt = carried.trim();
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
+  recordSearchQuery(query);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  let ragResult = await searchTechnicalManualMulti([query], model);
+  let ragResult = await searchTechnicalManualMulti([query], model, undefined, undefined, trimmed);
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
@@ -474,7 +485,7 @@ export async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
 
-  const withRef = await augmentWithReferencedSection(ragResult.content, model, emit);
+  const withRef = await augmentWithReferencedSection(ragResult.content, model, emit, trimmed);
 
   const totalBefore = withRef.length;
   const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;

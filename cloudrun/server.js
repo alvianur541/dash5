@@ -640,6 +640,7 @@ async function catatPemakaian(req, d) {
         output_tokens: d.usage.output + d.usage.thinking,
         llm_calls: d.usage.calls,
         tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
+        search_query: d.meta.searchQuery || null,
         cost_usd: Number(d.biaya.toFixed(6)),
         cost_idr: Math.round(d.biaya * 16300),
       }),

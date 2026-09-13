@@ -269,7 +269,9 @@ const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
-const NUMERIC_INTENT_RE = /\b(berapa|nilai|standar|standard|spesifikasi|spec|minimum|minimal|maksimum|maksimal|normal|batas|limit|toleransi|range)\b/i;
+// Teknisi lapangan menyingkat: "brp", "nilainya", "standarnya". Bentuk penuh saja
+// membuat niat "minta angka" hilang justru di query yang paling butuh.
+const NUMERIC_INTENT_RE = /\b(berapa|brp|brpa|brapa|nilai\w*|standar\w*|spesifikasi|spek|spec|minimum|minimal|maksimum|maksimal|normal|batas|limit|toleransi|range)\b/i;
 
 const SPEC_TERMS = new Set([
   'weight', 'berat', 'torque', 'torsi', 'pressure', 'tekanan', 'clearance',
@@ -382,7 +384,7 @@ interface Candidates {
   msCari: number;
 }
 
-function wantsNumeric(primaryQuery: string): boolean {
+export function wantsNumeric(primaryQuery: string): boolean {
   return primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .some(w => SPEC_TERMS.has(w))
@@ -590,6 +592,9 @@ export async function searchTechnicalManualMulti(
   model: string,
   topN = 4,
   forceKategori?: string,
+  // Kalimat asli user. optimizedQuery sudah dibuang kata tanyanya ("berapa" → strip),
+  // jadi niat "minta angka" cuma terbaca dari sini.
+  rawInput?: string,
 ): Promise<RAGResult> {
   if (!sb() || queries.length === 0) return { content: '', hasResults: false };
 
@@ -615,7 +620,8 @@ export async function searchTechnicalManualMulti(
     return { content: '', hasResults: false };
   }
 
-  return rankAndSelect(primaryQuery, filteredDocs, rankedDocs, wantsNumeric(primaryQuery), usedLooseFallback, topN, msCari);
+  const numerik = wantsNumeric(primaryQuery) || (!!rawInput && wantsNumeric(rawInput));
+  return rankAndSelect(primaryQuery, filteredDocs, rankedDocs, numerik, usedLooseFallback, topN, msCari);
 }
 
 const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);

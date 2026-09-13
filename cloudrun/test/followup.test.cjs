@@ -1,4 +1,4 @@
-const { extractSectionReferences, carryForwardTopic, hasTopicTerm, suite } = require('./helpers.cjs');
+const { extractSectionReferences, carryForwardTopic, hasTopicTerm, contextTurns, wantsNumeric, suite } = require('./helpers.cjs');
 
 const U = (content, id = '1') => ({ id, role: 'user', content, timestamp: Number(id) });
 const A = (content, id = '2') => ({ id, role: 'assistant', content, timestamp: Number(id) });
@@ -71,6 +71,24 @@ module.exports = async function () {
   t(hasTopicTerm('cycle time cylinder') === true, 'cylinder = kata teknis');
   t(hasTopicTerm('berapa nilainya') === false, 'basa-basi bukan topik');
   t(hasTopicTerm('berat swing motor') === true, 'berat = atribut spec');
+
+  // --- konteks intent: jawaban gagal tidak diwariskan ---
+  const GAGAL = 'Nilai standar cycle time tidak tercantum di data yang saya akses. '
+    + 'Data yang tersedia memuat relief set pressure 34.3 MPa.';
+  const ctx = contextTurns([U('Cek data cycle time cylinder'), A(GAGAL)], 6, m => m.content);
+  t(!ctx.includes('relief'), 'jawaban "tidak tercantum" dibuang dari konteks');
+  t(ctx.includes('cycle time cylinder'), 'pertanyaan user tetap jadi konteks');
+
+  const ctxOk = contextTurns([U('berat swing motor'), A('Berat swing device 310 kg.')], 6, m => m.content);
+  t(ctxOk.includes('310 kg'), 'jawaban berisi tetap dipakai');
+  t(contextTurns([], 6, m => m.content) === '', 'history kosong → string kosong');
+
+  // --- niat numerik bertahan walau kata tanya sudah di-strip ---
+  t(wantsNumeric('brp nilainya') === true, 'singkatan "brp nilainya"');
+  t(wantsNumeric('standarnya berapa') === true, 'imbuhan "standarnya"');
+  t(wantsNumeric('spek pompa') === true, 'spek');
+  t(wantsNumeric('swing motor weight') === true, 'atribut spec tetap kebaca');
+  t(wantsNumeric('cara bongkar swing motor') === false, 'prosedur bukan permintaan angka');
 
   return done();
 };

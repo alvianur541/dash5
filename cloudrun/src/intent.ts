@@ -18,8 +18,10 @@ function cleanOptimizedQuery(query: string): string {
     press: 'pressure', tekanan: 'pressure',
     vol: 'volume', cap: 'capacity', kapasitas: 'capacity',
   };
+  // 'value' sengaja TIDAK dibuang: di manual, kata itulah yang memisahkan tabel
+  // nilai standar dari chunk prosedurnya.
   const STOPWORDS = new Set(['the', 'and', 'for', 'of', 'in', 'on', 'at', 'with',
-    'information', 'data', 'detail', 'value']);
+    'information', 'data', 'detail']);
 
   const words = query.trim().split(/\s+/);
   const seen = new Set<string>();
@@ -35,6 +37,20 @@ function cleanOptimizedQuery(query: string): string {
   }
 
   return clean.join(' ');
+}
+
+// Jawaban "datanya tidak ada" bukan konteks yang berguna: kalau ikut dikirim,
+// classifier menganggap isinya topik yang sedang dibahas dan pertanyaan lanjutan
+// ditarik ke sana. Di sesi cycle time, jawaban gagal turn-2 (yang terpaksa
+// menyinggung relief pressure) membuat turn-3 makin melenceng ke relief valve.
+const FAILED_ANSWER_RE = /tidak (?:tercantum|ditemukan|tersedia|terdata)|belum (?:tercantum|terdata|ada di)|tidak ada di data|tidak saya temukan/i;
+
+export function contextTurns(history: Message[], take: number, cap: (m: Message) => string): string {
+  return history.slice(-take)
+    .filter(m => m.content?.trim())
+    .filter(m => !(m.role === 'assistant' && FAILED_ANSWER_RE.test(m.content)))
+    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${cap(m)}`)
+    .join('\n');
 }
 
 // Follow-up pendek ("brp nilainy", "coba cari") tidak menyebut komponen apa pun,
@@ -70,10 +86,7 @@ export async function analyzeIntent(
   userInput: string,
   history: Message[],
 ): Promise<IntentAnalysis> {
-  const ctx = history.slice(-6)
-    .filter(m => m.content?.trim())
-    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${ctxSnippet(m)}`)
-    .join('\n');
+  const ctx = contextTurns(history, 6, ctxSnippet);
 
   const systemPrompt = `You are a query classifier and optimizer for Hitachi/KCM heavy equipment documentation search.
 Output ONLY valid JSON — no markdown, no preamble, no explanation.
@@ -336,10 +349,7 @@ Examples:
 Single information-need → return ONE item:
 "kenapa swing lambat" -> ["swing motor slow response"]
 "harga seal kit swing" -> ["swing motor seal kit price"]`;
-  const ctx = history.slice(-4)
-    .filter(m => m.content?.trim())
-    .map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content.slice(0, 300)}`)
-    .join('\n');
+  const ctx = contextTurns(history, 4, m => m.content.slice(0, 300));
   const userMsg = ctx ? `Conversation so far:\n${ctx}\n\nDecompose this latest query: "${query}"` : `Decompose: "${query}"`;
   let subs: string[] = [];
   try {

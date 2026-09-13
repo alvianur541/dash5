@@ -77,6 +77,7 @@ interface AskBody {
   userName: string;
   history: Message[];
   userInput: string;
+  sessionId?: string | null;
   think?: ThinkLevel;
   attachments?: Array<{ mimeType: string; data: string }>;
 }
@@ -166,6 +167,7 @@ export async function generateResponseStream(
   userInput: string,
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
+  sessionId?: string | null,
 ): Promise<string> {
   const trimmed = userInput.trim();
   const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed);
@@ -178,7 +180,7 @@ export async function generateResponseStream(
   }
 
   const { text, cacheable } = await ask(
-    { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined },
+    { model, userName, history, userInput, sessionId, think: THINK_OVERRIDE ?? undefined },
     onChunk, onAgentEvent,
   );
   if (cacheKey && cacheable) writeAnswerCache(cacheKey, text);
@@ -208,6 +210,7 @@ export async function generateResponse(
   attachments: File[],
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
+  sessionId?: string | null,
 ): Promise<string> {
   const settled = await Promise.allSettled(attachments.map(fileToInline));
   const images = settled
@@ -216,7 +219,7 @@ export async function generateResponse(
   if (images.length === 0) return 'Maaf, gagal membaca file gambar.';
 
   const { text } = await ask(
-    { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined },
+    { model, userName, history, userInput, sessionId, attachments: images, think: THINK_OVERRIDE ?? undefined },
     onChunk, onAgentEvent,
   );
   return text;
