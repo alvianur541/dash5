@@ -21,9 +21,11 @@ module.exports = async function () {
     ['Cek untuk service 2000 partny', '2000'], ['service 2000 jam', '2000'], ['parts yang diganti 1000 jam ZX200', '1000'],
     ['servis 500', '500'], ['PM 1000 apa saja partnya', '1000'], ['maintenance 2000 butuh part apa', '2000'],
     ['perawatan 250 jam', '250'], ['service 2000 hr', '2000'], ['part service 3000', '3000'], ['2000 hm parts', '2000'],
+    ['Pket 2000', '2000'], ['paket 1000 berapa', '1000'], ['pkt 500', '500'], ['2000 hour periodic maintenance parts', '2000'],
   ];
   const jangan = ['harga seal kit swing', 'PN YB60000068', 'kapasitas oli mesin', 'fault code 13006-2',
-    'tekanan main pump 34.3 MPa', 'berat operating 20000 kg', 'service manual halaman berapa', 'kapan service berikutnya'];
+    'tekanan main pump 34.3 MPa', 'berat operating 20000 kg', 'service manual halaman berapa', 'kapan service berikutnya',
+    'paket data hp habis', 'kirim paket ke 2 unit'];
   for (const [q, exp] of harus) {
     const m = q.match(SERVICE_INTERVAL_RE); const got = m ? (m[1] ?? m[2]) : null;
     t(got === exp, `regex hits "${q}" -> ${got}`);

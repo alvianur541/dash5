@@ -234,7 +234,7 @@ export async function resolveFaultCodeQuery(
   };
 }
 
-export const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b|\b(?:servis|service|maintenance|perawatan|pm)\s+(\d{3,5})\b/i;
+export const SERVICE_INTERVAL_RE = /\b(\d{3,5})\s*(?:jam|hm|h(?:our)?r?|hours?)\b|\b(?:servis|service|maintenance|perawatan|pm|paket|pket|pkt)\s+(\d{3,5})\b/i;
 
 export function extractCpmPartsForInterval(content: string, hours: number): string {
   const lines = content.split('\n');
@@ -288,8 +288,8 @@ export async function resolvePartsQuery(
   let searchQuery    = trimmed;
   let usedOptimized  = false;
 
-  const intervalMatch = !hasLiteralPN && trimmed.match(SERVICE_INTERVAL_RE);
-  const intervalHours = intervalMatch ? (intervalMatch[1] ?? intervalMatch[2]) : null;
+  const intervalOf = (s?: string) => { const m = s?.match(SERVICE_INTERVAL_RE); return m ? (m[1] ?? m[2]) : null; };
+  const intervalHours = hasLiteralPN ? null : (intervalOf(trimmed) ?? intervalOf(precomputedOpt));
   if (intervalHours) {
     searchQuery = `${intervalHours} hour service maintenance schedule parts`;
   } else if (!hasLiteralPN && (precomputedOpt !== undefined || isLongQuery)) {
