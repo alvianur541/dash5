@@ -59,7 +59,7 @@ export function PasskeyPrompt() {
                 <CheckCircle2 className="w-9 h-9 text-green-400" />
                 <p className="text-[15px] font-semibold text-[var(--text-primary)]">Passkey aktif</p>
                 <p className="text-[13px] text-[var(--text-secondary)] leading-relaxed">
-                  Lain kali tekan <span className="font-semibold text-[var(--text-primary)]">Masuk dengan passkey</span> di halaman login.
+                  Lain kali tekan tombol <span className="font-semibold text-[var(--text-primary)]">Passkey</span> di halaman login.
                 </p>
                 <button
                   onClick={() => closePasskeyPrompt(false)}

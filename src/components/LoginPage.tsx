@@ -158,7 +158,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               >
                 {pkLoading
                   ? <Loader2 className="w-4 h-4 animate-spin" />
-                  : <><Fingerprint className="w-4 h-4" /><span>Masuk dengan passkey</span></>
+                  : <><Fingerprint className="w-4 h-4" /><span>Passkey</span></>
                 }
               </button>
               {pkHint && (
