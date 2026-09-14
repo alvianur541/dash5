@@ -1,9 +1,10 @@
 
-import React, { useState } from 'react';
-import { AlertCircle, LogIn, Loader2, Sun, Moon } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, LogIn, Loader2, Sun, Moon, Fingerprint } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
+import { passkeySupported } from '../services/passkey';
 
 interface LoginPageProps {
   theme: 'dark' | 'light';
@@ -11,19 +12,37 @@ interface LoginPageProps {
 }
 
 export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
-  const { login, authError } = useAuth();
+  const { login, loginWithPasskey, authError } = useAuth();
 
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [pkSupported, setPkSupported] = useState(false);
+  const [pkLoading, setPkLoading] = useState(false);
+  const [pkHint, setPkHint] = useState(false);
 
   const isDark = theme === 'dark';
 
+  useEffect(() => {
+    let alive = true;
+    passkeySupported().then(ok => { if (alive) setPkSupported(ok); });
+    return () => { alive = false; };
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setPkHint(false);
     setLoginLoading(true);
     await login(username, password);
     setLoginLoading(false);
+  };
+
+  const handlePasskey = async () => {
+    setPkHint(false);
+    setPkLoading(true);
+    const result = await loginWithPasskey();
+    setPkLoading(false);
+    if (result === 'cancelled') setPkHint(true);
   };
 
   const inputClass = cn(
@@ -65,58 +84,91 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
           </h1>
         </div>
 
-        <m.form
-          initial={{ opacity: 0, x: -16 }}
-          animate={{ opacity: 1, x: 0 }}
-          transition={{ duration: 0.2 }}
-          onSubmit={handleLogin}
-          className="w-full space-y-2.5"
-        >
-          <input
-            type="text"
-            value={username}
-            onChange={e => setUsername(e.target.value)}
-            placeholder="Username"
-            required
-            autoComplete="username"
-            autoFocus
-            className={inputClass}
-          />
-          <input
-            type="password"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-            placeholder="Password"
-            required
-            autoComplete="current-password"
-            className={inputClass}
-          />
-
-          <AnimatePresence>
-            {authError && (
-              <m.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="flex items-center gap-2.5 text-[#f87171] bg-red-500/8 border border-red-500/15 px-3 py-2.5 rounded-xl"
-              >
-                <AlertCircle className="w-4 h-4 shrink-0" />
-                <span className="text-[13px]">{authError}</span>
-              </m.div>
-            )}
-          </AnimatePresence>
-
-          <button
-            type="submit"
-            disabled={loginLoading}
-            className="w-full h-11 mt-1 bg-[var(--accent-main)] hover:brightness-110 active:opacity-70 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px]"
+        <div className="w-full flex flex-col gap-3">
+          <m.form
+            initial={{ opacity: 0, x: -16 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ duration: 0.2 }}
+            onSubmit={handleLogin}
+            className="w-full space-y-2.5"
           >
-            {loginLoading
-              ? <Loader2 className="w-4 h-4 animate-spin" />
-              : <><span>Masuk</span><LogIn className="w-4 h-4" /></>
-            }
-          </button>
-        </m.form>
+            <input
+              type="text"
+              value={username}
+              onChange={e => setUsername(e.target.value)}
+              placeholder="Username"
+              required
+              autoComplete="username"
+              autoFocus
+              className={inputClass}
+            />
+            <input
+              type="password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              placeholder="Password"
+              required
+              autoComplete="current-password"
+              className={inputClass}
+            />
+
+            <AnimatePresence>
+              {authError && (
+                <m.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2.5 text-[#f87171] bg-red-500/8 border border-red-500/15 px-3 py-2.5 rounded-xl"
+                >
+                  <AlertCircle className="w-4 h-4 shrink-0" />
+                  <span className="text-[13px]">{authError}</span>
+                </m.div>
+              )}
+            </AnimatePresence>
+
+            <button
+              type="submit"
+              disabled={loginLoading || pkLoading}
+              className="w-full h-11 mt-1 bg-[var(--accent-main)] hover:brightness-110 active:opacity-70 text-white font-semibold rounded-xl flex items-center justify-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-[14px]"
+            >
+              {loginLoading
+                ? <Loader2 className="w-4 h-4 animate-spin" />
+                : <><span>Masuk</span><LogIn className="w-4 h-4" /></>
+              }
+            </button>
+          </m.form>
+
+          {pkSupported && (
+            <>
+              <div className="flex items-center gap-3 text-[12px] text-[var(--text-muted)]">
+                <span className="h-px flex-1 bg-[var(--border-main)]" />
+                atau
+                <span className="h-px flex-1 bg-[var(--border-main)]" />
+              </div>
+              <button
+                type="button"
+                onClick={handlePasskey}
+                disabled={pkLoading || loginLoading}
+                className={cn(
+                  "w-full h-11 rounded-xl flex items-center justify-center gap-2 font-semibold text-[14px] transition-all active:opacity-70 disabled:opacity-50 disabled:cursor-not-allowed",
+                  isDark
+                    ? "bg-[var(--bg-card)] border border-[var(--border-main)] text-[var(--text-primary)] hover:bg-white/5"
+                    : "bg-white border border-[#e5e5e5] text-[#111] hover:bg-black/[0.03] shadow-sm"
+                )}
+              >
+                {pkLoading
+                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                  : <><Fingerprint className="w-4 h-4" /><span>Masuk dengan passkey</span></>
+                }
+              </button>
+              {pkHint && (
+                <p className="text-[12px] text-[var(--text-muted)] text-center leading-relaxed">
+                  Belum punya passkey di HP ini? Masuk pakai NIK dan password dulu — nanti ditawari mengaktifkannya.
+                </p>
+              )}
+            </>
+          )}
+        </div>
       </m.div>
 
     </div>
