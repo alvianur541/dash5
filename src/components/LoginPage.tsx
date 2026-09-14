@@ -163,7 +163,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               </button>
               {pkHint && (
                 <p className="text-[12px] text-[var(--text-muted)] text-center leading-relaxed">
-                  Belum punya passkey di HP ini? Masuk pakai NIK dan password dulu — nanti ditawari mengaktifkannya.
+                  Belum punya passkey di HP ini? Masuk pakai NIK dan password — Aktifkan Passkey pada halaman account.
                 </p>
               )}
             </>
