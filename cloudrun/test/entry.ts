@@ -4,6 +4,7 @@ export { runWithDeps } from '../src/deps';
 export { MODEL_CHAIN } from '../src/vertex';
 export { scrubLeaks, generateResponse } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
-export { isCasualExact } from '../src/routes';
+export { isCasualExact, docKategoriFor, resolvePartsQuery } from '../src/routes';
+export { exactPartRows, findPerformanceStandard } from '../src/rag';
 export { historyToContents } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate } from '../src/templates';

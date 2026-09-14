@@ -1,5 +1,6 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard } from './rag';
+import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
 import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
@@ -78,6 +79,22 @@ Rules:
   const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
   if (!raw || raw.toUpperCase() === 'NONE') return [];
   return raw.split(',').map(c => c.trim()).filter(Boolean);
+}
+
+export async function extractPartNumbersFromImage(imageParts: InlineDataPart[]): Promise<string[]> {
+  const SYS_PROMPT = `OCR part number untuk label/nameplate/stiker komponen alat berat Hitachi/KCM.
+Output 1 baris: part number dipisah koma, atau "NONE".
+- Hanya nomor berlabel P/N, PART NO, atau yang jelas berformat part number (mis. YA00002098, 4651654).
+- JANGAN tulis serial number, tanggal, barcode, fault code, atau nomor yang ragu dibaca.`;
+  const res = await callProxy({
+    contents: [{ role: 'user', parts: [...imageParts, { text: 'Tulis part number yang tercetak jelas di foto ini. Format: comma-separated atau NONE.' }] }],
+    systemInstruction: { parts: [{ text: SYS_PROMPT }] },
+    generationConfig: { maxOutputTokens: 60, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+  }, false, INTENT_MODEL);
+  const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
+  if (!raw || raw.toUpperCase() === 'NONE') return [];
+  const found = raw.split(',').map(c => extractPartNumber(c)).filter((c): c is string => !!c);
+  return [...new Set(found)].slice(0, 3);
 }
 
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
@@ -300,7 +317,7 @@ export async function resolvePartsQuery(
         return { type: 'rag_found', content: note + wmResult.content, dataLabel: RAG_LABEL.parts, confidence: wmResult.confidence };
       }
     }
-    return { type: 'rag_canned', text: partsNotFoundTemplate(trimmed, model, sessionLang(trimmed, history)) };
+    return { type: 'rag_canned', text: partsNotFoundTemplate(extractPartNumber(trimmed) ?? trimmed, model, sessionLang(trimmed, history)) };
   }
 
   let finalContent = ragResult.content;
@@ -359,6 +376,24 @@ function normalizeCasual(s: string): string {
     .trim();
 }
 
+const DOC_KATEGORI: Array<[RegExp, string[]]> = [
+  [/\bbro(?:s|a|ch)?u?re?\b/i, ['BROSUR MANUAL']],
+  [/\boperator'?s?\s*manual\b|buku\s+operator/i, ['OPERATOR MANUAL']],
+  [/\b(?:workshop|shop)\s*manual\b/i, ['WORKSHOP MANUAL']],
+  [/\bengine\s*manual\b/i, ['ENGINE MANUAL']],
+  [/operational\s*principle|prinsip\s*kerja/i, ['OPERATIONAL PRINCIPLE']],
+  [/circuit\s*diagram|wiring\s*diagram|diagram\s*kelistrikan/i, ['Circuit Diagram', 'HYDRAULIC CIRCUIT DIAGRAM']],
+  [/technical\s*news|service\s*bulletin|\bbuletin\b/i, ['TECHNICAL NEWS']],
+  [/\bsales\s*manual\b/i, ['SALES MANUAL']],
+];
+
+export function docKategoriFor(text: string, model: UnitModel): { kategori: string; available: boolean } | null {
+  const hit = DOC_KATEGORI.find(([re]) => re.test(text));
+  if (!hit) return null;
+  const kategori = hit[1].find(k => modelHasSource(model, k)) ?? hit[1][0];
+  return { kategori, available: modelHasSource(model, kategori) };
+}
+
 export async function resolveNaturalLanguageQuery(
   trimmed: string,
   history: Message[],
@@ -381,7 +416,27 @@ export async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  let ragResult = await searchTechnicalManualMulti([query], model);
+  const doc = docKategoriFor(trimmed, model);
+  let ragResult = doc?.available ? await searchTechnicalManualMulti([query], model, 4, doc.kategori) : null;
+  let docNote = '';
+  if (doc && (!ragResult || !ragResult.hasResults || ragResult.confidence === 'low')) {
+    docNote = doc.available
+      ? `[CATATAN: Teknisi minta dicek di ${doc.kategori}. Dokumen itu ADA untuk ${model} tapi tidak memuat topik ini — katakan begitu apa adanya; JANGAN bilang dokumennya tidak ada atau tidak dimuat.]\n\n`
+      : `[CATATAN: ${doc.kategori} memang tidak dimuat untuk ${model} — sampaikan itu singkat, lalu jawab dari data di bawah.]\n\n`;
+    ragResult = null;
+  }
+  if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model);
+  const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
+  const perf = await findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content);
+  if (perf) {
+    ragResult = {
+      ...ragResult,
+      content: [perf, ragResult.content].filter(Boolean).join('\n\n---\n\n'),
+      hasResults: true,
+      confidence: ragResult.hasResults && ragResult.confidence !== 'low' ? ragResult.confidence : 'high',
+    };
+  }
+  if (docNote && ragResult.hasResults) ragResult = { ...ragResult, content: docNote + ragResult.content };
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {

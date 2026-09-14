@@ -1,4 +1,4 @@
-const CACHE_GEN = 9;
+const CACHE_GEN = 10;
 
 export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
 

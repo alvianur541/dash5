@@ -1,13 +1,13 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber } from './rag';
 import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
-import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact } from './routes';
+import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact, extractPartNumbersFromImage } from './routes';
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang "tidak tercantum di data manual" di kalimat PERTAMA, jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
 
@@ -189,6 +189,7 @@ export async function generateResponse(
 
   try {
     emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
+    const pnScan = extractPartNumbersFromImage(imageParts).catch(() => [] as string[]);
     const faultCodes = await extractFaultCodes(imageParts);
 
     if (faultCodes.length > 0) {
@@ -258,10 +259,14 @@ export async function generateResponse(
       emit({ type: 'thinking', message: 'Tidak ada fault code terbaca — menganalisa kondisi visual…' });
       const q = userInput.trim();
       let ragBlock = '';
-      if (q.split(/\s+/).length >= 3 && !isCasualExact(q)) {
-        const route = isPartsQuery(q)
-          ? await resolvePartsQuery(q, history, model, emit)
-          : await resolveNaturalLanguageQuery(q, history, model, emit);
+      const imagePN = extractPartNumber(q) ? null : (await pnScan)[0] ?? null;
+      if (imagePN) emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
+      if (imagePN || (q.split(/\s+/).length >= 3 && !isCasualExact(q))) {
+        const route = imagePN
+          ? await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit)
+          : isPartsQuery(q)
+            ? await resolvePartsQuery(q, history, model, emit)
+            : await resolveNaturalLanguageQuery(q, history, model, emit);
         if (route.type === 'rag_found') {
           deps().meta.label = route.dataLabel;
           deps().meta.confidence = route.confidence;

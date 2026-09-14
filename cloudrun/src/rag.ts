@@ -731,6 +731,52 @@ export async function searchServiceIntervalParts(
   };
 }
 
+// Hybrid RPC only exact-matches "Part Number:" chunks; section and promo chunks need this literal lookup.
+export async function exactPartRows(pn: string, model: string): Promise<HybridResult[]> {
+  if (!sb()) return [];
+  const kategori = new Set(['PARTS CATALOG', 'ENGINE PARTS CATALOG', ...ACTIVE_PROMO_KATEGORI]);
+  const cell = new RegExp(`(?:^|\\|)\\s*${pn}\\s*\\|`, 'im');
+  try {
+    const { data } = await sb().from('documents').select('content, metadata')
+      .contains('metadata', { Model: model })
+      .ilike('content', `%${escapeLike(pn)}%`)
+      .limit(12);
+    return (data ?? [])
+      .filter((d: { content?: string; metadata?: any }) => d?.content && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
+      .slice(0, 4)
+      .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
+  } catch {
+    return [];
+  }
+}
+
+const PERF_TOPICS: Array<{ re: RegExp; term: string }> = [
+  { re: /cycle\s*time|waktu\s*siklus/i, term: 'Cycle Time' },
+  { re: /\bdrift\b|turun\s+sendiri|melorot/i, term: 'Drift' },
+  { re: /travel\s*speed|kecepatan\s*travel|track\s*revolution|putaran\s*track/i, term: 'Travel' },
+  { re: /swing\s*speed|kecepatan\s*swing|swing\s*revolution|putaran\s*swing/i, term: 'Swing' },
+];
+
+// MACHINE TEST sections only describe the procedure; the standard values live in PERFORMANCE STANDARD.
+export async function findPerformanceStandard(model: string, topicText: string, have: string): Promise<string | null> {
+  const topic = PERF_TOPICS.find(t => t.re.test(topicText));
+  if (!topic || !sb()) return null;
+  try {
+    const { data } = await sb().from('documents').select('content, metadata')
+      .contains('metadata', { Model: model })
+      .ilike('content', 'Section: PERFORMANCE STANDARD%')
+      .ilike('content', `%${escapeLike(topic.term)}%`)
+      .limit(2);
+    const fresh = (data ?? []).filter((d: { content?: string }) => d?.content && !have.includes(d.content.split('\n')[0]));
+    if (!fresh.length) return null;
+    noteChunks('perf', fresh.map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata })));
+    console.info('[perf] %d tabel PERFORMANCE STANDARD (%s) ditambahkan', fresh.length, topic.term);
+    return fresh.map((d: { content: string }) => d.content).join('\n\n---\n\n');
+  } catch {
+    return null;
+  }
+}
+
 export async function searchPartsCatalog(
   query: string,
   model: string,
@@ -776,6 +822,7 @@ export async function searchPartsCatalog(
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
   ];
 
+  const exactPromise = partNum ? exactPartRows(partNum.toUpperCase(), model) : Promise.resolve([] as HybridResult[]);
   const settled = await Promise.allSettled(queries);
   const getData = (idx: number): HybridResult[] =>
     idx >= 0 && settled[idx]?.status === 'fulfilled' && Array.isArray(settled[idx].value.data)
@@ -859,6 +906,11 @@ export async function searchPartsCatalog(
   }
 
   const merged = [...cpmData, ...orderedNonCpm];
+  const exact = (await exactPromise).filter(e => !merged.some(m => m.content === e.content));
+  if (exact.length) {
+    merged.unshift(...exact);
+    console.info('[parts] PN %s: %d section literal ditambahkan', partNum, exact.length);
+  }
 
   if (partNum) {
     const pnUpper = partNum.toUpperCase();

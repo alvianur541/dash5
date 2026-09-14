@@ -36,11 +36,20 @@ export function warmupProxy(): void {
 const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
 const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
 
-function answerCacheKey(model: string, query: string): string | null {
+// Follow-ups like "cek lg" mean different things per chat, so the key carries the last exchange.
+function contextTag(history: Message[]): string {
+  const last = history.slice(-2).map(m => m.content).join('\n');
+  if (!last) return '';
+  let h = 5381;
+  for (let i = 0; i < last.length; i++) h = (h * 33 + last.charCodeAt(i)) | 0;
+  return `::c${(h >>> 0).toString(36)}`;
+}
+
+function answerCacheKey(model: string, query: string, history: Message[]): string | null {
   const q = query.toLowerCase().replace(/\s+/g, ' ').trim();
   if (q.length < 6 || q.length > 300) return null;
   if (CONTEXT_REF_RE.test(q)) return null;
-  return `${ANSWER_CACHE_PREFIX}${model}::${q}`;
+  return `${ANSWER_CACHE_PREFIX}${model}::${q}${contextTag(history)}`;
 }
 
 function readAnswerCache(key: string): string | null {
@@ -168,7 +177,7 @@ export async function generateResponseStream(
   onAgentEvent?: (event: AgentEvent) => void,
 ): Promise<string> {
   const trimmed = userInput.trim();
-  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed);
+  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed, history);
   if (cacheKey) {
     const cached = readAnswerCache(cacheKey);
     if (cached) {
