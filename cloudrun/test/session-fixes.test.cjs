@@ -141,6 +141,11 @@ module.exports = async function () {
     t(manualTerms('main pump delivery pressure') === 'main pump delivery pressure', 'main pump tekanan tetap (manual memakai "MAIN PUMP" di situ)');
     const h2 = [{ role: 'user', content: 'Cek kan berat main pump' }, { role: 'assistant', content: 'Berat total main pump ...' }];
     t(!isShortFollowUp('Cari lebih dalam lagi', h2) && !isShortFollowUp('Cek lagi berapa total beratny', h2), '"cari lebih dalam" / "cek lagi" = cari ulang, tidak dipersingkat');
+    const { clampThinking } = require('./helpers.cjs');
+    const lvl = (m) => { const { d } = mockDeps([[]]); return runWithDeps(d, () => clampThinking({ contents: [], generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' } } }, m)).generationConfig.thinkingConfig.thinkingLevel; };
+    t(lvl('gemini-3.7-flash') === 'low' && lvl('gemini-3.8-flash') === 'low' && lvl('gemini-3.8-flash-preview') === 'low' && lvl('gemini-4.0-flash') === 'low',
+      'thinking "minimal" dinaikkan ke "low" untuk 3.7, 3.8, dan versi sesudahnya');
+    t(lvl('gemini-3.6-flash') === 'minimal' && lvl('gemini-3.1-flash-lite') === 'minimal', 'model lama tetap boleh "minimal"');
     t(typeof FALLBACK_RESPONSE === 'string' && /kirim ulang/i.test(FALLBACK_RESPONSE) && !/tidak bisa memproses/.test(FALLBACK_RESPONSE),'pesan gagal menyarankan kirim ulang, bukan "tidak bisa memproses"');
   }
 

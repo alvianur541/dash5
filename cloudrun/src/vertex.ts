@@ -41,7 +41,7 @@ export interface VRequest {
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
-const NO_MINIMAL_THINKING_RE = /^gemini-3\.7-/i;
+const NO_MINIMAL_THINKING_RE = /^gemini-(?:3\.(?:[7-9]|\d{2,})|(?:[4-9]|\d{2,})\.\d+)-/i;
 
 export function clampThinking(body: VRequest, model: string): VRequest {
   const asli = body.generationConfig?.thinkingConfig?.thinkingLevel;
