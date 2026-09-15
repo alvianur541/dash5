@@ -44,9 +44,9 @@ export function imageCodesNotFoundTemplate(codes: string[], model: string, lang:
   const list = codes.join(', ');
   const lines = (f: (c: string) => string) => codes.map(f).join('\n');
   return pick(lang, {
-    id: `Fault code terdeteksi dari gambar: **${list}**\n\n${lines(c => `- Kode \`${c}\` tidak ada di database manual **${model}** yang saya akses.`)}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`,
-    en: `Fault codes read from the photo: **${list}**\n\n${lines(c => `- Code \`${c}\` is not in the **${model}** manual database I can access.`)}\n\nCheck that the codes were read correctly and that the unit model is right (this chat is set to ${model}).`,
-    ja: `写真から読み取ったフォルトコード: **${list}**\n\n${lines(c => `- コード \`${c}\` は **${model}** のマニュアルデータベースにありません。`)}\n\nコードの読み取りが正しいか、機種設定が合っているか確認してください（現在の設定: ${model}）。`,
+    id: `Fault code terdeteksi dari gambar: **${list}**\n\n${lines(c => `- Kode \`${c}\` tidak ada di manual **${model}** yang saya akses.`)}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`,
+    en: `Fault codes read from the photo: **${list}**\n\n${lines(c => `- Code \`${c}\` is not in the **${model}** manual I can access.`)}\n\nCheck that the codes were read correctly and that the unit model is right (this chat is set to ${model}).`,
+    ja: `写真から読み取ったフォルトコード: **${list}**\n\n${lines(c => `- コード \`${c}\` は **${model}** のマニュアルにありません。`)}\n\nコードの読み取りが正しいか、機種設定が合っているか確認してください（現在の設定: ${model}）。`,
   });
 }
 
@@ -68,7 +68,7 @@ export const RERANK_DEGRADED_NOTE =
 
 export function faultCodeNotFoundTemplate(faultQuery: string, model: string, lang: Lang = 'id'): string {
   if (lang === 'en') {
-    return `Code \`${faultQuery}\` was not found in the **${model}** manual database.
+    return `Code \`${faultQuery}\` was not found in the **${model}** manual.
 
 Two things usually cause this:
 1. **Code reading** — make sure the digits and suffix match the monitor exactly (valid formats: \`11006-2\`, \`ENG:00436-04\`). If you're unsure, send a photo of the monitor screen and I'll read it directly.
@@ -77,7 +77,7 @@ Two things usually cause this:
 If both are correct and the code still isn't there, it's likely outside the available manual coverage — escalate to the Technical Support Department with the code and the unit serial number.`;
   }
   if (lang === 'ja') {
-    return `コード \`${faultQuery}\` は **${model}** のマニュアルデータベースに見つかりませんでした。
+    return `コード \`${faultQuery}\` は **${model}** のマニュアルに見つかりませんでした。
 
 主な原因は次の2つです。
 1. **コードの読み取り** — モニタ表示の数字とサフィックスが一致しているか確認してください（有効な形式: \`11006-2\`、\`ENG:00436-04\`）。不明な場合はモニタ画面の写真を送ってください。こちらで直接読み取ります。
@@ -85,7 +85,7 @@ If both are correct and the code still isn't there, it's likely outside the avai
 
 両方とも正しいのにコードが見つからない場合は、対応マニュアルの範囲外の可能性があります。コードと機体番号を添えて Technical Support Department にエスカレーションしてください。`;
   }
-  return `Kode \`${faultQuery}\` tidak ditemukan di database manual **${model}**.
+  return `Kode \`${faultQuery}\` tidak ditemukan di manual **${model}**.
 
 Dua hal yang paling sering jadi penyebabnya:
 1. **Pembacaan kode** — pastikan digit dan suffix persis seperti di monitor (format valid: \`11006-2\`, \`ENG:00436-04\`). Kalau ragu, kirim foto layar monitor — saya baca langsung dari situ.

@@ -154,7 +154,8 @@ async function ask(
           break;
         case 'meta':
           cacheable = frame.cacheable === true;
-          if (typeof frame.full === 'string' && frame.full.length > text.length) text = frame.full;
+          // Server text is final: retries and leak/LaTeX cleanup can make it shorter than what streamed.
+          if (typeof frame.full === 'string' && frame.full.trim()) text = frame.full;
           break;
         case 'error':
           serverError = String(frame.message || 'Gagal memproses pertanyaan.');

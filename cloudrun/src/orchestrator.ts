@@ -9,13 +9,19 @@ import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact, extractImageFacts, type RagRouteResult } from './routes';
 
-const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang "tidak tercantum di data manual" di kalimat PERTAMA, jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
+const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang di kalimat PERTAMA bahwa bagian itu belum ketemu di data ini (jangan simpulkan manualnya tidak memuat), jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
 
 const LEAK_RE = /^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
 const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
 
+const LATEX_SYMBOL: Record<string, string> = {
+  ge: '≥', geq: '≥', le: '≤', leq: '≤', rightarrow: '→', to: '→', leftarrow: '←', Rightarrow: '⇒',
+  times: '×', pm: '±', approx: '≈', neq: '≠', circ: '°', deg: '°', Omega: 'Ω', Delta: 'Δ', mu: 'μ',
+};
+
 export function scrubLeaks(text: string): string {
-  if (!/\[(?:DATA |CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|Fault Code:)/.test(text)) return text;
+  text = text.replace(/\$\s*\\([A-Za-z]+)\s*\$/g, (m, k: string) => LATEX_SYMBOL[k] ?? m);
+  if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|Fault Code:)/.test(text)) return text;
   const before = text.length;
   let out = text.replace(LEAK_RE, '');
   const head = out.slice(0, 400);
@@ -60,6 +66,14 @@ function verifyGrounding(answer: string, context: string): void {
   if (total > 0 && ungrounded.length > 0) {
     console.warn('[grounding] %d/%d angka spec TIDAK ditemukan di data:', ungrounded.length, total, ungrounded.slice(0, 10));
   }
+}
+
+const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*)\b/i;
+const REDO_RE = /\b(?:cek|coba|cari)\s*(?:lagi|lg|ulang)\b|\bcoba\s+cari\b/i;
+
+export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
+  return history.length >= 2 && trimmed.split(/\s+/).length <= 8
+    && !detectFaultCodeInQuery(trimmed).isFaultCode && !WANTS_LIST_RE.test(trimmed) && !REDO_RE.test(trimmed);
 }
 
 export async function generateResponseStream(
@@ -123,9 +137,8 @@ export async function generateResponseStream(
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const thinkingLevel: ThinkingLevel = 'low';
-  const isFollowUp = history.length >= 2 && trimmed.split(/\s+/).length <= 8 && !detectFaultCodeInQuery(trimmed);
-  const wantsList = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan)\b/i.test(trimmed);
-  const maxOutputTokens  = ragContent ? (isFollowUp ? 1200 : wantsList ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
+  const isFollowUp = isShortFollowUp(trimmed, history);
+  const maxOutputTokens  = ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
   const followUpNote = isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab LANGSUNG intinya dalam ≤ 8 kalimat atau 1 tabel kecil. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
     : '';
@@ -252,7 +265,7 @@ export async function generateResponse(
       let injection = `[DATA MANUAL TERSEDIA]\n${found.map(f => `[Fault Code: ${f.code}]\n${f.content}`).join('\n\n===\n\n')}`;
 
       if (notFound.length > 0) {
-        injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di database manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
+        injection += `\n\n[KODE TIDAK DITEMUKAN]\nKode berikut TIDAK ada di manual ${model}: ${notFound.join(', ')}.\nJANGAN karang detail/diagnosis untuk kode-kode ini.`;
       }
 
       sendImageToModel = false;
@@ -290,7 +303,7 @@ export async function generateResponse(
       const ask = q || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.';
       currentParts.push({ text: ragBlock
         ? `${ask}\n[Foto terlampir sebagai konteks visual. Data manual di bawah adalah sumber angka/prosedur — foto hanya untuk membaca kondisi/nilai yang tampak.]${ragBlock}`
-        : `${ask}\n[Tidak ada data manual yang cocok untuk pertanyaan ini. Jelaskan HANYA apa yang tampak di foto. JANGAN mengutip prosedur, angka, atau nama section manual dari ingatan, dan JANGAN menulis label/format dokumen apa pun.]` });
+        : `${ask}\n[Tidak ada data manual yang cocok untuk pertanyaan ini. Jelaskan HANYA apa yang tampak di foto. JANGAN mengutip prosedur, angka, atau nama section manual dari ingatan, dan JANGAN menulis label/format dokumen apa pun. Kalau teknisi minta part number/harga: katakan pencarian katalog dari foto ini belum menemukan section yang cocok (JANGAN bilang katalognya tidak memuat part itu), sebutkan komponen yang tampak, lalu minta dia ketik nama komponennya (mis. "part number piston engine") supaya dicarikan.]` });
     }
   } catch (err) {
     console.error('Image fault code extraction failed:', err);

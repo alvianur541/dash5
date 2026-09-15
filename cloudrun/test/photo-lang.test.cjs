@@ -44,7 +44,7 @@ module.exports = async function () {
     t(out.includes('`13004-02`') && out.includes('`13005-02`'), 'codes kept verbatim in the English reply'); }
 
   { const { out } = await photo('tolong cek kode ini', [], reads('13004-02'));
-    t(/tidak ada di database manual/.test(out), 'ID caption: Indonesian not-found reply unchanged'); }
+    t(/tidak ada di manual \*\*/.test(out), 'ID caption: Indonesian not-found reply unchanged'); }
 
   t(langDirective('id') === '', 'ID adds nothing (prompt already Indonesian)');
   return done();

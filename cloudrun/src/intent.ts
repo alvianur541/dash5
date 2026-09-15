@@ -233,7 +233,7 @@ export function resolveAffirmative(trimmed: string, history: Message[]): string 
 }
 
 const MULTI_CONNECTOR_RE =
-  /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\byang\s+)\b(?:sama|ama)\b(?!\s+(?:dengan|persis|kaya|seperti))/i;
+  /\b(?:dan|plus|sambil|bersamaan|juga|sekaligus|sekalian|lalu|kemudian|serta|beserta|trus|terus)\b|[+&]|(?<!\b(?:yang|yg)\s+)\b(?:sama|ama|sm)\b(?!\s+(?:dengan|dgn|persis|kaya|kyk|seperti))/i;
 const MULTI_TECH_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|ukuran|size|tekanan|pressure|torque|torsi|clearance|displacement|capacity|kapasitas|rpm|spec|stroke|bore|pn|part\s*number|partnumber|harga|price|promo|motor|pump|valve|cylinder|silinder|filter|seal|gasket|bearing|rotor|stator|pin|bushing|shaft|swing|boom|arm|bucket|blade|track|engine|mesin|hydraulic|hidrolik|sensor|relay|solenoid|controller|alternator|starter|nozzle|injector|turbo|radiator|coupling|reduction|gear)\w*/i;
 const MULTI_ATTR_RE = /\b(?:berat|weight|diameter|panjang|length|lebar|width|tinggi|height|tebal|thickness|tekanan|pressure|torque|torsi|clearance|displacement|kapasitas|capacity|rpm|harga|price|part\s*number|partnumber|pn|spec|ukuran|size)\w*/gi;
 

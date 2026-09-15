@@ -7,5 +7,7 @@ export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
 export { isCasualExact, docKategoriFor, resolvePartsQuery } from '../src/routes';
 export { exactPartRows, findPerformanceStandard, engineSectionRows, searchPartsCatalog } from '../src/rag';
 export { STREAM_LONG_NOTE } from '../src/stream';
+export { isMultiAspectQuery } from '../src/intent';
+export { isShortFollowUp } from '../src/orchestrator';
 export { historyToContents } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate } from '../src/templates';

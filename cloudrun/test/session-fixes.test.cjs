@@ -120,5 +120,19 @@ module.exports = async function () {
     t(neg.type !== 'rag_found' || !neg.content.includes('015 - CRANKSHAFT'), 'pertanyaan baru yang tidak merujuk ke belakang -> komponen jawaban lama tidak ikut');
   }
 
+  {
+    const { isMultiAspectQuery, isShortFollowUp, scrubLeaks, faultCodeNotFoundTemplate, imageCodesNotFoundTemplate } = require('./helpers.cjs');
+    t(isMultiAspectQuery('Cek berat travel device sm part nymberny'), '"sm" (= sama) dikenali sebagai penghubung dua pertanyaan (sesi 9370a5a4)');
+    t(!isMultiAspectQuery('part number seal yg sm dengan swing motor tadi'), '"yg sm dengan" = pembanding, bukan dua pertanyaan');
+    t(scrubLeaks('Coolant $\\ge$ `50 °C`, Titik A $\\rightarrow$ `33 L/min`') === 'Coolant ≥ `50 °C`, Titik A → `33 L/min`', 'simbol LaTeX ($\\ge$, $\\rightarrow$) jadi Unicode');
+    const noDb = [faultCodeNotFoundTemplate('20115-2', 'ZX200-5G', 'id'), faultCodeNotFoundTemplate('20115-2', 'ZX200-5G', 'en'), faultCodeNotFoundTemplate('20115-2', 'ZX200-5G', 'ja'),
+      imageCodesNotFoundTemplate(['20115-2'], 'ZX200-5G', 'id'), imageCodesNotFoundTemplate(['20115-2'], 'ZX200-5G', 'en'), imageCodesNotFoundTemplate(['20115-2'], 'ZX200-5G', 'ja')];
+    t(noDb.every(s => !/database|データベース/i.test(s)), 'template kode-tidak-ditemukan tanpa kata "database" (3 bahasa)');
+    const h2 = [{ role: 'user', content: 'Cek data cycle time cylinder' }, { role: 'assistant', content: 'Prosedur cycle time ...' }];
+    t(isShortFollowUp('Brpa nilainy', h2) && isShortFollowUp('Knpa td bilang ngga ad', h2), 'susulan pendek -> diberi catatan "jawab langsung"');
+    t(!isShortFollowUp('Coba listkn', h2) && !isShortFollowUp('Cek lg', h2) && !isShortFollowUp('Coba cari lagi', h2), 'minta daftar / cek ulang -> TIDAK dipersingkat');
+    t(!isShortFollowUp('20115-2', h2) && !isShortFollowUp('Brpa nilainy', []), 'fault code atau pesan pertama -> bukan susulan');
+  }
+
   return done();
 };
