@@ -563,6 +563,13 @@ async function rankAndSelect(
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
 
+// Workshop Manual names the main pump assembly "pump device"; its weight and R/I steps exist only under that name.
+export function manualTerms(q: string): string {
+  return /\bmain\s+pump\b/i.test(q) && /\b(?:weight|berat|removal|installation|install|disassembl\w*|assembl\w*|lifting)\b/i.test(q)
+    ? q.replace(/\bmain\s+pump\b/gi, 'pump device')
+    : q;
+}
+
 export async function searchTechnicalManualMulti(
   queries: string[],
   model: string,
@@ -570,6 +577,7 @@ export async function searchTechnicalManualMulti(
   forceKategori?: string,
 ): Promise<RAGResult> {
   if (!sb() || queries.length === 0) return { content: '', hasResults: false };
+  queries = queries.map(manualTerms);
 
   const primaryQuery = queries[0].trim();
   const faultCode    = isFaultCode(primaryQuery);

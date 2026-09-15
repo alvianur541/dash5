@@ -108,6 +108,7 @@ Technical — specs & symptoms:
 "diameter pin bucket berapa"                  → technical, "bucket pin diameter"
 "panjang arm cylinder"                        → technical, "arm cylinder length"
 "berat swing device"                          → technical, "swing device weight"
+"berapa berat main pump"                      → technical, "pump device weight"   (manual menyebut main pump assy "pump device")
 "clearance valve engine"                      → technical, "engine valve clearance"
 "cara adjust relief valve main pump"          → technical, "main pump relief valve adjustment"
 "engine tidak mau hidup setelah ganti filter" → technical, "engine no start after fuel filter replacement"

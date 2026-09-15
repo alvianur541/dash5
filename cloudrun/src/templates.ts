@@ -176,7 +176,7 @@ export const RAG_LABEL = {
   parts:  'DATA PARTS CATALOG TERSEDIA',
 } as const;
 
-export const FALLBACK_RESPONSE = 'Maaf, sistem tidak bisa memproses permintaan ini.';
+export const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali ini (respons server terlalu lama). Kirim ulang pertanyaanmu.';
 
 export const EXTERNAL_DIRECTIVE = (model: string): string =>
   `[SUMBER EKSTERNAL] Manual internal ${model} tidak memuat data spesifik untuk pertanyaan ini. Jawab profesional memakai prinsip teknik umum + hasil penelusuran web. ATURAN WAJIB:

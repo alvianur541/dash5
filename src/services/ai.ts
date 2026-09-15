@@ -90,7 +90,7 @@ interface AskBody {
   attachments?: Array<{ mimeType: string; data: string }>;
 }
 
-const FALLBACK_RESPONSE = 'Maaf, sistem tidak bisa memproses permintaan ini.';
+const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali ini (respons server terlalu lama). Kirim ulang pertanyaanmu.';
 
 async function ask(
   body: AskBody,

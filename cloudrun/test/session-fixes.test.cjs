@@ -134,5 +134,15 @@ module.exports = async function () {
     t(!isShortFollowUp('20115-2', h2) && !isShortFollowUp('Brpa nilainy', []), 'fault code atau pesan pertama -> bukan susulan');
   }
 
+  {
+    const { manualTerms, isShortFollowUp, FALLBACK_RESPONSE } = require('./helpers.cjs');
+    t(manualTerms('main pump weight') === 'pump device weight' && manualTerms('main pump removal installation') === 'pump device removal installation',
+      '"main pump" berat/lepas-pasang -> istilah manual "pump device" (sesi 11db623e: 170 kg / 160 kg)');
+    t(manualTerms('main pump delivery pressure') === 'main pump delivery pressure', 'main pump tekanan tetap (manual memakai "MAIN PUMP" di situ)');
+    const h2 = [{ role: 'user', content: 'Cek kan berat main pump' }, { role: 'assistant', content: 'Berat total main pump ...' }];
+    t(!isShortFollowUp('Cari lebih dalam lagi', h2) && !isShortFollowUp('Cek lagi berapa total beratny', h2), '"cari lebih dalam" / "cek lagi" = cari ulang, tidak dipersingkat');
+    t(typeof FALLBACK_RESPONSE === 'string' && /kirim ulang/i.test(FALLBACK_RESPONSE) && !/tidak bisa memproses/.test(FALLBACK_RESPONSE),'pesan gagal menyarankan kirim ulang, bukan "tidak bisa memproses"');
+  }
+
   return done();
 };

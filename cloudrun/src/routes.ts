@@ -280,7 +280,9 @@ export function extractCpmPartsForInterval(content: string, hours: number): stri
   return parts.join('\n');
 }
 
-const REFERS_BACK_RE = /\b(?:ini|itu|tsb|tersebut|tadi|td|di\s*atas|d\s*atas|yg\s*d\w*|yang\s+di|sesuai|semua|smua|lagi|lg|list\w*|daftar\w*)\b/i;
+export const REDO_RE = /\b(?:cek|coba|cb|cari)\s*(?:lagi|lg|ulang)\b|\bcoba\s+cari\b|\blebih\s+(?:dalam|detail|teliti)\b/i;
+
+const REFERS_BACK_RE =/\b(?:ini|itu|tsb|tersebut|tadi|td|di\s*atas|d\s*atas|yg\s*d\w*|yang\s+di|sesuai|semua|smua|lagi|lg|list\w*|daftar\w*)\b/i;
 
 export async function resolvePartsQuery(
   trimmed: string,
@@ -435,7 +437,7 @@ export async function resolveNaturalLanguageQuery(
       : `[CATATAN: ${doc.kategori} memang tidak dimuat untuk ${model} — sampaikan itu singkat, lalu jawab dari data di bawah.]\n\n`;
     ragResult = null;
   }
-  if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model);
+  if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
   const perf = await findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content);
   if (perf) {
