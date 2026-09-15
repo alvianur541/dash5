@@ -1087,5 +1087,5 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 }
 .dark-theme .sidebar-wordmark { filter: invert(1); }
 
-/* App root sizes from the visible frame via this chain, not 100dvh (iOS web-app insets). */
-#root { height: 100%; }
+/* Visible height from visualViewport (shrinks with the keyboard); 100% chain as fallback, never 100dvh. */
+#root { height: var(--app-h, 100%); }

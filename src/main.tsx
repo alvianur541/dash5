@@ -13,6 +13,9 @@ registerSW({ immediate: true });
 import { purgeStaleAnswerCaches } from './services/cacheGen';
 purgeStaleAnswerCaches();
 
+import { trackVisualViewport } from './lib/viewport';
+trackVisualViewport();
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ErrorBoundary>
