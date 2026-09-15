@@ -82,7 +82,7 @@ function isFaultCode(query: string): boolean {
   return /^(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i.test(query.trim());
 }
 
-const PARTS_KEYWORDS_RE = /\b(part\s*number|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
+const PARTS_KEYWORDS_RE = /\b(part\s*number\w*|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
 
 const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|oli|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft|roller|idler|sprocket|track|link|shoe|tooth|teeth|adapter|cutting\s*edge|undercarriage|bucket)\b/i;
 
@@ -777,11 +777,60 @@ export async function findPerformanceStandard(model: string, topicText: string, 
   }
 }
 
+const ENGINE_SECTION_TERMS: Array<[RegExp, string]> = [
+  [/piston|con(?:necting)?[\s-]*rod|stang\s*seher|crank\s*shaft|kruk\s*as|metal\s*(?:jalan|duduk|bulan)|main\s*bearing|thrust\s*washer|flywheel|roda\s*gila|(?:crank(?:shaft)?|damper)\s*pulley/i, 'CRANKSHAFT'],
+  [/inj(?:ection|ector)?\s*pump|pompa\s*injeksi|supply\s*pump/i, 'INJECTION PUMP'],
+  [/nozzle|injector(?!\s*pump)/i, 'FUEL INJECTION'],
+  [/governor/i, 'GOVERNOR'],
+  [/cylinder\s*head|\bkop\b|\bklep\b|valve\s*(?:seat|guide|spring)/i, 'CYLINDER HEAD'],
+  [/cylinder\s*block|blok\s*(?:mesin|silinder)|\bliner\b/i, 'CYLINDER BLOCK'],
+  [/camshaft|noken\s*as|tappet|push\s*rod|rocker\s*arm/i, 'CAMSHAFT'],
+  [/gasket\s*(?:kit|set)|overhaul\s*(?:kit|gasket)|paking\s*(?:set|lengkap)/i, 'GASKET'],
+  [/turbo/i, 'TURBOCHARGER'],
+  [/water\s*pump|pompa\s*air/i, 'WATER PUMP'],
+  [/oil\s*pump|pompa\s*oli/i, 'OIL PUMP'],
+  [/starter|starting\s*motor|dinamo\s*start/i, 'START'],
+  [/alternator|generator|dinamo\s*(?:ampere|cas|charge)/i, 'GENERATOR'],
+  [/thermostat/i, 'THERMOSTAT'],
+  [/oil\s*cooler/i, 'OIL COOLER'],
+];
+
+// Vector search returns only 3 engine sections; an overhaul spans several, so pin them by section title.
+export async function engineSectionRows(text: string, model: string): Promise<HybridResult[]> {
+  if (!sb() || !ENGINE_CATALOG_MODELS.has(model)) return [];
+  const keys = [...new Set(ENGINE_SECTION_TERMS.filter(([re]) => re.test(text)).map(([, k]) => k))].slice(0, 3);
+  if (!keys.length) return [];
+  const title = (d: { content: string }) => d.content.split('\n')[0].toUpperCase();
+  const perKey = await Promise.all(keys.map(async key => {
+    try {
+      const { data } = await sb().from('documents').select('content, metadata')
+        .contains('metadata', { Model: model, Kategori: 'ENGINE PARTS CATALOG' })
+        .filter('content', 'imatch', `^Section:[^\\n]*${key}`)
+        .limit(10);
+      const rows = ((data ?? []) as HybridResult[]).filter(d => d?.content && title(d).includes(key));
+      const best = Math.min(...rows.map(d => title(d).indexOf(key)));
+      return rows.filter(d => title(d).indexOf(key) === best)
+        .sort((a, b) => title(a).localeCompare(title(b)))
+        .slice(0, 3);
+    } catch {
+      return [];
+    }
+  }));
+  const seen = new Set<string>();
+  const out = perKey.flat()
+    .filter(d => !seen.has(d.content) && !!seen.add(d.content))
+    .slice(0, 5)
+    .map(d => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'section_title' }));
+  if (out.length) console.info('[parts] section engine %s: %d section dipasang', keys.join('+'), out.length);
+  return out;
+}
+
 export async function searchPartsCatalog(
   query: string,
   model: string,
   skipExpand = false,
   maxTop = 12,
+  sectionHint = '',
 ): Promise<RAGResult> {
   if (!sb()) return { content: '', hasResults: false };
 
@@ -823,7 +872,9 @@ export async function searchPartsCatalog(
   ];
 
   const exactPromise = partNum ? exactPartRows(partNum.toUpperCase(), model) : Promise.resolve([] as HybridResult[]);
+  const sectionPromise = partNum ? Promise.resolve([] as HybridResult[]) : engineSectionRows(`${query}\n${sectionHint}`, model);
   const settled = await Promise.allSettled(queries);
+  const sectionRows = await sectionPromise;
   const getData = (idx: number): HybridResult[] =>
     idx >= 0 && settled[idx]?.status === 'fulfilled' && Array.isArray(settled[idx].value.data)
       ? settled[idx].value.data
@@ -838,7 +889,7 @@ export async function searchPartsCatalog(
   const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
 
-  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0) {
+  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0 && sectionRows.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
         query_embedding: embedding, match_count: 5,
@@ -905,12 +956,10 @@ export async function searchPartsCatalog(
     }
   }
 
-  const merged = [...cpmData, ...orderedNonCpm];
-  const exact = (await exactPromise).filter(e => !merged.some(m => m.content === e.content));
-  if (exact.length) {
-    merged.unshift(...exact);
-    console.info('[parts] PN %s: %d section literal ditambahkan', partNum, exact.length);
-  }
+  const exact = await exactPromise;
+  const pinned = [...exact, ...sectionRows];
+  const merged = [...pinned, ...cpmData, ...orderedNonCpm.filter(d => !pinned.some(p => p.content === d.content))];
+  if (exact.length) console.info('[parts] PN %s: %d section literal ditambahkan', partNum, exact.length);
 
   if (partNum) {
     const pnUpper = partNum.toUpperCase();

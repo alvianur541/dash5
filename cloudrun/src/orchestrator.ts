@@ -4,7 +4,7 @@ import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber } from './rag';
 import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
-import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, looksComplete } from './stream';
+import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact, extractImageFacts, type RagRouteResult } from './routes';
@@ -124,7 +124,8 @@ export async function generateResponseStream(
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const thinkingLevel: ThinkingLevel = 'low';
   const isFollowUp = history.length >= 2 && trimmed.split(/\s+/).length <= 8 && !detectFaultCodeInQuery(trimmed);
-  const maxOutputTokens  = ragContent ? (isFollowUp ? 1200 : 4096) : gsTechnical ? 2048 : 1536;
+  const wantsList = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan)\b/i.test(trimmed);
+  const maxOutputTokens  = ragContent ? (isFollowUp ? 1200 : wantsList ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
   const followUpNote = isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab LANGSUNG intinya dalam ≤ 8 kalimat atau 1 tabel kecil. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
     : '';
@@ -152,6 +153,7 @@ export async function generateResponseStream(
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
+      && !fullText.includes(STREAM_LONG_NOTE.trim())
       && looksComplete(fullText)) {
     deps().meta.cacheable = true;
   } else if (routeResult.type === 'rag_found' && fullText) {

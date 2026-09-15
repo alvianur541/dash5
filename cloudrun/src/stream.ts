@@ -21,6 +21,8 @@ export const STREAM_CUT_NOTE =
   '\n\n> ⚠️ Jawaban terputus di tengah — koneksi ke AI sempat putus. Kirim ulang pertanyaanmu untuk jawaban lengkap.';
 export const STREAM_HALT_NOTE =
   '\n\n> ⚠️ Jawaban terhenti sebelum selesai. Kirim ulang pertanyaanmu, atau ubah sedikit kalimatnya.';
+export const STREAM_LONG_NOTE =
+  '\n\n> ⚠️ Daftarnya terlalu panjang dan terpotong di sini. Ketik "lanjutkan", atau sebut section/komponen yang dicari supaya daftarnya lebih pendek.';
 
 function pastDeadline(): boolean {
   const at = deps().deadlineAt;
@@ -160,7 +162,12 @@ export async function callProxyStream(
     await tunggu(attempt * 900);
     continue;
   }
-  if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
+  if (!retryNeeded && !upstreamError && finishReason === 'MAX_TOKENS') {
+    // Same cap would truncate again; retrying only burns quota and drops to the fallback model.
+    console.warn('[stream] finishReason=MAX_TOKENS setelah %d huruf — batas panjang, tidak diulang', fullText.trim().length);
+    fullText += STREAM_LONG_NOTE;
+    onChunk(STREAM_LONG_NOTE);
+  } else if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
     if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
       if (fullText) onChunk('\n\n');

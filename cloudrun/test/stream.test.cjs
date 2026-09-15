@@ -88,5 +88,13 @@ module.exports = async function () {
     const r = await run(d);
     t(calls() === 1 && r.includes(STREAM_HALT_NOTE), 'deadline passed + halt: 1 attempt + note'); }
 
+  { const { STREAM_LONG_NOTE } = require('./helpers.cjs');
+    const models = [];
+    const { d, calls } = mockDeps([[{ text: '| 074(B | `8943675301` | BOLT', usageMetadata: USAGE, live: true, finishReason: 'MAX_TOKENS' }], stop(UTUH)]);
+    const origStream = d.stream; d.stream = (b, m, cb) => { models.push(m); return origStream(b, m, cb); };
+    let out = ''; const r = await runWithDeps(d, () => callProxyStream(BODY, c => { out += c; }));
+    t(calls() === 1 && models[0] === MODEL_CHAIN[0], 'MAX_TOKENS: tidak diulang, tidak pindah ke model cadangan');
+    t(r.endsWith(STREAM_LONG_NOTE) && out.includes(STREAM_LONG_NOTE) && !r.includes(STREAM_HALT_NOTE), 'MAX_TOKENS: catatan "terlalu panjang" ditambahkan, bukan HALT'); }
+
   return done();
 };

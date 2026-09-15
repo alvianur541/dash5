@@ -5,10 +5,11 @@ function fakeSupabase(rows, calls = []) {
     select() { return q; },
     contains(col, v) { calls.push(['contains', col, v]); return q; },
     ilike(col, v) { calls.push(['ilike', col, v]); return q; },
+    filter(col, op, v) { calls.push(['filter', col, op, v]); return q; },
     limit() { return q; },
     then(resolve) { return Promise.resolve({ data: rows, error: null }).then(resolve); },
   };
-  return { from: () => q };
+  return { from: () => q, rpc: () => Promise.resolve({ data: [], error: null }) };
 }
 
 const CAB2 = { content: 'Section: CAB (2)\nModel: ZX200-5G\n      07 | 4651654            | GLASS  | qty:1\n      08 | YA00001496         | GLASS  | qty:1', metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' } };
@@ -82,6 +83,41 @@ module.exports = async function () {
   {
     const r = await photo('Cek', 'PN: NONE\nCOMPONENT: NONE');
     t(r.partsCalls === 0, 'foto bukan komponen + keterangan pendek -> tidak mencari');
+  }
+
+  {
+    const { isPartsQuery, engineSectionRows, STREAM_LONG_NOTE } = require('./helpers.cjs');
+    t(isPartsQuery('Listkn partnumberny') && isPartsQuery('Listkn part number ny ini'), '"partnumberny" (tanpa spasi) dikenali sebagai pertanyaan part');
+    t(typeof STREAM_LONG_NOTE === 'string' && STREAM_LONG_NOTE.includes('lanjutkan'), 'catatan daftar-terpotong tersedia');
+
+    const eng = (sec, row) => ({ content: `Section: ${sec}\nModel: ZX200-5G\nCatalog: ENGINE PARTS CATALOG\n    ${row}`, metadata: { Model: 'ZX200-5G', Kategori: 'ENGINE PARTS CATALOG' } });
+    const CRANK = eng('015 - CRANKSHAFT,PISTON AND FLYWHEEL', '010 | 1122101010 | PISTON; ENG | qty:6');
+    const INJ   = eng('080 - INJECTION PUMP', '001 | 1156034530 | PUMP ASM; INJ | qty:1');
+    const GOV   = eng('081 - GOVERNOR; INJECTION PUMP', '001 | 1156600000 | GOVERNOR ASM | qty:1');
+    const BLOCK = eng('012 - CYLINDER BLOCK', '056 | 1133421322 | JET; OIL,PISTON COOLING | qty:6');
+    const ALL = [BLOCK, GOV, INJ, CRANK];
+    const EMB = { embed: async () => new Array(3072).fill(0.01) };
+
+    const calls = [];
+    const { d } = mockDeps([[]], { supabase: fakeSupabase(ALL, calls), ...EMB });
+    const rows = await runWithDeps(d, () => engineSectionRows('piston, connecting rod, main bearing, injection pump part number', 'ZX200-5G'));
+    const titles = rows.map(r => r.content.split('\n')[0]);
+    t(titles.length === 2 && titles.includes(CRANK.content.split('\n')[0]) && titles.includes(INJ.content.split('\n')[0]),
+      `piston/conrod/bearing/injection pump -> section 015 + 080 saja (${titles.join(' ; ')})`);
+    t(calls.some(c => c[0] === 'filter' && c[2] === 'imatch' && c[3].startsWith('^Section:')), 'dicari lewat judul section (imatch berlabuh di baris Section:)');
+    t((await runWithDeps(d, () => engineSectionRows('piston', 'ZX65USB-5A'))).length === 0, 'model tanpa Engine Parts Catalog -> tidak mencari');
+    t((await runWithDeps(d, () => engineSectionRows('harga filter oli', 'ZX200-5G'))).length === 0, 'pertanyaan tanpa komponen engine -> tidak ada section dipasang');
+
+    const history = [
+      { role: 'user', content: '' },
+      { role: 'assistant', content: 'Dari foto overhaul engine:\n1. **Piston & Connecting Rod Assembly** (6 set)\n2. **Main Bearing & Conrod Bearing Set**\n4. **Supply Pump / Fuel Injection Pump Assembly**\n| 008 | `1090004692` | BOLT; BRG CAP | 14 |' },
+    ];
+    const { d: d2 } = mockDeps([[]], { supabase: fakeSupabase(ALL), ...EMB });
+    const r = await runWithDeps(d2, () => resolvePartsQuery('Cek lagi listkn sesuai yg d meja', history, 'ZX200-5G', () => {}, 'engine overhaul parts list'));
+    t(r.type === 'rag_found' && r.content.includes('015 - CRANKSHAFT') && r.content.includes('080 - INJECTION PUMP') && !r.content.includes('012 - CYLINDER BLOCK'),
+      'susulan "Cek lagi listkn sesuai yg d meja" -> section piston & injection pump dari jawaban sebelumnya (sesi bf36d44f)');
+    const neg = await runWithDeps(d2, () => resolvePartsQuery('harga filter oli brp', history, 'ZX200-5G', () => {}, 'engine oil filter price'));
+    t(neg.type !== 'rag_found' || !neg.content.includes('015 - CRANKSHAFT'), 'pertanyaan baru yang tidak merujuk ke belakang -> komponen jawaban lama tidak ikut');
   }
 
   return done();

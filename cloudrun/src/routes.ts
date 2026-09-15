@@ -85,9 +85,9 @@ export async function extractImageFacts(imageParts: InlineDataPart[]): Promise<{
   const SYS_PROMPT = `Baca foto komponen/area alat berat Hitachi/KCM untuk pencarian katalog.
 Output TEPAT 2 baris:
 PN: <part number yang tercetak jelas di label/nameplate, dipisah koma, atau NONE>
-COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog, 2-6 kata, atau NONE>
+COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog, 2-6 kata; beberapa komponen berbeda → maks 4 dipisah koma; atau NONE>
 - PN hanya yang berlabel P/N, PART NO, atau jelas berformat part number (mis. YA00002098, 4651654). JANGAN tulis serial number, tanggal, barcode, fault code, atau nomor yang ragu dibaca.
-- COMPONENT contoh: "hydraulic main pump regulator", "fuse relay box controller", "swing motor", "air cleaner element". Foto bukan komponen alat berat → NONE.`;
+- COMPONENT contoh: "hydraulic main pump regulator", "fuse relay box controller", "swing motor", "piston, connecting rod, main bearing, injection pump". Foto bukan komponen alat berat → NONE.`;
   const res = await callProxy({
     contents: [{ role: 'user', parts: [...imageParts, { text: 'Isi dua baris PN dan COMPONENT untuk foto ini.' }] }],
     systemInstruction: { parts: [{ text: SYS_PROMPT }] },
@@ -97,7 +97,7 @@ COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog
   const pnLine = raw.match(/PN:\s*(.*)/i)?.[1]?.trim() ?? '';
   const compLine = raw.match(/COMPONENT:\s*(.*)/i)?.[1]?.trim() ?? '';
   const pns = /^none$/i.test(pnLine) ? [] : pnLine.split(',').map(c => extractPartNumber(c)).filter((c): c is string => !!c);
-  const component = /^none$/i.test(compLine) ? '' : compLine.replace(/[^\p{L}\p{N} /-]/gu, '').trim().slice(0, 60);
+  const component = /^none$/i.test(compLine) ? '' : compLine.replace(/[^\p{L}\p{N} ,/-]/gu, '').trim().slice(0, 90);
   return { pns: [...new Set(pns)].slice(0, 3), component };
 }
 
@@ -280,6 +280,8 @@ export function extractCpmPartsForInterval(content: string, hours: number): stri
   return parts.join('\n');
 }
 
+const REFERS_BACK_RE = /\b(?:ini|itu|tsb|tersebut|tadi|td|di\s*atas|d\s*atas|yg\s*d\w*|yang\s+di|sesuai|semua|smua|lagi|lg|list\w*|daftar\w*)\b/i;
+
 export async function resolvePartsQuery(
   trimmed: string,
   history: Message[],
@@ -307,10 +309,14 @@ export async function resolvePartsQuery(
     }
   }
 
+  const prevAnswer = REFERS_BACK_RE.test(trimmed)
+    ? ([...history].reverse().find(m => m.role !== 'user')?.content ?? '')
+        .split('\n').filter(l => !l.trim().startsWith('|')).join('\n').slice(0, 800)
+    : '';
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
   const ragResult = intervalHours
     ? await searchServiceIntervalParts(searchQuery, model)
-    : await searchPartsCatalog(searchQuery, model, usedOptimized);
+    : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
 
   if (!ragResult.hasResults) {

@@ -5,6 +5,7 @@ export { MODEL_CHAIN } from '../src/vertex';
 export { scrubLeaks, generateResponse } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
 export { isCasualExact, docKategoriFor, resolvePartsQuery } from '../src/routes';
-export { exactPartRows, findPerformanceStandard } from '../src/rag';
+export { exactPartRows, findPerformanceStandard, engineSectionRows, searchPartsCatalog } from '../src/rag';
+export { STREAM_LONG_NOTE } from '../src/stream';
 export { historyToContents } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate } from '../src/templates';
