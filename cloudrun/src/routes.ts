@@ -81,20 +81,24 @@ Rules:
   return raw.split(',').map(c => c.trim()).filter(Boolean);
 }
 
-export async function extractPartNumbersFromImage(imageParts: InlineDataPart[]): Promise<string[]> {
-  const SYS_PROMPT = `OCR part number untuk label/nameplate/stiker komponen alat berat Hitachi/KCM.
-Output 1 baris: part number dipisah koma, atau "NONE".
-- Hanya nomor berlabel P/N, PART NO, atau yang jelas berformat part number (mis. YA00002098, 4651654).
-- JANGAN tulis serial number, tanggal, barcode, fault code, atau nomor yang ragu dibaca.`;
+export async function extractImageFacts(imageParts: InlineDataPart[]): Promise<{ pns: string[]; component: string }> {
+  const SYS_PROMPT = `Baca foto komponen/area alat berat Hitachi/KCM untuk pencarian katalog.
+Output TEPAT 2 baris:
+PN: <part number yang tercetak jelas di label/nameplate, dipisah koma, atau NONE>
+COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog, 2-6 kata, atau NONE>
+- PN hanya yang berlabel P/N, PART NO, atau jelas berformat part number (mis. YA00002098, 4651654). JANGAN tulis serial number, tanggal, barcode, fault code, atau nomor yang ragu dibaca.
+- COMPONENT contoh: "hydraulic main pump regulator", "fuse relay box controller", "swing motor", "air cleaner element". Foto bukan komponen alat berat → NONE.`;
   const res = await callProxy({
-    contents: [{ role: 'user', parts: [...imageParts, { text: 'Tulis part number yang tercetak jelas di foto ini. Format: comma-separated atau NONE.' }] }],
+    contents: [{ role: 'user', parts: [...imageParts, { text: 'Isi dua baris PN dan COMPONENT untuk foto ini.' }] }],
     systemInstruction: { parts: [{ text: SYS_PROMPT }] },
-    generationConfig: { maxOutputTokens: 60, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+    generationConfig: { maxOutputTokens: 80, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
   }, false, INTENT_MODEL);
-  const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-  if (!raw || raw.toUpperCase() === 'NONE') return [];
-  const found = raw.split(',').map(c => extractPartNumber(c)).filter((c): c is string => !!c);
-  return [...new Set(found)].slice(0, 3);
+  const raw = getText(res.candidates?.[0]?.content?.parts ?? []);
+  const pnLine = raw.match(/PN:\s*(.*)/i)?.[1]?.trim() ?? '';
+  const compLine = raw.match(/COMPONENT:\s*(.*)/i)?.[1]?.trim() ?? '';
+  const pns = /^none$/i.test(pnLine) ? [] : pnLine.split(',').map(c => extractPartNumber(c)).filter((c): c is string => !!c);
+  const component = /^none$/i.test(compLine) ? '' : compLine.replace(/[^\p{L}\p{N} /-]/gu, '').trim().slice(0, 60);
+  return { pns: [...new Set(pns)].slice(0, 3), component };
 }
 
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {

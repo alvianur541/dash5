@@ -52,17 +52,36 @@ module.exports = async function () {
     t(r.type === 'rag_canned' && r.text.includes('**4651654**') && !r.text.includes('Bukanny'), 'balasan tidak-ketemu menyebut PN, bukan seluruh kalimat');
   }
 
-  {
+  const photo = async (caption, scanText) => {
     const events = [];
     const gen = async (body) => {
       const sys = body?.systemInstruction?.parts?.[0]?.text ?? '';
-      const text = sys.includes('OCR part number') ? 'P/N YA00002098' : 'NONE';
+      const text = sys.includes('COMPONENT:') ? scanText : 'NONE';
       return { candidates: [{ content: { parts: [{ text }] } }], usageMetadata: USAGE };
     };
-    const { d } = mockDeps([[{ text: 'Harga YA00002098 ...', usageMetadata: USAGE, live: true, finishReason: 'STOP' }]], { generate: gen });
-    await runWithDeps(d, () => generateResponse('ZX200-5G', 'Alvianur', [], 'Hrgany brpa ini', [{ mimeType: 'image/jpeg', data: '/9j/AAAA' }], () => {}, e => events.push(e)));
-    t(events.some(e => e.type === 'thinking' && /YA00002098/.test(e.message || '')), 'PN dari label foto terbaca');
-    t(events.some(e => e.type === 'tool_call' && e.tool === 'search_parts_catalog'), 'foto label -> pencarian katalog parts dengan PN');
+    const { d } = mockDeps([[{ text: 'Jawaban ...', usageMetadata: USAGE, live: true, finishReason: 'STOP' }]], { generate: gen });
+    await runWithDeps(d, () => generateResponse('ZX200-5G', 'Alvianur', [], caption, [{ mimeType: 'image/jpeg', data: '/9j/AAAA' }], () => {}, e => events.push(e)));
+    const thinking = events.filter(e => e.type === 'thinking').map(e => e.message || '');
+    const partsCalls = events.filter(e => e.type === 'tool_call' && e.tool === 'search_parts_catalog').length;
+    return { thinking, partsCalls };
+  };
+
+  {
+    const r = await photo('Hrgany brpa ini', 'PN: P/N YA00002098\nCOMPONENT: engine controller');
+    t(r.thinking.some(m => /YA00002098/.test(m)), 'PN dari label foto terbaca');
+    t(r.partsCalls >= 1, 'foto label -> pencarian katalog parts dengan PN');
+  }
+  {
+    const r = await photo('Crikan part number ini', 'PN: NONE\nCOMPONENT: hydraulic main pump regulator');
+    t(r.thinking.some(m => /hydraulic main pump regulator/.test(m)) && r.partsCalls === 1, 'tanpa PN: katalog dicari pakai nama komponen di foto (sesi afacc06c)');
+  }
+  {
+    const r = await photo('Crikan part number ini', 'PN: 9318792\nCOMPONENT: hydraulic main pump regulator');
+    t(r.partsCalls === 2 && r.thinking.some(m => /hydraulic main pump/.test(m)), 'PN foto tidak ada di katalog -> lanjut cari pakai nama komponen');
+  }
+  {
+    const r = await photo('Cek', 'PN: NONE\nCOMPONENT: NONE');
+    t(r.partsCalls === 0, 'foto bukan komponen + keterangan pendek -> tidak mencari');
   }
 
   return done();
