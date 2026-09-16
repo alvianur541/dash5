@@ -351,11 +351,16 @@ app.get('/metrics', (_req, res) => {
   const perUnit = {};
   const perRoute = {};
   let biaya = 0, tokenIn = 0, tokenOut = 0, fallback = 0, degraded = 0;
+  const sebabFallback = {};
   for (const x of r) {
     perUnit[x.unit] = (perUnit[x.unit] || 0) + 1;
     perRoute[x.route] = (perRoute[x.route] || 0) + 1;
     biaya += x.cost; tokenIn += x.in; tokenOut += x.out;
-    if (x.fallback) fallback++;
+    if (x.fallback) {
+      fallback++;
+      const s = x.sebabFallback || 'lain';
+      sebabFallback[s] = (sebabFallback[s] || 0) + 1;
+    }
     if (x.degraded) degraded++;
   }
   const menit = Math.max(1, Math.min(15, (Date.now() - _stat.mulai) / 60000));
@@ -375,6 +380,7 @@ app.get('/metrics', (_req, res) => {
     },
     kualitas: {
       fallback_model: fallback,
+      fallback_sebab: sebabFallback,
       rerank_degraded: degraded,
       error: e.length,
       error_terakhir: e.slice(-3).map(x => ({ sebab: x.sebab, unit: x.unit, menit_lalu: Math.round((Date.now() - x.t) / 60000) })),
@@ -824,7 +830,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       deps.usage.input, deps.usage.output + deps.usage.thinking, deps.usage.calls,
       biaya.toFixed(5),
       m.degraded ? ' degraded=1' : '',
-      m.fallbackTo ? ` fallback=${m.fallbackTo}` : '');
+      m.fallbackTo ? ` fallback=${m.fallbackTo}${m.fallbackSebab ? `(${m.fallbackSebab})` : ''}` : '');
     catatPemakaian(req, {
       requestId, userName, unit, usage: deps.usage, meta: m,
       ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId : null,
@@ -832,7 +838,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     catatStat(_stat.req, {
       t: Date.now(), ttft, total: totalMs, unit, route: m.route || '-',
       in: deps.usage.input, out: deps.usage.output + deps.usage.thinking,
-      cost: biaya, fallback: !!m.fallbackTo, degraded: m.degraded === true,
+      cost: biaya, fallback: !!m.fallbackTo, sebabFallback: m.fallbackSebab || null, degraded: m.degraded === true,
     });
     sseWrite(res, 'meta', {
       usage: deps.usage,

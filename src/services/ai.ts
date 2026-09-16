@@ -88,6 +88,7 @@ interface AskBody {
   userInput: string;
   think?: ThinkLevel;
   attachments?: Array<{ mimeType: string; data: string }>;
+  sessionId?: string;
 }
 
 const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali ini (respons server terlalu lama). Kirim ulang pertanyaanmu.';
@@ -176,6 +177,7 @@ export async function generateResponseStream(
   userInput: string,
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
+  sessionId?: string,
 ): Promise<string> {
   const trimmed = userInput.trim();
   const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed, history);
@@ -188,7 +190,7 @@ export async function generateResponseStream(
   }
 
   const { text, cacheable } = await ask(
-    { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined },
+    { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, sessionId },
     onChunk, onAgentEvent,
   );
   if (cacheKey && cacheable) writeAnswerCache(cacheKey, text);
@@ -218,6 +220,7 @@ export async function generateResponse(
   attachments: File[],
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
+  sessionId?: string,
 ): Promise<string> {
   const settled = await Promise.allSettled(attachments.map(fileToInline));
   const images = settled
@@ -226,7 +229,7 @@ export async function generateResponse(
   if (images.length === 0) return 'Maaf, gagal membaca file gambar.';
 
   const { text } = await ask(
-    { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined },
+    { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined, sessionId },
     onChunk, onAgentEvent,
   );
   return text;

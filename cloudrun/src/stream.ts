@@ -24,6 +24,11 @@ export const STREAM_HALT_NOTE =
 export const STREAM_LONG_NOTE =
   '\n\n> ⚠️ Daftarnya terlalu panjang dan terpotong di sini. Ketik "lanjutkan", atau sebut section/komponen yang dicari supaya daftarnya lebih pendek.';
 
+function catatSebab(sebab: string): void {
+  // First cause only — that is what made the primary model fail.
+  try { const m = deps().meta; if (!m.fallbackSebab) m.fallbackSebab = sebab; } catch { /* di luar konteks */ }
+}
+
 function pastDeadline(): boolean {
   const at = deps().deadlineAt;
   return typeof at === 'number' && Date.now() > at - 5_000;
@@ -126,6 +131,7 @@ export async function callProxyStream(
   if (quotaFull) {
     if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[fallback] %s 429 (kapasitas penuh) — pindah model', modelUsed);
+      catatSebab('429');
       continue;
     }
     throw new Error('KUOTA_PENUH');
@@ -145,6 +151,7 @@ export async function callProxyStream(
       onChunk(STREAM_CUT_NOTE);
     } else if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] upstream gagal (%s) — percobaan %d/%d, pindah model', upstreamError, attempt, MAX_ATTEMPT);
+      catatSebab('error');
       await tunggu(300);
       retryNeeded = true;
     } else {
@@ -154,11 +161,13 @@ export async function callProxyStream(
 
   if (!retryNeeded && !firstTokenSeen && !fullText.trim() && !upstreamError && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, pindah model', attempt, MAX_ATTEMPT);
+    catatSebab('hang');
     await tunggu(300);
     continue;
   }
   if (!retryNeeded && !upstreamError && !usageBox.last && !looksComplete(fullText) && attempt < MAX_ATTEMPT && !pastDeadline()) {
     console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
+    catatSebab('sepotong');
     if (fullText) onChunk('\n\n');
     await tunggu(attempt * 900);
     continue;
@@ -171,6 +180,7 @@ export async function callProxyStream(
   } else if (!retryNeeded && !upstreamError && finishReason && finishReason !== 'STOP') {
     if (attempt < MAX_ATTEMPT && !pastDeadline()) {
       console.warn('[stream] finishReason=%s setelah %d huruf — percobaan %d/%d, ulangi', finishReason, fullText.trim().length, attempt, MAX_ATTEMPT);
+      catatSebab('finish');
       if (fullText) onChunk('\n\n');
       await tunggu(attempt * 900);
       continue;

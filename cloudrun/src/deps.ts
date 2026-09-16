@@ -17,7 +17,7 @@ export interface Deps {
   meta: {
     modelUsed?: string;
     cacheable?: boolean; route?: string; label?: string; confidence?: string; degraded?: boolean;
-    msRag?: number; msRerank?: number; topScore?: number; fallbackTo?: string;
+    msRag?: number; msRerank?: number; topScore?: number; fallbackTo?: string; fallbackSebab?: string;
     chunks?: Array<{ kind: string; model: string; kategori: string; section: string; score?: number }>;
   };
   deadlineAt?: number;

@@ -96,5 +96,29 @@ module.exports = async function () {
     t(calls() === 1 && models[0] === MODEL_CHAIN[0], 'MAX_TOKENS: tidak diulang, tidak pindah ke model cadangan');
     t(r.endsWith(STREAM_LONG_NOTE) && out.includes(STREAM_LONG_NOTE) && !r.includes(STREAM_HALT_NOTE), 'MAX_TOKENS: catatan "terlalu panjang" ditambahkan, bukan HALT'); }
 
+  { const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === '429', `sebab fallback 429 tercatat (${d.meta.fallbackSebab})`); }
+
+  { const { d } = mockDeps([[{ live: true }], stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === 'hang', `sebab fallback hang tercatat (${d.meta.fallbackSebab})`); }
+
+  { const { d } = mockDeps([[{ text: POTONG, live: true }], stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === 'sepotong', `sebab fallback sepotong tercatat (${d.meta.fallbackSebab})`); }
+
+  { const { d } = mockDeps([[{ text: POTONG, usageMetadata: USAGE, live: true, finishReason: 'SAFETY' }], stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === 'finish', `sebab fallback finish tercatat (${d.meta.fallbackSebab})`); }
+
+  { const { d } = mockDeps([stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === undefined, 'jawaban normal: tidak ada sebab fallback'); }
+
+  { const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], [{ text: POTONG, live: true }], stop(UTUH)]);
+    await run(d);
+    t(d.meta.fallbackSebab === '429', `sebab PERTAMA yang dipegang, bukan yang terakhir (${d.meta.fallbackSebab})`); }
+
   return done();
 };

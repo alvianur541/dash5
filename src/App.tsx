@@ -277,8 +277,8 @@ export default function App() {
 
     try {
       let fullText = attachments?.length
-        ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent)
-        : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent);
+        ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, sessionSnapshot)
+        : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, sessionSnapshot);
 
       if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
