@@ -5,7 +5,7 @@ const OFFER_SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 const offerKey = (uid: string) => `dash-passkey-offer-${uid}`;
 
 // Passkeys are bound to the RP ID configured in Supabase Auth; any other host would fail the ceremony.
-export function passkeyDomainOk(): boolean {
+function passkeyDomainOk(): boolean {
   const host = window.location.hostname;
   return host === RP_ID || host.endsWith(`.${RP_ID}`);
 }

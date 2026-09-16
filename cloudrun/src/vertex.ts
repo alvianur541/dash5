@@ -7,24 +7,12 @@ export const FALLBACK_MODELS: readonly string[] = (process.env.FALLBACK_MODELS ?
   .split(',').map(s => s.trim()).filter(s => s && s !== MODEL);
 export const MODEL_CHAIN: readonly string[] = [MODEL, ...FALLBACK_MODELS];
 
-interface TextPart            { text: string; thought?: boolean; thoughtSignature?: string }
-export interface InlineDataPart      { inlineData: { mimeType: string; data: string } }
-interface FunctionCallPart    { functionCall: { name: string; args: Record<string, unknown> }; thoughtSignature?: string }
-interface FunctionResponsePart { functionResponse: { name: string; response: Record<string, unknown> } }
+interface TextPart              { text: string; thought?: boolean }
+export interface InlineDataPart { inlineData: { mimeType: string; data: string } }
 
-export type Part = TextPart | InlineDataPart | FunctionCallPart | FunctionResponsePart;
+export type Part = TextPart | InlineDataPart;
 
 export interface VContent { role: 'user' | 'model'; parts: Part[] }
-
-export interface FunctionDeclaration {
-  name: string;
-  description: string;
-  parameters: {
-    type: 'object';
-    properties: Record<string, { type: string; description?: string; items?: { type: string } }>;
-    required?: string[];
-  };
-}
 
 export interface VRequest {
   contents: VContent[];
@@ -35,8 +23,6 @@ export interface VRequest {
     thinkingConfig?: { thinkingLevel: ThinkingLevel };
   };
   cachedContent?: string;
-  tools?: Array<{ functionDeclarations: FunctionDeclaration[] }>;
-  toolConfig?: { functionCallingConfig: { mode: 'AUTO' | 'ANY' | 'NONE' } };
 }
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';

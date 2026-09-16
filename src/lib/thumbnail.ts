@@ -3,7 +3,7 @@ const THUMB_QUALITY = 0.7;
 const THUMB_TIMEOUT_MS = 8000;
 
 // Stored in chat history (phone + Supabase), so kept small; the AI still receives the full photo.
-export function makeThumbnail(file: File): Promise<string | null> {
+function makeThumbnail(file: File): Promise<string | null> {
   return new Promise(resolve => {
     const url = URL.createObjectURL(file);
     const img = new Image();

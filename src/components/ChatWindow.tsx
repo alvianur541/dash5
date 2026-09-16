@@ -79,7 +79,7 @@ function ShareButton({ text }: { text: string }) {
   );
 }
 
-export function SessionSkeleton() {
+function SessionSkeleton() {
   return (
     <div className="chat-messages-list" aria-busy="true">
       <div className="msg-user"><div className="skeleton skeleton-user" /></div>
