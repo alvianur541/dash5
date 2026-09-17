@@ -8,7 +8,6 @@ setGlobalDispatcher(new Agent({
   connect: { timeout: 10_000 },
 }));
 
-
 const orch = require('./dist/orchestrator.cjs');
 const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
