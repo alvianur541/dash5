@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
@@ -8,10 +8,7 @@ import { PasskeyPrompt } from './components/PasskeyPrompt';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ModelSheet } from './components/ModelSheet';
 import { StatusBanner } from './components/StatusBanner';
-import { UnitModel, Message, SessionMeta } from './types';
-import { generateResponse, generateResponseStream, warmupProxy, type AgentEvent } from './services/ai';
-import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from './services/supabase';
-import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared } from './services/storage';
+import { UnitModel } from './types';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw, ChevronDown } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from './lib/utils';
@@ -19,306 +16,44 @@ import { useAuth } from './components/AuthProvider';
 import { useNetwork } from './hooks/useNetwork';
 import { useTheme } from './hooks/useTheme';
 import { usePocket } from './hooks/usePocket';
-import { makeThumbnails } from './lib/thumbnail';
-
-const FLUSH_INTERVAL = 40;
-const FLUSH_BATCH = 200;
-const SWIPE_MIN_DX = 70;
-const SWIPE_MAX_DY = 60;
-const SWIPE_MAX_MS = 600;
-const SWIPE_EDGE = 40;
-
-type Queued = { content: string; attachments?: File[] };
-
-function errorMessage(err: unknown): string {
-  const msg = (err as Error)?.message ?? '';
-  if (msg.includes('KUOTA_PENUH')) return 'Kuota AI sedang penuh (terlalu banyak permintaan berbarengan). Tunggu sekitar satu menit, lalu kirim ulang.';
-  if (msg.includes('Stream terputus')) return 'Koneksi ke AI terputus di tengah jalan. Coba kirim ulang pertanyaanmu.';
-  if (msg.includes('SERVER_DIAM')) return 'Server lama merespons (lebih dari 25 detik). Kirim ulang pertanyaanmu.';
-  return 'HTA tidak bisa dihubungi. Cek sinyal kamu, lalu coba lagi.';
-}
+import { useInputBarHeight } from './hooks/useInputBarHeight';
+import { useSwipeSidebar } from './hooks/useSwipeSidebar';
+import { useAppRefresh } from './hooks/useAppRefresh';
+import { useChat } from './hooks/useChat';
+import { useModelSwitch } from './hooks/useModelSwitch';
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
   const { isOnline, showOffline, showBackOnline } = useNetwork();
   const { theme, toggle: toggleTheme } = useTheme();
-  const [selectedModel, setSelectedModel] = useState<UnitModel>('ZX200-5G');
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const lastSentRef = useRef<{ content: string; attachments?: File[] } | null>(null);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => window.innerWidth < 768);
-  const [sessionList, setSessionList] = useState<SessionMeta[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
-  const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
-  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [modelSheet, setModelSheet] = useState(false);
-  const [switchConfirm, setSwitchConfirm] = useState<UnitModel | null>(null);
-  const [loadingSession, setLoadingSession] = useState(false);
-  const [queued, setQueued] = useState<Queued | null>(null);
+  const {
+    selectedModel, setSelectedModel,
+    messages, isTyping, isStreaming, error, setError, agentEvents,
+    sessionList, currentSessionId, loadingSession,
+    deleteConfirmId, setDeleteConfirmId, deleteAllConfirm, setDeleteAllConfirm,
+    mountedRef, messagesRef, lastSentRef, queued, setQueued,
+    stopStreaming, startNewSession, handleSelectSession,
+    confirmDelete, confirmDeleteAll, handleSendMessage,
+  } = useChat(user, isOnline);
 
-  const sessionIdRef = useRef<string | null>(null);
-  const messagesRef = useRef<Message[]>([]);
-  const mountedRef = useRef(true);
-  const abortStreamRef = useRef<AbortController | null>(null);
+  const onSwitchUnit = useCallback((model: UnitModel) => {
+    setSelectedModel(model);
+    startNewSession();
+  }, [setSelectedModel, startNewSession]);
+
+  const { modelSheet, setModelSheet, switchConfirm, setSwitchConfirm, handleSelectModel, confirmSwitch } =
+    useModelSwitch({ selected: selectedModel, hasMessages: messages.length > 0, onSwitch: onSwitchUnit });
+
+  const { isCollapsed: isSidebarCollapsed, setIsCollapsed: setIsSidebarCollapsed, onTouchStart, onTouchEnd } = useSwipeSidebar();
+  const { isRefreshing, refresh: handleRefresh } = useAppRefresh();
+
   const mainRef = useRef<HTMLElement | null>(null);
-  const swipeRef = useRef<{ x: number; y: number; t: number } | null>(null);
   const inputBarRef = useRef<HTMLDivElement | null>(null);
 
   const uid = user?.uid ?? null;
   const pocket = usePocket(uid, mountedRef);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    warmupProxy();
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
-  useEffect(() => { messagesRef.current = messages; }, [messages]);
-
-  useEffect(() => {
-    const bar = inputBarRef.current;
-    const host = mainRef.current;
-    if (!bar || !host) return;
-    const apply = () => host.style.setProperty('--input-bar-h', `${Math.ceil(bar.offsetHeight)}px`);
-    apply();
-    const ro = new ResizeObserver(apply);
-    ro.observe(bar);
-    return () => ro.disconnect();
-  }, [user]);
-
-  const stopStreaming = useCallback(() => {
-    abortStreamRef.current?.abort();
-    setIsTyping(false);
-    setIsStreaming(false);
-    setAgentEvents([]);
-  }, []);
-
-  const startNewSession = useCallback(() => {
-    abortStreamRef.current?.abort();
-    abortStreamRef.current = null;
-    setMessages([]);
-    setError(null);
-    setCurrentSessionId(null);
-    sessionIdRef.current = null;
-  }, []);
-
-  useEffect(() => {
-    if (!user) { setSessionList([]); return; }
-    setSessionList(loadSessionList(user.uid));
-    startNewSession();
-    fetchUserSessionList(user.uid).then(list => {
-      if (list === null || isSessionsCleared(user.uid)) return;
-      if (list.length > 0) {
-        setSessionList(list);
-        localStorage.setItem(listKey(user.uid), JSON.stringify(list));
-      } else {
-        deleteAllSessionData(user.uid, false);
-        setSessionList([]);
-      }
-    }).catch(() => {});
-  }, [user?.uid, startNewSession]);
-
-  const handleSelectModel = useCallback((model: UnitModel) => {
-    setModelSheet(false);
-    if (model === selectedModel) return;
-    if (messagesRef.current.length > 0) { setSwitchConfirm(model); return; }
-    setSelectedModel(model);
-    startNewSession();
-  }, [startNewSession, selectedModel]);
-
-  const confirmSwitch = useCallback(() => {
-    const model = switchConfirm;
-    setSwitchConfirm(null);
-    if (!model) return;
-    setSelectedModel(model);
-    startNewSession();
-  }, [switchConfirm, startNewSession]);
-
-  const handleSelectSession = useCallback(async (id: string) => {
-    if (!user) return;
-    abortStreamRef.current?.abort();
-    abortStreamRef.current = null;
-    const local = loadSessionData(user.uid, id);
-    setCurrentSessionId(id);
-    sessionIdRef.current = id;
-    if (local) {
-      setMessages(local.messages);
-      setSelectedModel(local.model);
-      setError(null);
-    } else {
-      setMessages([]);
-      setLoadingSession(true);
-    }
-    const remote = await fetchSessionData(id, user.uid);
-    if (!mountedRef.current || sessionIdRef.current !== id) return;
-    setLoadingSession(false);
-    if (remote) {
-      setMessages(remote.messages);
-      setSelectedModel(remote.model);
-      setError(null);
-    } else if (!local) {
-      setError('Gagal memuat percakapan ini. Coba lagi.');
-    }
-  }, [user]);
-
-  const confirmDelete = useCallback(() => {
-    const id = deleteConfirmId;
-    if (!id || !user) return;
-    setDeleteConfirmId(null);
-    setSessionList(deleteSessionData(user.uid, id));
-    deleteChatSession(id, user.uid);
-    if (sessionIdRef.current === id) startNewSession();
-  }, [deleteConfirmId, user, startNewSession]);
-
-  const confirmDeleteAll = useCallback(async () => {
-    if (!user) return;
-    setDeleteAllConfirm(false);
-    deleteAllSessionData(user.uid);
-    setSessionList([]);
-    startNewSession();
-    await deleteAllChatSessions(user.uid);
-  }, [user, startNewSession]);
-
-  const handleRefresh = useCallback(async () => {
-    if (isRefreshing) return;
-    setIsRefreshing(true);
-    try {
-      const reg = await navigator.serviceWorker?.getRegistration();
-      if (reg) {
-        await reg.update();
-        if (reg.waiting || reg.installing) {
-          await new Promise<void>(resolve => {
-            navigator.serviceWorker.addEventListener('controllerchange', () => resolve(), { once: true });
-            setTimeout(resolve, 3000);
-          });
-        }
-      }
-    } catch { }
-    window.location.reload();
-  }, [isRefreshing]);
-
-  const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
-    if (!user) return;
-    if (!navigator.onLine) { setQueued({ content, attachments }); return; }
-    lastSentRef.current = { content, attachments };
-
-    let sessionId = sessionIdRef.current;
-    if (!sessionId) {
-      sessionId = crypto.randomUUID();
-      setCurrentSessionId(sessionId);
-      sessionIdRef.current = sessionId;
-    }
-
-    const attachmentUrls = attachments?.length ? await makeThumbnails(attachments) : [];
-    const userMessage: Message = {
-      id: crypto.randomUUID(), role: 'user', content: content.trim(), timestamp: Date.now(), attachments: attachmentUrls,
-    };
-
-    const currentMessages = messagesRef.current;
-    const historyForAi = currentMessages.map(({ id, role, content, timestamp }) => ({ id, role, content, timestamp }));
-    setMessages(prev => [...prev, userMessage]);
-    setIsTyping(true);
-    setIsStreaming(true);
-    setError(null);
-    setAgentEvents([]);
-
-    const userName = (user.displayName || 'Operator').split(' ')[0];
-    const rawTitle = content.trim() || (attachmentUrls.length > 0 ? '[Gambar]' : 'New chat');
-    const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
-
-    const persist = (fullText: string) => {
-      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
-      const messagesForStorage = [...currentMessages, userMessage, assistantMessage];
-      saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
-      const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
-      setSessionList(prev => [newMeta, ...prev.filter(s => s.id !== sessionId)]);
-      saveOrUpdateChatSession(sessionId, user.uid, user.displayName || 'Operator', selectedModel, sessionTitle, messagesForStorage);
-    };
-
-    const assistantId = crypto.randomUUID();
-    const assistantTs = Date.now();
-    const sessionSnapshot = sessionId;
-    const streamCtrl = new AbortController();
-    abortStreamRef.current = streamCtrl;
-    let displayed = '';
-    let buffered = '';
-    let timerId: ReturnType<typeof setTimeout> | null = null;
-
-    const stillActive = () => mountedRef.current && sessionIdRef.current === sessionSnapshot && !streamCtrl.signal.aborted;
-    const upsertAssistant = (text: string) => setMessages(prev => {
-      const exists = prev.some(m => m.id === assistantId);
-      if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: text, timestamp: assistantTs }];
-      return prev.map(m => m.id === assistantId ? { ...m, content: text } : m);
-    });
-    const drip = () => {
-      timerId = null;
-      if (!stillActive() || !buffered.length) return;
-      const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
-      displayed += buffered.slice(0, size);
-      buffered = buffered.slice(size);
-      upsertAssistant(displayed);
-      if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
-    };
-    const onChunk = (chunk: string) => {
-      if (!stillActive()) return;
-      setIsTyping(false);
-      buffered += chunk;
-      if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
-    };
-    const onAgentEvent = (event: AgentEvent) => {
-      if (!stillActive()) return;
-      setAgentEvents(prev => [...prev, event]);
-    };
-
-    try {
-      let fullText = attachments?.length
-        ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, sessionSnapshot)
-        : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, sessionSnapshot);
-
-      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
-      if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
-      if (streamCtrl.signal.aborted) fullText = displayed + buffered;
-      if (!fullText.trim()) return;
-      upsertAssistant(fullText);
-      try { navigator.vibrate?.([12, 40, 12]); } catch { }
-      persist(fullText);
-    } catch (err) {
-      const e = err as Error;
-      if (e?.name === 'AbortError' || e?.message?.includes('abort')) return;
-      console.error('AI Error:', e?.message);
-      setError(errorMessage(err));
-    } finally {
-      setIsTyping(false);
-      setIsStreaming(false);
-    }
-  }, [user, selectedModel]);
-
-  useEffect(() => {
-    if (!isOnline || !queued) return;
-    const q = queued;
-    setQueued(null);
-    handleSendMessage(q.content, q.attachments);
-  }, [isOnline, queued, handleSendMessage]);
-
-  const onTouchStart = (e: React.TouchEvent) => {
-    const t = e.touches[0];
-    swipeRef.current = { x: t.clientX, y: t.clientY, t: Date.now() };
-  };
-  const onTouchEnd = (e: React.TouchEvent) => {
-    const s = swipeRef.current;
-    swipeRef.current = null;
-    if (!s || window.innerWidth >= 768) return;
-    const t = e.changedTouches[0];
-    const dx = t.clientX - s.x, dy = t.clientY - s.y;
-    if (Date.now() - s.t > SWIPE_MAX_MS || Math.abs(dy) > SWIPE_MAX_DY || Math.abs(dx) < SWIPE_MIN_DX) return;
-    if (dx > 0 && s.x < SWIPE_EDGE && isSidebarCollapsed) setIsSidebarCollapsed(false);
-    if (dx < 0 && !isSidebarCollapsed) setIsSidebarCollapsed(true);
-  };
+  useInputBarHeight(inputBarRef, mainRef, user);
 
   if (authLoading) {
     return (
