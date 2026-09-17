@@ -2,6 +2,13 @@ const express = require('express');
 
 const { setGlobalDispatcher, Agent } = require('undici');
 
+setGlobalDispatcher(new Agent({
+  keepAliveTimeout: 10_000,
+  keepAliveMaxTimeout: 10_000,
+  connect: { timeout: 10_000 },
+}));
+
+
 const orch = require('./dist/orchestrator.cjs');
 const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
@@ -11,12 +18,6 @@ const { cohereRerank, embedQuery, getAccessToken, vertexFetch } = require('./ser
 const registerTranscribe = require('./server/transcribe');
 
 const UNIT_MODELS = new Set(orch.UNIT_MODELS);
-
-setGlobalDispatcher(new Agent({
-  keepAliveTimeout: 10_000,
-  keepAliveMaxTimeout: 10_000,
-  connect: { timeout: 10_000 },
-}));
 
 const app = express();
 
