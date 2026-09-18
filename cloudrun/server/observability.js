@@ -84,31 +84,68 @@ function ringkasTanya(teks, jumlahGambar) {
   return tag + (bersih || '(tanpa teks)');
 }
 
+let kolomBaruGagal = 0;
+const COBA_LAGI_MS = 10 * 60_000;
+
+function barisPemakaian(req, d, pakaiKolomBaru) {
+  const dasar = {
+    user_name: d.userName,
+    user_nik: (req.authUser && req.authUser.email || '').split('@')[0] || null,
+    session_id: d.sessionId,
+    model: d.unit,
+    input_tokens: d.usage.input,
+    output_tokens: d.usage.output + d.usage.thinking,
+    llm_calls: d.usage.calls,
+    tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
+    cost_usd: Number(d.biaya.toFixed(6)),
+    cost_idr: Math.round(d.biaya * 16300),
+  };
+  if (!pakaiKolomBaru) return dasar;
+  return {
+    ...dasar,
+    ttft_ms: d.ttft || null,
+    total_ms: d.totalMs || null,
+    route: d.meta.route || null,
+    model_ai: d.meta.modelUsed || null,
+    confidence: d.meta.confidence || null,
+    fallback_to: d.meta.fallbackTo || null,
+    fallback_sebab: d.meta.fallbackSebab || null,
+    degraded: d.meta.degraded === true,
+    request_id: d.requestId || null,
+  };
+}
+
+async function kirimPemakaian(req, d, pakaiKolomBaru) {
+  return fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${req.authToken}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify(barisPemakaian(req, d, pakaiKolomBaru)),
+    signal: AbortSignal.timeout(5_000),
+  });
+}
+
 async function catatPemakaian(req, d) {
   if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken) return;
   try {
-    const r = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
-      method: 'POST',
-      headers: {
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${req.authToken}`,
-        'Content-Type': 'application/json',
-        Prefer: 'return=minimal',
-      },
-      body: JSON.stringify({
-        user_name: d.userName,
-        user_nik: (req.authUser && req.authUser.email || '').split('@')[0] || null,
-        session_id: d.sessionId,
-        model: d.unit,
-        input_tokens: d.usage.input,
-        output_tokens: d.usage.output + d.usage.thinking,
-        llm_calls: d.usage.calls,
-        tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
-        cost_usd: Number(d.biaya.toFixed(6)),
-        cost_idr: Math.round(d.biaya * 16300),
-      }),
-      signal: AbortSignal.timeout(5_000),
-    });
+    // Deployed before the migration: PostgREST rejects unknown columns with 400 — fall back, never drop the row.
+    const kolomBaru = Date.now() - kolomBaruGagal > COBA_LAGI_MS;
+    let r = await kirimPemakaian(req, d, kolomBaru);
+    if (!r.ok && r.status === 400 && kolomBaru) {
+      const teks = await r.text().catch(() => '');
+      if (/column|PGRST204/i.test(teks)) {
+        kolomBaruGagal = Date.now();
+        console.warn('[usage-log] kolom latensi belum ada di DB — jalankan migration 20260918; pakai kolom lama, coba lagi 10 mnt');
+        r = await kirimPemakaian(req, d, false);
+      } else {
+        console.warn('[usage-log] tolak rid=%s HTTP 400: %s', d.requestId, teks.slice(0, 200));
+        return;
+      }
+    }
     if (!r.ok) {
       const teks = await r.text().catch(() => '');
       console.warn('[usage-log] tolak rid=%s HTTP %d: %s', d.requestId, r.status, teks.slice(0, 200));
