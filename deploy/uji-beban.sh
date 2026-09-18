@@ -31,10 +31,14 @@ print(f"[1] Cek kedua model benar-benar menjawab (bukan cuma cepat gagal) ...")
 for m in (A, B):
     try:
         d = json.load(call(f"{BASE}/{m}:generateContent", {"contents": [{"role": "user", "parts": [{"text": "Balas: OK"}]}],
-                            "generationConfig": {"maxOutputTokens": 64, "thinkingConfig": {"thinkingLevel": "low"}}}))
-        parts = ((d.get("candidates") or [{}])[0].get("content") or {}).get("parts", [])
+                            "generationConfig": {"maxOutputTokens": 256, "thinkingConfig": {"thinkingLevel": "low"}}}))
+        c = (d.get("candidates") or [{}])[0]
+        parts = (c.get("content") or {}).get("parts", [])
         if not any(p.get("text", "").strip() and not p.get("thought") for p in parts):
-            print(f"  {m}: 200 tapi TANPA teks — uji dibatalkan"); sys.exit(1)
+            u = d.get("usageMetadata") or {}
+            print(f"  {m}: 200 tapi TANPA teks (finishReason={c.get('finishReason')}, "
+                  f"thinking={u.get('thoughtsTokenCount', 0)}, out={u.get('candidatesTokenCount', 0)}) — uji dibatalkan")
+            sys.exit(1)
         print(f"  {m}: OK")
     except urllib.error.HTTPError as e:
         print(f"  {m}: HTTP {e.code} — uji dibatalkan (model tidak tersedia)"); sys.exit(1)
@@ -48,8 +52,9 @@ question = ("Semua aktuator lemah saat oli panas, pump control pressure drop. Ap
 def one(m):
     body = {"systemInstruction": {"parts": [{"text": sys_text}]},
             "contents": [{"role": "user", "parts": [{"text": question}]}],
-            "generationConfig": {"maxOutputTokens": 256, "temperature": 0.3, "thinkingConfig": {"thinkingLevel": "low"}}}
+            "generationConfig": {"maxOutputTokens": 512, "temperature": 0.3, "thinkingConfig": {"thinkingLevel": "low"}}}
     t0 = time.time()
+    finish = None
     try:
         r = call(f"{BASE}/{m}:streamGenerateContent?alt=sse", body, timeout=120)
         hdr = time.time() - t0
@@ -61,10 +66,12 @@ def one(m):
                 j = json.loads(line[5:].strip())
             except Exception:
                 continue
-            for p in ((j.get("candidates") or [{}])[0].get("content") or {}).get("parts", []):
+            c = (j.get("candidates") or [{}])[0]
+            finish = c.get("finishReason") or finish
+            for p in (c.get("content") or {}).get("parts", []):
                 if p.get("text") and not p.get("thought"):
                     return {"ok": True, "hdr": hdr, "ttft": time.time() - t0}
-        return {"ok": False, "err": "stream selesai tanpa teks"}
+        return {"ok": False, "err": f"stream selesai tanpa teks (finishReason={finish})"}
     except urllib.error.HTTPError as e:
         return {"ok": False, "err": f"HTTP {e.code}"}
     except Exception as e:
