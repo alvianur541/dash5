@@ -51,24 +51,51 @@ const STALL_MS_STREAM_MIKIR  = 30_000;
 
 const STALL_MAX = 3;
 
+const BATAS_TOTAL_MS = 60_000;
+
+// Hedged: a slow connection is kept alive while a spare races it — the first header wins.
 async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
-  for (let i = 1; i <= STALL_MAX; i++) {
-    if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
-    const ctrl = new AbortController();
-    const teruskan = () => ctrl.abort();
-    if (signal) signal.addEventListener('abort', teruskan, { once: true });
-    const timer = setTimeout(() => ctrl.abort(), i < STALL_MAX ? stallMs : 60_000);
-    try {
-      return await fetch(url, { ...opts, signal: ctrl.signal });
-    } catch (err) {
-      if (signal && signal.aborted) throw err;
-      if (i === STALL_MAX) throw err;
-      console.warn('[upstream] %s macet >%d dtk — buka koneksi baru (%d/%d)',
-        label, stallMs / 1000, i, STALL_MAX);
-    } finally {
-      clearTimeout(timer);
-      if (signal) signal.removeEventListener('abort', teruskan);
-    }
+  if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
+  const ctrls = [];
+  const timers = [];
+  let selesai = false, jalan = 0, dikirim = 0, errTerakhir = null;
+  const batalSemua = () => { for (const c of ctrls) c.abort(); };
+  if (signal) signal.addEventListener('abort', batalSemua);
+
+  try {
+    return await new Promise((resolve, reject) => {
+      const tutup = (fn, nilai, menang) => {
+        if (selesai) return;
+        selesai = true;
+        for (const t of timers) clearTimeout(t);
+        for (const c of ctrls) if (c !== menang) c.abort();
+        fn(nilai);
+      };
+      const kirim = () => {
+        if (selesai || dikirim >= STALL_MAX) return;
+        const ke = ++dikirim;
+        jalan++;
+        const ctrl = new AbortController();
+        ctrls.push(ctrl);
+        if (ke > 1) console.warn('[upstream] %s macet >%d dtk — kirim koneksi cadangan (%d/%d)',
+          label, stallMs / 1000, ke, STALL_MAX);
+        fetch(url, { ...opts, signal: ctrl.signal }).then(
+          res => tutup(resolve, res, ctrl),
+          err => {
+            jalan--;
+            errTerakhir = err;
+            if (signal && signal.aborted) return tutup(reject, err);
+            if (jalan === 0) { if (dikirim >= STALL_MAX) tutup(reject, err); else kirim(); }
+          },
+        );
+        if (ke < STALL_MAX) timers.push(setTimeout(kirim, stallMs));
+      };
+      timers.push(setTimeout(
+        () => tutup(reject, errTerakhir || new Error('Upstream tidak menjawab')), BATAS_TOTAL_MS));
+      kirim();
+    });
+  } finally {
+    if (signal) signal.removeEventListener('abort', batalSemua);
   }
 }
 
