@@ -69,10 +69,13 @@ function verifyGrounding(answer: string, context: string): void {
 }
 
 const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*)\b/i;
+// Short but asking for a mechanism/procedure — brevity here removes the answer's substance.
+const WANTS_DETAIL_RE = /\b(?:cara\s*kerja|caranya|bagaimana|gimana|kenapa|knp|mengapa|jelas\w*|fungsi\w*|prosedur|urutan|langkah\w*|detail\w*|rinci\w*|analisa\w*|analisis)\b/i;
 
 export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
   return history.length >= 2 && trimmed.split(/\s+/).length <= 8
-    && !detectFaultCodeInQuery(trimmed).isFaultCode && !WANTS_LIST_RE.test(trimmed) && !REDO_RE.test(trimmed);
+    && !detectFaultCodeInQuery(trimmed).isFaultCode && !WANTS_LIST_RE.test(trimmed)
+    && !REDO_RE.test(trimmed) && !WANTS_DETAIL_RE.test(trimmed);
 }
 
 export async function generateResponseStream(
@@ -136,7 +139,7 @@ export async function generateResponseStream(
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
   const thinkingLevel: ThinkingLevel = 'low';
-  const isFollowUp = isShortFollowUp(trimmed, history);
+  const isFollowUp = !offer && isShortFollowUp(trimmed, history);
   const maxOutputTokens  = ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
   const followUpNote = isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab LANGSUNG intinya dalam ≤ 8 kalimat atau 1 tabel kecil. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'

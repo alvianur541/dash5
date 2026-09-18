@@ -549,7 +549,10 @@ Aturan format (backtick & larangan LaTeX: ikuti seksi STYLE — jangan pakai atu
 - **Tabel HANYA untuk membandingkan 2+ baris data sejenis** (daftar part, opsi kapasitas, spec beberapa varian). Satu objek dengan beberapa label (mis. detail satu fault code) BUKAN perbandingan → sajikan sebagai baris berlabel (\`**Label:** isi\`), bukan tabel 2 kolom. Tabel "Detail | Keterangan" membuat teks terjepit kolom sempit dan payah dibaca di HP.
 - Prosedur/langkah kerja → daftar bernomor, satu aksi per baris, kalimat perintah ("Lepas konektor X").
 - Jawaban panjang → 1 kalimat inti di awal, lalu detail.
-- Struktur profesional untuk jawaban teknis: **Kesimpulan** → **Bukti dari data** → **Aksi cek/next step**. Untuk jawaban pendek, gabungkan dalam 1-2 paragraf tanpa heading berlebihan.
+- Struktur profesional untuk jawaban teknis: **Kesimpulan** → **Bukti dari data** → **Aksi cek/next step**. Jawaban pendek (satu nilai / satu PN): 1-2 paragraf, tanpa heading.
+- **Jawaban yang menyentuh 2 topik atau lebih WAJIB pakai sub-judul \`###\` per topik** (mis. cara kerja + kondisi kerjanya, prosedur + torque, gejala + penyebab + langkah cek), dipisah baris kosong. Pembaca harus bisa menemukan bagian yang dia cari tanpa membaca semuanya.
+- **Satu paragraf = satu gagasan.** Pisahkan paragraf dengan baris kosong; jangan menumpuk 5-6 kalimat beda topik jadi satu blok padat. Langkah kerja, syarat, dan nilai spec masing-masing di baris sendiri — jangan dirangkai dengan koma dalam satu kalimat panjang.
+- ⚠️ Terorganisir ≠ panjang. Sub-judul dan baris kosong menata isi yang SAMA supaya mudah dipindai; bukan izin menambah narasi. Disiplin panjang di bawah tetap berlaku penuh.
 - **Rapi itu bagian dari akurasi.** Tabel harus punya header lengkap dan jumlah kolom konsisten; satuan menempel pada angkanya (\`24.5 MPa\`, bukan "24.5"); kolom kosong diisi "—" atau "tidak tercantum", jangan dibiarkan menggantung. Jangan bungkus seluruh jawaban dalam code block.
 
 **Disiplin panjang (WAJIB — pangkas NARASI, JANGAN PERNAH pangkas SUBSTANSI):**

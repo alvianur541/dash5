@@ -141,7 +141,23 @@ module.exports = async function () {
     t(manualTerms('main pump delivery pressure') === 'main pump delivery pressure', 'main pump tekanan tetap (manual memakai "MAIN PUMP" di situ)');
     const h2 = [{ role: 'user', content: 'Cek kan berat main pump' }, { role: 'assistant', content: 'Berat total main pump ...' }];
     t(!isShortFollowUp('Cari lebih dalam lagi', h2) && !isShortFollowUp('Cek lagi berapa total beratny', h2), '"cari lebih dalam" / "cek lagi" = cari ulang, tidak dipersingkat');
-    const { clampThinking } = require('./helpers.cjs');
+  }
+
+  {
+    const { isShortFollowUp, resolveAffirmative, FALLBACK_RESPONSE, clampThinking } = require('./helpers.cjs');
+    const h = [{ role: 'user', content: 'berat swing motor' }, { role: 'assistant', content: 'Berat swing motor 48 kg.' }];
+    t(!isShortFollowUp('klo anti drif fungsi dan cara kerjanya', h)
+      && !isShortFollowUp('kenapa bisa gitu', h)
+      && !isShortFollowUp('prosedur nya gimana', h)
+      && !isShortFollowUp('jelaskan singkat', h),
+      'susulan pendek yang MINTA PENJELASAN (cara kerja/kenapa/prosedur/jelaskan) -> TIDAK dipangkas 8 kalimat');
+    t(isShortFollowUp('klo yang 200 brpa', h) && isShortFollowUp('Brpa nilainy', h),
+      'susulan pendek minta satu angka -> tetap dipersingkat (ringkas memang benar di situ)');
+    const hTawar = [{ role: 'user', content: 'berat swing motor' },
+                    { role: 'assistant', content: ['Beratnya 48 kg.', '', 'Mau sekalian dicek urutan pelepasan atau torque mounting bautnya?'].join(String.fromCharCode(10)) }];
+    t(resolveAffirmative('oke', hTawar) !== null,
+      '"oke" dikenali menerima tawaran -> orchestrator memakai !offer, jadi batas 8 kalimat DILEWATI');
+    t(resolveAffirmative('brpa nilainy', hTawar) === null, 'pertanyaan biasa bukan penerimaan tawaran');
     const lvl = (m) => { const { d } = mockDeps([[]]); return runWithDeps(d, () => clampThinking({ contents: [], generationConfig: { thinkingConfig: { thinkingLevel: 'minimal' } } }, m)).generationConfig.thinkingConfig.thinkingLevel; };
     t(lvl('gemini-3.7-flash') === 'low' && lvl('gemini-3.8-flash') === 'low' && lvl('gemini-3.8-flash-preview') === 'low' && lvl('gemini-4.0-flash') === 'low',
       'thinking "minimal" dinaikkan ke "low" untuk 3.7, 3.8, dan versi sesudahnya');
