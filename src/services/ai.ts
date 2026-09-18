@@ -3,7 +3,8 @@ import { UnitModel, Message } from '../types';
 import { getAuthToken } from './supabase';
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
-export const ASK_IDLE_TIMEOUT_MS = 25_000;
+// Above the server deadline (120 s) so the server's own message wins instead of us guessing.
+export const ASK_IDLE_TIMEOUT_MS = 130_000;
 export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
 
 export interface AgentEvent {

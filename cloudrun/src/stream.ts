@@ -45,8 +45,8 @@ export async function callProxyStream(
   enableGoogleSearch = false,
 ): Promise<string> {
   const STREAM_TIMEOUT_MS = 90_000;
-  // Must exceed server.js stream stall retry (10 s/connection) so it reconnects before we switch model.
-  const FIRST_TOKEN_TIMEOUT_MS = 25_000;
+  // 45 s, not 25 — two stall retries burn 20 s, leaving the third connection no time to finish.
+  const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 
   const MAX_ATTEMPT = Math.max(3, MODEL_CHAIN.length);
   let attempt = 0;
