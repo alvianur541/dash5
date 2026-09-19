@@ -132,7 +132,7 @@ export function Sidebar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="fixed inset-0 bg-black/50 z-10 md:hidden"
+            className="vv-fill bg-black/50 z-10 md:hidden"
             onClick={onToggle}
           />
         )}
@@ -147,8 +147,8 @@ export function Sidebar({
         }
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className={cn(
-          "bg-[var(--bg-sidebar)] h-full flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
-          isMobile ? "fixed inset-y-0 left-0 shadow-2xl rounded-r-2xl" : "relative shrink-0"
+          "bg-[var(--bg-sidebar)] flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
+          isMobile ? "vv-side shadow-2xl rounded-r-2xl" : "relative shrink-0 h-full"
         )}
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
@@ -501,7 +501,7 @@ export function Sidebar({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
+                    className="vv-fill z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4"
                     onClick={() => { if (!pwLoading) { setShowChangePw(false); setPwNew(''); setPwConfirm(''); setPwError(null); setPwSuccess(false); } }}
                   >
                     <m.div

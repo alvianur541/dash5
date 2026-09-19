@@ -1089,3 +1089,7 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 /* Visible height from visualViewport (shrinks with the keyboard); 100% chain as fallback, never 100dvh. */
 #root { height: var(--app-h, 100%); }
+
+/* Full-screen fixed layers: iOS standalone reports a layout viewport taller than what is visible. */
+.vv-fill { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); }
+.vv-side { position: fixed; top: 0; left: 0; height: var(--app-h, 100%); }

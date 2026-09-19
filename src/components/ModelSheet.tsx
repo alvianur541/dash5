@@ -19,7 +19,7 @@ export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProp
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
+          className="vv-fill z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm"
           onClick={onClose}
         >
           <m.div

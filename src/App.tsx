@@ -57,7 +57,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center bg-[var(--bg-app)]">
+      <div className="vv-fill flex items-center justify-center bg-[var(--bg-app)]">
         <Loader2 className="w-10 h-10 text-[var(--accent-main)] animate-spin" />
       </div>
     );
