@@ -132,6 +132,9 @@ module.exports = async function () {
     t(isShortFollowUp('Brpa nilainy', h2) && isShortFollowUp('Knpa td bilang ngga ad', h2), 'susulan pendek -> diberi catatan "jawab langsung"');
     t(!isShortFollowUp('Coba listkn', h2) && !isShortFollowUp('Cek lg', h2) && !isShortFollowUp('Coba cari lagi', h2), 'minta daftar / cek ulang -> TIDAK dipersingkat');
     t(!isShortFollowUp('20115-2', h2) && !isShortFollowUp('Brpa nilainy', []), 'fault code atau pesan pertama -> bukan susulan');
+    const hSalam = [{ role: 'user', content: 'hei bro' }, { role: 'assistant', content: 'Malam, Alvianur! Lagi nanganin trouble apa?' }];
+    t(!isShortFollowUp('unitku ngga bisa start', hSalam) && !isShortFollowUp('Brpa nilainy', hSalam), 'sesudah salam saja -> pertanyaan pertama, bukan susulan (sesi e4e24d3f)');
+    t(!isShortFollowUp('unitku ngga bisa start', h2) && !isShortFollowUp('swing lambat', h2) && !isShortFollowUp('engine mati mendadak', h2), 'keluhan baru -> diagnosa penuh, tidak dipersingkat');
   }
 
   {

@@ -72,8 +72,18 @@ const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tam
 // Short but asking for a mechanism/procedure — brevity here removes the answer's substance.
 const WANTS_DETAIL_RE = /\b(?:cara\s*kerja|caranya|bagaimana|gimana|kenapa|knp|mengapa|jelas\w*|fungsi\w*|prosedur|urutan|langkah\w*|detail\w*|rinci\w*|analisa\w*|analisis)\b/i;
 
+// A new complaint is a fresh diagnosis, not a follow-up, even when it is short.
+const NEW_PROBLEM_RE = /\b(?:(?:ngga?k?|nggak|gak|ga|tidak|tdk|tak)\s+(?:bisa|mau|jalan|nyala|hidup|kuat)|mati\w*|mogok|macet|lambat|lemot|bocor|overheat\w*|panas|rusak|error|trouble|alarm|bunyi)\b/i;
+
+// "hei bro", "halo kak" — a greeting plus a filler word is still small talk.
+function isSmallTalk(s: string): boolean {
+  const words = s.trim().split(/\s+/);
+  return isCasualExact(s) || (words.length <= 3 && isCasualExact(words[0]));
+}
+
 export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
-  return history.length >= 2 && trimmed.split(/\s+/).length <= 8
+  const priorTalk = history.some(m => m.role === 'user' && !isSmallTalk(m.content));
+  return priorTalk && trimmed.split(/\s+/).length <= 8 && !NEW_PROBLEM_RE.test(trimmed)
     && !detectFaultCodeInQuery(trimmed).isFaultCode && !WANTS_LIST_RE.test(trimmed)
     && !REDO_RE.test(trimmed) && !WANTS_DETAIL_RE.test(trimmed);
 }
@@ -179,7 +189,7 @@ export async function generateResponseStream(
   const isFollowUp = !offer && isShortFollowUp(trimmed, history);
   const maxOutputTokens  = ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
   const followUpNote = isFollowUp && ragContent
-    ? '\n[Ini pertanyaan lanjutan pendek. Jawab LANGSUNG intinya dalam ≤ 8 kalimat atau 1 tabel kecil. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
+    ? '\n[Ini pertanyaan lanjutan pendek. Jawab intinya dalam ≤ 8 kalimat atau 1 tabel kecil; boleh diawali satu kalimat pengantar singkat yang natural. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
     : '';
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
