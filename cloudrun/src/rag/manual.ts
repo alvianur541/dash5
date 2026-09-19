@@ -11,7 +11,7 @@ const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
 
 const DEFAULT_TROUBLESHOOTING_KATEGORI = 'TECHNICAL MANUAL';
 
-function getTroubleshootingKategori(model: string): string {
+export function getTroubleshootingKategori(model: string): string {
   return TROUBLESHOOTING_KATEGORI_BY_MODEL[model] ?? DEFAULT_TROUBLESHOOTING_KATEGORI;
 }
 

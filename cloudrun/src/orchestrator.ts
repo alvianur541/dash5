@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori } from './rag';
 import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
@@ -76,6 +76,43 @@ export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
   return history.length >= 2 && trimmed.split(/\s+/).length <= 8
     && !detectFaultCodeInQuery(trimmed).isFaultCode && !WANTS_LIST_RE.test(trimmed)
     && !REDO_RE.test(trimmed) && !WANTS_DETAIL_RE.test(trimmed);
+}
+
+export const AC_CODE_RE = /^A\/?C\s*:?\s*(\d{1,2})$/i;
+
+// A bare 2-digit AC code matches unrelated tables; search with context, then require the code row itself.
+async function searchAcCode(code: string, num: string, model: UnitModel, topN: number): Promise<{ code: string; found: boolean; content: string }> {
+  const r = await searchTechnicalManualMulti([`air conditioner fault code ${num}`], model, topN, getTroubleshootingKategori(model));
+  const row = new RegExp(`(?:^|\n)\s*(?:Fault Code:\s*)?${num}\b`);
+  return { code, found: r.hasResults && row.test(r.content), content: r.content };
+}
+
+// A photographed parts list: look up every code exactly and name the misses, so none is called absent.
+export async function searchPhotoCodes(codes: string[], model: string, emit: AgentEventEmit): Promise<RagRouteResult | null> {
+  emit({ type: 'thinking', message: `Terbaca ${codes.length} kode part — mencari satu per satu…` });
+  emit({ type: 'tool_call', tool: 'search_parts_catalog' });
+  const hits = await Promise.all(codes.map(c => exactPartRows(c, model)));
+  const seen = new Set<string>();
+  const promo: string[] = [], other: string[] = [], missing: string[] = [];
+  codes.forEach((c, i) => {
+    if (!hits[i].length) missing.push(c);
+    for (const h of hits[i]) {
+      if (seen.has(h.content)) continue;
+      seen.add(h.content);
+      (/^PROMO/.test(h.metadata?.Kategori ?? '') ? promo : other).push(h.content);
+    }
+  });
+  emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 });
+  if (!seen.size) return null;
+  const miss = missing.length
+    ? `\n\n[KODE BELUM KETEMU DI PENCARIAN]\n${missing.join(', ')} — sebut "belum ketemu di pencarian"; JANGAN bilang kode ini tidak terdaftar / tidak ada di promo atau katalog.`
+    : '';
+  return {
+    type: 'rag_found',
+    content: `Kode part terbaca di foto: ${codes.join(', ')}\n\n` + [...promo, ...other].slice(0, 8).join('\n\n---\n\n') + miss,
+    dataLabel: 'DATA PARTS CATALOG & PROMO',
+    confidence: 'high',
+  };
 }
 
 export async function generateResponseStream(
@@ -220,6 +257,8 @@ export async function generateResponse(
       const perCodeTopN = faultCodes.length >= 3 ? 2 : 3;
       const settled = await Promise.allSettled(
         faultCodes.map(async code => {
+          const ac = code.match(AC_CODE_RE);
+          if (ac) return searchAcCode(code, ac[1], model, perCodeTopN);
           const terms = extractSearchTerms(code);
           let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
           let content = result.content;
@@ -277,9 +316,11 @@ export async function generateResponse(
       const q = userInput.trim();
       let ragBlock = '';
       const scan = await imageScan;
-      const imagePN = extractPartNumber(q) ? null : scan.pns[0] ?? null;
-      const partsAsk = isPartsQuery(q) || !!imagePN;
-      let route: RagRouteResult | null = null;
+      const codes = extractPartNumber(q) ? [] : scan.pns;
+      const listMode = codes.length >= 2 || (codes.length === 1 && extractPartNumber(codes[0]) !== codes[0]);
+      const imagePN = listMode ? null : codes[0] ?? null;
+      const partsAsk = isPartsQuery(q) || !!imagePN || listMode;
+      let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;
       if (imagePN) {
         emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
         route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit);

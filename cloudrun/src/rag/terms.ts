@@ -22,6 +22,14 @@ export function extractPartNumber(query: string): string | null {
   return match ? match[1].trim() : null;
 }
 
+const CATALOG_CODE_RE = /^(?:(?:HTC|HAP|MOHD)[A-Z0-9]{2,12}(?:-[A-Z]{1,3})?|SOS-IR|4S\d{5}[A-Z]{0,4}|(?:[A-Z]{1,3}\d{6,12}|\d{6,10})(?:-?[A-Z]{1,6}){1,2})$/;
+
+// Photo-only: lubricant and suffixed promo codes (HTCDH1C, 4249339-F) never match PART_NUMBER_RE.
+export function extractCatalogCode(token: string): string | null {
+  const t = token.toUpperCase().replace(/\s+/g, '').replace(/[.;:]+$/, '');
+  return CATALOG_CODE_RE.test(t) ? t : extractPartNumber(t);
+}
+
 export function extractSearchTerms(query: string): string[] {
   const trimmed = query.trim();
   if (isFaultCode(trimmed)) {

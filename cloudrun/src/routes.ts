@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, extractCatalogCode } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -62,7 +62,8 @@ Rules:
 - Tidak ada kode visible → "NONE"
 - Duplikat kode di image → list sekali saja
 - Ragu/tidak yakin baca → SKIP kode itu (better miss daripada salah baca)
-- Bukan fault code (mis. operating hour, tanggal, time) → JANGAN include`;
+- Bukan fault code (mis. operating hour, tanggal, time) → JANGAN include
+- Layar Air Conditioner / A/C menampilkan kode angka 1-2 digit (mis. 51) → tulis dengan awalan AC:, contoh "AC:51"`;
 
   const res = await callProxy({
     contents: [{
@@ -84,21 +85,21 @@ Rules:
 export async function extractImageFacts(imageParts: InlineDataPart[]): Promise<{ pns: string[]; component: string }> {
   const SYS_PROMPT = `Baca foto komponen/area alat berat Hitachi/KCM untuk pencarian katalog.
 Output TEPAT 2 baris:
-PN: <part number yang tercetak jelas di label/nameplate, dipisah koma, atau NONE>
+PN: <SEMUA part number / kode part yang tercetak jelas (label, nameplate, atau daftar/estimasi part), dipisah koma, maks 15, atau NONE>
 COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog, 2-6 kata; beberapa komponen berbeda → maks 4 dipisah koma; atau NONE>
-- PN hanya yang berlabel P/N, PART NO, atau jelas berformat part number (mis. YA00002098, 4651654). JANGAN tulis serial number, tanggal, barcode, fault code, atau nomor yang ragu dibaca.
+- PN hanya yang berlabel P/N, PART NO, atau jelas berformat part number (mis. YA00002098, 4651654), termasuk kode oli/pelumas/coolant (mis. HTCDH1C, HAPDH1P) dan kode bersufiks (mis. 4249339-F, YA00006560HP). JANGAN tulis serial number, tanggal, barcode, fault code, harga, qty, atau nomor yang ragu dibaca.
 - COMPONENT contoh: "hydraulic main pump regulator", "fuse relay box controller", "swing motor", "piston, connecting rod, main bearing, injection pump". Foto bukan komponen alat berat → NONE.`;
   const res = await callProxy({
     contents: [{ role: 'user', parts: [...imageParts, { text: 'Isi dua baris PN dan COMPONENT untuk foto ini.' }] }],
     systemInstruction: { parts: [{ text: SYS_PROMPT }] },
-    generationConfig: { maxOutputTokens: 80, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+    generationConfig: { maxOutputTokens: 400, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
   }, false, INTENT_MODEL);
   const raw = getText(res.candidates?.[0]?.content?.parts ?? []);
   const pnLine = raw.match(/PN:\s*(.*)/i)?.[1]?.trim() ?? '';
   const compLine = raw.match(/COMPONENT:\s*(.*)/i)?.[1]?.trim() ?? '';
-  const pns = /^none$/i.test(pnLine) ? [] : pnLine.split(',').map(c => extractPartNumber(c)).filter((c): c is string => !!c);
+  const pns = /^none$/i.test(pnLine) ? [] : pnLine.split(',').map(c => extractCatalogCode(c)).filter((c): c is string => !!c);
   const component = /^none$/i.test(compLine) ? '' : compLine.replace(/[^\p{L}\p{N} ,/-]/gu, '').trim().slice(0, 90);
-  return { pns: [...new Set(pns)].slice(0, 3), component };
+  return { pns: [...new Set(pns)].slice(0, 15), component };
 }
 
 async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
