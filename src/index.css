@@ -1086,6 +1086,10 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 }
 .dark-theme .sidebar-wordmark { filter: invert(1); }
 
+/* The logo artwork is made for a light ground; give it one in dark theme instead of recolouring it. */
+.login-logo { display: inline-flex; padding: 10px 16px; border-radius: 14px; }
+.dark-theme .login-logo { background: #FAF9F5; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35); }
+
 /* Visible height from visualViewport (shrinks with the keyboard); 100% chain as fallback, never 100dvh. */
 #root { height: var(--app-h, 100%); }
 

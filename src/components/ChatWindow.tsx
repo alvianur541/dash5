@@ -369,6 +369,7 @@ export function ChatWindow({
   }, [expandedTable]);
   const pinnedRef = useRef(true);
   const prevLenRef = useRef(0);
+  const firstIdRef = useRef<string | undefined>(undefined);
 
   const handleFeedback = (id: string, type: 'up' | 'down') => {
     setFeedback(prev => {
@@ -399,6 +400,10 @@ export function ChatWindow({
     if (!el) return;
     const lengthGrew = messages.length > prevLenRef.current;
     prevLenRef.current = messages.length;
+    if (messages[0]?.id !== firstIdRef.current) {
+      firstIdRef.current = messages[0]?.id;
+      pinnedRef.current = true;
+    }
     if (lengthGrew && messages[messages.length - 1]?.role === 'user') pinnedRef.current = true;
 
     if (pinnedRef.current) {
@@ -407,6 +412,17 @@ export function ChatWindow({
       setShowScrollBtn(el.scrollHeight - el.scrollTop - el.clientHeight > 120);
     }
   }, [messages, isTyping]);
+
+  const hasMessages = messages.length > 0;
+  useEffect(() => {
+    const el = scrollRef.current;
+    const list = el?.querySelector('.chat-messages-list');
+    if (!el || !list) return;
+    // Markdown loads lazily and grows the list after render; keep an opened chat on its latest answer.
+    const ro = new ResizeObserver(() => { if (pinnedRef.current) el.scrollTop = el.scrollHeight; });
+    ro.observe(list);
+    return () => ro.disconnect();
+  }, [hasMessages]);
 
   const isWelcome = messages.length === 0 && !isTyping && !loadingSession;
 
