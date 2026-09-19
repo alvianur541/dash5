@@ -88,20 +88,24 @@ export async function fetchSessionData(sessionId: string, userId: string): Promi
   };
 }
 
-export async function deleteChatSession(id: string, userId: string): Promise<void> {
-  if (!supabase) return;
+export async function deleteChatSession(id: string, userId: string): Promise<boolean> {
+  if (!supabase) return false;
   const { error } = await supabase.from('chat_sessions')
     .update({ deleted_at: new Date().toISOString() })
     .eq('id', id).eq('user_id', userId);
   if (error) console.error('Failed to delete chat session from Supabase:', error.message);
+  return !error;
 }
 
-export async function deleteAllChatSessions(userId: string): Promise<void> {
-  if (!supabase) return;
+// Only rows last touched before `before`, so a retry never deletes chats made after the clear.
+export async function deleteAllChatSessions(userId: string, before: number): Promise<boolean> {
+  if (!supabase) return false;
   const { error } = await supabase.from('chat_sessions')
     .update({ deleted_at: new Date().toISOString() })
-    .eq('user_id', userId).is('deleted_at', null);
+    .eq('user_id', userId).is('deleted_at', null)
+    .lte('updated_at', new Date(before).toISOString());
   if (error) console.error('Failed to delete all chat sessions from Supabase:', error.message);
+  return !error;
 }
 
 interface RemoteBookmark { message_id: string; model: string; question: string; answer: string; saved_at: string }
@@ -120,13 +124,14 @@ export async function fetchBookmarksRemote(userId: string): Promise<RemoteBookma
 export async function upsertBookmarkRemote(
   userId: string,
   b: { id: string; model: string; question: string; answer: string; savedAt: number },
-): Promise<void> {
-  if (!supabase) return;
+): Promise<boolean> {
+  if (!supabase) return false;
   const { error } = await supabase.from('bookmarks').upsert({
     user_id: userId, message_id: b.id, model: b.model, question: b.question,
     answer: b.answer, saved_at: new Date(b.savedAt).toISOString(),
   }, { onConflict: 'user_id,message_id' });
   if (error) console.warn('[bookmark] simpan remote gagal (offline?):', error.message);
+  return !error;
 }
 
 export async function deleteBookmarkRemote(userId: string, messageId: string): Promise<void> {

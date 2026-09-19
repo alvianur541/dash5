@@ -6,16 +6,6 @@ export const listKey    = (uid: string) => `dash-session-list-${uid}`;
 const dataKey           = (uid: string, id: string) => `dash-session-${uid}-${id}`;
 const clearedKey        = (uid: string) => `dash-cleared-${uid}`;
 
-const CLEARED_TTL_MS = 15_000;
-
-export const isSessionsCleared = (uid: string): boolean => {
-  const v = localStorage.getItem(clearedKey(uid));
-  if (!v) return false;
-  const ts = parseInt(v, 10);
-  if (!Number.isFinite(ts)) return false;
-  return Date.now() - ts < CLEARED_TTL_MS;
-};
-
 const MAX_EVICTION_ATTEMPTS = 5;
 
 function safeSetItem(key: string, value: string): void {
@@ -78,7 +68,6 @@ export function loadSessionData(uid: string, id: string): ChatSession | null {
 }
 
 export function saveSession(uid: string, id: string, model: UnitModel, messages: Message[], firstMessage: string): SessionMeta[] {
-  localStorage.removeItem(clearedKey(uid));
   const sessionData: ChatSession = { id, model, messages };
   safeSetItem(dataKey(uid, id), JSON.stringify(sessionData));
 
@@ -110,6 +99,7 @@ export interface PocketItem {
   question: string;
   answer: string;
   savedAt: number;
+  synced?: boolean;
 }
 
 const MAX_POCKET_ITEMS = 30;
@@ -141,12 +131,21 @@ export function replacePocket(uid: string, items: PocketItem[]): void {
   safeSetItem(pocketKey(uid), JSON.stringify(items.slice(0, MAX_POCKET_ITEMS)));
 }
 
-const tombKey = (uid: string) => `dash-pocket-del-${uid}`;
-const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+export function markPocketSynced(uid: string, id: string): void {
+  const list = loadPocket(uid);
+  const item = list.find(p => p.id === id);
+  if (!item || item.synced) return;
+  item.synced = true;
+  safeSetItem(pocketKey(uid), JSON.stringify(list));
+}
 
-export function loadPocketTombstones(uid: string): Record<string, number> {
+const TOMBSTONE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+const pocketTombKey = (uid: string) => `dash-pocket-del-${uid}`;
+const sessionTombKey = (uid: string) => `dash-session-del-${uid}`;
+
+function loadTomb(key: string): Record<string, number> {
   try {
-    const parsed = JSON.parse(localStorage.getItem(tombKey(uid)) || '{}');
+    const parsed = JSON.parse(localStorage.getItem(key) || '{}');
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
     const cutoff = Date.now() - TOMBSTONE_TTL_MS;
     const fresh: Record<string, number> = {};
@@ -159,22 +158,37 @@ export function loadPocketTombstones(uid: string): Record<string, number> {
   }
 }
 
-export function addPocketTombstone(uid: string, id: string): void {
-  const t = loadPocketTombstones(uid);
-  t[id] = Date.now();
-  safeSetItem(tombKey(uid), JSON.stringify(t));
+function addTomb(key: string, ids: string[]): void {
+  const t = loadTomb(key);
+  const now = Date.now();
+  ids.forEach(id => { t[id] = now; });
+  safeSetItem(key, JSON.stringify(t));
 }
+
+export const loadPocketTombstones = (uid: string) => loadTomb(pocketTombKey(uid));
+export const addPocketTombstone = (uid: string, id: string) => addTomb(pocketTombKey(uid), [id]);
 
 export function clearPocketTombstone(uid: string, id: string): void {
-  const t = loadPocketTombstones(uid);
+  const t = loadTomb(pocketTombKey(uid));
   if (!(id in t)) return;
   delete t[id];
-  safeSetItem(tombKey(uid), JSON.stringify(t));
+  safeSetItem(pocketTombKey(uid), JSON.stringify(t));
 }
 
-export function deleteAllSessionData(uid: string, setFlag = true): void {
+export const loadSessionTombstones = (uid: string) => loadTomb(sessionTombKey(uid));
+export const addSessionTombstones = (uid: string, ids: string[]) => addTomb(sessionTombKey(uid), ids);
+
+// Timestamp of a "delete all" the server has not confirmed yet; 0 when none is pending.
+export function pendingClearAt(uid: string): number {
+  const ts = parseInt(localStorage.getItem(clearedKey(uid)) || '', 10);
+  return Number.isFinite(ts) ? ts : 0;
+}
+
+export const setPendingClear = (uid: string, at: number) => localStorage.setItem(clearedKey(uid), String(at));
+export const clearPendingClear = (uid: string) => localStorage.removeItem(clearedKey(uid));
+
+export function deleteAllSessionData(uid: string): void {
   const list = loadSessionList(uid);
   list.forEach(s => localStorage.removeItem(dataKey(uid, s.id)));
   localStorage.removeItem(listKey(uid));
-  if (setFlag) localStorage.setItem(clearedKey(uid), String(Date.now()));
 }

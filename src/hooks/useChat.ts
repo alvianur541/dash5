@@ -2,7 +2,11 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { UnitModel, Message, SessionMeta } from '../types';
 import { generateResponse, generateResponseStream, warmupProxy, type AgentEvent } from '../services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from '../services/supabase';
-import { loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey, isSessionsCleared } from '../services/storage';
+import {
+  loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey,
+  loadSessionTombstones, addSessionTombstones, pendingClearAt, setPendingClear, clearPendingClear,
+} from '../services/storage';
+import { onForeground } from '../lib/onForeground';
 import { makeThumbnails } from '../lib/thumbnail';
 import { errorMessage } from '../lib/errorMessage';
 
@@ -29,6 +33,7 @@ export function useChat(user: User, isOnline: boolean) {
   const lastSentRef = useRef<{ content: string; attachments?: File[] } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
+  const sessionListRef = useRef<SessionMeta[]>([]);
   const mountedRef = useRef(true);
   const abortStreamRef = useRef<AbortController | null>(null);
 
@@ -40,6 +45,7 @@ export function useChat(user: User, isOnline: boolean) {
 
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
   useEffect(() => { messagesRef.current = messages; }, [messages]);
+  useEffect(() => { sessionListRef.current = sessionList; }, [sessionList]);
 
   const stopStreaming = useCallback(() => {
     abortStreamRef.current?.abort();
@@ -57,21 +63,38 @@ export function useChat(user: User, isOnline: boolean) {
     sessionIdRef.current = null;
   }, []);
 
+  const syncSessions = useCallback(async (uid: string) => {
+    const startedAt = Date.now();
+    const clearAt = pendingClearAt(uid);
+    if (clearAt) {
+      deleteAllChatSessions(uid, clearAt).then(ok => { if (ok && pendingClearAt(uid) === clearAt) clearPendingClear(uid); });
+    }
+    const list = await fetchUserSessionList(uid).catch(() => null);
+    if (list === null || !mountedRef.current) return;
+    // A delete-all made while this request was in flight makes its answer stale.
+    if (pendingClearAt(uid) > startedAt) return;
+    const tomb = loadSessionTombstones(uid);
+    const gone = (s: SessionMeta) => !!tomb[s.id] || (!!clearAt && s.updatedAt <= clearAt);
+    list.filter(s => tomb[s.id]).forEach(s => { deleteChatSession(s.id, uid); });
+    const live = list.filter(s => !gone(s));
+    if (live.length) localStorage.setItem(listKey(uid), JSON.stringify(live));
+    else deleteAllSessionData(uid);
+    const liveIds = new Set(live.map(s => s.id));
+    setSessionList(prev => [
+      ...prev.filter(s => s.updatedAt >= startedAt && !liveIds.has(s.id) && !tomb[s.id]),
+      ...live,
+    ]);
+  }, []);
+
   useEffect(() => {
     if (!user) { setSessionList([]); return; }
-    setSessionList(loadSessionList(user.uid));
+    const uid = user.uid;
+    const tomb = loadSessionTombstones(uid);
+    setSessionList(loadSessionList(uid).filter(s => !tomb[s.id]));
     startNewSession();
-    fetchUserSessionList(user.uid).then(list => {
-      if (list === null || isSessionsCleared(user.uid)) return;
-      if (list.length > 0) {
-        setSessionList(list);
-        localStorage.setItem(listKey(user.uid), JSON.stringify(list));
-      } else {
-        deleteAllSessionData(user.uid, false);
-        setSessionList([]);
-      }
-    }).catch(() => {});
-  }, [user?.uid, startNewSession]);
+    syncSessions(uid);
+    return onForeground(() => syncSessions(uid));
+  }, [user?.uid, startNewSession, syncSessions]);
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (!user) return;
@@ -104,7 +127,9 @@ export function useChat(user: User, isOnline: boolean) {
     const id = deleteConfirmId;
     if (!id || !user) return;
     setDeleteConfirmId(null);
-    setSessionList(deleteSessionData(user.uid, id));
+    addSessionTombstones(user.uid, [id]);
+    deleteSessionData(user.uid, id);
+    setSessionList(prev => prev.filter(s => s.id !== id));
     deleteChatSession(id, user.uid);
     if (sessionIdRef.current === id) startNewSession();
   }, [deleteConfirmId, user, startNewSession]);
@@ -112,10 +137,14 @@ export function useChat(user: User, isOnline: boolean) {
   const confirmDeleteAll = useCallback(async () => {
     if (!user) return;
     setDeleteAllConfirm(false);
-    deleteAllSessionData(user.uid);
+    const uid = user.uid;
+    const at = Date.now();
+    addSessionTombstones(uid, sessionListRef.current.map(s => s.id));
+    setPendingClear(uid, at);
+    deleteAllSessionData(uid);
     setSessionList([]);
     startNewSession();
-    await deleteAllChatSessions(user.uid);
+    if (await deleteAllChatSessions(uid, at) && pendingClearAt(uid) === at) clearPendingClear(uid);
   }, [user, startNewSession]);
 
   const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
@@ -148,6 +177,7 @@ export function useChat(user: User, isOnline: boolean) {
     const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
 
     const persist = (fullText: string) => {
+      if (loadSessionTombstones(user.uid)[sessionId]) return;
       const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
       const messagesForStorage = [...currentMessages, userMessage, assistantMessage];
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
