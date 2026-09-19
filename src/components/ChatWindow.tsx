@@ -479,7 +479,6 @@ export function ChatWindow({
                     gap: '9px',
                   }}
                 >
-                  <span>Unit aktif: <strong style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>{selectedModel}</strong></span>
                   <span>Ajukan pertanyaan fault code, part number, atau spesifikasi teknis.</span>
                 </m.div>
               </div>

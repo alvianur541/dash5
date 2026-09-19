@@ -527,7 +527,23 @@ img {
 }
 .topbar-center:hover { background: rgba(255,255,255,0.07); }
 .topbar-center:active { transform: translateX(-50%) scale(0.97); }
-.topbar-model-name { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; color: var(--text-primary); }
+.topbar-model-name {
+  font-size: 15px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+.topbar-model-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0;
+  background: var(--accent-main);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 18%, transparent),
+              0 0 10px color-mix(in srgb, var(--accent-main) 70%, transparent);
+  animation: unit-glow 2.8s ease-in-out infinite;
+}
+@keyframes unit-glow {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 18%, transparent), 0 0 8px color-mix(in srgb, var(--accent-main) 55%, transparent); }
+  50%      { box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent-main) 10%, transparent), 0 0 14px color-mix(in srgb, var(--accent-main) 85%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) { .topbar-model-dot { animation: none; } }
+.dark-theme .topbar-model-name { text-shadow: 0 0 14px color-mix(in srgb, var(--accent-main) 35%, transparent); }
 .topbar-newchat {
   width: 36px; height: 36px; border-radius: 50%; border: none;
   background: var(--accent-main); color: #fff;
