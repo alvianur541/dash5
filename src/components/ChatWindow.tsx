@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -65,18 +65,6 @@ function CodeSpan({ children }: { children?: ReactNode }) {
     try { await navigator.clipboard.writeText(text.trim()); toast('Disalin: ' + text.trim()); try { navigator.vibrate?.(6); } catch { } } catch { }
   };
   return <code className="code-copy" onClick={copy} role="button" tabIndex={0} title="Ketuk untuk salin">{children}</code>;
-}
-
-function ShareButton({ text }: { text: string }) {
-  if (typeof navigator === 'undefined' || !navigator.share) return null;
-  const share = async () => {
-    try { await navigator.share({ text: text.replace(CUT_NOTE_RE, '') }); } catch { }
-  };
-  return (
-    <button onClick={share} className="action-btn" title="Bagikan" aria-label="Bagikan">
-      <Share2 size={14} />
-    </button>
-  );
 }
 
 function SessionSkeleton() {
@@ -207,23 +195,6 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
   );
 });
 
-const CopyButton = memo(function CopyButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(text);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-  return (
-    <button onClick={handleCopy} className="action-btn" title="Copy">
-      {copied
-        ? <Check size={14} style={{ color: 'var(--status-success)' }} />
-        : <Copy size={14} />
-      }
-    </button>
-  );
-});
-
 const MessageItem = memo(function MessageItem({
   message, feedback, onFeedback, isStreaming = false, onExpandTable, inPocket = false, onTogglePocket, resendText, onResend,
 }: {
@@ -321,9 +292,6 @@ const MessageItem = memo(function MessageItem({
           )}
 
           <div className="ai-actions">
-            <CopyButton text={message.content} />
-            <ShareButton text={message.content} />
-            <span className="ai-actions-gap" />
             <button className="action-btn" title="Respons bagus"
               onClick={() => onFeedback(message.id, 'up')}>
               <ThumbsUp size={14}
