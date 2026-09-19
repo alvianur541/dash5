@@ -45,7 +45,7 @@ export default defineConfig(() => {
         },
         manifest: {
           name: 'Hexindo Technical Assistant',
-          short_name: 'HTA',
+          short_name: 'Dash⁵',
           description: 'AI-powered heavy equipment troubleshooting assistant for field technicians',
           lang: 'id',
           theme_color: '#1A1915',

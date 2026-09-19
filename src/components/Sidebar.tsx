@@ -178,7 +178,7 @@ export function Sidebar({
           <div className="px-3 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition-colors"
+              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--accent-main)] hover:text-[var(--accent-active)] transition-colors"
             >
               <Plus size={12} className="shrink-0" />
               <span>New Chat</span>
