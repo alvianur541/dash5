@@ -444,22 +444,13 @@ export function ChatWindow({
             transition={{ duration: 0.3 }}
             className="welcome-screen"
           >
-            <div style={{ width: '100%', maxWidth: '440px', display: 'flex', flexDirection: 'column', gap: '26px' }}>
-
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '9px', textAlign: 'center' }}>
+            <div className="welcome-inner">
+              <div className="welcome-stack">
                 <m.h1
                   className="welcome-greeting"
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
-                  style={{
-                    fontFamily: '"DM Serif Display", var(--font-serif)',
-                    fontSize: 'clamp(23px, 5.4vw, 29px)',
-                    fontWeight: 400,
-                    letterSpacing: '-0.01em',
-                    lineHeight: 1.16,
-                    color: 'var(--text-primary)',
-                  }}
                 >
                   {getGreeting({ name: userName || 'Operator' })}
                 </m.h1>
@@ -468,18 +459,8 @@ export function ChatWindow({
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.12 }}
-                  style={{
-                    fontSize: '13.5px',
-                    color: 'var(--text-muted)',
-                    letterSpacing: '-0.003em',
-                    lineHeight: 1.6,
-                    maxWidth: '380px',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '9px',
-                  }}
                 >
-                  <span>Ajukan pertanyaan fault code, part number, atau spesifikasi teknis.</span>
+                  Tanyakan <em>fault code</em>, <em>part number</em>, atau <em>spesifikasi teknis</em>.
                 </m.div>
               </div>
 
