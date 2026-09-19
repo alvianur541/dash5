@@ -282,6 +282,7 @@ const MessageItem = memo(function MessageItem({
                           title="Layar penuh"
                         >
                           <Maximize2 size={13} />
+                          <span>Layar penuh</span>
                         </button>
                       )}
                     </div>

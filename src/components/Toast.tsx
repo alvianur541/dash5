@@ -15,6 +15,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastCtx.Provider value={show}>
       {children}
+      <div className="toast-layer">
       <AnimatePresence>
         {msg && (
           <m.div
@@ -31,6 +32,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           </m.div>
         )}
       </AnimatePresence>
+      </div>
     </ToastCtx.Provider>
   );
 }

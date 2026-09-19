@@ -10,7 +10,11 @@ export function useInputBarHeight(
     const bar = barRef.current;
     const host = hostRef.current;
     if (!bar || !host) return;
-    const apply = () => host.style.setProperty('--input-bar-h', `${Math.ceil(bar.offsetHeight)}px`);
+    const apply = () => {
+      const h = `${Math.ceil(bar.offsetHeight)}px`;
+      host.style.setProperty('--input-bar-h', h);
+      document.documentElement.style.setProperty('--input-bar-h', h);
+    };
     apply();
     const ro = new ResizeObserver(apply);
     ro.observe(bar);
