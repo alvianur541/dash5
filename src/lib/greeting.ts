@@ -5,5 +5,5 @@ interface GreetingContext {
 }
 
 export function getGreeting({ name }: GreetingContext): string {
-  return `Asistenmu siap membantu, ${name}`;
+  return `Halo ${name}, mau cek apa?`;
 }

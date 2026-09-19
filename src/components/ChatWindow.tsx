@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw } from 'lucide-react';
+import { Copy, ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, Bookmark, BookmarkCheck, Share2, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -452,7 +452,8 @@ export function ChatWindow({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.4, delay: 0.04, ease: [0.22, 1, 0.36, 1] }}
                 >
-                  {getGreeting({ name: userName || 'Operator' })}
+                  <span>{getGreeting({ name: userName || 'Operator' })}</span>
+                  <span className="welcome-badge" aria-hidden="true"><MessageCircleMore className="welcome-badge-icon" strokeWidth={2} /></span>
                 </m.h1>
                 <m.div
                   className="welcome-subtitle"
@@ -460,7 +461,10 @@ export function ChatWindow({
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.3, delay: 0.12 }}
                 >
-                  Tanyakan <em>fault code</em>, <em>part number</em>, atau <em>spesifikasi teknis</em>.
+                  Tanya <em>fault code</em>, <em>part number</em>, <em>spesifikasi teknis</em>, atau kirim{' '}
+                  <button type="button" className="welcome-chip" onClick={() => window.dispatchEvent(new Event('hta:pick-photo'))}>
+                    <Camera size={13} strokeWidth={2.2} /> Foto monitor
+                  </button>.
                 </m.div>
               </div>
 

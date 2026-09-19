@@ -100,6 +100,12 @@ export function MessageInput({
   useEffect(() => () => { if (pendingImage) URL.revokeObjectURL(pendingImage.url); }, [pendingImage]);
 
   useEffect(() => {
+    const pick = () => { if (!disabled) fileInputRef.current?.click(); };
+    window.addEventListener('hta:pick-photo', pick);
+    return () => window.removeEventListener('hta:pick-photo', pick);
+  }, [disabled]);
+
+  useEffect(() => {
     if (recordingState !== 'recording') { setRecordSec(0); return; }
     const t = setInterval(() => setRecordSec(s => s + 1), 1000);
     return () => clearInterval(t);
