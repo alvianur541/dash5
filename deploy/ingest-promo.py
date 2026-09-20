@@ -49,9 +49,13 @@ def post(url, body, headers, timeout=180):
 
 def sql(query):
     """Jalankan SQL lewat Management API (token = SUPABASE_ACCESS_TOKEN)."""
-    token = os.environ.get('SUPABASE_ACCESS_TOKEN')
+    token = (os.environ.get('SUPABASE_ACCESS_TOKEN') or '').strip()
     if not token:
         mati('SUPABASE_ACCESS_TOKEN belum di-export.')
+    if not token.startswith('sbp_') or len(token) < 40:
+        mati(f'Token tidak berbentuk token Supabase ({len(token)} karakter, diawali {token[:4]!r}).\n'
+             'Tempelannya kemungkinan tidak masuk penuh. Ulangi:\n'
+             '  read -rs SUPABASE_ACCESS_TOKEN && export SUPABASE_ACCESS_TOKEN')
     return post(f'https://api.supabase.com/v1/projects/{PROJECT_REF}/database/query',
                 {'query': query}, {'Authorization': f'Bearer {token}'})
 
