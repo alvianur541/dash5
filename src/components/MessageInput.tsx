@@ -1,6 +1,6 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { ArrowUp, Paperclip, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
+import { ArrowUp, Camera, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -317,7 +317,7 @@ export function MessageInput({
                   title="Lampirkan gambar"
                   aria-label="Lampirkan gambar"
                 >
-                  <Paperclip size={18} />
+                  <Camera size={18} />
                 </button>
                 <input
                   ref={fileInputRef}
@@ -328,8 +328,6 @@ export function MessageInput({
                 />
               </>
             )}
-
-            <div className="flex-1" />
 
             {!isOffline && (
               <button
@@ -345,6 +343,8 @@ export function MessageInput({
                 }
               </button>
             )}
+
+            <div className="flex-1" />
 
             {isStreaming && onStop ? (
               <button
