@@ -11,6 +11,7 @@ Urutan kerja: validasi -> backup chunk lama -> embed -> tulis sebagai STAGING ->
 tukar dalam SATU transaksi (hapus lama + promosikan staging) -> verifikasi.
 Aman diulang: embedding di-cache, staging dibersihkan tiap mulai.
 """
+import hashlib
 import json
 import os
 import re
@@ -90,12 +91,20 @@ def buat_embedder():
     lokasi = os.environ.get('VERTEX_LOCATION', 'asia-southeast1')
     if not project or project == '(unset)':
         mati('Project GCP tidak terbaca. Jalankan di Cloud Shell atau set GOOGLE_CLOUD_PROJECT.')
-    token = subprocess.run(['gcloud', 'auth', 'print-access-token'],
-                           capture_output=True, text=True).stdout.strip()
-    if not token:
-        mati('gcloud auth print-access-token kosong.')
+    simpan = {'token': '', 'saat': 0.0}
+
+    def token_segar():
+        if time.time() - simpan['saat'] > 1500:  # token gcloud berlaku 1 jam; perbarui tiap 25 menit
+            simpan['token'] = subprocess.run(['gcloud', 'auth', 'print-access-token'],
+                                             capture_output=True, text=True).stdout.strip()
+            simpan['saat'] = time.time()
+            if not simpan['token']:
+                mati('gcloud auth print-access-token kosong.')
+        return simpan['token']
+
+    token_segar()
     print(f'  project={project} region={lokasi}')
-    return (lambda teks: embed_vertex(teks, project, lokasi, token)), 13.0
+    return (lambda teks: embed_vertex(teks, project, lokasi, token_segar())), 13.0
 
 
 # ---------- SQL ----------
@@ -166,7 +175,7 @@ def embed_semua(chunks):
     tulis_cache = open(CACHE, 'a', encoding='utf-8')
     vektor = []
     for i, c in enumerate(chunks, 1):
-        kunci = str(hash(c['content']))
+        kunci = hashlib.sha1(c['content'].encode('utf-8')).hexdigest()
         if kunci in cache:
             vektor.append(cache[kunci])
             continue
