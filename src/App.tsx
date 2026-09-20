@@ -109,7 +109,6 @@ export default function App() {
                 </button>
               </div>
               <button className="topbar-center" onClick={() => setModelSheet(true)} aria-label="Ganti unit">
-                <span className="topbar-model-dot" aria-hidden="true" />
                 <span className="topbar-model-name">{selectedModel}</span>
                 <ChevronDown size={14} className="text-[var(--text-muted)]" />
               </button>

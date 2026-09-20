@@ -528,10 +528,10 @@ img {
 .topbar-center:hover { background: rgba(255,255,255,0.07); }
 .topbar-center:active { transform: translateX(-50%) scale(0.97); }
 .topbar-model-name {
-  font-size: 15px; font-weight: 600; letter-spacing: 0.01em; color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px; font-weight: 700; letter-spacing: -0.035em; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.topbar-model-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: var(--accent-main); }
 .topbar-newchat {
   width: 36px; height: 36px; border-radius: 50%; border: none;
   background: var(--accent-main); color: #fff;
