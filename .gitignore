@@ -18,3 +18,7 @@ secrets/*
 !secrets/.gitkeep
 cloudrun/test/.build/
 docs/evaluation/*.json
+
+# Daftar harga promo & cadangannya: repo ini publik, jangan ikut ter-commit
+promo-backup-*.json
+supabase/data/

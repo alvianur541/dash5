@@ -44,12 +44,12 @@ export function modelHasSource(model: UnitModel, kategori: string): boolean {
 }
 
 const PROMO_SECTIONS_BY_MODEL: Record<UnitModel, string[]> = {
-  'ZX48U-5A':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
-  'ZX65USB-5A': ['FILTER PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
-  'ZX138MF-5G': ['ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
-  'ZX200-5G':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
-  'KCM 60ZV':   ['COOLANT', 'LUBRICANT'],
-  'ZW140':      ['FILTER PARTS', 'COOLANT', 'LUBRICANT'],
+  'ZX48U-5A':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'COOLANT', 'LUBRICANT'],
+  'ZX65USB-5A': ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
+  'ZX138MF-5G': ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'HITACHI SPECIAL PARTS (seal kit, pin bucket/arm/boom)', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
+  'ZX200-5G':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'HITACHI SPECIAL PARTS (seal kit, pin bucket/arm/boom)', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
+  'KCM 60ZV':   ['ELECTRICAL PARTS', 'COOLANT', 'LUBRICANT'],
+  'ZW140':      ['FILTER PARTS', 'ELECTRICAL PARTS', 'COOLANT', 'LUBRICANT'],
 };
 
 const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
@@ -377,11 +377,16 @@ ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit se
 
 **Hanya ada SATU periode promo aktif di data** — periode lama sudah dihapus dari database saat periode baru masuk. Jadi setiap harga promo yang kamu lihat adalah harga berlaku. Cek baris \`Periode Promo\` di tiap chunk untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
 
-⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. FILTER PARTS mulai 15 Juli, LUBRICANT & COOLANT mulai 5 Agustus, sama-sama berakhir 30 September). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
+⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. sebagian section mulai 15 Juli, HYDRAULIC HOSE & LUBRICANT mulai 5 Agustus, sama-sama berakhir 30 September — baca baris \`Periode Promo\` di chunk-nya, jangan hafalan). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
 
 **Section PROMO aktif untuk ${model}** (census DB — HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
-Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada. Parts di luar cakupan section di atas → "harga promo tidak tersedia untuk part ini, konfirmasi ke Parts Counter."
+Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada.
+
+**Blok berlabel \`[PROMO LINTAS-UNIT — …]\`** (kalau muncul di data) = daftar harga promo untuk unit **LAIN** (ZX330, ZX470, ZX870, EX1200, seri ZW, wheel loader lain, truk, ban). Aturannya ketat:
+- DILARANG menyajikannya sebagai harga part ${model}. Kalau teknisi tidak menyebut PN atau unit yang tertulis di situ, **abaikan blok itu sepenuhnya** — jangan disinggung sama sekali.
+- Boleh dipakai HANYA kalau PN/unit yang ditanyakan memang tertulis di baris itu. Saat menyebutnya, WAJIB sebut unit asalnya (tiap baris punya penanda \`[Unit: …]\`) dan katakan sekali bahwa itu harga untuk unit tersebut, bukan daftar promo ${model}.
+- COOLANT & LUBRICANT berlaku semua model dan sudah ada di daftar ${model} sendiri — pakai yang dari daftar ${model}, jangan yang lintas-unit. Parts di luar cakupan section di atas → "harga promo tidak tersedia untuk part ini, konfirmasi ke Parts Counter."
 
 **Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. Sebut programnya cukup "Promo Q2 FY2026" / "promo aktif".
 
@@ -390,7 +395,7 @@ Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek s
 **Suffix \`-F\` (section HYDRAULIC HOSE):** artinya hose **lokal merek Fukoku** — bukan "factory-made", bukan "siap pakai". Kalau perlu menyebut artinya, sebut itu; kalau tidak ditanya, cukup tampilkan PN-nya apa adanya.
 **DILARANG MENGARANG ARTI SUFFIX/KODE.** Suffix atau kode yang artinya tidak tertulis di data dan tidak disebut di prompt ini → tampilkan apa adanya TANPA penjelasan. Jangan menebak kepanjangannya (kesalahan nyata: \`-F\` ditafsirkan "factory-made" padahal Fukoku). Menebak arti kode = menyesatkan saat teknisi memesan part.
 
-Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS.
+Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS, "harga seal kit / pin bucket-arm-boom" → HITACHI SPECIAL PARTS, "harga ban" → TIRE PARTS (hanya ada di daftar lintas-unit).
 
 ---
 

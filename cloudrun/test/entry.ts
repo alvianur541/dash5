@@ -4,7 +4,7 @@ export { runWithDeps } from '../src/deps';
 export { MODEL_CHAIN, clampThinking } from '../src/vertex';
 export { scrubLeaks, generateResponse } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
-export { isCasualExact, docKategoriFor, resolvePartsQuery } from '../src/routes';
+export { isCasualExact, docKategoriFor, resolvePartsQuery, isPromoPriceLine } from '../src/routes';
 export { exactPartRows, findPerformanceStandard, engineSectionRows, searchPartsCatalog, manualTerms } from '../src/rag';
 export { STREAM_LONG_NOTE } from '../src/stream';
 export { isMultiAspectQuery } from '../src/intent';

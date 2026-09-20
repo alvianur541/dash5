@@ -285,6 +285,10 @@ export const REDO_RE = /\b(?:cek|coba|cb|cari)\s*(?:lagi|lg|ulang)\b|\bcoba\s+ca
 
 const REFERS_BACK_RE =/\b(?:ini|itu|tsb|tersebut|tadi|td|di\s*atas|d\s*atas|yg\s*d\w*|yang\s+di|sesuai|semua|smua|lagi|lg|list\w*|daftar\w*)\b/i;
 
+// Price rows carry two Rp amounts; the older dump labelled them "Promo: Rp", the newer one does not.
+export const isPromoPriceLine = (line: string): boolean =>
+  line.includes('|') && (line.match(/Rp\s?[\d.]{3,}/g) ?? []).length >= 2;
+
 export async function resolvePartsQuery(
   trimmed: string,
   history: Message[],
@@ -344,7 +348,7 @@ export async function resolvePartsQuery(
       const promoLines = [...new Set(
         ragResult.content.split('\n')
           .map(l => l.trim())
-          .filter(l => /Promo:\s*Rp/i.test(l) && cpmPNs.some(pn => l.includes(pn))),
+          .filter(l => isPromoPriceLine(l) && cpmPNs.some(pn => l.includes(pn))),
       )];
       const periodeLines = [...new Set(
         Array.from(ragResult.content.matchAll(/Periode Promo\s*:[^\n]*/gi), m => m[0].trim()),

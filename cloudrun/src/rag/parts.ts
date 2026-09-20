@@ -5,6 +5,12 @@ import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from 
 
 
 const ACTIVE_PROMO_KATEGORI = ['PROMO Q2 FY2026'] as const;
+const PROMO_GENERAL_MODEL = 'GENERAL';
+const GENERAL_PROMO_MAX = 2;
+
+// GENERAL promo rows price OTHER units; label them so they are never read as this unit's list.
+const labelCrossUnit = (content: string, model: string): string =>
+  `[PROMO LINTAS-UNIT — bukan daftar untuk ${model}; tiap baris menyebut unitnya sendiri]\n${content}`;
 
 type PromoChunk = { content: string; similarity?: number; match_type?: string };
 
@@ -80,20 +86,27 @@ export async function searchServiceIntervalParts(
 // Hybrid RPC only exact-matches "Part Number:" chunks; section and promo chunks need this literal lookup.
 export async function exactPartRows(pn: string, model: string): Promise<HybridResult[]> {
   if (!sb()) return [];
-  const kategori = new Set(['PARTS CATALOG', 'ENGINE PARTS CATALOG', ...ACTIVE_PROMO_KATEGORI]);
   const cell = new RegExp(`(?:^|\\|)\\s*${pn}\\s*\\|`, 'im');
-  try {
-    const { data } = await sb().from('documents').select('content, metadata')
-      .contains('metadata', { Model: model })
-      .ilike('content', `%${escapeLike(pn)}%`)
-      .limit(12);
-    return (data ?? [])
-      .filter((d: { content?: string; metadata?: any }) => d?.content && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
-      .slice(0, 4)
-      .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
-  } catch {
-    return [];
-  }
+  const rowsFor = async (filterModel: string, kategori: Set<string>, cap: number): Promise<HybridResult[]> => {
+    try {
+      const { data } = await sb().from('documents').select('content, metadata')
+        .contains('metadata', { Model: filterModel })
+        .ilike('content', `%${escapeLike(pn)}%`)
+        .limit(12);
+      return (data ?? [])
+        .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === filterModel
+          && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
+        .slice(0, cap)
+        .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
+    } catch {
+      return [];
+    }
+  };
+  const [own, general] = await Promise.all([
+    rowsFor(model, new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', ...ACTIVE_PROMO_KATEGORI]), 4),
+    rowsFor(PROMO_GENERAL_MODEL, new Set<string>(ACTIVE_PROMO_KATEGORI), GENERAL_PROMO_MAX),
+  ]);
+  return [...own, ...general.map(d => ({ ...d, content: labelCrossUnit(d.content, model) }))];
 }
 
 const ENGINE_SECTION_TERMS: Array<[RegExp, string]> = [
@@ -182,18 +195,21 @@ export async function searchPartsCatalog(
   const PROMO_START_IDX = 2;
   const PROMO_END_IDX   = PROMO_START_IDX + ACTIVE_PROMO_KATEGORI.length;
   const ENGINE_IDX = hasEngineCatalog ? PROMO_END_IDX : -1;
+  const GENERAL_START_IDX = hasEngineCatalog ? PROMO_END_IDX + 1 : PROMO_END_IDX;
 
   const queries = [
     hybrid(queryText, embedding, bodyCount, { Model: model, Kategori: 'PARTS CATALOG' }, 0.28),
     hybrid(queryText, embedding, cpmCount, { Model: model, Kategori: 'CPM' }, 0.30),
     ...ACTIVE_PROMO_KATEGORI.map(kat => hybrid(queryText, embedding, promoCount, { Model: model, Kategori: kat }, 0.25)),
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
+    ...ACTIVE_PROMO_KATEGORI.map(kat => hybrid(queryText, embedding, 3, { Model: PROMO_GENERAL_MODEL, Kategori: kat }, 0.34)),
   ];
 
   const exactPromise = partNum ? exactPartRows(partNum.toUpperCase(), model) : Promise.resolve([] as HybridResult[]);
   const sectionPromise = partNum ? Promise.resolve([] as HybridResult[]) : engineSectionRows(`${query}\n${sectionHint}`, model);
   const settled = await Promise.allSettled(queries);
   const sectionRows = await sectionPromise;
+  const exact = await exactPromise;
   const getData = (idx: number): HybridResult[] =>
     idx >= 0 && settled[idx]?.status === 'fulfilled' && Array.isArray(settled[idx].value.data)
       ? settled[idx].value.data
@@ -208,7 +224,16 @@ export async function searchPartsCatalog(
   const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
 
-  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0 && sectionRows.length === 0) {
+  const ownSections = new Set(promoData.map(d => promoSectionKey(d.content)).filter(Boolean));
+  const generalData: HybridResult[] = ACTIVE_PROMO_KATEGORI
+    .flatMap((_, i) => getData(GENERAL_START_IDX + i))
+    .filter(d => !ownSections.has(promoSectionKey(d.content)))
+    .sort((a, b) => (b.similarity ?? 0) - (a.similarity ?? 0))
+    .slice(0, GENERAL_PROMO_MAX)
+    .map(d => ({ ...d, content: labelCrossUnit(d.content, model) }));
+
+  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0
+      && sectionRows.length === 0 && exact.length === 0 && generalData.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
         query_embedding: embedding, match_count: 5,
@@ -275,9 +300,13 @@ export async function searchPartsCatalog(
     }
   }
 
-  const exact = await exactPromise;
   const pinned = [...exact, ...sectionRows];
-  const merged = [...pinned, ...cpmData, ...orderedNonCpm.filter(d => !pinned.some(p => p.content === d.content))];
+  const merged = [
+    ...pinned,
+    ...cpmData,
+    ...orderedNonCpm.filter(d => !pinned.some(p => p.content === d.content)),
+    ...generalData.filter(d => !pinned.some(p => p.content === d.content)),
+  ];
   if (exact.length) console.info('[parts] PN %s: %d section literal ditambahkan', partNum, exact.length);
 
   if (partNum) {
@@ -300,8 +329,8 @@ export async function searchPartsCatalog(
       ? computeConfidence([{ content: '', score: rerankTopScore }]).confidence
       : 'medium';
 
-  console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
-    cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
+  console.info('[parts] cpm=%d body=%d engine=%d promo=%d lintas-unit=%d → top=%d | tier=%s%s',
+    cpmData.length, bodyData.length, engineData.length, promoData.length, generalData.length, top.length,
     partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
   noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity, metadata: d.metadata })));
 
