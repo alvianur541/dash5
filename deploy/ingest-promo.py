@@ -127,43 +127,19 @@ def validasi(chunks):
     return per_model, masalah
 
 
-def main():
-    if len(sys.argv) < 2 or sys.argv[1].startswith('--'):
-        mati('Pakai: python3 deploy/ingest-promo.py <file.json> [--dry-run]')
-    path = sys.argv[1]
+def baca_chunks(path):
     if not os.path.exists(path):
         mati(f'File tidak ada: {path}')
-
     data = json.load(open(path, encoding='utf-8-sig'))  # -sig: file ekspor Windows sering ber-BOM
     chunks = data['chunks'] if isinstance(data, dict) else data
-
     per_model, masalah = validasi(chunks)
     if masalah:
         mati('Validasi gagal:\n  - ' + '\n  - '.join(masalah[:20]))
+    return chunks, per_model
 
-    print(f'\nFile  : {path}')
-    print(f'Chunk : {len(chunks)}')
-    for m in sorted(per_model):
-        print(f'  {m:<12} {per_model[m]:>3}')
 
-    lama = sql(f"select metadata->>'Model' m, count(*) n from documents "
-               f"where metadata->>'Kategori' = '{AKTIF}' group by 1 order by 1")
-    print(f'\nDi database sekarang: {sum(r["n"] for r in lama)} chunk')
-    for r in lama:
-        print(f'  {r["m"]:<12} {r["n"]:>3}')
-
-    if DRY:
-        print('\n--dry-run: berhenti di sini, nol tulisan ke database.')
-        return
-
-    # --- backup isi lama (embedding tidak ikut; bisa dibuat ulang) ---
-    dump = sql(f"select id, content, metadata from documents "
-               f"where metadata->>'Kategori' = '{AKTIF}' order by id")
-    nama_backup = f'promo-backup-{datetime.now():%Y%m%d-%H%M}.json'
-    json.dump(dump, open(nama_backup, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
-    print(f'Backup chunk lama -> {nama_backup}')
-
-    # --- embedding (cache supaya aman diulang) ---
+def embed_semua(chunks):
+    """Embed tiap chunk; hasil di-cache supaya skrip aman diulang."""
     cache = {}
     if os.path.exists(CACHE):
         for baris in open(CACHE, encoding='utf-8'):
@@ -200,8 +176,11 @@ def main():
         time.sleep(jeda)
     tulis_cache.close()
     print(f'\nEmbedding siap: {len(vektor)} chunk.')
+    return vektor
 
-    # --- tulis sebagai staging (belum terbaca aplikasi) ---
+
+def tukar(chunks, vektor):
+    """Tulis sebagai staging, lalu tukar dengan yang aktif dalam satu transaksi."""
     sql(f"delete from documents where metadata->>'Kategori' = '{STAGING}'")
     BATCH = 3
     for i in range(0, len(chunks), BATCH):
@@ -215,7 +194,6 @@ def main():
     if cek[0]['n'] != len(chunks):
         mati(f'Staging {cek[0]["n"]} baris, seharusnya {len(chunks)}. Tidak ada yang ditukar.')
 
-    # --- tukar dalam satu transaksi ---
     sql(f"""begin;
 delete from documents where metadata->>'Kategori' = '{AKTIF}';
 update documents set metadata = jsonb_set(metadata, '{{Kategori}}', '"{AKTIF}"')
@@ -232,6 +210,88 @@ commit;""")
         mati(f'Jumlah akhir {total} != {len(chunks)} — periksa manual.')
     sisa = sql(f"select count(*) n from documents where metadata->>'Kategori' = '{STAGING}'")
     print(f'Sisa staging: {sisa[0]["n"]} (harus 0)')
+
+
+def mode_embed_only(path, keluaran):
+    """Cloud Shell: cukup buat embedding-nya, tanpa menyentuh database sama sekali."""
+    chunks, per_model = baca_chunks(path)
+    print(f'\nFile  : {path}\nChunk : {len(chunks)}')
+    for m in sorted(per_model):
+        print(f'  {m:<12} {per_model[m]:>3}')
+    vektor = embed_semua(chunks)
+    with open(keluaran, 'w', encoding='utf-8') as f:
+        for c, v in zip(chunks, vektor):
+            f.write(json.dumps({'content': c['content'], 'metadata': c['metadata'], 'embedding': v},
+                               ensure_ascii=False) + '\n')
+    mb = os.path.getsize(keluaran) / 1024 / 1024
+    print(f'\nTersimpan: {keluaran} ({mb:.1f} MB, {len(chunks)} baris). Nol tulisan ke database.')
+    print('Unduh file itu (menu ⋮ → Download), lalu penulisan ke database dikerjakan dari laptop.')
+
+
+def mode_tulis(path):
+    """Laptop: pakai hasil --embed-only, tulis + tukar (token Supabase dari env laptop)."""
+    rows = [json.loads(b) for b in open(path, encoding='utf-8') if b.strip()]
+    chunks, per_model = [], {}
+    vektor = []
+    for i, r in enumerate(rows):
+        if len(r.get('embedding', [])) != DIMS:
+            mati(f'Baris {i}: embedding {len(r.get("embedding", []))} dimensi, harus {DIMS}.')
+        chunks.append({'content': r['content'], 'metadata': r['metadata']})
+        vektor.append(r['embedding'])
+    per_model, masalah = validasi(chunks)
+    if masalah:
+        mati('Validasi gagal:\n  - ' + '\n  - '.join(masalah[:20]))
+    print(f'\nSiap tulis: {len(chunks)} chunk')
+    for m in sorted(per_model):
+        print(f'  {m:<12} {per_model[m]:>3}')
+    dump = sql(f"select id, content, metadata from documents "
+               f"where metadata->>'Kategori' = '{AKTIF}' order by id")
+    nama_backup = f'promo-backup-{datetime.now():%Y%m%d-%H%M}.json'
+    json.dump(dump, open(nama_backup, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    print(f'Backup {len(dump)} chunk lama -> {nama_backup}')
+    tukar(chunks, vektor)
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1].startswith('--'):
+        mati('Pakai: python3 deploy/ingest-promo.py <file.json> [--dry-run|--embed-only <keluaran.jsonl>]\n'
+             '       python3 deploy/ingest-promo.py --tulis <hasil-embed.jsonl>')
+    if sys.argv[1] == '--tulis':
+        if len(sys.argv) < 3:
+            mati('Pakai: --tulis <hasil-embed.jsonl>')
+        return mode_tulis(sys.argv[2])
+    path = sys.argv[1]
+    if '--embed-only' in sys.argv:
+        i = sys.argv.index('--embed-only')
+        keluaran = sys.argv[i + 1] if len(sys.argv) > i + 1 else 'promo-embedded.jsonl'
+        return mode_embed_only(path, keluaran)
+
+    chunks, per_model = baca_chunks(path)
+
+    print(f'\nFile  : {path}')
+    print(f'Chunk : {len(chunks)}')
+    for m in sorted(per_model):
+        print(f'  {m:<12} {per_model[m]:>3}')
+
+    lama = sql(f"select metadata->>'Model' m, count(*) n from documents "
+               f"where metadata->>'Kategori' = '{AKTIF}' group by 1 order by 1")
+    print(f'\nDi database sekarang: {sum(r["n"] for r in lama)} chunk')
+    for r in lama:
+        print(f'  {r["m"]:<12} {r["n"]:>3}')
+
+    if DRY:
+        print('\n--dry-run: berhenti di sini, nol tulisan ke database.')
+        return
+
+    # --- backup isi lama (embedding tidak ikut; bisa dibuat ulang) ---
+    dump = sql(f"select id, content, metadata from documents "
+               f"where metadata->>'Kategori' = '{AKTIF}' order by id")
+    nama_backup = f'promo-backup-{datetime.now():%Y%m%d-%H%M}.json'
+    json.dump(dump, open(nama_backup, 'w', encoding='utf-8'), ensure_ascii=False, indent=1)
+    print(f'Backup chunk lama -> {nama_backup}')
+
+    vektor = embed_semua(chunks)
+    tukar(chunks, vektor)
 
 
 if __name__ == '__main__':
