@@ -795,9 +795,8 @@ img {
 .pill-mic-btn:disabled { opacity: 0.35; cursor: not-allowed; }
 
 .send-btn-inactive {
-  background: transparent;
-  color: var(--text-muted);
-  opacity: 0.5;
+  background: color-mix(in srgb, var(--accent-main) 34%, transparent);
+  color: #fff;
 }
 
 .light-theme .topbar-hamburger { background: transparent; }

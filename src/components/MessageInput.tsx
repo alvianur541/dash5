@@ -223,14 +223,14 @@ export function MessageInput({
   const isTranscribing = recordingState === 'transcribing';
 
   return (
-    <div className="message-input-bar px-3 pt-0 pb-1 md:px-6 md:pt-1 flex flex-col">
+    <div className="message-input-bar px-4 pt-0 pb-1 md:px-6 md:pt-1 flex flex-col">
       <div
         className="mx-auto w-full"
         style={{ maxWidth: 'var(--input-content-max)' }}
       >
 
         <div className={cn(
-          "relative rounded-[22px] transition-all duration-150 shadow-sm",
+          "relative rounded-[26px] transition-all duration-150 shadow-sm",
           "bg-[var(--bg-card)] border",
           isRecording
             ? "border-red-500/40"
@@ -282,7 +282,7 @@ export function MessageInput({
             </div>
           )}
 
-          <div className={cn("px-5 pb-[4px] flex flex-col justify-center", pendingImage ? "pt-2" : "pt-[14px]")}>
+          <div className={cn("px-5 pb-[4px] flex flex-col justify-center", pendingImage ? "pt-2" : "pt-[16px]")}>
             <textarea
               ref={textareaRef}
               value={input}
@@ -304,7 +304,7 @@ export function MessageInput({
             />
           </div>
 
-          <div className="flex items-center px-3.5 pb-[13px] pt-0 gap-0.5">
+          <div className="flex items-center px-3 pb-[12px] pt-0 gap-0.5">
 
             {isOffline ? (
               <WifiOff size={15} className="text-amber-400 mx-1.5 shrink-0" />
@@ -329,6 +329,8 @@ export function MessageInput({
               </>
             )}
 
+            <div className="flex-1" />
+
             {!isOffline && (
               <button
                 onClick={toggleRecording}
@@ -344,30 +346,28 @@ export function MessageInput({
               </button>
             )}
 
-            <div className="flex-1" />
-
             {isStreaming && onStop ? (
               <button
                 onClick={onStop}
-                className="w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0 bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
+                className="w-[38px] h-[38px] md:w-[34px] md:h-[34px] rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
                 title="Hentikan jawaban"
                 aria-label="Hentikan jawaban"
               >
-                <Square size={11} fill="currentColor" />
+                <Square size={12} fill="currentColor" />
               </button>
             ) : (
               <button
                 onClick={handleSend}
                 disabled={!canSend}
                 className={cn(
-                  "w-9 h-9 md:w-[30px] md:h-[30px] rounded-lg flex items-center justify-center transition-all active:scale-95 shrink-0",
+                  "w-[38px] h-[38px] md:w-[34px] md:h-[34px] rounded-full flex items-center justify-center transition-all active:scale-95 shrink-0 text-white",
                   canSend
-                    ? "bg-[var(--text-primary)] text-[var(--bg-app)] hover:opacity-85"
+                    ? "bg-[var(--accent-main)] hover:bg-[var(--accent-active)]"
                     : "send-btn-inactive cursor-not-allowed"
                 )}
                 title="Kirim"
               >
-                <ArrowUp size={15} />
+                <ArrowUp size={17} />
               </button>
             )}
           </div>
