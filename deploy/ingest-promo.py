@@ -110,8 +110,8 @@ def baris_insert(chunk, vektor, kategori):
 
 
 def validasi(chunks):
-    """Kembalikan (jumlah per model, daftar masalah)."""
-    per_model, masalah = {}, []
+    """Kembalikan (jumlah per model, masalah fatal, chunk tanpa harga yang dilewati)."""
+    per_model, masalah, tanpa_harga = {}, [], []
     for i, c in enumerate(chunks):
         isi, meta = c.get('content', ''), c.get('metadata', {})
         m, k = meta.get('Model'), meta.get('Kategori')
@@ -121,10 +121,12 @@ def validasi(chunks):
             masalah.append(f'chunk #{i} Model tidak dikenal: {m!r}')
         if k != AKTIF:
             masalah.append(f'chunk #{i} Kategori {k!r} (harus {AKTIF!r})')
+        # Section placeholder tanpa satu pun harga tidak berguna dicari — dilewati, bukan fatal.
         if not re.search(r'Rp\s?[\d.]{3,}', isi):
-            masalah.append(f'chunk #{i} ({m}) tidak memuat satu pun harga Rp')
+            tanpa_harga.append((i, isi.split('\n')[0][:90]))
+            continue
         per_model[m] = per_model.get(m, 0) + 1
-    return per_model, masalah
+    return per_model, masalah, tanpa_harga
 
 
 def baca_chunks(path):
@@ -132,9 +134,15 @@ def baca_chunks(path):
         mati(f'File tidak ada: {path}')
     data = json.load(open(path, encoding='utf-8-sig'))  # -sig: file ekspor Windows sering ber-BOM
     chunks = data['chunks'] if isinstance(data, dict) else data
-    per_model, masalah = validasi(chunks)
+    per_model, masalah, tanpa_harga = validasi(chunks)
     if masalah:
         mati('Validasi gagal:\n  - ' + '\n  - '.join(masalah[:20]))
+    if tanpa_harga:
+        print(f'\nDilewati {len(tanpa_harga)} chunk tanpa satu pun harga (tidak berguna dicari):')
+        for i, judul in tanpa_harga:
+            print(f'  #{i}  {judul}')
+        lewati = {i for i, _ in tanpa_harga}
+        chunks = [c for i, c in enumerate(chunks) if i not in lewati]
     return chunks, per_model
 
 
@@ -238,9 +246,9 @@ def mode_tulis(path):
             mati(f'Baris {i}: embedding {len(r.get("embedding", []))} dimensi, harus {DIMS}.')
         chunks.append({'content': r['content'], 'metadata': r['metadata']})
         vektor.append(r['embedding'])
-    per_model, masalah = validasi(chunks)
-    if masalah:
-        mati('Validasi gagal:\n  - ' + '\n  - '.join(masalah[:20]))
+    per_model, masalah, tanpa_harga = validasi(chunks)
+    if masalah or tanpa_harga:
+        mati('Validasi gagal:\n  - ' + '\n  - '.join(masalah + [f'chunk #{i} tanpa harga' for i, _ in tanpa_harga]))
     print(f'\nSiap tulis: {len(chunks)} chunk')
     for m in sorted(per_model):
         print(f'  {m:<12} {per_model[m]:>3}')
