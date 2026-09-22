@@ -391,7 +391,7 @@ export function ChatWindow({
   const closeTable = useCallback(() => setExpandedTable(null), []);
 
   const toast = useToast();
-  const [savedImage, setSavedImage] = useState<{ url: string; name: string } | null>(null);
+  const [savedImage, setSavedImage] = useState<{ url: string; name: string; blob: Blob } | null>(null);
   const closeImage = useCallback(() => {
     setSavedImage(prev => { if (prev) URL.revokeObjectURL(prev.url); return null; });
   }, []);
@@ -403,7 +403,7 @@ export function ChatWindow({
       if (img.isIosLike()) {
         setSavedImage(prev => {
           if (prev) URL.revokeObjectURL(prev.url);
-          return { url: URL.createObjectURL(blob), name };
+          return { url: URL.createObjectURL(blob), name, blob };
         });
       } else {
         img.downloadBlob(blob, name);
@@ -413,6 +413,24 @@ export function ChatWindow({
       toast('Gagal membuat gambar tabel');
     }
   }, [selectedModel, toast]);
+
+  const downloadSavedImage = useCallback(async () => {
+    if (!savedImage) return;
+    const img = await import('../lib/tableImage');
+    img.downloadBlob(savedImage.blob, savedImage.name);
+    toast('Gambar diunduh ke Files');
+  }, [savedImage, toast]);
+
+  const shareSavedImage = useCallback(async () => {
+    if (!savedImage) return;
+    const img = await import('../lib/tableImage');
+    const res = await img.shareImage(savedImage.blob, savedImage.name);
+    if (res === 'shared') closeImage();
+    else if (res === 'unsupported') {
+      img.downloadBlob(savedImage.blob, savedImage.name);
+      toast('Gambar diunduh ke Files');
+    }
+  }, [savedImage, closeImage, toast]);
   const saveModalTable = useCallback(() => {
     const el = modalBodyRef.current?.querySelector('table');
     if (el) saveTableImage(el as HTMLTableElement, tableNotesRef.current);
@@ -645,8 +663,16 @@ export function ChatWindow({
             </div>
             <div className="table-image-body">
               <img src={savedImage.url} alt="Tabel harga" className="table-image-preview" />
+              <div className="table-image-actions">
+                <button className="table-image-save" onClick={shareSavedImage}>
+                  <ImageDown size={16} />
+                  <span>Simpan / kirim gambar</span>
+                </button>
+                <button className="table-image-alt" onClick={downloadSavedImage}>Unduh ke Files</button>
+              </div>
               <p className="table-image-hint">
-                Tekan lama gambarnya → <strong>Save to Photos</strong>, lalu kirim lewat WhatsApp.
+                Pilih <strong>Save Image</strong> untuk menyimpan ke Foto, atau langsung pilih WhatsApp.
+                Bisa juga tekan lama gambarnya.
               </p>
             </div>
           </m.div>

@@ -201,6 +201,25 @@ export function isIosLike(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 }
 
+// iOS blocks <a download> into Photos; the share sheet is the only route that reaches it.
+export async function shareImage(blob: Blob, filename: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return 'unsupported';
+  let file: File;
+  try {
+    file = new File([blob], filename, { type: 'image/png' });
+  } catch {
+    return 'unsupported';
+  }
+  if (!navigator.canShare({ files: [file] })) return 'unsupported';
+  try {
+    await navigator.share({ files: [file] });
+    return 'shared';
+  } catch (err) {
+    const name = (err as Error)?.name;
+    return name === 'AbortError' ? 'cancelled' : 'unsupported';
+  }
+}
+
 export function downloadBlob(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
