@@ -401,6 +401,7 @@ const DOC_KATEGORI: Array<[RegExp, string[]]> = [
   [/operational\s*principle|prinsip\s*kerja/i, ['OPERATIONAL PRINCIPLE']],
   [/circuit\s*diagram|wiring\s*diagram|diagram\s*kelistrikan/i, ['Circuit Diagram', 'HYDRAULIC CIRCUIT DIAGRAM']],
   [/technical\s*news|service\s*bulletin|\bbuletin\b/i, ['TECHNICAL NEWS']],
+  [/konsumsi\s*(?:bahan\s*bakar|solar|bbm)|pemakaian\s*(?:solar|bbm|bahan\s*bakar)|fuel\s*consumption|\bliter\s*per\s*jam\b|\bl\/(?:jam|hour|h)\b/i, ['FUEL CONSUMPTION']],
   [/\bsales\s*manual\b/i, ['SALES MANUAL']],
 ];
 

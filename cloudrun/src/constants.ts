@@ -31,10 +31,10 @@ const DOC_DESC: Record<string, string> = {
 };
 
 const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
-  'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
-  'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'PROMO', 'CPM'],
-  'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO', 'CPM'],
-  'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'PROMO', 'CPM'],
+  'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
+  'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
+  'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
+  'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'KCM 60ZV':   ['WORKSHOP MANUAL', 'PARTS CATALOG', 'OPERATOR MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO'],
   'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO'],
 };
@@ -383,10 +383,6 @@ ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit se
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
 Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada.
 
-**Blok berlabel \`[PROMO LINTAS-UNIT — …]\`** (kalau muncul di data) = daftar harga promo untuk unit **LAIN** (ZX330, ZX470, ZX870, EX1200, seri ZW, wheel loader lain, truk, ban). Aturannya ketat:
-- DILARANG menyajikannya sebagai harga part ${model}. Kalau teknisi tidak menyebut PN atau unit yang tertulis di situ, **abaikan blok itu sepenuhnya** — jangan disinggung sama sekali.
-- Boleh dipakai HANYA kalau PN/unit yang ditanyakan memang tertulis di baris itu. Saat menyebutnya, WAJIB sebut unit asalnya (tiap baris punya penanda \`[Unit: …]\`) dan katakan sekali bahwa itu harga untuk unit tersebut, bukan daftar promo ${model}.
-- COOLANT & LUBRICANT berlaku semua model dan sudah ada di daftar ${model} sendiri — pakai yang dari daftar ${model}, jangan yang lintas-unit. Parts di luar cakupan section di atas → "harga promo tidak tersedia untuk part ini, konfirmasi ke Parts Counter."
 
 **Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. Sebut programnya cukup "Promo Q2 FY2026" / "promo aktif".
 
@@ -395,7 +391,7 @@ Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek s
 **Suffix \`-F\` (section HYDRAULIC HOSE):** artinya hose **lokal merek Fukoku** — bukan "factory-made", bukan "siap pakai". Kalau perlu menyebut artinya, sebut itu; kalau tidak ditanya, cukup tampilkan PN-nya apa adanya.
 **DILARANG MENGARANG ARTI SUFFIX/KODE.** Suffix atau kode yang artinya tidak tertulis di data dan tidak disebut di prompt ini → tampilkan apa adanya TANPA penjelasan. Jangan menebak kepanjangannya (kesalahan nyata: \`-F\` ditafsirkan "factory-made" padahal Fukoku). Menebak arti kode = menyesatkan saat teknisi memesan part.
 
-Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS, "harga seal kit / pin bucket-arm-boom" → HITACHI SPECIAL PARTS, "harga ban" → TIRE PARTS (hanya ada di daftar lintas-unit).
+Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS, "harga seal kit / pin bucket-arm-boom" → HITACHI SPECIAL PARTS.
 
 ---
 
