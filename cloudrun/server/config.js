@@ -71,7 +71,8 @@ const BASE64_RE        = /^[A-Za-z0-9+/=\s]+$/;
 
 const CACHE_TTL_S      = parseInt(process.env.PROMPT_CACHE_TTL_S || '3600', 10);
 
-const CACHE_ENABLED    = process.env.PROMPT_CACHE !== 'off';
+// Opt-in: cached prompts are billed per hour of storage, not per use.
+const CACHE_ENABLED    = process.env.PROMPT_CACHE === 'on';
 
 const CACHE_WAIT_MS = 1_500;
 

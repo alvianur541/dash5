@@ -86,15 +86,16 @@ export function useChat(user: User, isOnline: boolean) {
     ]);
   }, []);
 
+  // Keyed on uid, not the user object: a token refresh must not reset the open chat.
+  const uid = user?.uid;
   useEffect(() => {
-    if (!user) { setSessionList([]); return; }
-    const uid = user.uid;
+    if (!uid) { setSessionList([]); return; }
     const tomb = loadSessionTombstones(uid);
     setSessionList(loadSessionList(uid).filter(s => !tomb[s.id]));
     startNewSession();
     syncSessions(uid);
     return onForeground(() => syncSessions(uid));
-  }, [user?.uid, startNewSession, syncSessions]);
+  }, [uid, startNewSession, syncSessions]);
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (!user) return;

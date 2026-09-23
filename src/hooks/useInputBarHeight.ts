@@ -19,5 +19,5 @@ export function useInputBarHeight(
     const ro = new ResizeObserver(apply);
     ro.observe(bar);
     return () => ro.disconnect();
-  }, [dep]);
+  }, [barRef, hostRef, dep]);
 }

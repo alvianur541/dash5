@@ -20,7 +20,7 @@ const MONO = 'ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace';
 const CODE_RE = /^[A-Z0-9][A-Z0-9./-]{4,}$/i;
 const NUM_RE = /^(?:rp\.?\s*)?[\d.,%\s-]*\d[\d.,%\s-]*$/i;
 
-export type TableImageOptions = { unit: string; notes?: string[] };
+type TableImageOptions = { unit: string; notes?: string[] };
 
 type Grid = { head: string[]; rows: string[][] };
 

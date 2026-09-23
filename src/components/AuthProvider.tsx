@@ -11,7 +11,7 @@ interface AuthUser {
   email: string | null;
 }
 
-export type PasskeyPromptMode = 'offer' | 'menu';
+type PasskeyPromptMode = 'offer' | 'menu';
 
 interface AuthContextType {
   user: AuthUser | null;

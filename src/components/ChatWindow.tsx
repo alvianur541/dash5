@@ -58,7 +58,7 @@ function stickyClass(children: ReactNode): string | undefined {
 
 const NOTE_RE = /^[\s*>|-]*((?:periode|masa berlaku|berlaku)[^\n|]{0,110}|[^\n|]{0,60}(?:belum termasuk|exclude|excl\.?)\s*ppn[^\n|]{0,40})$/gim;
 
-export function tableNotes(content: string): string[] {
+function tableNotes(content: string): string[] {
   const seen = new Set<string>();
   for (const m of content.matchAll(NOTE_RE)) {
     const line = m[1].replace(/[*`]/g, '').replace(/\s+/g, ' ').trim().replace(/[.;,]$/, '');
@@ -150,8 +150,6 @@ const TOOL_LABELS: Record<string, string> = {
   search_technical_manual: 'Technical Manual',
   search_parts_catalog:    'Parts Catalog',
   search_engine_manual:    'Engine Manual',
-  search_circuit_diagram:  'Hydraulic Circuit',
-  decompose_query:         'memecah query',
 };
 
 function eventLabel(e: AgentEvent): { icon: 'search' | 'check' | 'spark'; text: string } | null {
@@ -159,7 +157,7 @@ function eventLabel(e: AgentEvent): { icon: 'search' | 'check' | 'spark'; text: 
   if (e.type === 'tool_call') {
     const tool = e.tool ?? '';
     const friendly = TOOL_LABELS[tool] ?? tool;
-    return { icon: 'search', text: tool === 'decompose_query' ? `Memecah query…` : `Mencari di ${friendly}…` };
+    return { icon: 'search', text: `Mencari di ${friendly}…` };
   }
   if (e.type === 'tool_result') {
     const tool = e.tool ?? '';

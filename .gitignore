@@ -1,25 +1,19 @@
 node_modules/
 node-portable/
-build/
 dist/
-coverage/
+cloudrun/test/.build/
 .DS_Store
 *.log
 .env*
 !.env.example
-.agents/
 .claude/
 .vscode/
-.tmp/
 CLAUDE.md
 
-# Kunci service account Google Cloud — jangan pernah di-commit.
+# Google Cloud service account keys — never commit.
 secrets/*
 !secrets/.gitkeep
-cloudrun/test/.build/
-docs/evaluation/*.json
 
-# Daftar harga promo & cadangannya: repo ini publik, jangan ikut ter-commit
+# Dealer price lists and their backups: this repo is public.
 promo-backup-*.json
 supabase/data/
-__pycache__/

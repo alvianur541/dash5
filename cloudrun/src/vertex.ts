@@ -47,7 +47,7 @@ export function clampThinking(body: VRequest, model: string): VRequest {
   };
 }
 
-export interface VResponse {
+interface VResponse {
   candidates?: Array<{
     content?: { role: string; parts: Part[] };
     finishReason?: string;

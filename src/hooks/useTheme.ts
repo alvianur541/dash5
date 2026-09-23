@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
-export type Theme = 'dark' | 'light';
+type Theme = 'dark' | 'light';
 
 const THEME_COLOR: Record<Theme, string> = { dark: '#1A1915', light: '#FAF9F5' };
 

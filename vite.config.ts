@@ -72,11 +72,11 @@ export default defineConfig(() => {
     },
 
     server: {
-      hmr: process.env.DISABLE_HMR !== 'true',
       proxy: {
-        '/v1': {
-          target: baseEnv.VITE_VERTEX_PROXY_URL,
+        '/api': {
+          target: baseEnv.DEV_API_TARGET,
           changeOrigin: true,
+          rewrite: p => p.replace(/^\/api/, ''),
         },
       },
     },
