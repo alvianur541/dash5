@@ -9,9 +9,7 @@ import {
 import { onForeground } from '../lib/onForeground';
 import { makeThumbnails } from '../lib/thumbnail';
 import { errorMessage } from '../lib/errorMessage';
-
-const FLUSH_INTERVAL = 40;
-const FLUSH_BATCH = 200;
+import { createPacer } from '../lib/streamPacer';
 
 type Queued = { content: string; attachments?: File[] };
 type User = { uid: string; displayName?: string | null } | null;
@@ -192,30 +190,17 @@ export function useChat(user: User, isOnline: boolean) {
     const sessionSnapshot = sessionId;
     const streamCtrl = new AbortController();
     abortStreamRef.current = streamCtrl;
-    let displayed = '';
-    let buffered = '';
-    let timerId: ReturnType<typeof setTimeout> | null = null;
-
     const stillActive = () => mountedRef.current && sessionIdRef.current === sessionSnapshot && !streamCtrl.signal.aborted;
     const upsertAssistant = (text: string) => setMessages(prev => {
       const exists = prev.some(m => m.id === assistantId);
       if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: text, timestamp: assistantTs }];
       return prev.map(m => m.id === assistantId ? { ...m, content: text } : m);
     });
-    const drip = () => {
-      timerId = null;
-      if (!stillActive() || !buffered.length) return;
-      const size = Math.max(FLUSH_BATCH, Math.ceil(buffered.length / 4));
-      displayed += buffered.slice(0, size);
-      buffered = buffered.slice(size);
-      upsertAssistant(displayed);
-      if (buffered.length > 0) timerId = setTimeout(drip, FLUSH_INTERVAL);
-    };
+    const pacer = createPacer(upsertAssistant, stillActive);
     const onChunk = (chunk: string) => {
       if (!stillActive()) return;
       setIsTyping(false);
-      buffered += chunk;
-      if (timerId === null) timerId = setTimeout(drip, FLUSH_INTERVAL);
+      pacer.push(chunk);
     };
     const onAgentEvent = (event: AgentEvent) => {
       if (!stillActive()) return;
@@ -229,23 +214,33 @@ export function useChat(user: User, isOnline: boolean) {
         ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, opts)
         : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, opts);
     } catch (err) {
+      pacer.cancel();
+      setIsTyping(false);
+      setIsStreaming(false);
       if (!streamCtrl.signal.aborted) {
         console.error('AI Error:', (err as Error)?.message);
         setError(errorMessage(err));
         return;
       }
       // Stop cancels the request; what was already on screen is kept.
-      fullText = displayed + buffered;
-    } finally {
-      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
-      setIsTyping(false);
-      setIsStreaming(false);
+      fullText = pacer.text();
     }
 
-    if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot || !fullText.trim()) return;
-    upsertAssistant(fullText);
-    if (!streamCtrl.signal.aborted) { try { navigator.vibrate?.([12, 40, 12]); } catch { } }
+    setIsTyping(false);
+    const release = () => { if (!abortStreamRef.current || abortStreamRef.current === streamCtrl) setIsStreaming(false); };
+    if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot || !fullText.trim()) {
+      pacer.cancel();
+      release();
+      return;
+    }
     persist(fullText);
+    if (streamCtrl.signal.aborted) {
+      upsertAssistant(fullText);
+    } else {
+      await pacer.finish(fullText);
+      try { navigator.vibrate?.([12, 40, 12]); } catch { }
+    }
+    release();
   }, [user, selectedModel]);
 
   useEffect(() => {

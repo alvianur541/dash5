@@ -1,5 +1,6 @@
 
-import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
+import { createContext, useContext, useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
+import type { Components } from 'react-markdown';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
 import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
@@ -9,6 +10,7 @@ import { getGreeting } from '../lib/greeting';
 import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../types';
+import { tidyStreamingTail } from '../lib/streamPacer';
 
 const Markdown = lazy(() => import('./Markdown'));
 
@@ -68,11 +70,10 @@ function tableNotes(content: string): string[] {
   return [...seen];
 }
 
-function TableBlock({ children, sticky, onSave }: {
-  children?: ReactNode;
-  sticky?: string;
-  onSave?: (table: HTMLTableElement) => void;
-}) {
+const TableSaveCtx = createContext<((table: HTMLTableElement) => void) | undefined>(undefined);
+
+function TableBlock({ children, sticky }: { children?: ReactNode; sticky?: string }) {
+  const onSave = useContext(TableSaveCtx);
   const wrapRef = useRef<HTMLDivElement>(null);
   return (
     <div className="table-wrap-outer">
@@ -113,6 +114,31 @@ function CodeSpan({ children }: { children?: ReactNode }) {
   };
   return <code className="code-copy" onClick={copy} role="button" tabIndex={0} title="Ketuk untuk salin">{children}</code>;
 }
+
+function StrongText({ children }: { children?: ReactNode }) {
+  const text = typeof children === 'string'
+    ? children
+    : Array.isArray(children)
+      ? children.map(c => (typeof c === 'string' ? c : '')).join('')
+      : String(children ?? '');
+  const words = text.split(/\s+/);
+  const isPartLike = (
+    words.length <= 2
+    && /\d/.test(words[0])
+    && /^[A-Z0-9][A-Za-z0-9.,:;/-]*$/.test(words[0])
+    && (words.length === 1
+        || (/^[A-Za-z°]+$/.test(words[1]) && words[1].length <= 5))
+    && text.length <= 30
+  );
+  return isPartLike ? <code>{text}</code> : <strong>{children}</strong>;
+}
+
+// Module-level so component types never change: a new table type per chunk would rebuild the table DOM.
+const MD_COMPONENTS: Components = {
+  table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
+  code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
+  strong: ({ children }) => <StrongText>{children}</StrongText>,
+};
 
 function SessionSkeleton() {
   return (
@@ -253,6 +279,12 @@ const MessageItem = memo(function MessageItem({
   onResend?: (text: string) => void;
 }) {
   const isCut = message.role === 'assistant' && CUT_NOTE_RE.test(message.content);
+  const contentRef = useRef(message.content);
+  useEffect(() => { contentRef.current = message.content; });
+  const saveTable = useCallback(
+    (el: HTMLTableElement) => onSaveTable?.(el, tableNotes(contentRef.current)),
+    [onSaveTable],
+  );
 
   if (message.role === 'user') {
     return (
@@ -284,38 +316,11 @@ const MessageItem = memo(function MessageItem({
         <div className="ai-msg-wrap">
           <div className="markdown-body">
             <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
-              <Markdown
-                components={{
-                  table: ({ children }) => (
-                    <TableBlock
-                      sticky={stickyClass(children)}
-                      onSave={!isStreaming && onSaveTable ? el => onSaveTable(el, tableNotes(message.content)) : undefined}
-                    >
-                      {children}
-                    </TableBlock>
-                  ),
-                  code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
-                  strong: ({ children }) => {
-                    const text = typeof children === 'string'
-                      ? children
-                      : Array.isArray(children)
-                        ? children.map(c => (typeof c === 'string' ? c : '')).join('')
-                        : String(children ?? '');
-                    const words = text.split(/\s+/);
-                    const isPartLike = (
-                      words.length <= 2
-                      && /\d/.test(words[0])
-                      && /^[A-Z0-9][A-Za-z0-9.,:;/-]*$/.test(words[0])
-                      && (words.length === 1
-                          || (/^[A-Za-z°]+$/.test(words[1]) && words[1].length <= 5))
-                      && text.length <= 30
-                    );
-                    return isPartLike
-                      ? <code>{text}</code>
-                      : <strong>{children}</strong>;
-                  },
-                }}
-              >{stripLatex(message.content)}</Markdown>
+              <TableSaveCtx.Provider value={!isStreaming && onSaveTable ? saveTable : undefined}>
+                <Markdown components={MD_COMPONENTS}>
+                  {stripLatex(isStreaming ? tidyStreamingTail(message.content) : message.content)}
+                </Markdown>
+              </TableSaveCtx.Provider>
             </Suspense>
             {isStreaming && <span className="typewriter-cursor" aria-hidden="true" />}
           </div>
@@ -398,7 +403,12 @@ export function ChatWindow({
   const prevLenRef = useRef(0);
   const firstIdRef = useRef<string | undefined>(undefined);
 
-  const handleFeedback = (id: string, type: 'up' | 'down') => {
+  // Latest values behind stable callbacks: new function props would defeat MessageItem's memo on every chunk.
+  const latest = useRef({ feedback, messages, user, selectedModel, onTogglePocket, onResend });
+  useEffect(() => { latest.current = { feedback, messages, user, selectedModel, onTogglePocket, onResend }; });
+
+  const handleFeedback = useCallback((id: string, type: 'up' | 'down') => {
+    const { feedback, messages, user, selectedModel } = latest.current;
     const next = feedback[id] === type ? null : type;
     setFeedback(prev => ({ ...prev, [id]: next }));
     if (!next || !user) return;
@@ -409,7 +419,9 @@ export function ChatWindow({
       if (messages[i].role === 'user') { question = messages[i].content; break; }
     }
     saveFeedback({ userId: user.uid, messageId: id, rating: next, question, answer, model: selectedModel }).catch(() => {});
-  };
+  }, []);
+  const togglePocket = useCallback((id: string) => latest.current.onTogglePocket?.(id), []);
+  const resend = useCallback((text: string) => latest.current.onResend?.(text), []);
 
   const handleScroll = useCallback(() => {
     const el = scrollRef.current;
@@ -518,9 +530,9 @@ export function ChatWindow({
                 isStreaming={showCursor}
                 onSaveTable={saveTableImage}
                 inPocket={pocketIds?.has(message.id) ?? false}
-                onTogglePocket={onTogglePocket}
+                onTogglePocket={onTogglePocket ? togglePocket : undefined}
                 resendText={isLast ? prevUser : undefined}
-                onResend={onResend}
+                onResend={onResend ? resend : undefined}
               />
             );
           })}
