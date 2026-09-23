@@ -22,7 +22,6 @@ export interface VRequest {
     temperature?: number;
     thinkingConfig?: { thinkingLevel: ThinkingLevel };
   };
-  cachedContent?: string;
 }
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';

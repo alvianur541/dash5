@@ -1,4 +1,4 @@
-const { detectFaultCodeInQuery, extractPartNumber, isPartsQuery, suite } = require('./helpers.cjs');
+const { detectFaultCodeInQuery, extractPartNumber, extractSearchTerms, isPartsQuery, suite } = require('./helpers.cjs');
 
 module.exports = async function () {
   const { t, done } = suite('router: fault-code detection & part-number extraction');
@@ -42,6 +42,14 @@ module.exports = async function () {
     t(isPartsQuery(q), `parts query: "${q}"`);
   for (const q of ['swing lambat', 'berapa kapasitas oli mesin', 'cek part seal kit lift cylinder'])
     t(!isPartsQuery(q), `left to analyzeIntent: "${q}"`);
+
+  for (const q of ['berapa harga filter rp 100000', 'harga dibawah rp 50000', 'PM 2000', 'pkt 2000', 'ganti oli jam 2000'])
+    t(!detectFaultCodeInQuery(q).isFaultCode, `price/interval phrase is not a fault code: "${q}"`);
+  { const r = detectFaultCodeInQuery('harga rp 50000 kode 11006-2 muncul');
+    t(r.isFaultCode && r.faultQuery === '11006-2', 'a real code after a price phrase is still found'); }
+
+  { const terms = extractSearchTerms('ENG:0001D-02');
+    t(terms.includes('0001D-2') && terms.includes('ENG: 0001D-02'), `hex Yanmar code gets search variants (${terms.join(' | ')})`); }
 
   return done();
 };

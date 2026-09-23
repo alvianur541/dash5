@@ -15,7 +15,7 @@ export interface Message {
 export interface InlineImage { mimeType: string; data: string }
 
 export interface AgentEvent {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'done';
+  type: 'thinking' | 'tool_call' | 'tool_result';
   tool?: string;
   found?: boolean;
   message?: string;

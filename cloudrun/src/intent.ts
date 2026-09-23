@@ -320,8 +320,8 @@ Single information-need → return ONE item:
       generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
     }, false, INTENT_MODEL);
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-    const m = raw.match(/\[[\s\S]*?\]/);
-    const arr = m ? JSON.parse(m[0]) : [];
+    const start = raw.indexOf('['), end = raw.lastIndexOf(']');
+    const arr = start >= 0 && end > start ? JSON.parse(raw.slice(start, end + 1)) : [];
     subs = Array.isArray(arr) ? arr.filter((s): s is string => typeof s === 'string' && s.trim().length > 0).slice(0, 4) : [];
   } catch (err) {
     console.warn('[decomposeAspects] failed:', (err as Error)?.message);

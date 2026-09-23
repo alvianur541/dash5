@@ -96,6 +96,12 @@ export function MessageInput({
   const [pendingImage, setPendingImage] = useState<{ file: File; url: string } | null>(null);
   const pendingRef = useRef<{ file: File; url: string } | null>(null);
   pendingRef.current = pendingImage;
+  const streamingRef = useRef(isStreaming);
+  streamingRef.current = isStreaming;
+  const fileInputRef     = useRef<HTMLInputElement>(null);
+  const textareaRef      = useRef<HTMLTextAreaElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef        = useRef<Blob[]>([]);
 
   useEffect(() => () => { if (pendingImage) URL.revokeObjectURL(pendingImage.url); }, [pendingImage]);
 
@@ -114,12 +120,6 @@ export function MessageInput({
   useEffect(() => {
     if (recordingState === 'recording' && recordSec >= RECORD_MAX_SEC) mediaRecorderRef.current?.stop();
   }, [recordSec, recordingState]);
-
-
-  const fileInputRef     = useRef<HTMLInputElement>(null);
-  const textareaRef      = useRef<HTMLTextAreaElement>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const chunksRef        = useRef<Blob[]>([]);
 
   useLayoutEffect(() => {
     const el = textareaRef.current;
@@ -192,6 +192,11 @@ export function MessageInput({
           if (text) {
             const currentInput = textareaRef.current?.value?.trim() || '';
             const combined = currentInput ? `${currentInput} ${text}` : text;
+            if (streamingRef.current) {
+              setInput(combined);
+              flash('Jawaban masih berjalan — pesan suaramu disimpan di kotak ketik.');
+              return;
+            }
             resetBox();
             buzz();
             onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined);

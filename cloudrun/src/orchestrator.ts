@@ -33,16 +33,16 @@ export function scrubLeaks(text: string): string {
 
 const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
 
-async function systemForModel(unit: UnitModel, casual: boolean, aiModel: string, noCache = false): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
-  const text = casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit);
-  const key = `${casual ? 'casual' : 'main'}:${unit}`;
-  const id = noCache ? null : await deps().cacheFor?.(aiModel, key, text).catch(() => null);
-  return id ? { cachedContent: id } : { systemInstruction: { parts: [{ text }] } };
+function systemFor(unit: UnitModel, casual: boolean): Pick<VRequest, 'systemInstruction'> {
+  return { systemInstruction: { parts: [{ text: casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit) }] } };
 }
 
-async function systemFor(unit: UnitModel, casual: boolean): Promise<Pick<VRequest, 'systemInstruction' | 'cachedContent'>> {
-  deps().systemFor = (aiModel: string, noCache?: boolean) => systemForModel(unit, casual, aiModel, noCache === true);
-  return systemForModel(unit, casual, MODEL);
+function sanitize(input: string): string {
+  return input
+    .slice(0, 4000)
+    .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
+    .replace(/<\|[^|]*\|>/g, '[blocked]')
+    .trim();
 }
 
 export { MODEL, INTENT_MODEL } from './vertex';
@@ -138,11 +138,7 @@ export async function generateResponseStream(
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
 
-  const sanitized = userInput
-    .slice(0, 4000)
-    .replace(/\[(?:SYSTEM|INSTRUCTION|NEW\s+INSTRUCTION|OVERRIDE|IGNORE\s+PREVIOUS)[^\]]*\]/gi, '[blocked]')
-    .replace(/<\|[^|]*\|>/g, '[blocked]');
-  const trimmed  = sanitized.trim();
+  const trimmed = sanitize(userInput);
 
   const contents = historyToContents(history, 20);
 
@@ -183,7 +179,6 @@ export async function generateResponseStream(
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   deps().meta.route      = routeResult.type === 'google_search' ? `google_${routeResult.mode}` : routeResult.type;
-  deps().meta.label      = routeResult.type === 'rag_found' ? routeResult.dataLabel : undefined;
   deps().meta.confidence = ragConfidence;
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
@@ -211,7 +206,7 @@ export async function generateResponseStream(
 
   const fullText = scrubLeaks(await callProxyStream({
     contents,
-    ...(await systemFor(model, isCasual)),
+    ...systemFor(model, isCasual),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical));
 
@@ -233,14 +228,15 @@ export async function generateResponse(
   model: UnitModel,
   userName: string,
   history: Message[],
-  userInput: string,
+  rawInput: string,
   attachments: InlineImage[],
   onChunk: (text: string) => void,
   onAgentEvent?: AgentEventEmit,
 ): Promise<string> {
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
-  const system = await systemFor(model, false);
+  const userInput = sanitize(rawInput);
+  const system = systemFor(model, false);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
   const lang = sessionLang(userInput, history);
@@ -350,7 +346,6 @@ export async function generateResponse(
           : await resolveNaturalLanguageQuery(searchQ, history, model, emit);
       }
       if (route?.type === 'rag_found') {
-        deps().meta.label = route.dataLabel;
         deps().meta.confidence = route.confidence;
         const caveat = route.confidence === 'medium' ? MEDIUM_CAVEAT : '';
         ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
@@ -385,6 +380,5 @@ export async function generateResponse(
   };
 
   const streamed = scrubLeaks(await callProxyStream(body, onChunk));
-  emit({ type: 'done' });
   return streamed || FALLBACK_RESPONSE;
 }

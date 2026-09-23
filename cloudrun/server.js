@@ -12,9 +12,10 @@ const orch = require('./dist/orchestrator.cjs');
 const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
 const { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
-const { ASK_MODELS, CACHE_WARM_INTERVAL_MS, cacheFor, cacheInvalidate, warmPromptCaches } = require('./server/promptcache');
 const { cohereRerank, embedQuery, getAccessToken, vertexFetch } = require('./server/upstream');
 const registerTranscribe = require('./server/transcribe');
+
+const ASK_MODELS = new Set(orch.UNIT_MODELS);
 
 const app = express();
 
@@ -51,9 +52,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
     let reason = '', message = '';
     try { const e = JSON.parse(errText).error; reason = e.status || ''; message = e.message || ''; } catch { }
     console.error('[upstream] %s HTTP %d %s: %s', model, upstream.status, reason, (message || errText).slice(0, 160).replace(/\s+/g, ' '));
-    const cacheExpired = upstream.status === 400 && /cache content .* (expired|not found)/i.test(message);
-    if (cacheExpired && body.cachedContent) cacheInvalidate(body.cachedContent);
-    onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status, cacheExpired });
+    onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status });
     return;
   }
   const reader = upstream.body.getReader();
@@ -123,7 +122,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
-  const debug = b.debug === true;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
@@ -155,7 +153,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
         return { results: [], error: err.message || 'Rerank gagal' };
       }
     },
-    cacheFor,
     generate: async (body, model, enableGoogleSearch) => {
       if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
@@ -221,18 +218,18 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       model: deps.meta.modelUsed || orch.MODEL,
       cacheable: deps.meta.cacheable === true,
       full: answer,
-      ...(debug ? { debug: { rid: requestId, route: deps.meta.route, label: deps.meta.label, confidence: deps.meta.confidence, degraded: deps.meta.degraded === true, chunks: deps.meta.chunks || [] } } : {}),
     });
   } catch (err) {
+    if (ctrl.signal.aborted && !deadlineHit) {
+      console.info('[ask] rid=%s dibatalkan klien setelah %dms', requestId, Date.now() - tMulai);
+      return;
+    }
     const kuota = err && err.message === 'KUOTA_PENUH';
+    const sebab = deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception';
     console.error('[ask-error] rid=%s user=%s unit=%s q="%s" after=%dms sebab=%s | %s',
-      requestId, userName, unit, ringkasTanya(userInput, images.length), Date.now() - tMulai,
-      deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception',
+      requestId, userName, unit, ringkasTanya(userInput, images.length), Date.now() - tMulai, sebab,
       (err && err.stack) || err);
-    catatStat(_stat.err, {
-      t: Date.now(), unit,
-      sebab: deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception',
-    });
+    catatStat(_stat.err, { t: Date.now(), unit, sebab });
     sseWrite(res, 'error', { message: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'Waktu proses habis — coba kirim ulang pertanyaanmu.' : 'Gagal memproses pertanyaan.' });
   } finally {
     clearTimeout(deadlineTimer);
@@ -240,16 +237,10 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   }
 });
 
-if (require.main === module) {
-  const PORT = process.env.PORT || 8080;
-  app.listen(PORT, () => {
-    console.info('[boot] Dash5 proxy siap di port %d', PORT);
-    getAccessToken()
-      .then(() => console.info('[boot] kredensial GCP siap'))
-      .then(() => warmPromptCaches('boot'))
-      .catch(e => console.warn('[boot] warm-up gagal:', e && e.message));
-    setInterval(() => warmPromptCaches('refresh').catch(() => {}), CACHE_WARM_INTERVAL_MS).unref();
-  });
-}
-
-module.exports = { imageMagicMatches, IMAGE_MIME_ALLOWED, IMAGE_MAX_BYTES, REQUEST_DEADLINE_MS };
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+  console.info('[boot] Dash5 proxy siap di port %d', PORT);
+  getAccessToken()
+    .then(() => console.info('[boot] kredensial GCP siap'))
+    .catch(e => console.warn('[boot] kredensial GCP belum siap:', e && e.message));
+});

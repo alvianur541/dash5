@@ -138,16 +138,16 @@ export function foreignModelTemplate(foreign: string, activeModel: string, lang:
   const supported = UNIT_MODELS.some(s => s.toUpperCase().replace(/[\s-]/g, '') === foreign.toUpperCase().replace(/[\s-]/g, ''));
   if (lang === 'en') {
     return supported
-      ? `Your question is about **${foreign}**, but this chat is set to **${activeModel}**.\n\nSwitch the unit in the left menu to ${foreign} first, then I can answer from that unit's manual.\n\nAnything you'd like to check on ${activeModel}?`
+      ? `Your question is about **${foreign}**, but this chat is set to **${activeModel}**.\n\nSwitch the unit to ${foreign} first, then I can answer from that unit's manual.\n\nAnything you'd like to check on ${activeModel}?`
       : `I don't have the **${foreign}** manual in my system yet. I only hold data for: ${UNIT_MODELS.join(', ')}.\n\nI can't help diagnose that unit — my answers have to come from the official manual, not guesswork.\n\nAnything you'd like to check on **${activeModel}**?`;
   }
   if (lang === 'ja') {
     return supported
-      ? `ご質問は **${foreign}** についてですが、このチャットは **${activeModel}** に設定されています。\n\n左のメニューで機種を ${foreign} に切り替えてください。そうすればその機種のマニュアルからお答えできます。\n\n**${activeModel}** で確認したいことはありますか？`
+      ? `ご質問は **${foreign}** についてですが、このチャットは **${activeModel}** に設定されています。\n\n機種を ${foreign} に切り替えてください。そうすればその機種のマニュアルからお答えできます。\n\n**${activeModel}** で確認したいことはありますか？`
       : `**${foreign}** のマニュアルはまだシステムにありません。手元にあるのは次の機種のデータのみです: ${UNIT_MODELS.join(', ')}。\n\nその機種の診断はお手伝いできません。回答は必ず正規マニュアルに基づく必要があり、推測ではお答えできません。\n\n**${activeModel}** で確認したいことはありますか？`;
   }
   return supported
-    ? `Pertanyaan kamu soal **${foreign}**, tapi chat ini di-set ke **${activeModel}**.\n\nGanti dulu unitnya di menu sebelah kiri ke ${foreign}, baru aku bisa jawab dari manual unit itu.\n\nAda yang mau dicek di ${activeModel}?`
+    ? `Pertanyaan kamu soal **${foreign}**, tapi chat ini di-set ke **${activeModel}**.\n\nGanti dulu unitnya ke ${foreign}, baru aku bisa jawab dari manual unit itu.\n\nAda yang mau dicek di ${activeModel}?`
     : `Manual **${foreign}** belum ada di sistemku. Aku cuma pegang data unit: ${UNIT_MODELS.join(', ')}.\n\nAku ngga bisa bantu diagnosa unit itu — jawabanku harus dari manual resmi, bukan kira-kira.\n\nAda yang mau dicek di **${activeModel}**?`;
 }
 

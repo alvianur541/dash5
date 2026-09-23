@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, extractCatalogCode } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, extractCatalogCode, isFaultCode } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -167,8 +167,6 @@ export function detectForeignModel(query: string, activeModel: string): string |
   return null;
 }
 
-const FAULT_CODE_PATTERN = /(?:[A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)/i;
-
 export type RagRouteResult =
   | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
   | { type: 'rag_canned'; text: string }
@@ -182,14 +180,12 @@ export function streamCanned(text: string, onChunk: (text: string) => void): str
   return text;
 }
 
-const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/i;
+const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/gi;
 
 export function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
-  const looksLike    = new RegExp(`^${FAULT_CODE_PATTERN.source}$`, 'i').test(trimmed);
-  const embeddedCode = !looksLike
-    ? trimmed.match(EMBEDDED_FAULT_CODE_RE)?.[1]?.trim()
-    : undefined;
-  return { isFaultCode: looksLike || !!embeddedCode, faultQuery: embeddedCode ?? trimmed };
+  if (isFaultCode(trimmed)) return { isFaultCode: true, faultQuery: trimmed };
+  const embedded = [...trimmed.matchAll(EMBEDDED_FAULT_CODE_RE)].map(m => m[1].trim()).find(isFaultCode);
+  return { isFaultCode: !!embedded, faultQuery: embedded ?? trimmed };
 }
 
 async function augmentWithEngineManual(
@@ -452,6 +448,7 @@ export async function resolveNaturalLanguageQuery(
       content: [perf, ragResult.content].filter(Boolean).join('\n\n---\n\n'),
       hasResults: true,
       confidence: ragResult.hasResults && ragResult.confidence !== 'low' ? ragResult.confidence : 'high',
+      ragError: isRerankError(ragResult.ragError) ? ragResult.ragError : undefined,
     };
   }
   if (docNote && ragResult.hasResults) ragResult = { ...ragResult, content: docNote + ragResult.content };
@@ -558,7 +555,7 @@ export async function resolveMultiAspectQuery(
     `[PERTANYAAN MULTI-ASPEK — ${subs.length} aspek: ${subs.map((s, i) => `(${i + 1}) ${s}`).join(', ')}]\n` +
     `WAJIB jawab SEMUA aspek, satu bagian per aspek dengan heading sendiri, urutan sesuai nomor. ` +
     `Data tiap aspek ada di blok [ASPEK n/${subs.length}]. Aspek yang datanya ada tapi kamu lewati = jawaban tidak lengkap.` +
-    (missing.length ? ` Untuk aspek berikut TIDAK ADA data: ${missing.join('; ')} — nyatakan singkat tidak tercantum di data ${model}, jangan dikarang.` : '');
+    (missing.length ? ` Aspek berikut belum ketemu di pencarian ini: ${missing.join('; ')} — katakan singkat belum ketemu (jangan simpulkan manual ${model} tidak memuatnya) dan sarankan satu istilah lain untuk ditanyakan ulang; jangan dikarang.` : '');
 
   return { type: 'rag_found', content: `${directive}\n\n${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual };
 }

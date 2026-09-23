@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { UnitModel, Message, SessionMeta } from '../types';
-import { generateResponse, generateResponseStream, warmupProxy, type AgentEvent } from '../services/ai';
+import { UnitModel, Message, SessionMeta, AgentEvent } from '../types';
+import { generateResponse, generateResponseStream, warmupProxy } from '../services/ai';
 import { saveOrUpdateChatSession, deleteChatSession, deleteAllChatSessions, fetchUserSessionList, fetchSessionData } from '../services/supabase';
 import {
   loadSessionList, loadSessionData, saveSession, deleteSessionData, deleteAllSessionData, listKey,
@@ -222,27 +222,30 @@ export function useChat(user: User, isOnline: boolean) {
       setAgentEvents(prev => [...prev, event]);
     };
 
+    const opts = { sessionId: sessionSnapshot, signal: streamCtrl.signal };
+    let fullText: string;
     try {
-      let fullText = attachments?.length
-        ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, sessionSnapshot)
-        : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, sessionSnapshot);
-
-      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
-      if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot) return;
-      if (streamCtrl.signal.aborted) fullText = displayed + buffered;
-      if (!fullText.trim()) return;
-      upsertAssistant(fullText);
-      try { navigator.vibrate?.([12, 40, 12]); } catch { }
-      persist(fullText);
+      fullText = attachments?.length
+        ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, opts)
+        : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, opts);
     } catch (err) {
-      const e = err as Error;
-      if (e?.name === 'AbortError' || e?.message?.includes('abort')) return;
-      console.error('AI Error:', e?.message);
-      setError(errorMessage(err));
+      if (!streamCtrl.signal.aborted) {
+        console.error('AI Error:', (err as Error)?.message);
+        setError(errorMessage(err));
+        return;
+      }
+      // Stop cancels the request; what was already on screen is kept.
+      fullText = displayed + buffered;
     } finally {
+      if (timerId !== null) { clearTimeout(timerId); timerId = null; }
       setIsTyping(false);
       setIsStreaming(false);
     }
+
+    if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot || !fullText.trim()) return;
+    upsertAssistant(fullText);
+    if (!streamCtrl.signal.aborted) { try { navigator.vibrate?.([12, 40, 12]); } catch { } }
+    persist(fullText);
   }, [user, selectedModel]);
 
   useEffect(() => {

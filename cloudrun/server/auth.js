@@ -62,7 +62,6 @@ const _userCache = new Map();
 async function fetchAuthUser(token) {
   const hit = _userCache.get(token);
   if (hit && Date.now() < hit.expiresAt) return hit.user;
-  if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
     signal: AbortSignal.timeout(8_000),
@@ -74,4 +73,4 @@ async function fetchAuthUser(token) {
   return user;
 }
 
-module.exports = { _rateBuckets, _userCache, fetchAuthUser, rateLimit, securityHeaders, verifyToken };
+module.exports = { rateLimit, securityHeaders, verifyToken };

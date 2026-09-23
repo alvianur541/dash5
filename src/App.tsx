@@ -33,7 +33,7 @@ export default function App() {
     deleteConfirmId, setDeleteConfirmId, deleteAllConfirm, setDeleteAllConfirm,
     mountedRef, messagesRef, lastSentRef, queued, setQueued,
     stopStreaming, startNewSession, handleSelectSession,
-    confirmDelete, confirmDeleteAll, handleSendMessage,
+    confirmDelete, confirmDeleteAll, handleSendMessage, retryLast,
   } = useChat(user, isOnline);
 
   const onSwitchUnit = useCallback((model: UnitModel) => {
@@ -130,7 +130,7 @@ export default function App() {
           <strong className="font-semibold">Sinyal hilang</strong> — Riwayat tersedia. Chat aktif kembali saat sinyal pulih.
         </StatusBanner>
         <StatusBanner id="online" show={showBackOnline} tone="ok" icon={<Wifi size={13} className="text-emerald-400" />}>
-          <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, HTA siap digunakan.
+          <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, siap bertanya lagi.
         </StatusBanner>
         <StatusBanner id="queued" show={!!queued && !isOnline} tone="warn" icon={<Loader2 size={13} className="text-amber-400 animate-spin" />}
           action={<button onClick={() => setQueued(null)} className="text-[11px] underline text-amber-300/80">Batal</button>}>
@@ -139,7 +139,7 @@ export default function App() {
         <StatusBanner id="error" show={!!error} tone="error" icon={<AlertCircle size={15} className="text-red-400" />}
           action={<div className="flex items-center gap-3">
             {lastSentRef.current && !isTyping && !isStreaming && (
-              <button onClick={() => { const q = lastSentRef.current; if (!q) return; setError(null); handleSendMessage(q.content, q.attachments); }} className="text-xs font-semibold underline text-red-400">Kirim ulang</button>
+              <button onClick={() => { setError(null); retryLast(); }} className="text-xs font-semibold underline text-red-400">Kirim ulang</button>
             )}
             <button onClick={() => setError(null)} className="text-xs underline opacity-70 hover:opacity-100 text-red-400">Tutup</button>
           </div>}>

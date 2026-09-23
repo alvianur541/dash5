@@ -1,4 +1,4 @@
-const { CACHE_ENABLED, SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
+const { SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
 
 const _stat = { mulai: Date.now(), req: [], err: [] };
 
@@ -70,7 +70,6 @@ function registerMetrics(app) {
       config: {
         model: process.env.VERTEX_MODEL || '-',
         fallback: process.env.FALLBACK_MODELS || '-',
-        prompt_cache: CACHE_ENABLED ? 'on' : 'off',
         usage_log: USAGE_LOG_ON ? 'on' : 'off',
       },
     });
@@ -155,4 +154,4 @@ async function catatPemakaian(req, d) {
   }
 }
 
-module.exports = { JENDELA_MS, _stat, catatPemakaian, catatStat, persentil, registerMetrics, ringkasTanya };
+module.exports = { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya };

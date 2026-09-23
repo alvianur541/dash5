@@ -40,23 +40,20 @@ module.exports = async function () {
     t(calls() === 2 && r === UTUH && models[1] !== models[0], 'empty stream on primary: switched model'); }
 
   { const seen = []; const models = [];
-    const { d, calls } = mockDeps([[{ error: 'Upstream 400 INVALID_ARGUMENT', code: 400, cacheExpired: true }], stop(UTUH)], {
-      systemFor: async (m, noCache) => ({ systemInstruction: { parts: [{ text: `SYS-${m}-${noCache ? 'nocache' : 'cache'}` }] } }),
-    });
+    const body = { ...BODY, systemInstruction: { parts: [{ text: 'SYS' }] } };
+    const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)]);
     const origStream = d.stream; d.stream = (b, m, cb) => { seen.push(b); models.push(m); return origStream(b, m, cb); };
-    const r = await runWithDeps(d, () => callProxyStream({ ...BODY, cachedContent: 'projects/x/cachedContents/9' }, () => {}));
-    t(calls() === 2 && r === UTUH, 'cache expired: retried once, clean result');
-    t(models[0] === models[1] && models[0] === MODEL_CHAIN[0], `cache expired: SAME model retried (${models.join(' → ')})`);
-    t(!seen[1].cachedContent && seen[1].systemInstruction.parts[0].text.endsWith('-nocache'), 'cache expired: retry sends full system prompt, no cachedContent'); }
+    const r = await runWithDeps(d, () => callProxyStream(body, () => {}));
+    t(r === UTUH && models[1] === MODEL_CHAIN[1], `429 on primary: answered by fallback (${models.join(' → ')})`);
+    t(seen[1].systemInstruction.parts[0].text === 'SYS', 'fallback receives the same system prompt'); }
 
-  { const seen = [];
-    const { d } = mockDeps([[{ error: 'Resource exhausted', code: 429 }], stop(UTUH)], {
-      systemFor: async (m) => ({ systemInstruction: { parts: [{ text: `SYS-for-${m}` }] } }),
-    });
-    const origStream = d.stream; d.stream = (b, m, cb) => { seen.push(b); return origStream(b, m, cb); };
-    await runWithDeps(d, () => callProxyStream({ ...BODY, cachedContent: 'projects/x/cachedContents/1' }, () => {}));
-    t(seen[0].cachedContent === 'projects/x/cachedContents/1', 'primary keeps cachedContent');
-    t(!seen[1].cachedContent && seen[1].systemInstruction.parts[0].text === `SYS-for-${MODEL_CHAIN[1]}`, 'fallback swaps cache for its own system prompt'); }
+  { const { d, calls } = mockDeps([
+      [{ text: POTONG, usageMetadata: USAGE, live: true, finishReason: 'SAFETY' }],
+      [{ text: POTONG, live: true }],
+      stop(UTUH),
+    ]);
+    const r = await run(d);
+    t(calls() === 3 && r === UTUH, 'usage stamp from an earlier attempt does not let a truncated retry through'); }
 
   { const { d, calls } = mockDeps([[{ text: POTONG, live: true }], stop(UTUH)]);
     const r = await run(d);

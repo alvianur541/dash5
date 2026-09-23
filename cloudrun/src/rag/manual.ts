@@ -1,5 +1,5 @@
 import { capRerankPayload, computeConfidence, rerankWithCohere } from './rerank';
-import { RAGResult, filterByFaultCode, gatherCandidates, noteChunks, rankAndSelect, sb, wantsNumeric } from './retrieve';
+import { RAGResult, filterByFaultCode, gatherCandidates, rankAndSelect, sb, wantsNumeric } from './retrieve';
 import { escapeLike, isFaultCode, manualTerms } from './terms';
 import type { UnitModel } from '../types';
 
@@ -36,16 +36,11 @@ export async function searchTechnicalManualMulti(
   const { rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari } =
     await gatherCandidates(queries, model, faultCode, strictFilter);
 
-  if (allDocs.length === 0) return { content: '', hasResults: false };
+  // Empty because search itself failed is not "not in the manual" — surface the error instead.
+  if (allDocs.length === 0) return { content: '', hasResults: false, ...(embedFailed ? { ragError: embedError } : {}) };
 
   const filteredDocs = faultCode ? filterByFaultCode(allDocs, primaryQuery) : allDocs;
-
-  if (filteredDocs.length === 0) {
-    if (embedFailed && allDocs.length === 0) {
-      return { content: '', hasResults: false, ragError: embedError };
-    }
-    return { content: '', hasResults: false };
-  }
+  if (filteredDocs.length === 0) return { content: '', hasResults: false };
 
   return rankAndSelect(primaryQuery, filteredDocs, rankedDocs, wantsNumeric(primaryQuery), usedLooseFallback, topN, msCari);
 }
@@ -90,7 +85,6 @@ export async function searchEngineManual(
   const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
   console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
     effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);
-  noteChunks('em', top);
   return {
     content: top.map(t => t.content).join('\n\n---\n\n'),
     hasResults: top.length > 0,
@@ -112,14 +106,13 @@ export async function findPerformanceStandard(model: string, topicText: string, 
   const topic = PERF_TOPICS.find(t => t.re.test(topicText));
   if (!topic || !sb()) return null;
   try {
-    const { data } = await sb().from('documents').select('content, metadata')
+    const { data } = await sb().from('documents').select('content')
       .contains('metadata', { Model: model })
       .ilike('content', 'Section: PERFORMANCE STANDARD%')
       .ilike('content', `%${escapeLike(topic.term)}%`)
       .limit(2);
     const fresh = (data ?? []).filter((d: { content?: string }) => d?.content && !have.includes(d.content.split('\n')[0]));
     if (!fresh.length) return null;
-    noteChunks('perf', fresh.map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata })));
     console.info('[perf] %d tabel PERFORMANCE STANDARD (%s) ditambahkan', fresh.length, topic.term);
     return fresh.map((d: { content: string }) => d.content).join('\n\n---\n\n');
   } catch {

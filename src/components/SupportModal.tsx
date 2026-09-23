@@ -28,7 +28,7 @@ const FAQS = [
   },
   {
     q: 'Data apa yang digunakan HTA?',
-    a: 'HTA menggunakan data manual dan katalog yang sudah di-ingest per model unit: Technical Manual, Workshop Manual, Engine Manual, Operator Manual, Hydraulic Circuit Diagram, Parts Catalog, Engine Parts Catalog, CPM, dan data promo parts jika tersedia.',
+    a: 'HTA menjawab dari manual dan katalog resmi per model unit: Technical Manual, Workshop Manual, Engine Manual, Operator Manual, Hydraulic Circuit Diagram, Parts Catalog, Engine Parts Catalog, jadwal Periodic Maintenance, dan harga promo parts jika tersedia.',
   },
   {
     q: 'Apakah HTA bisa membaca gambar fault code?',
@@ -76,7 +76,7 @@ function CatalogPanel() {
       </summary>
       <div className="px-3 pb-3 border-t border-[var(--border-main)] pt-2.5">
         <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed mb-2.5">
-          HTA menggunakan data internal yang sudah di-ingest per model unit. Daftar di bawah menunjukkan kategori dokumen yang tersedia untuk pencarian.
+          HTA menjawab dari manual dan katalog resmi per model unit. Daftar di bawah menunjukkan dokumen yang tersedia untuk pencarian.
         </p>
 
         {loading && (
@@ -107,7 +107,7 @@ function CatalogPanel() {
                     <div key={kategori} className="px-3 py-1.5 flex items-center gap-2">
                       <span className="w-1 h-1 rounded-full bg-[var(--text-muted)] shrink-0" />
                       <span className="text-[11.5px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
-                        {kategori.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
+                        {kategori === 'CPM' ? 'Periodic Maintenance' : kategori.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
                       <span className="text-[10.5px] text-[var(--text-muted)] tabular-nums shrink-0">{count}</span>
                     </div>

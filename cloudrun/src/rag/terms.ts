@@ -1,8 +1,12 @@
 import { UNIT_MODELS } from '../types';
 
+const FAULT_CODE_RE = /^(?:[A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i;
+// Currency, unit and interval words before a number ("rp 50000", "pkt 2000") are not fault-code prefixes.
+const NOT_CODE_PREFIX_RE = /^(?:rp|pm|pkt|jam|hm|hr|pn|no|kg|mm|cm|km|hp|kw|rpm)\s/i;
 
 export function isFaultCode(query: string): boolean {
-  return /^(?:[A-Z]{1,3}\s*:?\s*(?:\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i.test(query.trim());
+  const q = query.trim();
+  return FAULT_CODE_RE.test(q) && !NOT_CODE_PREFIX_RE.test(q);
 }
 
 const PARTS_KEYWORDS_RE = /\b(part\s*number\w*|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;

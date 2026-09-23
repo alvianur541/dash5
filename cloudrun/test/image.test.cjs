@@ -3,7 +3,7 @@ const { suite } = require('./helpers.cjs');
 process.env.GOOGLE_CLOUD_PROJECT ||= 'test';
 process.env.SUPABASE_URL ||= 'https://test.supabase.co';
 process.env.SUPABASE_ANON_KEY ||= 'test';
-const { imageMagicMatches, IMAGE_MIME_ALLOWED, IMAGE_MAX_BYTES } = require('../server.js');
+const { imageMagicMatches, IMAGE_MIME_ALLOWED, IMAGE_MAX_BYTES } = require('../server/config');
 
 const b64 = bytes => Buffer.from(bytes).toString('base64');
 

@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
 import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
-import type { AgentEvent } from '../services/ai';
+import type { AgentEvent } from '../types';
 
 const Markdown = lazy(() => import('./Markdown'));
 
@@ -399,19 +399,16 @@ export function ChatWindow({
   const firstIdRef = useRef<string | undefined>(undefined);
 
   const handleFeedback = (id: string, type: 'up' | 'down') => {
-    setFeedback(prev => {
-      const next = prev[id] === type ? null : type;
-      if (next && user) {
-        const idx = messages.findIndex(m => m.id === id);
-        const answer = idx >= 0 ? (messages[idx]?.content ?? '') : '';
-        let question = '';
-        for (let i = idx - 1; i >= 0; i--) {
-          if (messages[i].role === 'user') { question = messages[i].content; break; }
-        }
-        saveFeedback({ userId: user.uid, messageId: id, rating: next, question, answer, model: selectedModel }).catch(() => {});
-      }
-      return { ...prev, [id]: next };
-    });
+    const next = feedback[id] === type ? null : type;
+    setFeedback(prev => ({ ...prev, [id]: next }));
+    if (!next || !user) return;
+    const idx = messages.findIndex(m => m.id === id);
+    const answer = idx >= 0 ? (messages[idx]?.content ?? '') : '';
+    let question = '';
+    for (let i = idx - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') { question = messages[i].content; break; }
+    }
+    saveFeedback({ userId: user.uid, messageId: id, rating: next, question, answer, model: selectedModel }).catch(() => {});
   };
 
   const handleScroll = useCallback(() => {

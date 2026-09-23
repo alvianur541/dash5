@@ -1,36 +1,11 @@
 import { getEmbedding } from './embed';
 import { capRerankPayload, computeConfidence, mmrSelect, rerankWithCohere } from './rerank';
-import { HybridResult, RAGResult, SearchResult, hybrid, noteChunks, sb } from './retrieve';
+import { HybridResult, RAGResult, SearchResult, hybrid, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
 import type { UnitModel } from '../types';
 
-
-const ACTIVE_PROMO_KATEGORI = ['PROMO Q2 FY2026'] as const;
-
-type PromoChunk = { content: string; similarity?: number; match_type?: string };
-
-function promoSectionKey(content: string): string {
-  const m = content.match(/PROMO\s+Q\d\s+FY\d+\s*-\s*([^\n(]+)/i);
-  return (m ? m[1] : '').trim().toUpperCase();
-}
-
-function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
-  const out: PromoChunk[] = [];
-  const seen = new Set<string>();
-  for (let i = byPeriod.length - 1; i >= 0; i--) {
-    const period = byPeriod[i];
-    for (const d of period) {
-      const key = promoSectionKey(d.content);
-      if (key && seen.has(key)) continue;
-      out.push(d);
-    }
-    for (const d of period) {
-      const key = promoSectionKey(d.content);
-      if (key) seen.add(key);
-    }
-  }
-  return out;
-}
+// The DB keeps one promo period; rename this when the next period's chunks replace it.
+const PROMO_KATEGORI = 'PROMO Q2 FY2026';
 
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 
@@ -53,25 +28,15 @@ export async function searchServiceIntervalParts(
     return { content: '', hasResults: false };
   }
 
-  const cpmPromise = hybrid(stripped, embedding, 1, { Model: model, Kategori: 'CPM' }, 0.20);
-  const promoPromises = ACTIVE_PROMO_KATEGORI.map(kat =>
-    hybrid(stripped, embedding, 12, { Model: model, Kategori: kat }, 0),
-  );
+  const [cpmRes, promoRes] = await Promise.allSettled([
+    hybrid(stripped, embedding, 1, { Model: model, Kategori: 'CPM' }, 0.20),
+    hybrid(stripped, embedding, 12, { Model: model, Kategori: PROMO_KATEGORI }, 0),
+  ]);
+  const rows = (r: typeof cpmRes): HybridResult[] =>
+    r.status === 'fulfilled' && Array.isArray(r.value.data) ? r.value.data : [];
 
-  const [cpmRes, ...promoSettled] = await Promise.allSettled([cpmPromise, ...promoPromises]);
-
-  const cpmData = cpmRes.status === 'fulfilled' && Array.isArray(cpmRes.value.data) ? cpmRes.value.data : [];
-  const promoByPeriod: HybridResult[][] = promoSettled.map(r =>
-    r.status === 'fulfilled' && Array.isArray(r.value.data) ? r.value.data : [],
-  );
-  const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
-
-  if (cpmData.length === 0 && promoData.length === 0) {
-    return { content: '', hasResults: false };
-  }
-
-  const all = [...cpmData, ...promoData];
-  noteChunks('interval', all.map(d => ({ content: d.content, score: d.similarity, metadata: d.metadata })));
+  const all = [...rows(cpmRes), ...rows(promoRes)];
+  if (all.length === 0) return { content: '', hasResults: false };
   return {
     content: all.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
@@ -81,23 +46,21 @@ export async function searchServiceIntervalParts(
 // Hybrid RPC only exact-matches "Part Number:" chunks; section and promo chunks need this literal lookup.
 export async function exactPartRows(pn: string, model: string): Promise<HybridResult[]> {
   if (!sb()) return [];
-  const cell = new RegExp(`(?:^|\\|)\\s*${pn}\\s*\\|`, 'im');
-  const rowsFor = async (filterModel: string, kategori: Set<string>, cap: number): Promise<HybridResult[]> => {
-    try {
-      const { data } = await sb().from('documents').select('content, metadata')
-        .contains('metadata', { Model: filterModel })
-        .ilike('content', `%${escapeLike(pn)}%`)
-        .limit(12);
-      return (data ?? [])
-        .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === filterModel
-          && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
-        .slice(0, cap)
-        .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
-    } catch {
-      return [];
-    }
-  };
-  return rowsFor(model, new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', ...ACTIVE_PROMO_KATEGORI]), 4);
+  const kategori = new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', PROMO_KATEGORI]);
+  const cell = new RegExp(`(?:^|\\|)\\s*${pn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\|`, 'im');
+  try {
+    const { data } = await sb().from('documents').select('content, metadata')
+      .contains('metadata', { Model: model })
+      .ilike('content', `%${escapeLike(pn)}%`)
+      .limit(12);
+    return (data ?? [])
+      .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === model
+        && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
+      .slice(0, 4)
+      .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
+  } catch {
+    return [];
+  }
 }
 
 const ENGINE_SECTION_TERMS: Array<[RegExp, string]> = [
@@ -183,14 +146,13 @@ export async function searchPartsCatalog(
 
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
-  const PROMO_START_IDX = 2;
-  const PROMO_END_IDX   = PROMO_START_IDX + ACTIVE_PROMO_KATEGORI.length;
-  const ENGINE_IDX = hasEngineCatalog ? PROMO_END_IDX : -1;
+  const PROMO_IDX = 2;
+  const ENGINE_IDX = hasEngineCatalog ? 3 : -1;
 
   const queries = [
     hybrid(queryText, embedding, bodyCount, { Model: model, Kategori: 'PARTS CATALOG' }, 0.28),
     hybrid(queryText, embedding, cpmCount, { Model: model, Kategori: 'CPM' }, 0.30),
-    ...ACTIVE_PROMO_KATEGORI.map(kat => hybrid(queryText, embedding, promoCount, { Model: model, Kategori: kat }, 0.25)),
+    hybrid(queryText, embedding, promoCount, { Model: model, Kategori: PROMO_KATEGORI }, 0.25),
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
   ];
 
@@ -206,11 +168,7 @@ export async function searchPartsCatalog(
 
   const bodyData: HybridResult[]   = getData(PARTS_IDX);
   const cpmData: HybridResult[]    = getData(CPM_IDX);
-  const promoByPeriod: HybridResult[][] = [];
-  for (let i = PROMO_START_IDX; i < PROMO_END_IDX; i++) {
-    promoByPeriod.push(getData(i));
-  }
-  const promoData: HybridResult[] = preferNewestPromo(promoByPeriod);
+  const promoData: HybridResult[]  = getData(PROMO_IDX);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
 
   if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0
@@ -312,7 +270,6 @@ export async function searchPartsCatalog(
   console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',
     cpmData.length, bodyData.length, engineData.length, promoData.length, top.length,
     partsConfidence, partNum ? ' (PN literal terbukti)' : rerankDipakai ? '' : ' (tanpa rerank)');
-  noteChunks('parts', top.map(d => ({ content: d.content, score: d.similarity, metadata: d.metadata })));
 
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),

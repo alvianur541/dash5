@@ -303,7 +303,7 @@ try:
     else:
         items = cd.get("cachedContents", [])
         tokens = sum(int(c.get("usageMetadata", {}).get("totalTokenCount", 0)) for c in items)
-        note = "   <- seharusnya 0 selama PROMPT_CACHE=off" if items else "   (aman)"
+        note = "   <- seharusnya 0: prompt cache sudah tidak dipakai kode" if items else "   (aman)"
         print(f"  {len(items)} cache, total {rb(tokens)} token{note}")
 except Exception:
     print("  ! tidak bisa dicek")

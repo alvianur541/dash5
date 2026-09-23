@@ -3,35 +3,6 @@ import { getEmbedding } from './embed';
 import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankWithCohere } from './rerank';
 import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, batangKata, escapeLike, stripModelFromQuery } from './terms';
 
-
-const META_CACHE_MAX = 500;
-
-const metaByContent = new Map<string, any>();
-
-function rememberMeta(content?: string, metadata?: any): void {
-  if (!content || !metadata || metaByContent.has(content)) return;
-  if (metaByContent.size >= META_CACHE_MAX) metaByContent.delete(metaByContent.keys().next().value as string);
-  metaByContent.set(content, metadata);
-}
-
-export function noteChunks(
-  kind: string,
-  docs: Array<{ content: string; score?: number; metadata?: any }>,
-): void {
-  const meta = deps().meta;
-  if (!meta.chunks) meta.chunks = [];
-  for (const d of docs) {
-    const md = d.metadata || metaByContent.get(d.content) || {};
-    const field = (k: string) =>
-      (md[k] ?? '').toString().trim() ||
-      (d.content.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim() ?? '');
-    meta.chunks.push({
-      kind, model: field('Model'), kategori: field('Kategori'), section: field('Section').slice(0, 120),
-      ...(typeof d.score === 'number' ? { score: Number(d.score.toFixed(3)) } : {}),
-    });
-  }
-}
-
 export const sb = () => deps().supabase as any;
 
 export interface SearchResult {
@@ -53,8 +24,6 @@ export interface RAGResult {
 }
 
 interface Candidates {
-  kwDocs: string[];
-  vecDocs: string[];
   rankedDocs: string[];
   allDocs: string[];
   usedLooseFallback: boolean;
@@ -86,15 +55,15 @@ export async function gatherCandidates(
       : q.trim(),
   );
 
-  const ilikeAny = (filter: Record<string, string>, limit: number): Promise<{ data: Array<{ content?: string; metadata?: any }> | null }> =>
-    sb().from('documents').select('content, metadata')
+  const ilikeAny = (filter: Record<string, string>, limit: number): Promise<{ data: Array<{ content?: string }> | null }> =>
+    sb().from('documents').select('content')
       .or(normalizedQueries.map(sq => `content.ilike.%${escapeLike(sq)}%`).join(','))
       .contains('metadata', filter)
       .limit(limit);
 
   const kwPromise = faultCode
     ? ilikeAny(strictFilter, 5 * normalizedQueries.length)
-    : Promise.resolve({ data: [] as Array<{ content?: string; metadata?: any }> });
+    : Promise.resolve({ data: [] as Array<{ content?: string }> });
 
   const wantsNumericAnswer = wantsNumeric(primaryQuery);
 
@@ -108,10 +77,9 @@ export async function gatherCandidates(
     const bigrams = stems.slice(0, -1).map((w, i) => `${w} ${stems[i + 1]}`);
     const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
     const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
-    const wantsNumber = wantsNumericAnswer;
 
     const { data, error } = await sb().rpc('match_documents_keyword_ranked', {
-      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumber, p_match_count: 10,
+      p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumericAnswer, p_match_count: 10,
     });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
@@ -171,11 +139,11 @@ export async function gatherCandidates(
   }
 
   if (kwSettled.status === 'fulfilled') {
-    for (const d of kwSettled.value.data ?? []) if (d?.content) { rememberMeta(d.content, d.metadata); kwDocs.push(d.content); }
+    for (const d of kwSettled.value.data ?? []) if (d?.content) kwDocs.push(d.content);
   }
 
   if (vectorSettled.status === 'fulfilled') {
-    for (const d of vectorSettled.value) if (d.content) { rememberMeta(d.content, (d as any).metadata); vecDocs.push(d.content); }
+    for (const d of vectorSettled.value) if (d.content) vecDocs.push(d.content);
   }
 
   const seen  = new Set<string>();
@@ -192,13 +160,13 @@ export async function gatherCandidates(
   if (faultCode && allDocs.length === 0) {
     const fb = await ilikeAny(looseFilter, 5 * normalizedQueries.length).then(r => r.data ?? []).catch(() => []);
     for (const d of fb) {
-      if (d?.content && !seen.has(d.content)) { rememberMeta(d.content, d.metadata); pushUnik(d.content); usedLooseFallback = true; }
+      if (d?.content && !seen.has(d.content)) { pushUnik(d.content); usedLooseFallback = true; }
     }
   }
 
   const embedFailed = vectorSettled.status === 'rejected';
   const embedError = embedFailed ? ((vectorSettled.reason as Error)?.message ?? 'Embedding service error') : undefined;
-  return { kwDocs, vecDocs, rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari };
+  return { rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari };
 }
 
 export function filterByFaultCode(docs: string[], primaryQuery: string): string[] {
@@ -255,13 +223,11 @@ export async function rankAndSelect(
     const m = deps().meta;
     m.msRag = (m.msRag || 0) + msCari;
     m.msRerank = (m.msRerank || 0) + msRerank;
-    m.topScore = topScore;
   } catch { /* di luar konteks request */ }
 
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
-  noteChunks('tm', top);
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }

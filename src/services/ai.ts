@@ -1,18 +1,10 @@
-
-import { UnitModel, Message } from '../types';
+import { UnitModel, Message, AgentEvent } from '../types';
 import { getAuthToken } from './supabase';
 import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 // Above the server deadline (120 s) so the server's own message wins instead of us guessing.
 const ASK_IDLE_TIMEOUT_MS = 130_000;
 export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
-
-export interface AgentEvent {
-  type: 'thinking' | 'tool_call' | 'tool_result' | 'done';
-  tool?: string;
-  found?: boolean;
-  message?: string;
-}
 
 type ThinkLevel = 'low' | 'medium' | 'high';
 
@@ -92,81 +84,93 @@ interface AskBody {
   sessionId?: string;
 }
 
+export interface AskOptions {
+  sessionId?: string;
+  signal?: AbortSignal;
+}
+
 const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali ini (respons server terlalu lama). Kirim ulang pertanyaanmu.';
 
 async function ask(
   body: AskBody,
   onChunk: (text: string) => void,
-  onAgentEvent?: (e: AgentEvent) => void,
+  onAgentEvent: ((e: AgentEvent) => void) | undefined,
+  cancel: AbortSignal | undefined,
 ): Promise<{ text: string; cacheable: boolean }> {
-
   const ctrl = new AbortController();
-  let idle = setTimeout(() => ctrl.abort(), ASK_IDLE_TIMEOUT_MS);
-  const tick = () => { clearTimeout(idle); idle = setTimeout(() => ctrl.abort(), ASK_IDLE_TIMEOUT_MS); };
-  let res: Response;
-  try {
-    res = await fetch(`${PROXY_URL}/v1/ask`, {
-      method: 'POST', headers: await authHeaders(), body: JSON.stringify(body), signal: ctrl.signal,
-    });
-  } catch (e) {
-    clearTimeout(idle);
-    if (ctrl.signal.aborted) throw new Error('SERVER_DIAM');
-    throw e;
-  }
-  if (!res.ok) {
-    let detail = '';
-    try { detail = (await res.json())?.error ?? ''; } catch { }
-    throw new Error(`Ask error ${res.status}${detail ? `: ${detail}` : ''}`);
-  }
-  if (!res.body) throw new Error('Ask response has no body');
+  const stop = () => ctrl.abort();
+  cancel?.addEventListener('abort', stop);
+  if (cancel?.aborted) stop();
+  let idle = setTimeout(stop, ASK_IDLE_TIMEOUT_MS);
+  const tick = () => { clearTimeout(idle); idle = setTimeout(stop, ASK_IDLE_TIMEOUT_MS); };
+  // The user's Stop surfaces as AbortError; only our idle timer means the server went quiet.
+  const abortReason = () => (cancel?.aborted ? new DOMException('Dibatalkan', 'AbortError') : new Error('SERVER_DIAM'));
 
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
   let text = '';
   let cacheable = false;
   let serverError: string | null = null;
-
-  while (true) {
-    let step: ReadableStreamReadResult<Uint8Array>;
-    try { step = await reader.read(); }
-    catch (e) {
-      clearTimeout(idle);
-      if (ctrl.signal.aborted) { if (text.trim()) break; throw new Error('SERVER_DIAM'); }
-      throw e;
+  try {
+    let res: Response;
+    try {
+      res = await fetch(`${PROXY_URL}/v1/ask`, {
+        method: 'POST', headers: await authHeaders(), body: JSON.stringify(body), signal: ctrl.signal,
+      });
+    } catch (e) {
+      throw ctrl.signal.aborted ? abortReason() : e;
     }
-    const { done, value } = step;
-    if (done) break;
-    tick();
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
-    for (const line of lines) {
-      if (!line.startsWith('data: ')) continue;
-      const raw = line.slice(6).trim();
-      if (!raw) continue;
-      let frame: any;
-      try { frame = JSON.parse(raw); } catch { continue; }
-      switch (frame.ev) {
-        case 'text':
-          if (frame.text) { text += frame.text; onChunk(frame.text); }
-          break;
-        case 'agent_event':
-          if (frame.event && onAgentEvent) onAgentEvent(frame.event as AgentEvent);
-          break;
-        case 'meta':
-          cacheable = frame.cacheable === true;
-          // Server text is final: retries and leak/LaTeX cleanup can make it shorter than what streamed.
-          if (typeof frame.full === 'string' && frame.full.trim()) text = frame.full;
-          break;
-        case 'error':
-          serverError = String(frame.message || 'Gagal memproses pertanyaan.');
-          break;
+    if (!res.ok) {
+      let detail = '';
+      try { detail = (await res.json())?.error ?? ''; } catch { }
+      throw new Error(`Ask error ${res.status}${detail ? `: ${detail}` : ''}`);
+    }
+    if (!res.body) throw new Error('Ask response has no body');
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      let step: ReadableStreamReadResult<Uint8Array>;
+      try {
+        step = await reader.read();
+      } catch (e) {
+        if (!ctrl.signal.aborted) throw e;
+        if (cancel?.aborted || !text.trim()) throw abortReason();
+        break;
+      }
+      if (step.done) break;
+      tick();
+      buffer += decoder.decode(step.value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const raw = line.slice(6).trim();
+        if (!raw) continue;
+        let frame: any;
+        try { frame = JSON.parse(raw); } catch { continue; }
+        switch (frame.ev) {
+          case 'text':
+            if (frame.text) { text += frame.text; onChunk(frame.text); }
+            break;
+          case 'agent_event':
+            if (frame.event && onAgentEvent) onAgentEvent(frame.event as AgentEvent);
+            break;
+          case 'meta':
+            cacheable = frame.cacheable === true;
+            // Server text is final: retries and leak/LaTeX cleanup can make it shorter than what streamed.
+            if (typeof frame.full === 'string' && frame.full.trim()) text = frame.full;
+            break;
+          case 'error':
+            serverError = String(frame.message || 'Gagal memproses pertanyaan.');
+            break;
+        }
       }
     }
+  } finally {
+    clearTimeout(idle);
+    cancel?.removeEventListener('abort', stop);
   }
 
-  clearTimeout(idle);
   if (serverError && !text.trim()) throw new Error(serverError);
   return { text: text || FALLBACK_RESPONSE, cacheable };
 }
@@ -178,7 +182,7 @@ export async function generateResponseStream(
   userInput: string,
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
-  sessionId?: string,
+  { sessionId, signal }: AskOptions = {},
 ): Promise<string> {
   const trimmed = userInput.trim();
   const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed, history);
@@ -192,7 +196,7 @@ export async function generateResponseStream(
 
   const { text, cacheable } = await ask(
     { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, sessionId },
-    onChunk, onAgentEvent,
+    onChunk, onAgentEvent, signal,
   );
   if (cacheKey && cacheable) writeAnswerCache(cacheKey, text);
   return text;
@@ -221,7 +225,7 @@ export async function generateResponse(
   attachments: File[],
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
-  sessionId?: string,
+  { sessionId, signal }: AskOptions = {},
 ): Promise<string> {
   const settled = await Promise.allSettled(attachments.map(fileToInline));
   const images = settled
@@ -231,7 +235,7 @@ export async function generateResponse(
 
   const { text } = await ask(
     { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined, sessionId },
-    onChunk, onAgentEvent,
+    onChunk, onAgentEvent, signal,
   );
   return text;
 }

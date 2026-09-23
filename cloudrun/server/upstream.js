@@ -192,6 +192,8 @@ async function vertexEmbed(query, taskType = 'RETRIEVAL_QUERY') {
           data.predictions[0].embeddings && data.predictions[0].embeddings.values) || [];
 }
 
+const RERANK_TIMEOUT_MS = 8_000;
+
 async function cohereRerank(query, documents, topN) {
   if (COHERE_KEYS.length === 0) { const e = new Error('COHERE_API_KEY not configured'); e.status = 500; throw e; }
   for (const key of COHERE_KEYS) {
@@ -200,6 +202,7 @@ async function cohereRerank(query, documents, topN) {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
         body: JSON.stringify({ model: COHERE_RERANK_MODEL, query, documents, top_n: topN }),
+        signal: AbortSignal.timeout(RERANK_TIMEOUT_MS),
       });
       if (upstream.status === 429 || upstream.status === 401 || upstream.status === 403) {
         console.warn('Cohere key gagal (status %d), coba key berikutnya...', upstream.status);
@@ -210,6 +213,8 @@ async function cohereRerank(query, documents, topN) {
       return data;
     } catch (err) {
       if (err.status) throw err;
+      // Another key would wait on the same slow server; give up and let retrieval run unranked.
+      if (err.name === 'TimeoutError') throw new Error(`Rerank timeout (${RERANK_TIMEOUT_MS / 1000}s)`);
       console.warn('Cohere key error, trying next:', err);
     }
   }
@@ -219,4 +224,4 @@ async function cohereRerank(query, documents, topN) {
   throw e;
 }
 
-module.exports = { STALL_MAX, STALL_MS_NONSTREAM, STALL_MS_STREAM_CEPAT, STALL_MS_STREAM_MIKIR, auth, cohereRerank, embedQuery, fetchAntiMacet, geminiEmbed, getAccessToken, resolveUpstream, vertexEmbed, vertexFetch };
+module.exports = { STALL_MAX, cohereRerank, embedQuery, fetchAntiMacet, getAccessToken, resolveUpstream, vertexFetch };
