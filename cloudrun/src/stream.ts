@@ -152,12 +152,19 @@ export async function callProxyStream(
       await tunggu(300);
       continue;
     }
-    if (!usage && !looksComplete(fullText) && canRetry) {
-      console.warn('[stream] jawaban sepotong (%d huruf, tanpa stempel usage) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
-      catatSebab('sepotong');
-      if (fullText) onChunk('\n\n');
-      await tunggu(attempt * 900);
-      continue;
+    // A finished Vertex stream always ends with finishReason; none means the connection was cut.
+    if (!finishReason && fullText.trim()) {
+      if (canRetry) {
+        console.warn('[stream] jawaban sepotong (%d huruf, tanpa finishReason) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
+        catatSebab('sepotong');
+        onChunk('\n\n');
+        await tunggu(attempt * 900);
+        continue;
+      }
+      console.warn('[stream] jawaban tetap terputus setelah %d percobaan (%d huruf) — beri catatan', attempt, fullText.trim().length);
+      fullText += STREAM_CUT_NOTE;
+      onChunk(STREAM_CUT_NOTE);
+      break;
     }
     if (finishReason === 'MAX_TOKENS') {
       // Same cap would truncate again; retrying only burns quota and drops to the fallback model.

@@ -63,24 +63,29 @@ module.exports = async function () {
     const r = await run(d);
     t(calls() === 2 && r === UTUH, 'no usage stamp + 6 chars: retried'); }
 
-  { const PANJANG = 'x'.repeat(320) + '.'; const { d, calls } = mockDeps([[{ text: PANJANG, live: true }]]);
+  { const PANJANG = 'Kode 11400-4 mendeteksi arus feedback rendah. '.repeat(70) + '(*Pump 2 flow rate';
+    const { d, calls } = mockDeps([[{ text: PANJANG, live: true }], stop(UTUH)]);
     const r = await run(d);
-    t(calls() === 1 && r === PANJANG, 'no usage stamp + >=300 chars: not retried'); }
+    t(calls() === 2 && r === UTUH, `3.000+ chars cut without finishReason (sesi 6f8fe028): retried (${calls()} calls)`); }
 
-  { const { d, calls } = mockDeps([[{ text: 'Siap, Bang.', live: true }]]);
+  { const { d, calls } = mockDeps([[{ text: 'Siap, Bang.', live: true }], stop(UTUH)]);
     const r = await run(d);
-    t(calls() === 1 && r === 'Siap, Bang.', 'no usage stamp + ends with period: not retried'); }
+    t(calls() === 2 && r === UTUH, 'ends with period but no finishReason: retried'); }
+
+  { const { d, calls } = mockDeps([[{ text: 'Siap, Bang.', usageMetadata: USAGE, live: true, finishReason: 'STOP' }]]);
+    const r = await run(d);
+    t(calls() === 1 && r === 'Siap, Bang.', 'short answer with STOP: not retried'); }
 
   { const { d, calls } = mockDeps([[{ text: POTONG, live: true }]]);
     const r = await run(d);
-    t(calls() === 3 && r.startsWith(POTONG), 'incomplete x3: stops at 3 attempts'); }
+    t(calls() === 3 && r.startsWith(POTONG) && r.endsWith(STREAM_CUT_NOTE), 'cut x3: stops at 3 attempts and says so'); }
 
   { const { d, calls } = mockDeps([[{ text: POTONG, live: true }], stop(UTUH)], { deadlineAt: Date.now() + 60_000 });
     const r = await run(d);
     t(calls() === 2 && r === UTUH, 'deadline far: retried'); }
   { const { d, calls } = mockDeps([[{ text: POTONG, live: true }], stop(UTUH)], { deadlineAt: Date.now() + 2_000 });
     const r = await run(d);
-    t(calls() === 1 && r === POTONG, 'deadline <5s: not retried'); }
+    t(calls() === 1 && r === POTONG + STREAM_CUT_NOTE, 'deadline <5s: not retried, cut note added'); }
   { const { d, calls } = mockDeps([[{ text: POTONG, usageMetadata: USAGE, live: true, finishReason: 'SAFETY' }]], { deadlineAt: Date.now() - 1 });
     const r = await run(d);
     t(calls() === 1 && r.includes(STREAM_HALT_NOTE), 'deadline passed + halt: 1 attempt + note'); }
