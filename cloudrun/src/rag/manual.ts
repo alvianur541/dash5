@@ -1,6 +1,7 @@
 import { capRerankPayload, computeConfidence, rerankWithCohere } from './rerank';
 import { RAGResult, filterByFaultCode, gatherCandidates, noteChunks, rankAndSelect, sb, wantsNumeric } from './retrieve';
 import { escapeLike, isFaultCode, manualTerms } from './terms';
+import type { UnitModel } from '../types';
 
 
 const TROUBLESHOOTING_KATEGORI_BY_MODEL: Record<string, string> = {
@@ -49,7 +50,7 @@ export async function searchTechnicalManualMulti(
   return rankAndSelect(primaryQuery, filteredDocs, rankedDocs, wantsNumeric(primaryQuery), usedLooseFallback, topN, msCari);
 }
 
-const ENGINE_MANUAL_MODELS = new Set(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
+const ENGINE_MANUAL_MODELS: ReadonlySet<string> = new Set<UnitModel>(['ZX48U-5A', 'ZX65USB-5A', 'ZX138MF-5G', 'ZX200-5G']);
 
 export async function searchEngineManual(
   pCodes: string[],

@@ -1,13 +1,8 @@
+// Unit list lives in cloudrun/src: only that folder is uploaded by `gcloud run deploy --source=cloudrun`.
+export { UNIT_MODELS } from '@/cloudrun/src/types';
+export type { UnitModel, Message } from '@/cloudrun/src/types';
 
-export type UnitModel = 'ZX48U-5A' | 'ZX65USB-5A' | 'ZX138MF-5G' | 'ZX200-5G' | 'KCM 60ZV' | 'ZW140';
-
-export interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: number;
-  attachments?: string[];
-}
+import type { UnitModel, Message } from '@/cloudrun/src/types';
 
 export interface SessionMeta {
   id: string;

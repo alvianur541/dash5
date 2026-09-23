@@ -2,6 +2,7 @@ import { getEmbedding } from './embed';
 import { capRerankPayload, computeConfidence, mmrSelect, rerankWithCohere } from './rerank';
 import { HybridResult, RAGResult, SearchResult, hybrid, noteChunks, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
+import type { UnitModel } from '../types';
 
 
 const ACTIVE_PROMO_KATEGORI = ['PROMO Q2 FY2026'] as const;
@@ -33,9 +34,9 @@ function preferNewestPromo(byPeriod: PromoChunk[][]): PromoChunk[] {
 
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 
-const ENGINE_CATALOG_MODELS = new Set(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
+const ENGINE_CATALOG_MODELS: ReadonlySet<string> = new Set<UnitModel>(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
 
-export const MODELS_WITHOUT_PARTS_CATALOG = new Set(['ZX65USB-5A', 'ZX138MF-5G']);
+export const MODELS_WITHOUT_PARTS_CATALOG: ReadonlySet<string> = new Set<UnitModel>(['ZX65USB-5A', 'ZX138MF-5G']);
 
 export async function searchServiceIntervalParts(
   query: string,
