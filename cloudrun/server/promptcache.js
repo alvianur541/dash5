@@ -95,7 +95,7 @@ async function warmPromptCaches(reason) {
   if (!CACHE_ENABLED || !PROJECT_ID) return;
   const t0 = Date.now();
   let pending = [];
-  for (const m of orch.MODEL_CHAIN) for (const unit of UNIT_MODELS) pending.push([m, unit]);
+  for (const m of orch.MODEL_CHAIN) for (const unit of orch.UNIT_MODELS) pending.push([m, unit]);
   const total = pending.length;
   for (let attempt = 1; attempt <= 3 && pending.length; attempt++) {
     if (attempt > 1) await new Promise(r => setTimeout(r, 30_000));

@@ -138,7 +138,7 @@ module.exports = async function () {
   }
 
   {
-    const { manualTerms, isShortFollowUp, FALLBACK_RESPONSE } = require('./helpers.cjs');
+    const { manualTerms, isShortFollowUp } = require('./helpers.cjs');
     t(manualTerms('main pump weight') === 'pump device weight' && manualTerms('main pump removal installation') === 'pump device removal installation',
       '"main pump" berat/lepas-pasang -> istilah manual "pump device" (sesi 11db623e: 170 kg / 160 kg)');
     t(manualTerms('main pump delivery pressure') === 'main pump delivery pressure', 'main pump tekanan tetap (manual memakai "MAIN PUMP" di situ)');

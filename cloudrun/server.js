@@ -16,8 +16,6 @@ const { ASK_MODELS, CACHE_WARM_INTERVAL_MS, cacheFor, cacheInvalidate, warmPromp
 const { cohereRerank, embedQuery, getAccessToken, vertexFetch } = require('./server/upstream');
 const registerTranscribe = require('./server/transcribe');
 
-const UNIT_MODELS = new Set(orch.UNIT_MODELS);
-
 const app = express();
 
 const BIG_BODY_PATHS = new Set(['/v1/transcribe', '/v1/ask']);

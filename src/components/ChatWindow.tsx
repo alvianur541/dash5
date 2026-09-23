@@ -25,7 +25,7 @@ export function stripLatex(text: string): string {
 }
 
 const CUT_NOTE_RE = /\n\n> ⚠️ Jawaban ter(?:putus|henti)[^\n]*/;
-const PN_CODE_RE = /^[A-Z0-9][A-Z0-9.\/-]{4,}$/i;
+const PN_CODE_RE = /^[A-Z0-9][A-Z0-9./-]{4,}$/i;
 
 function partNoColumn(children: ReactNode): number {
   const cells: string[] = [];
@@ -139,7 +139,6 @@ interface ChatWindowProps {
   isStreaming: boolean;
   selectedModel: UnitModel;
   userName?: string;
-  hasHistory?: boolean;
   agentEvents?: AgentEvent[];
   pocketIds?: Set<string>;
   onTogglePocket?: (messageId: string) => void;
@@ -357,7 +356,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, hasHistory = false, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false,
+  messages, isTyping, isStreaming, selectedModel, userName, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);

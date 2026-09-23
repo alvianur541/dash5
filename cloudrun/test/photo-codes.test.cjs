@@ -1,4 +1,4 @@
-const { extractCatalogCode, extractPartNumber, isPartsQuery, searchPhotoCodes, AC_CODE_RE, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { extractCatalogCode, extractPartNumber, isPartsQuery, searchPhotoCodes, AC_CODE_RE, acRowRe, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 function fakeSupabase(rows) {
   const q = {
@@ -46,6 +46,13 @@ module.exports = async () => {
 
   t(['AC:51', 'ac:51', 'A/C 51', 'AC51', 'AC:5'].every(c => AC_CODE_RE.test(c)) && AC_CODE_RE.exec('AC:51')[1] === '51', 'kode AC dikenali, angkanya diambil');
   t(['13006-2', 'ENG:00436-04', 'AC:511', 'CA2769', '51'].every(c => !AC_CODE_RE.test(c)), 'fault code biasa & angka telanjang tidak dianggap kode AC');
+
+  {
+    const isiAc = 'AIR CONDITIONER - FAULT CODE LIST\n  Fault Code: 51 (Abnormal high/low refrigerant pressure)';
+    t(!acRowRe('51').source.includes(String.fromCharCode(8)), 'pola baris AC tidak memuat backspace (backslash di template literal wajib ganda)');
+    t(acRowRe('51').test(isiAc), 'baris kode AC di hasil pencarian dikenali');
+    t(!acRowRe('51').test('PERFORMANCE STANDARD\n  Travel speed 5.1 km/h'), 'angka lain (5.1 km/h) tidak dianggap baris kode AC');
+  }
 
   return done();
 };

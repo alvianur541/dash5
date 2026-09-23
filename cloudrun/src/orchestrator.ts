@@ -90,11 +90,13 @@ export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
 
 export const AC_CODE_RE = /^A\/?C\s*:?\s*(\d{1,2})$/i;
 
+// Backslashes must be doubled: this is a template literal, so `\s` would become a plain "s".
+export const acRowRe = (num: string): RegExp => new RegExp(`(?:^|\\n)\\s*(?:Fault Code:\\s*)?${num}\\b`);
+
 // A bare 2-digit AC code matches unrelated tables; search with context, then require the code row itself.
 async function searchAcCode(code: string, num: string, model: UnitModel, topN: number): Promise<{ code: string; found: boolean; content: string }> {
   const r = await searchTechnicalManualMulti([`air conditioner fault code ${num}`], model, topN, getTroubleshootingKategori(model));
-  const row = new RegExp(`(?:^|\n)\s*(?:Fault Code:\s*)?${num}\b`);
-  return { code, found: r.hasResults && row.test(r.content), content: r.content };
+  return { code, found: r.hasResults && acRowRe(num).test(r.content), content: r.content };
 }
 
 // A photographed parts list: look up every code exactly and name the misses, so none is called absent.
@@ -270,7 +272,7 @@ export async function generateResponse(
           const ac = code.match(AC_CODE_RE);
           if (ac) return searchAcCode(code, ac[1], model, perCodeTopN);
           const terms = extractSearchTerms(code);
-          let result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
+          const result = await searchTechnicalManualMulti(terms, model, perCodeTopN);
           let content = result.content;
 
           if (result.hasResults) {

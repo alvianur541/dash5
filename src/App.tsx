@@ -152,7 +152,6 @@ export default function App() {
           isStreaming={isStreaming}
           selectedModel={selectedModel}
           userName={userName}
-          hasHistory={sessionList.length > 0}
           pocketIds={pocket.pocketIds}
           onTogglePocket={id => pocket.toggle(id, messagesRef.current, selectedModel)}
           agentEvents={agentEvents}
