@@ -6,7 +6,6 @@ Core tables: `documents` (pgvector, 3072-dim `gemini-embedding-001`), `chat_sess
 | Folder | Contents | Run it? |
 | --- | --- | --- |
 | `migrations/` | Dated schema changes — the source of truth | Yes, in filename order |
-| `migrations/rollback/` | Reverts for specific migrations | Only to undo that migration |
 | `sql/` | Older changes applied by hand before migrations existed | Already applied in production |
 | `snapshots/` | Dump of production RPC functions | Only to restore missing functions |
 | `tests/` | Read-only checks against the database | Yes, `SELECT` only |
