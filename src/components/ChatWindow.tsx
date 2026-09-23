@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, Maximize2, X, Plus, Minus, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -68,10 +68,9 @@ export function tableNotes(content: string): string[] {
   return [...seen];
 }
 
-function TableBlock({ children, sticky, onExpand, onSave }: {
+function TableBlock({ children, sticky, onSave }: {
   children?: ReactNode;
   sticky?: string;
-  onExpand?: (table: ReactNode) => void;
   onSave?: (table: HTMLTableElement) => void;
 }) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -84,33 +83,20 @@ function TableBlock({ children, sticky, onExpand, onSave }: {
       >
         <table className={sticky}>{children}</table>
       </div>
-      {(onExpand || onSave) && (
+      {onSave && (
         <div className="table-tools">
-          {onSave && (
-            <button
-              className="table-expand-btn"
-              onClick={() => {
-                const el = wrapRef.current?.querySelector('table');
-                if (el) onSave(el as HTMLTableElement);
-              }}
-              aria-label="Simpan tabel jadi gambar"
-              title="Simpan gambar"
-            >
-              <ImageDown size={13} />
-              <span>Simpan gambar</span>
-            </button>
-          )}
-          {onExpand && (
-            <button
-              className="table-expand-btn"
-              onClick={() => onExpand(<table className={sticky}>{children}</table>)}
-              aria-label="Buka tabel layar penuh"
-              title="Layar penuh"
-            >
-              <Maximize2 size={13} />
-              <span>Layar penuh</span>
-            </button>
-          )}
+          <button
+            className="table-expand-btn"
+            onClick={() => {
+              const el = wrapRef.current?.querySelector('table');
+              if (el) onSave(el as HTMLTableElement);
+            }}
+            aria-label="Simpan tabel jadi gambar"
+            title="Simpan gambar"
+          >
+            <ImageDown size={13} />
+            <span>Simpan gambar</span>
+          </button>
         </div>
       )}
     </div>
@@ -257,13 +243,12 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onExpandTable, onSaveTable, inPocket = false, onTogglePocket, resendText, onResend,
+  message, feedback, onFeedback, isStreaming = false, onSaveTable, inPocket = false, onTogglePocket, resendText, onResend,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
   onFeedback: (id: string, type: 'up' | 'down') => void;
   isStreaming?: boolean;
-  onExpandTable?: (table: ReactNode, notes: string[]) => void;
   onSaveTable?: (table: HTMLTableElement, notes: string[]) => void;
   inPocket?: boolean;
   onTogglePocket?: (messageId: string) => void;
@@ -307,7 +292,6 @@ const MessageItem = memo(function MessageItem({
                   table: ({ children }) => (
                     <TableBlock
                       sticky={stickyClass(children)}
-                      onExpand={!isStreaming && onExpandTable ? node => onExpandTable(node, tableNotes(message.content)) : undefined}
                       onSave={!isStreaming && onSaveTable ? el => onSaveTable(el, tableNotes(message.content)) : undefined}
                     >
                       {children}
@@ -379,17 +363,6 @@ export function ChatWindow({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [feedback, setFeedback] = useState<Record<string, 'up' | 'down' | null>>({});
   const [showScrollBtn, setShowScrollBtn] = useState(false);
-  const [expandedTable, setExpandedTable] = useState<ReactNode | null>(null);
-  const [tableFont, setTableFont] = useState(15);
-  const tableNotesRef = useRef<string[]>([]);
-  const modalBodyRef = useRef<HTMLDivElement>(null);
-  const openTable = useCallback((table: ReactNode, notes: string[] = []) => {
-    tableNotesRef.current = notes;
-    setTableFont(15);
-    setExpandedTable(table);
-  }, []);
-  const closeTable = useCallback(() => setExpandedTable(null), []);
-
   const toast = useToast();
   const [savedImage, setSavedImage] = useState<{ url: string; name: string; blob: Blob } | null>(null);
   const closeImage = useCallback(() => {
@@ -414,13 +387,6 @@ export function ChatWindow({
     }
   }, [selectedModel, toast]);
 
-  const downloadSavedImage = useCallback(async () => {
-    if (!savedImage) return;
-    const img = await import('../lib/tableImage');
-    img.downloadBlob(savedImage.blob, savedImage.name);
-    toast('Gambar diunduh ke Files');
-  }, [savedImage, toast]);
-
   const shareSavedImage = useCallback(async () => {
     if (!savedImage) return;
     const img = await import('../lib/tableImage');
@@ -431,17 +397,6 @@ export function ChatWindow({
       toast('Gambar diunduh ke Files');
     }
   }, [savedImage, closeImage, toast]);
-  const saveModalTable = useCallback(() => {
-    const el = modalBodyRef.current?.querySelector('table');
-    if (el) saveTableImage(el as HTMLTableElement, tableNotesRef.current);
-  }, [saveTableImage]);
-
-  useEffect(() => {
-    if (!expandedTable) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setExpandedTable(null); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [expandedTable]);
   const pinnedRef = useRef(true);
   const prevLenRef = useRef(0);
   const firstIdRef = useRef<string | undefined>(undefined);
@@ -567,7 +522,6 @@ export function ChatWindow({
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
                 isStreaming={showCursor}
-                onExpandTable={openTable}
                 onSaveTable={saveTableImage}
                 inPocket={pocketIds?.has(message.id) ?? false}
                 onTogglePocket={onTogglePocket}
@@ -602,45 +556,6 @@ export function ChatWindow({
       )}
 
       <AnimatePresence>
-        {expandedTable && (
-          <m.div
-            key="table-modal"
-            className="table-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-label="Tabel layar penuh"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.15 }}
-          >
-            <div className="table-modal-bar">
-              <span className="table-modal-title">Tabel</span>
-              <div className="table-modal-actions">
-                <button className="table-modal-btn" onClick={saveModalTable} aria-label="Simpan tabel jadi gambar" title="Simpan gambar">
-                  <ImageDown size={16} />
-                </button>
-                <button className="table-modal-btn" onClick={() => setTableFont(f => Math.max(12, f - 1.5))} aria-label="Perkecil teks">
-                  <Minus size={16} />
-                </button>
-                <button className="table-modal-btn" onClick={() => setTableFont(f => Math.min(21, f + 1.5))} aria-label="Perbesar teks">
-                  <Plus size={16} />
-                </button>
-                <button className="table-modal-btn" onClick={closeTable} aria-label="Tutup">
-                  <X size={17} />
-                </button>
-              </div>
-            </div>
-            <div className="table-modal-scroll" onScroll={e => e.currentTarget.classList.toggle('scrolled', e.currentTarget.scrollLeft > 2)}>
-              <div ref={modalBodyRef} className="markdown-body table-modal-body" style={{ fontSize: `${tableFont}px` }}>
-                {expandedTable}
-              </div>
-            </div>
-          </m.div>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
         {savedImage && (
           <m.div
             key="table-image"
@@ -663,17 +578,10 @@ export function ChatWindow({
             </div>
             <div className="table-image-body">
               <img src={savedImage.url} alt="Tabel harga" className="table-image-preview" />
-              <div className="table-image-actions">
-                <button className="table-image-save" onClick={shareSavedImage}>
-                  <ImageDown size={16} />
-                  <span>Simpan / kirim gambar</span>
-                </button>
-                <button className="table-image-alt" onClick={downloadSavedImage}>Unduh ke Files</button>
-              </div>
-              <p className="table-image-hint">
-                Pilih <strong>Save Image</strong> untuk menyimpan ke Foto, atau langsung pilih WhatsApp.
-                Bisa juga tekan lama gambarnya.
-              </p>
+              <button className="table-image-save" onClick={shareSavedImage}>
+                <ImageDown size={16} />
+                <span>Simpan / kirim gambar</span>
+              </button>
             </div>
           </m.div>
         )}
