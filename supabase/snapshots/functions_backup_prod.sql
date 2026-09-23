@@ -1,4 +1,8 @@
 -- ═══════════════════════════════════════════════════════════════════════════
+-- ⚠️ BUKAN SUMBER KEBENARAN SKEMA. Ini SNAPSHOT produksi 15 Agu 2026, bukan migrasi.
+-- Jangan dijalankan untuk setup dari nol — pakai supabase/migrations/ (lihat supabase/README.md).
+-- Berkas ini hanya untuk memulihkan definisi fungsi kalau hilang dari database.
+
 -- CADANGAN DEFINISI FUNGSI PRODUKSI — Supabase cloud (ipoxxshvtkragylisogv)
 -- Diambil 15 Agustus 2026 lewat pg_get_functiondef(), SEBELUM migrasi self-host.
 --
@@ -16,7 +20,7 @@
 -- mati total tanpa jaring pengaman.
 --
 -- CARA PAKAI (kalau restore gagal / fungsi tidak terbawa)
---   psql -U postgres -d postgres -f sql/functions_backup_prod.sql
+--   psql -U postgres -d postgres -f supabase/snapshots/functions_backup_prod.sql
 -- Aman dijalankan berulang: semuanya CREATE OR REPLACE.
 --
 -- ⚠️ URUTAN: jalankan SETELAH `CREATE EXTENSION vector;` dan `pg_trgm`,
