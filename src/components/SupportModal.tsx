@@ -1,44 +1,150 @@
 
 import { useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
-import { X, Mail, MessageCircleQuestion, BookOpen, Wrench, ExternalLink, Database, Loader2 } from 'lucide-react';
+import { X, Mail, MessageCircleQuestion, Download, Wrench, ExternalLink, Database, Loader2, CheckCircle2 } from 'lucide-react';
 import { fetchDocumentCatalog, CatalogEntry } from '../services/supabase';
+import { cn } from '../lib/utils';
 
 interface SupportModalProps {
   open: boolean;
   onClose: () => void;
 }
 
+type Platform = 'ios' | 'android' | 'desktop';
+
+const HOST = typeof window !== 'undefined' ? window.location.host : 'dash5.my.id';
+
+const INSTALL_STEPS: Record<Platform, { label: string; steps: string[]; note: string }> = {
+  ios: {
+    label: 'iPhone / iPad',
+    steps: [
+      `Buka ${HOST} menggunakan Safari.`,
+      'Ketuk tombol Bagikan (ikon kotak dengan panah ke atas) di bar bawah.',
+      'Gulir ke bawah, lalu pilih "Tambah ke Layar Utama" (Add to Home Screen).',
+      'Ketuk "Tambah". Ikon aplikasi akan muncul di layar utama.',
+    ],
+    note: 'Aplikasi di layar utama memiliki penyimpanan terpisah dari Safari, sehingga Anda perlu login satu kali lagi di dalam aplikasi.',
+  },
+  android: {
+    label: 'Android',
+    steps: [
+      `Buka ${HOST} menggunakan Google Chrome.`,
+      'Ketuk menu ⋮ di pojok kanan atas.',
+      'Pilih "Instal aplikasi" atau "Tambahkan ke layar utama".',
+      'Ketuk "Instal". Ikon aplikasi akan muncul di layar utama dan daftar aplikasi.',
+    ],
+    note: 'Jika opsi instal belum muncul, muat ulang halaman lalu tunggu beberapa detik sebelum membuka menu.',
+  },
+  desktop: {
+    label: 'Laptop / PC',
+    steps: [
+      `Buka ${HOST} menggunakan Google Chrome atau Microsoft Edge.`,
+      'Klik ikon Instal di ujung kanan kolom alamat (ikon monitor dengan tanda panah).',
+      'Jika ikon tidak terlihat, buka menu browser lalu pilih "Instal Hexindo Technical Assistant" atau "Aplikasi → Instal situs ini sebagai aplikasi".',
+      'Klik "Instal". Aplikasi terbuka di jendela sendiri dan dapat disematkan ke taskbar.',
+    ],
+    note: 'Aplikasi yang terpasang tetap memperbarui diri secara otomatis setiap kali dibuka.',
+  },
+};
+
+function detectPlatform(): Platform {
+  const ua = navigator.userAgent;
+  const iPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  if (/iPhone|iPad|iPod/.test(ua) || iPadOS) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  return 'desktop';
+}
+
+function isInstalled(): boolean {
+  try {
+    return window.matchMedia('(display-mode: standalone)').matches
+      || (navigator as Navigator & { standalone?: boolean }).standalone === true;
+  } catch {
+    return false;
+  }
+}
+
 const FAQS = [
   {
-    q: 'Pertanyaan apa saja yang bisa diajukan?',
-    a: 'HTA dirancang untuk pertanyaan teknis alat berat Hitachi/KCM: analisa gejala kerusakan, arti fault code, troubleshooting sistem hydraulic/electrical/engine, spec detail komponen, kapasitas fluida, prosedur pengecekan, part number, harga promo jika tersedia, dan daftar parts service berkala.',
+    q: 'Apa itu Hexindo Technical Assistant?',
+    a: 'Hexindo Technical Assistant adalah asisten teknis digital untuk tim service PT Hexindo Adiperkasa. Setiap jawaban disusun dari manual dan katalog resmi Hitachi dan KCM untuk model unit yang sedang dipilih, bukan dari pengetahuan umum internet.',
   },
   {
-    q: 'Contoh pertanyaan yang ideal seperti apa?',
-    a: 'Gunakan format yang spesifik: sebut model unit, gejala, komponen, kondisi kejadian, atau fault code. Contoh: "ZX200-5G hydraulic power lemah saat arm in", "spec main pump pressure ZX48U-5A", "fault code 11006-2 artinya apa?", atau "PN hydraulic filter service 1000 jam".',
+    q: 'Jenis pertanyaan apa yang dapat diajukan?',
+    a: 'Arti dan penanganan fault code, analisa gejala kerusakan, langkah troubleshooting sistem hydraulic, electrical, dan engine, spesifikasi komponen, kapasitas fluida, prosedur pembongkaran dan pemasangan, part number, harga promo parts, serta daftar parts Periodic Maintenance per interval jam kerja.',
   },
   {
-    q: 'Apa batasan pertanyaan yang bisa diajukan?',
-    a: 'HTA tidak ditujukan untuk pertanyaan umum di luar technical support alat berat, seperti berita, cuaca, hiburan, resep, atau topik non-unit. HTA juga tidak melakukan pemesanan parts, klaim warranty, keputusan komersial, atau instruksi kerja yang tidak memiliki dasar data manual.',
+    q: 'Bagaimana cara bertanya agar jawabannya tepat?',
+    a: 'Pastikan model unit yang dipilih sesuai dengan unit yang ditangani, lalu sebutkan komponen, gejala, kondisi saat gangguan muncul, atau fault code secara spesifik. Contoh: "boom turun sendiri saat engine mati", "fault code 11006-2", "berat travel device", atau "part untuk service 2000 jam".',
   },
   {
-    q: 'Apa limitasi jawaban HTA?',
-    a: 'Jawaban difilter berdasarkan model unit yang dipilih. HTA tidak menebak PN, torque, pressure, kapasitas, harga, atau prosedur yang tidak ada di data. Jika informasi belum tersedia, HTA akan menyebutkan keterbatasannya dan menyarankan verifikasi ke manual fisik atau referensi internal.',
+    q: 'Apakah foto dapat dianalisa?',
+    a: 'Ya. Kirim foto layar monitor untuk membaca fault code, atau foto label dan daftar part untuk mencari part number beserta harganya. Satu foto per pesan, dan Anda dapat menambahkan keterangan agar analisanya lebih terarah.',
   },
   {
-    q: 'Data apa yang digunakan HTA?',
-    a: 'HTA menjawab dari manual dan katalog resmi per model unit: Technical Manual, Workshop Manual, Engine Manual, Operator Manual, Hydraulic Circuit Diagram, Parts Catalog, Engine Parts Catalog, jadwal Periodic Maintenance, dan harga promo parts jika tersedia.',
+    q: 'Seberapa akurat jawabannya?',
+    a: 'Hexindo Technical Assistant hanya menyampaikan angka, part number, dan prosedur yang tercantum di dokumen resmi. Jika informasi tidak ditemukan, keterbatasan tersebut disampaikan secara terbuka tanpa perkiraan. Untuk pekerjaan kritis seperti torsi, tekanan, dan setting, cocokkan kembali dengan manual fisik atau plat unit sebelum dikerjakan.',
   },
   {
-    q: 'Apakah HTA bisa membaca gambar fault code?',
-    a: 'Ya. Lampirkan foto layar monitor unit. HTA akan mengekstrak fault code yang terlihat, mencocokkan ke data manual, lalu memberi analisa per kode.',
+    q: 'Apa yang berada di luar cakupan?',
+    a: 'Unit di luar daftar model yang tersedia, topik non-teknis, pemesanan parts, klaim warranty, dan keputusan komersial. Harga promo bersifat informasi, belum termasuk PPN, dan perlu dikonfirmasi ke Parts Counter sebelum transaksi.',
   },
   {
-    q: 'Apakah riwayat chat tersimpan?',
-    a: 'Ya, sesi chat tersimpan otomatis dan bisa dibuka kembali dari panel Riwayat di sidebar.',
+    q: 'Apakah riwayat percakapan tersimpan?',
+    a: 'Ya. Percakapan tersimpan otomatis dan dapat dibuka kembali dari panel History di sidebar, termasuk dari perangkat lain yang login dengan akun yang sama. Percakapan yang dihapus tidak lagi tampil di aplikasi.',
+  },
+  {
+    q: 'Bagaimana jika tidak dapat login?',
+    a: 'Password dapat diganti sendiri melalui menu akun di bagian bawah sidebar. Jika lupa password atau akun belum terdaftar, hubungi admin melalui email di bawah.',
   },
 ];
+
+function InstallGuide() {
+  const [platform, setPlatform] = useState<Platform>(detectPlatform);
+  const installed = isInstalled();
+  const { steps, note } = INSTALL_STEPS[platform];
+
+  return (
+    <div className="space-y-2.5">
+      {installed && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+          <CheckCircle2 size={14} className="text-emerald-500 shrink-0" />
+          <span className="text-[12px] text-[var(--text-secondary)]">Aplikasi sudah terpasang di perangkat ini.</span>
+        </div>
+      )}
+
+      <div className="grid grid-cols-3 gap-1 p-1 rounded-xl bg-[var(--bg-app)] border border-[var(--border-main)]">
+        {(Object.keys(INSTALL_STEPS) as Platform[]).map(p => (
+          <button
+            key={p}
+            onClick={() => setPlatform(p)}
+            className={cn(
+              'py-1.5 rounded-lg text-[11.5px] font-medium transition-colors',
+              p === platform
+                ? 'bg-[var(--bg-card)] text-[var(--text-primary)] shadow-sm'
+                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
+            )}
+          >
+            {INSTALL_STEPS[p].label}
+          </button>
+        ))}
+      </div>
+
+      <ol className="space-y-1.5">
+        {steps.map((text, i) => (
+          <li key={i} className="flex items-start gap-3 px-3 py-2 rounded-xl bg-[var(--bg-app)] border border-[var(--border-main)]">
+            <span className="w-5 h-5 rounded-full bg-[var(--accent-main)]/12 text-[var(--accent-main)] text-[11px] font-bold flex items-center justify-center shrink-0">{i + 1}</span>
+            <span className="text-[12.5px] text-[var(--text-secondary)] leading-snug">{text}</span>
+          </li>
+        ))}
+      </ol>
+
+      <p className="text-[11.5px] text-[var(--text-muted)] leading-relaxed px-1">
+        {note} Jika ikon atau tampilan tidak berubah setelah pembaruan, hapus aplikasi dari layar utama lalu pasang ulang.
+      </p>
+    </div>
+  );
+}
 
 function CatalogPanel() {
   const [catalog, setCatalog] = useState<CatalogEntry[] | null>(null);
@@ -69,20 +175,20 @@ function CatalogPanel() {
       onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) load(); }}
     >
       <summary className="flex items-center justify-between px-3 py-2.5 cursor-pointer list-none select-none">
-        <span className="text-[13px] font-medium text-[var(--text-primary)] pr-2">
-          Data yang digunakan HTA?
+        <span className="text-[12.5px] font-medium text-[var(--text-primary)] pr-2 leading-snug">
+          Dokumen apa saja yang menjadi sumber jawaban?
         </span>
-        <span className="text-[var(--text-muted)] text-[11px] shrink-0 group-open:rotate-180 transition-transform">▾</span>
+        <span className="text-[var(--text-muted)] text-[11px] shrink-0 group-open:rotate-180 transition-transform duration-200">▾</span>
       </summary>
       <div className="px-3 pb-3 border-t border-[var(--border-main)] pt-2.5">
-        <p className="text-[12.5px] text-[var(--text-secondary)] leading-relaxed mb-2.5">
-          HTA menjawab dari manual dan katalog resmi per model unit. Daftar di bawah menunjukkan dokumen yang tersedia untuk pencarian.
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed mb-2.5">
+          Setiap model unit memiliki kumpulan dokumen resmi tersendiri. Pilih model untuk melihat dokumen yang tersedia.
         </p>
 
         {loading && (
           <div className="flex items-center gap-2 py-2">
             <Loader2 size={13} className="animate-spin text-[var(--accent-main)]" />
-            <span className="text-[12px] text-[var(--text-muted)]">Memuat data...</span>
+            <span className="text-[12px] text-[var(--text-muted)]">Memuat daftar dokumen...</span>
           </div>
         )}
 
@@ -103,13 +209,12 @@ function CatalogPanel() {
                   <span className="text-[var(--accent-main)]/60 text-[10px] group-open/model:rotate-180 transition-transform duration-200">▾</span>
                 </summary>
                 <div className="divide-y divide-[var(--border-main)]">
-                  {entries.sort((a, b) => a.kategori.localeCompare(b.kategori)).map(({ kategori, count }) => (
+                  {entries.sort((a, b) => a.kategori.localeCompare(b.kategori)).map(({ kategori }) => (
                     <div key={kategori} className="px-3 py-1.5 flex items-center gap-2">
                       <span className="w-1 h-1 rounded-full bg-[var(--text-muted)] shrink-0" />
                       <span className="text-[11.5px] text-[var(--text-secondary)] flex-1 min-w-0 truncate">
                         {kategori === 'CPM' ? 'Periodic Maintenance' : kategori.toLowerCase().replace(/\b\w/g, c => c.toUpperCase())}
                       </span>
-                      <span className="text-[10.5px] text-[var(--text-muted)] tabular-nums shrink-0">{count}</span>
                     </div>
                   ))}
                 </div>
@@ -168,22 +273,10 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
 
               <div>
                 <div className="flex items-center gap-2 mb-2.5">
-                  <BookOpen size={12} className="text-[var(--text-muted)]" />
-                  <p className="text-[10.5px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Cara Pakai</p>
+                  <Download size={12} className="text-[var(--text-muted)]" />
+                  <p className="text-[10.5px] font-bold uppercase tracking-widest text-[var(--text-muted)]">Instalasi Aplikasi</p>
                 </div>
-                <div className="space-y-1.5">
-                  {[
-                    { icon: '①', text: 'Pilih model unit di sidebar sebelum bertanya' },
-                    { icon: '②', text: 'Ketik gejala, nama komponen, atau fault code langsung' },
-                    { icon: '③', text: 'Lampirkan foto monitor untuk analisa fault code otomatis' },
-                    { icon: '④', text: 'Riwayat chat tersimpan — bisa dibuka kembali kapan saja' },
-                  ].map(({ icon, text }) => (
-                    <div key={icon} className="flex items-start gap-3 px-3 py-2 rounded-xl bg-[var(--bg-app)] border border-[var(--border-main)]">
-                      <span className="text-[13px] text-[var(--accent-main)] font-bold shrink-0 mt-px leading-snug">{icon}</span>
-                      <span className="text-[12.5px] text-[var(--text-secondary)] leading-snug">{text}</span>
-                    </div>
-                  ))}
-                </div>
+                <InstallGuide />
               </div>
 
               <div>
