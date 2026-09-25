@@ -16,7 +16,7 @@ Supported units: ZX48U-5A · ZX65USB-5A · ZX138MF-5G · ZX200-5G · ZW140 · KC
 - **Periodic maintenance** — parts due at a service interval ("service 2000"), priced.
 - **Specs and procedures** — torque, pressure, capacity, removal/installation steps.
 - **Photos** — reads fault codes, part labels and part lists from an image.
-- **Voice input**, bookmarks, passkey login, and export of any answer table as a PNG.
+- **Voice input**, bookmarks, and export of any answer table as a PNG.
 
 Answers are grounded in retrieved manual text: hybrid keyword + vector search, Cohere rerank,
 and a confidence tier that decides whether the model may answer, must add a caveat, or must say

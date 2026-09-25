@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff, Fingerprint } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
@@ -10,7 +10,6 @@ import { ChangePasswordDialog } from './ChangePasswordDialog';
 
 import { m, AnimatePresence } from 'motion/react';
 import { useAuth } from './AuthProvider';
-import { passkeySupported } from '../services/passkey';
 
 function pocketPreview(answer: string): string {
   return answer
@@ -71,7 +70,7 @@ export function Sidebar({
   const filteredSessions = historyQuery.trim()
     ? sessions.filter(s => (s.title + ' ' + s.model).toLowerCase().includes(historyQuery.trim().toLowerCase()))
     : sessions;
-  const { user, logout, openPasskeyPrompt } = useAuth();
+  const { user, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showChangePw, setShowChangePw] = useState(false);
   const [hoveredSession, setHoveredSession] = useState<string | null>(null);
@@ -83,13 +82,6 @@ export function Sidebar({
   const [showHistory, setShowHistory] = useState(true);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
-  const [passkeyOk, setPasskeyOk] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    passkeySupported().then(ok => { if (alive) setPasskeyOk(ok); });
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -432,15 +424,6 @@ export function Sidebar({
                     exit={{ opacity: 0, y: 4 }}
                     className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-card)] border border-[var(--border-main)] rounded-xl shadow-lg overflow-hidden"
                   >
-                    {passkeyOk && (
-                      <button
-                        onClick={() => { setShowUserMenu(false); openPasskeyPrompt(); }}
-                        className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
-                      >
-                        <Fingerprint size={14} className="text-[var(--text-muted)]" />
-                        <span>Passkey (sidik jari / Face ID)</span>
-                      </button>
-                    )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowChangePw(true); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"

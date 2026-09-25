@@ -4,7 +4,6 @@ import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
 import { PocketModal } from './components/PocketModal';
-import { PasskeyPrompt } from './components/PasskeyPrompt';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ModelSheet } from './components/ModelSheet';
 import { StatusBanner } from './components/StatusBanner';
@@ -172,8 +171,6 @@ export default function App() {
       </main>
 
       <PocketModal item={pocket.pocketView} onClose={() => pocket.setPocketView(null)} onDelete={pocket.remove} />
-
-      <PasskeyPrompt />
 
       <ModelSheet open={modelSheet} selected={selectedModel} onSelect={handleSelectModel} onClose={() => setModelSheet(false)} />
 
