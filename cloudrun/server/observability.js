@@ -1,4 +1,4 @@
-const { SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
+const { GOOGLE_RANK_MODEL, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
 
 const _stat = { mulai: Date.now(), req: [], err: [] };
 
@@ -70,6 +70,8 @@ function registerMetrics(app) {
       config: {
         model: process.env.VERTEX_MODEL || '-',
         fallback: process.env.FALLBACK_MODELS || '-',
+        intent: process.env.INTENT_MODEL || 'gemini-3.5-flash-lite',
+        reranker: RERANKER === 'google' ? `google ${GOOGLE_RANK_MODEL} (cadangan cohere)` : 'cohere',
         usage_log: USAGE_LOG_ON ? 'on' : 'off',
       },
     });

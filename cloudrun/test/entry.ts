@@ -13,3 +13,4 @@ export { historyToContents } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate, FALLBACK_RESPONSE } from '../src/templates';
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { extractCatalogCode } from '../src/rag';
+export { computeConfidence, rerankDocs } from '../src/rag/rerank';

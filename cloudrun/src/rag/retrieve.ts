@@ -1,6 +1,6 @@
 import { deps } from '../deps';
 import { getEmbedding } from './embed';
-import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankWithCohere } from './rerank';
+import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
 import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, batangKata, escapeLike, stripModelFromQuery } from './terms';
 
 export const sb = () => deps().supabase as any;
@@ -194,7 +194,7 @@ export async function rankAndSelect(
   const rerankInput = capRerankPayload(filteredDocs);
   const rerankPool = Math.min(rerankInput.length, RERANK_RETURN_N);
   const tRerank = Date.now();
-  const { docs: reranked, error: rerankErr } = await rerankWithCohere(primaryQuery, rerankInput, rerankPool);
+  const { docs: reranked, error: rerankErr, source: rerankSource } = await rerankDocs(primaryQuery, rerankInput, rerankPool);
   const msRerank = Date.now() - tRerank;
   let top = mmrSelect(reranked, topN, 0.7);
 
@@ -210,15 +210,15 @@ export async function rankAndSelect(
     }
   }
 
-  const { confidence, topScore } = computeConfidence(top);
+  const { confidence, topScore } = computeConfidence(top, rerankSource);
 
   const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
     ? 'medium'
     : confidence;
 
   const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
-  console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms',
-    effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank);
+  console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms (%s)',
+    effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank, rerankSource ?? '-');
   try {
     const m = deps().meta;
     m.msRag = (m.msRag || 0) + msCari;

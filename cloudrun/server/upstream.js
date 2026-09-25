@@ -1,4 +1,4 @@
-const { COHERE_KEYS, COHERE_RERANK_MODEL, GEMINI_API_KEY, LOCATION, PROJECT_ID, UPSTREAM_429_BACKOFF_MS, UPSTREAM_429_RETRIES, VERTEX_API_KEY } = require('./config');
+const { COHERE_KEYS, COHERE_RERANK_MODEL, GEMINI_API_KEY, GOOGLE_RANK_MODEL, LOCATION, PROJECT_ID, UPSTREAM_429_BACKOFF_MS, UPSTREAM_429_RETRIES, VERTEX_API_KEY } = require('./config');
 
 const { GoogleAuth } = require('google-auth-library');
 
@@ -237,4 +237,29 @@ async function cohereRerank(query, documents, topN) {
   throw e;
 }
 
-module.exports = { STALL_MAX, cohereRerank, embedQuery, fetchAntiMacet, getAccessToken, resolveUpstream, vertexFetch };
+const GOOGLE_RANK_TIMEOUT_MS = 4_000;
+
+async function googleRerank(query, documents, topN) {
+  if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
+  const token = await getAccessToken();
+  const records = documents.map((content, i) => {
+    const title = (content.match(/^Section:[^\n]*/m) || [''])[0].slice(0, 200);
+    return title ? { id: String(i), title, content } : { id: String(i), content };
+  });
+  const upstream = await fetch(
+    `https://discoveryengine.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/rankingConfigs/default_ranking_config:rank`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}`, 'x-goog-user-project': PROJECT_ID },
+      body: JSON.stringify({ model: GOOGLE_RANK_MODEL, query, topN, ignoreRecordDetailsInResponse: true, records }),
+      signal: AbortSignal.timeout(GOOGLE_RANK_TIMEOUT_MS),
+    });
+  const data = await upstream.json().catch(() => ({}));
+  if (!upstream.ok) {
+    const e = new Error(`Google rank ${upstream.status}: ${data?.error?.message?.slice(0, 160) ?? ''}`);
+    e.status = upstream.status;
+    throw e;
+  }
+  return (data.records || []).map(r => ({ index: Number(r.id), score: r.score ?? 0 }));
+}
+
+module.exports = { STALL_MAX, cohereRerank, embedQuery, fetchAntiMacet, getAccessToken, googleRerank, resolveUpstream, vertexFetch };

@@ -10,9 +10,9 @@ setGlobalDispatcher(new Agent({
 
 const orch = require('./dist/orchestrator.cjs');
 const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
-const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
+const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
 const { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
-const { cohereRerank, embedQuery, getAccessToken, vertexFetch } = require('./server/upstream');
+const { cohereRerank, embedQuery, getAccessToken, googleRerank, vertexFetch } = require('./server/upstream');
 const registerTranscribe = require('./server/transcribe');
 
 const ASK_MODELS = new Set(orch.UNIT_MODELS);
@@ -146,15 +146,22 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     deadlineAt,
     embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
     rerank: async (query, documents, topN) => {
+      if (RERANKER === 'google') {
+        try {
+          return { results: await googleRerank(query, documents, topN), source: 'google' };
+        } catch (err) {
+          console.warn('[rerank] Google gagal (%s) — cadangan Cohere', err.message);
+        }
+      }
       try {
         const data = await cohereRerank(query, documents, topN);
-        return { results: (data.results || []).map(r => ({ index: r.index, score: r.relevance_score })) };
+        return { results: (data.results || []).map(r => ({ index: r.index, score: r.relevance_score })), source: 'cohere' };
       } catch (err) {
         return { results: [], error: err.message || 'Rerank gagal' };
       }
     },
     generate: async (body, model, enableGoogleSearch) => {
-      if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
+      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const callCtrl = new AbortController();
@@ -168,7 +175,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       } finally { clearTimeout(timer); }
     },
     stream: async (body, model, onChunk, opts = {}) => {
-      if (!ALLOWED_MODELS.has(model)) throw new Error(`Model tidak diizinkan: ${model}`);
+      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;

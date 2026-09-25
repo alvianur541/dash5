@@ -1,7 +1,9 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './vertex';
 
-export interface RerankOut { results: { index: number; score: number }[]; error?: string }
+export type RerankSource = 'google' | 'cohere';
+
+export interface RerankOut { results: { index: number; score: number }[]; error?: string; source?: RerankSource }
 
 export interface Deps {
   supabase: any;

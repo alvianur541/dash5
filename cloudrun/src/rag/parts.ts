@@ -1,8 +1,9 @@
 import { getEmbedding } from './embed';
-import { capRerankPayload, computeConfidence, mmrSelect, rerankWithCohere } from './rerank';
+import { capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
 import { HybridResult, RAGResult, SearchResult, hybrid, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
 import type { UnitModel } from '../types';
+import type { RerankSource } from '../deps';
 
 // The DB keeps one promo period; rename this when the next period's chunks replace it.
 const PROMO_KATEGORI = 'PROMO Q2 FY2026';
@@ -211,20 +212,22 @@ export async function searchPartsCatalog(
 
   let orderedNonCpm = nonCpm;
   let rerankTopScore = 0;
+  let rerankSource: RerankSource | undefined;
   let rerankDipakai  = false;
   if (!partNum && nonCpm.length > 3) {
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
     if (rest.length > 3) {
-      const rerankDocs = capRerankPayload(rest.map(d => d.content));
-      const rerankRest = rest.slice(0, rerankDocs.length);
-      const { docs: reranked, error } = await rerankWithCohere(
+      const rerankInput = capRerankPayload(rest.map(d => d.content));
+      const rerankRest = rest.slice(0, rerankInput.length);
+      const { docs: reranked, error, source } = await rerankDocs(
         queryText,
-        rerankDocs,
+        rerankInput,
         Math.min(rerankRest.length, 12),
       );
       if (!error && reranked.length > 0) {
         rerankTopScore = reranked[0].score;
+        rerankSource = source;
         rerankDipakai  = true;
         const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
         const byContent = new Map(rest.map(d => [d.content, d]));
@@ -264,7 +267,7 @@ export async function searchPartsCatalog(
   const partsConfidence: 'high' | 'medium' | 'low' = partNum
     ? 'high'
     : rerankDipakai
-      ? computeConfidence([{ content: '', score: rerankTopScore }]).confidence
+      ? computeConfidence([{ content: '', score: rerankTopScore }], rerankSource).confidence
       : 'medium';
 
   console.info('[parts] cpm=%d body=%d engine=%d promo=%d → top=%d | tier=%s%s',

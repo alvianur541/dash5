@@ -1,4 +1,4 @@
-import { capRerankPayload, computeConfidence, rerankWithCohere } from './rerank';
+import { capRerankPayload, computeConfidence, rerankDocs } from './rerank';
 import { RAGResult, filterByFaultCode, gatherCandidates, rankAndSelect, sb, wantsNumeric } from './retrieve';
 import { escapeLike, isFaultCode, manualTerms } from './terms';
 import type { UnitModel } from '../types';
@@ -80,8 +80,8 @@ export async function searchEngineManual(
 
   if (allDocs.length === 0) return { content: '', hasResults: false };
 
-  const { docs: top, error: rerankErr } = await rerankWithCohere(pCodes[0], capRerankPayload(allDocs), topN);
-  const { confidence, topScore } = computeConfidence(top);
+  const { docs: top, error: rerankErr, source } = await rerankDocs(pCodes[0], capRerankPayload(allDocs), topN);
+  const { confidence, topScore } = computeConfidence(top, source);
   const effectiveConfidence = rerankErr && confidence === 'high' ? 'medium' : confidence;
   console.info('[confidence] em tier=%s%s topScore=%s pool=%d',
     effectiveConfidence, rerankErr ? ' (rerank GAGAL — skor semu)' : '', topScore.toFixed(2), top.length);

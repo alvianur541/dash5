@@ -1,4 +1,4 @@
-import { deps } from '../deps';
+import { deps, RerankSource } from '../deps';
 
 
 const RERANK_INPUT_CAP = 30;
@@ -25,11 +25,11 @@ export function capRerankPayload(docs: string[]): string[] {
 
 interface RerankedDoc { content: string; score: number }
 
-interface RerankResult { docs: RerankedDoc[]; error?: string }
+interface RerankResult { docs: RerankedDoc[]; error?: string; source?: RerankSource }
 
 const RERANK_DOC_CAP = 2500;
 
-export async function rerankWithCohere(query: string, docs: string[], topN: number): Promise<RerankResult> {
+export async function rerankDocs(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
 
   const scoringDocs = docs.map(d => d.length > RERANK_DOC_CAP ? d.slice(0, RERANK_DOC_CAP) : d);
@@ -40,19 +40,26 @@ export async function rerankWithCohere(query: string, docs: string[], topN: numb
     const ranked = out.results
       .map(r => ({ content: docs[r.index], score: r.score }))
       .filter((d): d is RerankedDoc => typeof d.content === 'string');
-    return { docs: ranked };
+    return { docs: ranked, source: out.source ?? 'cohere' };
   } catch (err) {
     const msg = (err as Error)?.message ?? 'Unknown error';
     const errMsg = msg.includes('abort') ? 'Rerank timeout (8s)' : `Rerank error: ${msg}`;
-    console.warn('Cohere rerank failed:', errMsg);
+    console.warn('Rerank failed:', errMsg);
     return { docs: docs.slice(0, topN).map(content => ({ content, score: 0.5 })), error: errMsg };
   }
 }
 
-export function computeConfidence(scored: RerankedDoc[]): { confidence: 'high' | 'medium' | 'low'; topScore: number } {
+// Google scores run lower than Cohere for the same relevance; thresholds are per source.
+const THRESHOLDS: Record<RerankSource, { high: number; medium: number }> = {
+  cohere: { high: 0.45, medium: 0.25 },
+  google: { high: Number(process.env.GOOGLE_RANK_HIGH) || 0.30, medium: Number(process.env.GOOGLE_RANK_MEDIUM) || 0.15 },
+};
+
+export function computeConfidence(scored: RerankedDoc[], source: RerankSource = 'cohere'): { confidence: 'high' | 'medium' | 'low'; topScore: number } {
   const topScore = scored[0]?.score ?? 0;
-  if (topScore >= 0.45) return { confidence: 'high', topScore };
-  if (topScore >= 0.25) return { confidence: 'medium', topScore };
+  const t = THRESHOLDS[source];
+  if (topScore >= t.high) return { confidence: 'high', topScore };
+  if (topScore >= t.medium) return { confidence: 'medium', topScore };
   return { confidence: 'low', topScore };
 }
 
