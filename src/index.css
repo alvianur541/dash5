@@ -147,18 +147,26 @@ img {
 
 .markdown-body {
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 13.5px;
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-primary);
-  letter-spacing: -0.006em;
+  letter-spacing: -0.003em;
 }
+@media (min-width: 768px) { .markdown-body { line-height: 1.7; } }
 
 .markdown-body hr { display: none; }
 
 .markdown-body p {
-  margin-bottom: 0.75em;
+  margin-bottom: 0.8em;
 }
+.markdown-body li > p { margin-bottom: 0.3em; }
+.markdown-body .md-source {
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-bottom: 0.6em;
+}
+.markdown-body :is(h1, h2, h3) + .md-source { margin-top: -0.15em; }
 
 .markdown-body p:last-child {
   margin-bottom: 0;
@@ -166,9 +174,9 @@ img {
 
 .markdown-body ul,
 .markdown-body ol {
-  padding-left: 1.4rem;
-  margin-bottom: 0.75em;
-  margin-top: 0.25em;
+  padding-left: 1.35em;
+  margin-top: 0.2em;
+  margin-bottom: 0.8em;
 }
 
 .markdown-body ul {
@@ -180,21 +188,21 @@ img {
 }
 
 .markdown-body li {
-  margin-bottom: 0.35em;
-  padding-left: 0.15em;
+  margin-bottom: 0.3em;
+  padding-left: 0.2em;
 }
 .markdown-body li::marker { color: var(--text-muted); }
 .markdown-body ol > li::marker { font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .markdown-body code {
   font-family: var(--font-mono);
-  font-size: 0.86em;
+  font-size: 0.88em;
   font-weight: 500;
   color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.07);
   border: none;
-  border-radius: 4px;
-  padding: 0.1em 0.4em;
+  border-radius: 5px;
+  padding: 0.12em 0.38em;
   letter-spacing: 0;
 }
 .markdown-body :not(pre) > code { white-space: nowrap; }
@@ -250,12 +258,12 @@ img {
   letter-spacing: -0.015em;
   line-height: 1.35;
   text-wrap: balance;
-  margin-top: 1.6em;
-  margin-bottom: 0.45em;
+  margin-top: 1.55em;
+  margin-bottom: 0.4em;
 }
-.markdown-body h1 { font-size: 18px; }
-.markdown-body h2 { font-size: 17px; }
-.markdown-body h3 { font-size: 16px; }
+.markdown-body h1 { font-size: 16px; }
+.markdown-body h2 { font-size: 15px; }
+.markdown-body h3 { font-size: 14px; }
 
 .markdown-body > h1:first-child,
 .markdown-body > h2:first-child,
@@ -282,7 +290,7 @@ img {
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13.5px;
+  font-size: 12.5px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -293,10 +301,10 @@ img {
 }
 
 .markdown-body thead th {
-  padding: 0.45rem 0.85rem;
+  padding: 0.5rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  font-size: 12.5px;
+  font-size: 12px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-main);
   white-space: nowrap;
@@ -319,10 +327,10 @@ img {
 }
 
 .markdown-body tbody td {
-  padding: 0.55rem 0.9rem;
+  padding: 0.5rem 0.75rem;
   color: var(--text-primary);
   vertical-align: middle;
-  line-height: 1.55;
+  line-height: 1.5;
 }
 
 .markdown-body tbody td:first-child {
@@ -824,8 +832,6 @@ img {
 
   .msg-user-group { max-width: 85%; }
 
-  .ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-size: 14px; line-height: 1.7; }
-
   .action-btn { width: 36px; height: 36px; border-radius: 10px; }
 
   .scroll-fab { --fab: 42px; }
@@ -1021,9 +1027,6 @@ img {
 
 @media (max-width: 767px) {
   .message-input-bar textarea { font-size: 16px !important; }
-  .ai-msg-wrap .markdown-body, .pocket-modal-inner .markdown-body { font-size: 15px; line-height: 1.65; }
-  .markdown-body h2, .markdown-body h3 { font-size: 17px; }
-  .user-bubble { font-size: 15px; }
   .chat-messages-list { padding-left: 14px; padding-right: 14px; }
   .msg-user-group { max-width: 84%; }
 }
@@ -1052,6 +1055,7 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .table-modal-body table.sticky-col-3 thead th:nth-child(3) { z-index: 3; }
 .table-modal-body .markdown-table-wrap, .table-modal-body table { margin-top: 14px; }
 .markdown-body table .code-copy { border-bottom: none; }
+.markdown-body td.md-num { white-space: nowrap; }
 
 .toast-layer {
   position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); z-index: 60;

@@ -134,7 +134,14 @@ function StrongText({ children }: { children?: ReactNode }) {
 }
 
 // Module-level so component types never change: a new table type per chunk would rebuild the table DOM.
+type HNode = { type: string; value?: string; children?: HNode[] };
+const nodeText = (n?: HNode): string => (n ? (n.type === 'text' ? n.value ?? '' : (n.children ?? []).map(nodeText).join('')) : '');
+const NUM_CELL_RE = /^(rp\s?)?[\d.,±~–-]+\s?(%|[a-zµ°·/³²⁻¹]{1,8})?$/i;
+const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|diagram|principle)[^()]*\)\.?$/i;
+
 const MD_COMPONENTS: Components = {
+  p: ({ node, children }) => <p className={SOURCE_RE.test(nodeText(node as HNode).trim()) ? 'md-source' : undefined}>{children}</p>,
+  td: ({ node, children, ...rest }) => <td {...rest} className={NUM_CELL_RE.test(nodeText(node as HNode).trim()) ? 'md-num' : undefined}>{children}</td>,
   table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
   code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
   strong: ({ children }) => <StrongText>{children}</StrongText>,
