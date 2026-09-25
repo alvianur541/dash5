@@ -5,7 +5,7 @@ const PROJECT = process.env.PROJECT;
 const TOKEN = process.env.TOKEN;
 const ROUNDS = Number(process.env.ROUNDS || 2);
 const PART = process.argv[2] || 'all';
-const CASES_FILE = process.env.CASES || `${process.env.HOME}/rerank-cases.json`;
+const CASES_FILE = process.env.CASES || (existsSync(`${process.env.HOME}/rerank-cases-v2.json`) ? `${process.env.HOME}/rerank-cases-v2.json` : `${process.env.HOME}/rerank-cases.json`);
 
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
 const p90 = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * 0.9))] : NaN; };
@@ -132,62 +132,102 @@ async function cohere(query, docs) {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, status: res.status, err: JSON.stringify(data).slice(0, 160) };
-  return { ok: true, order: data.results.map(r => docs[r.index].id) };
+  return { ok: true, order: data.results.map(r => docs[r.index].id), scores: data.results.map(r => r.relevance_score) };
 }
 
-async function vertexRank(model, query, docs) {
+async function vertexRank(model, useTitle, query, docs) {
+  const records = docs.map(d => (useTitle && d.title ? { id: String(d.id), title: d.title, content: d.text } : { id: String(d.id), content: d.text }));
   const res = await fetch(`https://discoveryengine.googleapis.com/v1/projects/${PROJECT}/locations/global/rankingConfigs/default_ranking_config:rank`, {
     method: 'POST',
     headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', 'x-goog-user-project': PROJECT },
-    body: JSON.stringify({ model, query, topN: 10, ignoreRecordDetailsInResponse: true, records: docs.map(d => ({ id: String(d.id), content: d.text })) }),
+    body: JSON.stringify({ model, query, topN: 10, ignoreRecordDetailsInResponse: true, records }),
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, status: res.status, err: data?.error?.message?.slice(0, 200) };
-  return { ok: true, order: (data.records ?? []).map(r => Number(r.id)) };
+  const recs = data.records ?? [];
+  return { ok: true, order: recs.map(r => Number(r.id)), scores: recs.map(r => r.score ?? 0) };
 }
 
+const quantile = (a, q) => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(q * s.length))] : NaN; };
+
 async function runRerank() {
-  if (!existsSync(CASES_FILE)) { console.log(`\n=== S3 dilewati: ${CASES_FILE} tidak ada (upload rerank-cases.json ke home Cloud Shell) ===`); return; }
+  if (!existsSync(CASES_FILE)) { console.log(`\n=== S3 dilewati: ${CASES_FILE} tidak ada (upload file kasus ke home Cloud Shell) ===`); return; }
   const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8')).map(c => ({ ...c, gold: [].concat(c.gold) }));
   const rankers = [];
-  if (process.env.COHERE_API_KEY) rankers.push({ label: `Cohere ${process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast'}`, fn: cohere });
+  if (process.env.COHERE_API_KEY) rankers.push({ key: 'cohere', label: `Cohere ${process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast'}`, fn: cohere });
   else console.log('  (Cohere dilewati: COHERE_API_KEY kosong)');
-  for (const m of (process.env.VERTEX_RANKERS || 'semantic-ranker-fast-004,semantic-ranker-default-004').split(',')) {
-    rankers.push({ label: `Google ${m}`, fn: (q, d) => vertexRank(m, q, d) });
+  const models = (process.env.VERTEX_RANKERS || 'semantic-ranker-fast-004,semantic-ranker-default-004,semantic-ranker-default-003,semantic-ranker-512-003').split(',');
+  for (const m of models) {
+    const short = m.replace('semantic-ranker-', 'g-');
+    rankers.push({ key: short, label: `Google ${m}`, fn: (q, d) => vertexRank(m, false, q, d) });
+  }
+  for (const m of models.slice(0, 2)) {
+    const short = m.replace('semantic-ranker-', 'g-') + '+judul';
+    rankers.push({ key: short, label: `Google ${m} + judul section`, fn: (q, d) => vertexRank(m, true, q, d) });
   }
 
-  console.log(`\n=== S3 · Rerank — ${cases.length} kasus × ${ROUNDS} putaran, ±${cases[0].docs.length} kandidat per kasus ===`);
+  const langs = cases.some(c => c.query_id) ? ['en', 'id'] : ['en'];
+  console.log(`\n=== S3 · Rerank — ${cases.length} kasus, pertanyaan ${langs.join('+')}, latensi ${ROUNDS} putaran, ±${cases[0].docs.length} kandidat per kasus ===`);
   for (const rk of rankers) {
     const w = await rk.fn(cases[0].query, cases[0].docs);
     if (!w.ok) { console.log(`  ${rk.label}: GAGAL ${w.status} ${w.err}`); rk.dead = true; }
   }
-  const stats = new Map(rankers.map(r => [r.label, { ms: [], top1: 0, top4: 0, mrr: 0, n: 0, pos: [] }]));
+  const live = rankers.filter(r => !r.dead);
+  const blank = () => ({ top1: 0, top4: 0, top10: 0, mrr: 0, n: 0, pos: [], gold: [], wrongTop: [], top: [] });
+  const st = new Map(live.map(r => [r.key, { ms: [], en: blank(), id: blank() }]));
+
   for (let r = 0; r < ROUNDS; r++) {
     for (const c of cases) {
-      for (const rk of rankers) {
-        if (rk.dead) continue;
-        const res = await timed(() => rk.fn(c.query, c.docs));
-        const st = stats.get(rk.label);
-        if (!res.ok) continue;
-        st.ms.push(res.ms);
-        if (r > 0) continue;
-        const pos = res.order.findIndex(id => c.gold.includes(id));
-        st.n++; st.pos.push(pos < 0 ? '>10' : pos + 1);
-        if (pos === 0) st.top1++;
-        if (pos >= 0 && pos < 4) st.top4++;
-        if (pos >= 0) st.mrr += 1 / (pos + 1);
+      for (const lang of (r === 0 ? langs : ['en'])) {
+        const q = lang === 'en' ? c.query : c.query_id;
+        if (!q) continue;
+        for (const rk of live) {
+          const res = await timed(() => rk.fn(q, c.docs));
+          const s = st.get(rk.key);
+          if (!res.ok) { if (r === 0) s[lang].pos.push('ERR'); continue; }
+          if (lang === 'en') s.ms.push(res.ms);
+          if (r > 0) continue;
+          const acc = s[lang];
+          const pos = res.order.findIndex(id => c.gold.includes(id));
+          acc.n++; acc.pos.push(pos < 0 ? '>10' : String(pos + 1));
+          acc.top.push(res.scores[0] ?? 0);
+          if (pos === 0) acc.top1++;
+          if (pos >= 0 && pos < 4) acc.top4++;
+          if (pos >= 0) { acc.top10++; acc.mrr += 1 / (pos + 1); acc.gold.push(res.scores[pos]); }
+          if (pos !== 0) acc.wrongTop.push(res.scores[0] ?? 0);
+        }
       }
     }
   }
-  console.log(`\n${pad('Reranker', 40)}${pad('median', 9)}${pad('p90', 9)}${pad('juara #1', 10)}${pad('masuk 4 besar', 15)}MRR`);
-  for (const rk of rankers) {
-    if (rk.dead) continue;
-    const st = stats.get(rk.label);
-    console.log(`${pad(rk.label, 40)}${pad(sec(median(st.ms)) + ' dtk', 9)}${pad(sec(p90(st.ms)) + ' dtk', 9)}${pad(`${st.top1}/${st.n}`, 10)}${pad(`${st.top4}/${st.n}`, 15)}${(st.mrr / (st.n || 1)).toFixed(2)}`);
+
+  for (const lang of langs) {
+    console.log(`\n--- Pertanyaan ${lang === 'en' ? 'Inggris (yang dikirim sistem sekarang)' : 'Indonesia asli teknisi'} ---`);
+    console.log(`${pad('Reranker', 54)}${lang === 'en' ? pad('median', 9) + pad('p90', 9) : ''}${pad('#1', 8)}${pad('4 besar', 9)}${pad('10 besar', 10)}MRR`);
+    for (const rk of live) {
+      const s = st.get(rk.key); const a = s[lang];
+      const lat = lang === 'en' ? pad(sec(median(s.ms)) + ' dtk', 9) + pad(sec(p90(s.ms)) + ' dtk', 9) : '';
+      console.log(`${pad(rk.label, 54)}${lat}${pad(`${a.top1}/${a.n}`, 8)}${pad(`${a.top4}/${a.n}`, 9)}${pad(`${a.top10}/${a.n}`, 10)}${(a.mrr / (a.n || 1)).toFixed(3)}`);
+    }
   }
-  console.log('\nPeringkat jawaban benar per kasus (1 = paling atas, >10 = tidak masuk):');
+
+  console.log('\n--- Skala skor (untuk kalibrasi ambang keyakinan HIGH/MEDIUM, pertanyaan Inggris) ---');
+  const coh = st.get('cohere');
+  const cohHighShare = coh ? coh.en.top.filter(x => x >= 0.45).length / (coh.en.top.length || 1) : null;
+  const cohMedShare = coh ? coh.en.top.filter(x => x >= 0.25).length / (coh.en.top.length || 1) : null;
+  for (const rk of live) {
+    const a = st.get(rk.key).en;
+    let eq = '';
+    if (cohHighShare !== null && rk.key !== 'cohere') {
+      eq = ` · setara HIGH≥${quantile(a.top, 1 - cohHighShare).toFixed(2)} MEDIUM≥${quantile(a.top, 1 - cohMedShare).toFixed(2)}`;
+    }
+    console.log(`  ${pad(rk.key, 20)} skor jawaban benar p10=${quantile(a.gold, 0.1).toFixed(2)} p50=${quantile(a.gold, 0.5).toFixed(2)} · skor #1 saat SALAH p50=${quantile(a.wrongTop, 0.5).toFixed(2)} maks=${Math.max(0, ...a.wrongTop).toFixed(2)}${eq}`);
+  }
+
+  console.log('\nPeringkat jawaban benar per kasus (en/id; 1 = paling atas, >10 = tidak masuk):');
+  console.log(`  ${pad('', 58)}${live.map(r => pad(r.key, 16)).join('')}`);
   for (const [i, c] of cases.entries()) {
-    console.log(`  ${pad(c.model + ' · ' + c.query, 52)} ${rankers.filter(r => !r.dead).map(r => `${r.label.split(' ').pop()}=${stats.get(r.label).pos[i]}`).join('  ')}`);
+    const cells = live.map(r => { const s = st.get(r.key); return pad(`${s.en.pos[i] ?? '-'}/${s.id.pos[i] ?? '-'}`, 16); }).join('');
+    console.log(`  ${pad((c.model + ' · ' + c.query).slice(0, 56), 58)}${cells}`);
   }
 }
 
