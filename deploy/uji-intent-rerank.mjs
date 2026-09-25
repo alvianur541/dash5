@@ -252,5 +252,49 @@ async function runRerank() {
 }
 
 if (!PROJECT || !TOKEN) { console.error('PROJECT dan TOKEN wajib di-set (jalankan lewat uji-intent-rerank.sh)'); process.exit(1); }
+async function runCalibration() {
+  if (!existsSync(CASES_FILE)) { console.log(`Kalibrasi dilewati: ${CASES_FILE} tidak ada`); return; }
+  const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8'));
+  const words = q => new Set(q.toLowerCase().split(/\s+/).filter(w => w.length >= 4));
+  const rankers = [
+    ...(process.env.COHERE_API_KEY ? [{ key: 'cohere', fn: cohere }] : []),
+    { key: 'g-fast-004', fn: (q, d) => vertexRank('semantic-ranker-fast-004', false, q, d) },
+    { key: 'g-fast-004+judul', fn: (q, d) => vertexRank('semantic-ranker-fast-004', true, q, d) },
+  ];
+  const pos = new Map(rankers.map(r => [r.key, []]));
+  const neg = new Map(rankers.map(r => [r.key, []]));
+  console.log(`\n=== Kalibrasi skor — ${cases.length} pertanyaan cocok vs ${cases.length} pertanyaan salah-alamat ===`);
+  for (const [i, c] of cases.entries()) {
+    const own = words(c.query);
+    let j = (i + 7) % cases.length;
+    for (let k = 0; k < cases.length; k++, j = (j + 1) % cases.length) {
+      const other = words(cases[j].query);
+      if (j !== i && ![...own].some(w => other.has(w))) break;
+    }
+    console.log(`  kasus ${i + 1}/${cases.length} · "${c.query}" · salah-alamat: "${cases[j].query}"`);
+    for (const rk of rankers) {
+      const a = await timed(() => rk.fn(c.query, c.docs));
+      const b = await timed(() => rk.fn(cases[j].query, c.docs));
+      if (a.ok) pos.get(rk.key).push(a.scores[0] ?? 0);
+      if (b.ok) neg.get(rk.key).push(b.scores[0] ?? 0);
+    }
+  }
+  const f = x => x.toFixed(2);
+  console.log('\nSkor #1 — pertanyaan COCOK (datanya ada) vs SALAH-ALAMAT (datanya tidak ada):');
+  for (const rk of rankers) {
+    const p = pos.get(rk.key), n = neg.get(rk.key);
+    console.log(`  ${pad(rk.key, 18)} cocok p10=${f(quantile(p, 0.1))} p25=${f(quantile(p, 0.25))} p50=${f(quantile(p, 0.5))} | salah-alamat p50=${f(quantile(n, 0.5))} p75=${f(quantile(n, 0.75))} p90=${f(quantile(n, 0.9))} maks=${f(Math.max(0, ...n))}`);
+  }
+  console.log('\nPorsi skor #1 ≥ ambang (cocok% / salah-alamat%):');
+  const th = [0.05, 0.1, 0.15, 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5, 0.6];
+  console.log(`  ${pad('', 18)}${th.map(t => pad(t.toFixed(2), 10)).join('')}`);
+  for (const rk of rankers) {
+    const p = pos.get(rk.key), n = neg.get(rk.key);
+    const pct = (a, t) => Math.round(100 * a.filter(x => x >= t).length / (a.length || 1));
+    console.log(`  ${pad(rk.key, 18)}${th.map(t => pad(`${pct(p, t)}/${pct(n, t)}`, 10)).join('')}`);
+  }
+}
+
+if (PART === 'kalibrasi') await runCalibration();
 if (PART === 'all' || PART === 'intent') await runIntent();
 if (PART === 'all' || PART === 'rerank') await runRerank();
