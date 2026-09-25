@@ -148,7 +148,7 @@ async function vertexRank(model, query, docs) {
 
 async function runRerank() {
   if (!existsSync(CASES_FILE)) { console.log(`\n=== S3 dilewati: ${CASES_FILE} tidak ada (upload rerank-cases.json ke home Cloud Shell) ===`); return; }
-  const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8'));
+  const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8')).map(c => ({ ...c, gold: [].concat(c.gold) }));
   const rankers = [];
   if (process.env.COHERE_API_KEY) rankers.push({ label: `Cohere ${process.env.COHERE_RERANK_MODEL || 'rerank-v4.0-fast'}`, fn: cohere });
   else console.log('  (Cohere dilewati: COHERE_API_KEY kosong)');
