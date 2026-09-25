@@ -12,10 +12,27 @@ const p90 = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[M
 const sec = ms => (ms / 1000).toFixed(2);
 const pad = (s, n) => String(s).padEnd(n);
 
+const rawFetch = globalThis.fetch;
+globalThis.fetch = async (url, opts = {}) => {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(Object.assign(new Error('timeout'), { name: 'TimeoutError' })), 20_000);
+  try {
+    const res = await rawFetch(url, { ...opts, signal: ctrl.signal });
+    const body = await res.text();
+    return { ok: res.ok, status: res.status, json: async () => JSON.parse(body) };
+  } finally {
+    clearTimeout(timer);
+  }
+};
+
 async function timed(fn) {
   const t = performance.now();
-  const r = await fn();
-  return { ...r, ms: performance.now() - t };
+  try {
+    const r = await fn();
+    return { ...r, ms: performance.now() - t };
+  } catch (err) {
+    return { ok: false, status: err?.name === 'TimeoutError' ? 'timeout 20 dtk' : 'error', err: String(err?.message ?? err).slice(0, 120), ms: performance.now() - t };
+  }
 }
 
 // ---------- S2: intent model ----------
@@ -91,7 +108,7 @@ async function runIntent() {
 
   console.log(`\n=== S2 · Pemilah pertanyaan (analyzeIntent) — ${INTENT_CASES.length} pertanyaan nyata × ${ROUNDS} putaran ===`);
   for (const v of variants) {
-    const w = await intentCall(v.model, v.sys, 'halo');
+    const w = await timed(() => intentCall(v.model, v.sys, 'halo'));
     if (!w.ok) { console.log(`  ${v.label}: GAGAL ${w.status} ${w.err}`); v.dead = true; }
   }
   const stats = new Map(variants.map(v => [v.label, { ms: [], right: 0, total: 0, parseFail: 0, inTok: 0, answers: {} }]));
@@ -169,15 +186,18 @@ async function runRerank() {
   const langs = cases.some(c => c.query_id) ? ['en', 'id'] : ['en'];
   console.log(`\n=== S3 · Rerank — ${cases.length} kasus, pertanyaan ${langs.join('+')}, latensi ${ROUNDS} putaran, ±${cases[0].docs.length} kandidat per kasus ===`);
   for (const rk of rankers) {
-    const w = await rk.fn(cases[0].query, cases[0].docs);
+    const w = await timed(() => rk.fn(cases[0].query, cases[0].docs));
+    console.log(`  cek ${rk.label}: ${w.ok ? 'OK' : 'GAGAL'} (${sec(w.ms)} dtk)`);
     if (!w.ok) { console.log(`  ${rk.label}: GAGAL ${w.status} ${w.err}`); rk.dead = true; }
   }
   const live = rankers.filter(r => !r.dead);
   const blank = () => ({ top1: 0, top4: 0, top10: 0, mrr: 0, n: 0, pos: [], gold: [], wrongTop: [], top: [] });
   const st = new Map(live.map(r => [r.key, { ms: [], en: blank(), id: blank() }]));
 
+  const t0 = performance.now();
   for (let r = 0; r < ROUNDS; r++) {
-    for (const c of cases) {
+    for (const [ci, c] of cases.entries()) {
+      console.log(`  putaran ${r + 1}/${ROUNDS} · kasus ${ci + 1}/${cases.length} · ${c.model} · ${c.query} (${sec(performance.now() - t0)} dtk berjalan)`);
       for (const lang of (r === 0 ? langs : ['en'])) {
         const q = lang === 'en' ? c.query : c.query_id;
         if (!q) continue;
