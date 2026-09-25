@@ -52,7 +52,7 @@ export async function rerankDocs(query: string, docs: string[], topN: number): P
 // Google scores run lower than Cohere for the same relevance; thresholds are per source.
 const THRESHOLDS: Record<RerankSource, { high: number; medium: number }> = {
   cohere: { high: 0.45, medium: 0.25 },
-  google: { high: Number(process.env.GOOGLE_RANK_HIGH) || 0.30, medium: Number(process.env.GOOGLE_RANK_MEDIUM) || 0.15 },
+  google: { high: Number(process.env.GOOGLE_RANK_HIGH) || 0.30, medium: Number(process.env.GOOGLE_RANK_MEDIUM) || 0.20 },
 };
 
 export function computeConfidence(scored: RerankedDoc[], source: RerankSource = 'cohere'): { confidence: 'high' | 'medium' | 'low'; topScore: number } {

@@ -6,7 +6,7 @@ module.exports = async function () {
   const s = x => [{ content: 'x', score: x }];
   t(computeConfidence(s(0.35), 'google').confidence === 'high', 'google 0.35 → high');
   t(computeConfidence(s(0.20), 'google').confidence === 'medium', 'google 0.20 → medium');
-  t(computeConfidence(s(0.10), 'google').confidence === 'low', 'google 0.10 → low');
+  t(computeConfidence(s(0.17), 'google').confidence === 'low', 'google 0.17 → low (ambang MEDIUM 0.20 dari kalibrasi)');
   t(computeConfidence(s(0.35), 'cohere').confidence === 'medium', 'cohere 0.35 → medium (ambang lama tidak berubah)');
   t(computeConfidence(s(0.35)).confidence === 'medium', 'tanpa sumber → ambang Cohere (kompatibel mundur)');
 
