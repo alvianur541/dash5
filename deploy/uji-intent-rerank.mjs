@@ -256,10 +256,10 @@ async function runCalibration() {
   if (!existsSync(CASES_FILE)) { console.log(`Kalibrasi dilewati: ${CASES_FILE} tidak ada`); return; }
   const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8'));
   const words = q => new Set(q.toLowerCase().split(/\s+/).filter(w => w.length >= 4));
+  const models = (process.env.VERTEX_RANKERS || 'semantic-ranker-fast-004').split(',');
   const rankers = [
     ...(process.env.COHERE_API_KEY ? [{ key: 'cohere', fn: cohere }] : []),
-    { key: 'g-fast-004', fn: (q, d) => vertexRank('semantic-ranker-fast-004', false, q, d) },
-    { key: 'g-fast-004+judul', fn: (q, d) => vertexRank('semantic-ranker-fast-004', true, q, d) },
+    ...models.map(m => ({ key: m.replace('semantic-ranker-', 'g-') + '+judul', fn: (q, d) => vertexRank(m, true, q, d) })),
   ];
   const pos = new Map(rankers.map(r => [r.key, []]));
   const neg = new Map(rankers.map(r => [r.key, []]));
