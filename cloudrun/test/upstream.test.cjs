@@ -1,7 +1,7 @@
 const { suite } = require('./helpers.cjs');
 const { fetchAntiMacet, STALL_MAX } = require('../server/upstream');
 
-// rencana[i] = { ms, gagal? } untuk panggilan fetch ke-i
+// rencana[i] = { ms, gagal?, status? } untuk panggilan fetch ke-i
 function pasangFetch(rencana) {
   const catat = [];
   global.fetch = (_url, opts) => {
@@ -10,7 +10,7 @@ function pasangFetch(rencana) {
     catat.push({ dibatalkan: false });
     return new Promise((resolve, reject) => {
       const timer = setTimeout(
-        () => (r.gagal ? reject(new Error('gagal-' + i)) : resolve({ ke: i })), r.ms);
+        () => (r.gagal ? reject(new Error('gagal-' + i)) : resolve({ ke: i, status: r.status || 200 })), r.ms);
       opts.signal.addEventListener('abort', () => {
         clearTimeout(timer);
         catat[i].dibatalkan = true;
@@ -81,6 +81,28 @@ module.exports = async () => {
     let err = null;
     try { await fetchAntiMacet('u', {}, ctrl.signal, 'uji', STALL); } catch (e) { err = e; }
     t(err !== null && /Dibatalkan sebelum/.test(err.message), 'sudah dibatalkan sebelum mulai → tidak menembak upstream');
+  }
+
+  {
+    const catat = pasangFetch([{ ms: STALL * 1.7, status: 429 }, { ms: STALL * 1.2 }, { ms: 5000 }]);
+    const res = await fetchAntiMacet('u', {}, null, 'uji', STALL);
+    t(res.ke === 1 && res.status === 200, '429 dari koneksi lama TIDAK membatalkan cadangan yang masih jalan → cadangan menang');
+    t(catat[2].dibatalkan === true, 'koneksi ketiga yang masih menggantung dibatalkan setelah cadangan menang');
+  }
+
+  {
+    const catat = pasangFetch([{ ms: 5, status: 429 }]);
+    const mulai = Date.now();
+    const res = await fetchAntiMacet('u', {}, null, 'uji', STALL);
+    t(res.status === 429 && catat.length === 1 && Date.now() - mulai < STALL, '429 cepat tanpa koneksi lain → langsung diteruskan (model cadangan), tanpa menembak ulang');
+  }
+
+  {
+    const catat = pasangFetch([{ ms: STALL + 10, status: 429 }, { ms: 5000 }]);
+    const mulai = Date.now();
+    const res = await fetchAntiMacet('u', {}, null, 'uji', STALL);
+    const lama = Date.now() - mulai;
+    t(res.status === 429 && lama < STALL * 3 && catat[1].dibatalkan === true, '429 + cadangan menggantung → 429 diteruskan setelah satu ambang, cadangan dibatalkan');
   }
 
   global.fetch = fetchAsli;

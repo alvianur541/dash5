@@ -45,7 +45,7 @@ async function resolveUpstream(model, { stream }) {
 
 const STALL_MS_NONSTREAM     = 8_000;
 
-const STALL_MS_STREAM_CEPAT  = 10_000;
+const STALL_MS_STREAM_CEPAT  = 5_000;
 
 const STALL_MS_STREAM_MIKIR  = 30_000;
 
@@ -58,7 +58,7 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
   if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
   const ctrls = [];
   const timers = [];
-  let selesai = false, jalan = 0, dikirim = 0, errTerakhir = null;
+  let selesai = false, jalan = 0, dikirim = 0, errTerakhir = null, ditolak = null;
   const batalSemua = () => { for (const c of ctrls) c.abort(); };
   if (signal) signal.addEventListener('abort', batalSemua);
 
@@ -71,6 +71,7 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
         for (const c of ctrls) if (c !== menang) c.abort();
         fn(nilai);
       };
+      const lepasDitolak = () => tutup(resolve, ditolak.res, ditolak.ctrl);
       const kirim = () => {
         if (selesai || dikirim >= STALL_MAX) return;
         const ke = ++dikirim;
@@ -80,12 +81,23 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
         if (ke > 1) console.warn('[upstream] %s macet >%d dtk — kirim koneksi cadangan (%d/%d)',
           label, stallMs / 1000, ke, STALL_MAX);
         fetch(url, { ...opts, signal: ctrl.signal }).then(
-          res => tutup(resolve, res, ctrl),
+          res => {
+            // A 429 must not cancel sibling connections that may still succeed.
+            if (res.status !== 429) return tutup(resolve, res, ctrl);
+            jalan--;
+            if (ditolak) ctrl.abort(); else ditolak = { res, ctrl };
+            if (jalan === 0) return lepasDitolak();
+            timers.push(setTimeout(lepasDitolak, stallMs));
+          },
           err => {
             jalan--;
             errTerakhir = err;
             if (signal && signal.aborted) return tutup(reject, err);
-            if (jalan === 0) { if (dikirim >= STALL_MAX) tutup(reject, err); else kirim(); }
+            if (jalan === 0) {
+              if (ditolak) lepasDitolak();
+              else if (dikirim >= STALL_MAX) tutup(reject, err);
+              else kirim();
+            }
           },
         );
         if (ke < STALL_MAX) timers.push(setTimeout(kirim, stallMs));
@@ -116,7 +128,8 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   if (msAuth > 1000 || msFetch > 3000) {
     console.warn('[upstream] LAMBAT %s auth=%dms fetch=%dms status=%d', label, msAuth, msFetch, upstream.status);
   }
-  for (let i = 0; upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
+  // Streaming 429 goes straight to the fallback model in stream.ts; retrying the same model only adds delay.
+  for (let i = 0; !stream && upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
     const waitMs = UPSTREAM_429_BACKOFF_MS[i];
     console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
     await new Promise(r => setTimeout(r, waitMs));
