@@ -9,6 +9,7 @@ cloudrun/test/.build/
 .claude/
 .vscode/
 CLAUDE.md
+CLAUDE-HISTORY.md
 
 # Google Cloud service account keys — never commit.
 secrets/*
