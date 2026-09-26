@@ -1026,7 +1026,6 @@ img {
 .model-sheet-item-active { background: color-mix(in srgb, var(--accent-active) 10%, transparent); font-weight: 600; }
 
 @media (max-width: 767px) {
-  .message-input-bar textarea { font-size: 16px !important; }
   .chat-messages-list { padding-left: 14px; padding-right: 14px; }
   .msg-user-group { max-width: 84%; }
 }
