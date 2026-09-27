@@ -321,6 +321,19 @@ function windowRecords(docs) {
   return recs;
 }
 
+// Hybrid: whole chunk (Google reads its first ~1024 tokens) plus windows over the tail it cannot see.
+const TAIL_FROM = Number(process.env.TAIL_FROM || 3000);
+function hybridRecords(docs) {
+  const recs = docs.map((d, i) => ({ doc: i, text: d.text }));
+  const tails = docs.map(d => (d.text.length > TAIL_FROM ? windowsOf(d.text.slice(TAIL_FROM - OVL)) : []));
+  for (let k = 0; recs.length < MAX_REC; k++) {
+    let added = false;
+    for (let i = 0; i < tails.length && recs.length < MAX_REC; i++) if (tails[i][k]) { recs.push({ doc: i, text: tails[i][k] }); added = true; }
+    if (!added) break;
+  }
+  return recs;
+}
+
 async function googleRecords(model, query, recs) {
   const records = recs.map((r, i) => (r.title ? { id: String(i), title: r.title, content: r.text } : { id: String(i), content: r.text }));
   const res = await fetch(`https://discoveryengine.googleapis.com/v1/projects/${PROJECT}/locations/global/rankingConfigs/default_ranking_config:rank`, {
@@ -335,7 +348,9 @@ async function googleRecords(model, query, recs) {
 
 async function rankVariant(v, c, model) {
   const q = v.idQuery && c.query_id ? `${c.query_id.replace(/\s*\(dalam\)$/, '')} — ${c.query}` : c.query;
-  const recs = v.windows
+  const recs = v.hybrid
+    ? hybridRecords(c.docs).map(r => ({ ...r, title: titleOf(c.docs[r.doc].text) }))
+    : v.windows
     ? windowRecords(c.docs).map(r => ({ ...r, title: titleOf(c.docs[r.doc].text) }))
     : c.docs.map((d, i) => ({ doc: i, text: v.cap ? d.text.slice(0, v.cap) : d.text, title: titleOf(d.text) }));
   const res = await googleRecords(model, q, recs);
@@ -358,7 +373,8 @@ async function runWindow() {
     { key: 'B', label: 'B · chunk utuh + judul', cap: 0 },
     { key: 'C', label: `C · jendela ${WIN}/${OVL} (MaxP) + judul`, windows: true },
     { key: 'D', label: 'D · jendela + pertanyaan Indonesia asli', windows: true, idQuery: true },
-  ];
+    { key: 'E', label: `E · utuh + jendela ekor >${TAIL_FROM} huruf`, hybrid: true },
+  ].filter(v => !process.env.VARIANTS || process.env.VARIANTS.split(',').includes(v.key));
   const sets = [...new Set(cases.map(c => c.set))];
   console.log(`\n=== Uji jendela rerank — ${cases.length} kasus (${sets.map(s => `${s} ${cases.filter(c => c.set === s).length}`).join(', ')}), model ${model}, ${ROUNDS} putaran latensi ===`);
   const st = new Map(variants.map(v => [v.key, { ms: [], nRec: [], by: Object.fromEntries(sets.map(s => [s, { top1: 0, top4: 0, mrr: 0, n: 0 }])), pos: [] }]));
