@@ -5,7 +5,7 @@ const PROJECT = process.env.PROJECT;
 const TOKEN = process.env.TOKEN;
 const ROUNDS = Number(process.env.ROUNDS || 2);
 const PART = process.argv[2] || 'all';
-const CASES_FILE = process.env.CASES || (existsSync(`${process.env.HOME}/rerank-cases-v2.json`) ? `${process.env.HOME}/rerank-cases-v2.json` : `${process.env.HOME}/rerank-cases.json`);
+const CASES_FILE = process.env.CASES || [3, 2, ''].map(v => `${process.env.HOME}/rerank-cases${v ? '-v' + v : ''}.json`).find(f => existsSync(f)) || `${process.env.HOME}/rerank-cases.json`;
 
 const median = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
 const p90 = a => { const s = [...a].sort((x, y) => x - y); return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * 0.9))] : NaN; };
@@ -295,6 +295,111 @@ async function runCalibration() {
   }
 }
 
+// ---------- Windowed rerank (MaxP): long chunks scored per window, chunk score = best window ----------
+const WIN = Number(process.env.WIN || 2000), OVL = Number(process.env.OVL || 300), MAX_REC = Number(process.env.MAX_REC || 100);
+const titleOf = t => (t.match(/^Section:[^\n]*/m) || [''])[0].slice(0, 200);
+
+function windowsOf(text) {
+  if (text.length <= WIN) return [text];
+  const out = [];
+  for (let s = 0; s < text.length; s += WIN - OVL) {
+    out.push(text.slice(s, s + WIN));
+    if (s + WIN >= text.length) break;
+  }
+  return out;
+}
+
+// Every chunk gets its first window; extra windows are added round-robin until MAX_REC records.
+function windowRecords(docs) {
+  const per = docs.map(d => windowsOf(d.text));
+  const recs = per.map((w, i) => ({ doc: i, text: w[0] }));
+  for (let k = 1; recs.length < MAX_REC; k++) {
+    let added = false;
+    for (let i = 0; i < per.length && recs.length < MAX_REC; i++) if (per[i][k]) { recs.push({ doc: i, text: per[i][k] }); added = true; }
+    if (!added) break;
+  }
+  return recs;
+}
+
+async function googleRecords(model, query, recs) {
+  const records = recs.map((r, i) => (r.title ? { id: String(i), title: r.title, content: r.text } : { id: String(i), content: r.text }));
+  const res = await fetch(`https://discoveryengine.googleapis.com/v1/projects/${PROJECT}/locations/global/rankingConfigs/default_ranking_config:rank`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${TOKEN}`, 'Content-Type': 'application/json', 'x-goog-user-project': PROJECT },
+    body: JSON.stringify({ model, query, topN: records.length, ignoreRecordDetailsInResponse: true, records }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok: false, status: res.status, err: data?.error?.message?.slice(0, 200) };
+  return { ok: true, recs: (data.records ?? []).map(r => ({ i: Number(r.id), score: r.score ?? 0 })) };
+}
+
+async function rankVariant(v, c, model) {
+  const q = v.idQuery && c.query_id ? `${c.query_id.replace(/\s*\(dalam\)$/, '')} — ${c.query}` : c.query;
+  const recs = v.windows
+    ? windowRecords(c.docs).map(r => ({ ...r, title: titleOf(c.docs[r.doc].text) }))
+    : c.docs.map((d, i) => ({ doc: i, text: v.cap ? d.text.slice(0, v.cap) : d.text, title: titleOf(d.text) }));
+  const res = await googleRecords(model, q, recs);
+  if (!res.ok) return res;
+  const best = new Map();
+  for (const r of res.recs) {
+    const doc = recs[r.i].doc;
+    if (!best.has(doc) || r.score > best.get(doc)) best.set(doc, r.score);
+  }
+  const ranked = [...best.entries()].sort((a, b) => b[1] - a[1]);
+  return { ok: true, order: ranked.map(([doc]) => c.docs[doc].id), scores: ranked.map(([, s]) => s), nRec: recs.length };
+}
+
+async function runWindow() {
+  if (!existsSync(CASES_FILE)) { console.log(`Uji jendela dilewati: ${CASES_FILE} tidak ada`); return; }
+  const cases = JSON.parse(readFileSync(CASES_FILE, 'utf8')).map(c => ({ ...c, gold: [].concat(c.gold), set: c.set || 'lama' }));
+  const model = process.env.VERTEX_RANKERS?.split(',')[0] || 'semantic-ranker-fast-004';
+  const variants = [
+    { key: 'A', label: 'A · sekarang: potong 2500 huruf + judul', cap: 2500 },
+    { key: 'B', label: 'B · chunk utuh + judul', cap: 0 },
+    { key: 'C', label: `C · jendela ${WIN}/${OVL} (MaxP) + judul`, windows: true },
+    { key: 'D', label: 'D · jendela + pertanyaan Indonesia asli', windows: true, idQuery: true },
+  ];
+  const sets = [...new Set(cases.map(c => c.set))];
+  console.log(`\n=== Uji jendela rerank — ${cases.length} kasus (${sets.map(s => `${s} ${cases.filter(c => c.set === s).length}`).join(', ')}), model ${model}, ${ROUNDS} putaran latensi ===`);
+  const st = new Map(variants.map(v => [v.key, { ms: [], nRec: [], by: Object.fromEntries(sets.map(s => [s, { top1: 0, top4: 0, mrr: 0, n: 0 }])), pos: [] }]));
+  const t0 = performance.now();
+  for (let r = 0; r < ROUNDS; r++) {
+    for (const [ci, c] of cases.entries()) {
+      console.log(`  putaran ${r + 1}/${ROUNDS} · kasus ${ci + 1}/${cases.length} · ${c.model} · ${c.query} (${sec(performance.now() - t0)} dtk berjalan)`);
+      for (const v of variants) {
+        const res = await timed(() => rankVariant(v, c, model));
+        const s = st.get(v.key);
+        if (!res.ok) { if (r === 0) { s.pos.push('ERR'); console.log(`    ${v.key} GAGAL ${res.status} ${res.err}`); } continue; }
+        s.ms.push(res.ms); s.nRec.push(res.nRec);
+        if (r > 0) continue;
+        const pos = res.order.findIndex(id => c.gold.includes(id));
+        const a = s.by[c.set];
+        a.n++; s.pos.push(pos < 0 ? '-' : String(pos + 1));
+        if (pos === 0) a.top1++;
+        if (pos >= 0 && pos < 4) a.top4++;
+        if (pos >= 0) a.mrr += 1 / (pos + 1);
+      }
+    }
+  }
+  for (const set of [...sets, 'SEMUA']) {
+    console.log(`\n--- Kasus ${set} ---`);
+    console.log(`${pad('Varian', 46)}${pad('#1', 8)}${pad('4 besar', 9)}${pad('MRR', 8)}${pad('median', 9)}rekaman`);
+    for (const v of variants) {
+      const s = st.get(v.key);
+      const a = set === 'SEMUA'
+        ? Object.values(s.by).reduce((x, y) => ({ top1: x.top1 + y.top1, top4: x.top4 + y.top4, mrr: x.mrr + y.mrr, n: x.n + y.n }), { top1: 0, top4: 0, mrr: 0, n: 0 })
+        : s.by[set];
+      console.log(`${pad(v.label, 46)}${pad(`${a.top1}/${a.n}`, 8)}${pad(`${a.top4}/${a.n}`, 9)}${pad((a.mrr / (a.n || 1)).toFixed(3), 8)}${pad(sec(median(s.ms)) + ' dtk', 9)}${median(s.nRec)}`);
+    }
+  }
+  console.log('\nPeringkat jawaban benar per kasus (1 = paling atas, - = tidak masuk):');
+  console.log(`  ${pad('', 60)}${variants.map(v => pad(v.key, 5)).join('')}`);
+  for (const [i, c] of cases.entries()) {
+    console.log(`  ${pad(`[${c.set}] ${c.model} · ${c.query}`.slice(0, 58), 60)}${variants.map(v => pad(st.get(v.key).pos[i] ?? '-', 5)).join('')}`);
+  }
+}
+
+if (PART === 'jendela') await runWindow();
 if (PART === 'kalibrasi') await runCalibration();
 if (PART === 'all' || PART === 'intent') await runIntent();
 if (PART === 'all' || PART === 'rerank') await runRerank();
