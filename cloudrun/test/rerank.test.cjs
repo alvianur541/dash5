@@ -19,6 +19,15 @@ module.exports = async function () {
   }
 
   {
+    let dikirim = null;
+    const panjang = 'Section: SWING MOTOR - DISASSEMBLY\n' + 'x '.repeat(1500) + 'swing motor assembly weight: 48 kg';
+    const { d } = mockDeps([], { rerank: async (_q, docs) => { dikirim = docs; return { results: [{ index: 0, score: 0.5 }], source: 'google' }; } });
+    await runWithDeps(d, () => rerankDocs('swing motor weight', [panjang, 'x'.repeat(30000)], 2));
+    t(dikirim[0] === panjang && dikirim[0].includes('weight: 48'), 'chunk 3000+ huruf dinilai utuh (fakta di ekor ikut terbaca)');
+    t(dikirim[1].length === 8000, 'chunk ekstrem 30k huruf tetap dibatasi 8000');
+  }
+
+  {
     const { d } = mockDeps([], { rerank: async () => ({ results: [{ index: 0, score: 0.5 }] }) });
     const out = await runWithDeps(d, () => rerankDocs('q', ['a', 'b'], 1));
     t(out.source === 'cohere', 'hasil tanpa label sumber dianggap Cohere');

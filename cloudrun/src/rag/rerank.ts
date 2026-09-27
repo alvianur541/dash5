@@ -27,7 +27,8 @@ interface RerankedDoc { content: string; score: number }
 
 interface RerankResult { docs: RerankedDoc[]; error?: string; source?: RerankSource }
 
-const RERANK_DOC_CAP = 2500;
+// Whole chunk, not the first 2500 chars (#1 45→50/59 in the v3 benchmark); the cap only bounds 28k-char outliers.
+const RERANK_DOC_CAP = 8000;
 
 export async function rerankDocs(query: string, docs: string[], topN: number): Promise<RerankResult> {
   if (docs.length === 0) return { docs: [] };
