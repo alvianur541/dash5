@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, extractCatalogCode, isFaultCode } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, extractCatalogCode, isFaultCode } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -441,11 +441,15 @@ export async function resolveNaturalLanguageQuery(
   }
   if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
-  const perf = await findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content);
-  if (perf) {
+  const [perf, berat] = await Promise.all([
+    findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content),
+    findComponentWeight(model, trimmed, ragResult.content),
+  ]);
+  const extra = [perf, berat].filter(Boolean).join('\n\n---\n\n');
+  if (extra) {
     ragResult = {
       ...ragResult,
-      content: [perf, ragResult.content].filter(Boolean).join('\n\n---\n\n'),
+      content: [extra, ragResult.content].filter(Boolean).join('\n\n---\n\n'),
       hasResults: true,
       confidence: ragResult.hasResults && ragResult.confidence !== 'low' ? ragResult.confidence : 'high',
       ragError: isRerankError(ragResult.ragError) ? ragResult.ragError : undefined,
