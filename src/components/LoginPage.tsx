@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, LogIn, Loader2, Sun, Moon } from 'lucide-react';
+import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
@@ -16,22 +16,21 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
+  const [showPw, setShowPw] = useState(false);
 
   const isDark = theme === 'dark';
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginLoading(true);
-    await login(username, password);
-    setLoginLoading(false);
+    try { await login(username, password); } finally { setLoginLoading(false); }
   };
 
   const inputClass = cn(
     "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
-    "focus:ring-2 focus:ring-[var(--accent-main)]/20",
-    isDark
-      ? "bg-[var(--bg-card)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--border-main)]"
-      : "bg-white border border-[#e5e5e5] text-[#111] placeholder-[#bbb] focus:border-[#bbb] shadow-sm"
+    "bg-[var(--bg-card)] border text-[var(--text-primary)] placeholder-[var(--text-muted)]",
+    "focus:ring-2 focus:ring-[var(--accent-main)]/20 focus:border-[var(--accent-main)]/50",
+    isDark ? "border-[var(--border-main)]" : "border-black/10 shadow-sm"
   );
 
   return (
@@ -41,11 +40,10 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
       <button
         onClick={onThemeToggle}
         className={cn(
-          "absolute top-5 right-5 p-2.5 rounded-xl transition-all",
-          isDark ? "bg-white/5 hover:bg-white/10 text-[#888] hover:text-white"
-                 : "bg-black/5 hover:bg-black/10 text-[#888] hover:text-[#111]"
+          "login-theme-btn p-2.5 rounded-xl transition-all text-[var(--text-muted)] hover:text-[var(--text-primary)]",
+          isDark ? "bg-white/5 hover:bg-white/10" : "bg-black/5 hover:bg-black/10"
         )}
-        title={isDark ? 'Light mode' : 'Dark mode'}
+        aria-label={isDark ? 'Tema terang' : 'Tema gelap'}
       >
         {isDark ? <Sun size={16} /> : <Moon size={16} />}
       </button>
@@ -77,21 +75,40 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               type="text"
               value={username}
               onChange={e => setUsername(e.target.value)}
-              placeholder="Username"
+              placeholder="NIK atau email"
+              aria-label="NIK atau email"
               required
               autoComplete="username"
+              autoCapitalize="none"
+              autoCorrect="off"
+              spellCheck={false}
               autoFocus
               className={inputClass}
             />
-            <input
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              placeholder="Password"
-              required
-              autoComplete="current-password"
-              className={inputClass}
-            />
+            <div className="relative">
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Password"
+                aria-label="Password"
+                required
+                autoComplete="current-password"
+                autoCapitalize="none"
+                autoCorrect="off"
+                spellCheck={false}
+                className={cn(inputClass, 'pr-12')}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPw(v => !v)}
+                className="absolute right-1 top-1/2 -translate-y-1/2 w-10 h-10 flex items-center justify-center rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                aria-label={showPw ? 'Sembunyikan password' : 'Lihat password'}
+                aria-pressed={showPw}
+              >
+                {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
 
             <AnimatePresence>
               {authError && (
@@ -99,7 +116,8 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className="flex items-center gap-2.5 text-[#f87171] bg-red-500/8 border border-red-500/15 px-3 py-2.5 rounded-xl"
+                  role="alert"
+                  className="flex items-center gap-2.5 text-[var(--status-danger)] bg-red-500/8 border border-red-500/15 px-3 py-2.5 rounded-xl"
                 >
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span className="text-[13px]">{authError}</span>

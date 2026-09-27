@@ -166,7 +166,7 @@ export function MessageInput({
     if (file.size > MAX_SIZE_BYTES) { flash(`Gambar terlalu besar (maks 5MB). Ukuran file: ${(file.size / 1024 / 1024).toFixed(1)}MB.`); return; }
 
     const { file: ready, compressed } = await compressImage(file);
-    if (!compressed) flash('Compress gambar gagal — akan mengirim file original.');
+    if (!compressed) flash('Foto tidak bisa dikecilkan — dikirim dengan ukuran asli.');
     // Hold the photo so the technician can add what to check before sending.
     setPendingImage({ file: ready, url: URL.createObjectURL(ready) });
     textareaRef.current?.focus();
@@ -312,7 +312,7 @@ export function MessageInput({
           <div className="flex items-center px-3 pb-[12px] pt-0 gap-0.5">
 
             {isOffline ? (
-              <WifiOff size={15} className="text-amber-400 mx-1.5 shrink-0" />
+              <WifiOff size={15} className="text-[var(--banner-warn)] mx-1.5 shrink-0" />
             ) : (
               <>
                 <button
@@ -371,6 +371,7 @@ export function MessageInput({
                     : "send-btn-inactive cursor-not-allowed"
                 )}
                 title="Kirim"
+                aria-label="Kirim"
               >
                 <ArrowUp size={17} />
               </button>
@@ -382,7 +383,8 @@ export function MessageInput({
           {transcribeError && (
             <m.p
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-              className="text-center text-[11px] text-red-400 font-medium pt-1"
+              role="alert"
+              className="text-center text-[11px] text-[var(--status-danger)] font-medium pt-1"
             >
               {transcribeError}
             </m.p>

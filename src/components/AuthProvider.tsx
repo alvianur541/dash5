@@ -83,8 +83,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setAuthError('Username atau password salah.');
       } else if (msg.includes('network') || msg.includes('fetch')) {
         setAuthError('Gagal terhubung ke server. Cek koneksi kamu.');
+      } else if (/rate limit|too many/i.test(msg)) {
+        setAuthError('Terlalu banyak percobaan. Tunggu beberapa menit, lalu coba lagi.');
       } else {
-        setAuthError(msg || 'Login gagal. Coba lagi.');
+        console.warn('[auth] login gagal:', msg);
+        setAuthError('Login gagal. Coba lagi.');
       }
       return;
     }

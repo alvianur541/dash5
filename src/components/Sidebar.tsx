@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
 import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
@@ -82,6 +82,18 @@ export function Sidebar({
   const [showHistory, setShowHistory] = useState(true);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
+  const userMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showUserMenu) return;
+    const onDown = (e: PointerEvent) => {
+      if (!userMenuRef.current?.contains(e.target as Node)) setShowUserMenu(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowUserMenu(false); };
+    document.addEventListener('pointerdown', onDown);
+    window.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('pointerdown', onDown); window.removeEventListener('keydown', onKey); };
+  }, [showUserMenu]);
 
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth < 768);
@@ -130,7 +142,7 @@ export function Sidebar({
                 <button
                   onClick={onThemeToggle}
                   className="p-1.5 hover:bg-white/8 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
-                  aria-label="Toggle tema"
+                  aria-label={theme === 'dark' ? 'Tema terang' : 'Tema gelap'}
                 >
                   {theme === 'dark' ? <Sun size={14} /> : <Moon size={14} />}
                 </button>
@@ -166,6 +178,7 @@ export function Sidebar({
                 <div key={type}>
                   <button
                     onClick={() => setExpandedType(isOpen ? '' : type)}
+                    aria-expanded={isOpen}
                     className={cn(
                       "w-full flex items-center gap-2 px-3 py-2 rounded-xl transition-colors duration-150 text-left",
                       hasActive
@@ -226,17 +239,16 @@ export function Sidebar({
           {pocketItems.length > 0 && (
             <div className="shrink-0 px-3">
               <div className="border-t border-[var(--border-main)] mt-3" />
-              <div
-                role="button"
-                tabIndex={0}
+              <button
+                type="button"
                 onClick={() => setShowBookmarks(v => !v)}
-                onKeyDown={e => e.key === 'Enter' && setShowBookmarks(v => !v)}
-                className="flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
+                aria-expanded={showBookmarks}
+                className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
               >
-                <p className="flex items-center gap-1.5 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
+                <span className="flex items-center gap-1.5 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
                   <Bookmark size={11} /> Bookmark
                   {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
-                </p>
+                </span>
                 <ChevronRight
                   size={11}
                   className={cn(
@@ -244,7 +256,7 @@ export function Sidebar({
                     showBookmarks ? "rotate-90" : ""
                   )}
                 />
-              </div>
+              </button>
               <AnimatePresence initial={false}>
                 {showBookmarks && (
                   <m.div
@@ -259,7 +271,7 @@ export function Sidebar({
                         <div key={item.id} className="relative group/pocket">
                           <button
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
-                            className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-8 hover:bg-white/5 active:bg-white/8 group/pbtn"
+                            className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-10 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
                             <span className="block truncate text-[12.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
@@ -268,12 +280,13 @@ export function Sidebar({
                           <button
                             onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
                             className={cn(
-                              "absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all",
-                              isMobile ? "opacity-100" : "opacity-0 group-hover/pocket:opacity-100"
+                              "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all flex items-center justify-center",
+                              isMobile ? "w-9 h-9 opacity-100" : "w-7 h-7 opacity-0 group-hover/pocket:opacity-100 focus-visible:opacity-100"
                             )}
                             title="Hapus dari Bookmark"
+                            aria-label="Hapus dari Bookmark"
                           >
-                            <Trash2 size={11} />
+                            <Trash2 size={isMobile ? 14 : 12} />
                           </button>
                         </div>
                       ))}
@@ -286,16 +299,15 @@ export function Sidebar({
 
           <div className="shrink-0 px-3">
             <div className="border-t border-[var(--border-main)] mt-3" />
-            <div
-              role="button"
-              tabIndex={0}
+            <button
+              type="button"
               onClick={() => setShowHistory(v => !v)}
-              onKeyDown={e => e.key === 'Enter' && setShowHistory(v => !v)}
-              className="flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
+              aria-expanded={showHistory}
+              className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
-              <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
+              <span className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
                 <HistoryIcon size={12} /> History
-              </p>
+              </span>
               <ChevronRight
                 size={11}
                 className={cn(
@@ -303,7 +315,7 @@ export function Sidebar({
                   showHistory ? "rotate-90" : ""
                 )}
               />
-            </div>
+            </button>
           </div>
 
           <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-2">
@@ -352,7 +364,7 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-8 active:bg-white/8",
+                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-10 active:bg-white/8",
                                 isActive
                                   ? "bg-[var(--accent-active)]/20 text-[var(--text-primary)] font-medium"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
@@ -379,10 +391,14 @@ export function Sidebar({
                                   exit={{ opacity: 0, scale: 0.8 }}
                                   transition={{ duration: 0.1 }}
                                   onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
-                                  className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-colors"
+                                  className={cn(
+                                    "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-colors flex items-center justify-center",
+                                    isMobile ? "w-9 h-9" : "w-7 h-7"
+                                  )}
                                   title="Hapus sesi"
+                                  aria-label="Hapus percakapan"
                                 >
-                                  <Trash2 size={11} />
+                                  <Trash2 size={isMobile ? 14 : 12} />
                                 </m.button>
                               )}
                             </AnimatePresence>
@@ -397,9 +413,11 @@ export function Sidebar({
           </div>
 
           <div className="shrink-0 px-3 pt-1 pb-3 sidebar-footer-safe">
-            <div className="relative">
+            <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setShowUserMenu(v => !v)}
+                aria-expanded={showUserMenu}
+                aria-haspopup="menu"
                 className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl hover:bg-white/5 transition-all group"
               >
                 <div className="w-[30px] h-[30px] rounded-full bg-[var(--accent-main)] flex items-center justify-center text-[12px] font-medium text-white uppercase shrink-0">
@@ -422,6 +440,7 @@ export function Sidebar({
                     initial={{ opacity: 0, y: 4 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: 4 }}
+                    role="menu"
                     className="absolute bottom-full left-0 right-0 mb-1 bg-[var(--bg-card)] border border-[var(--border-main)] rounded-xl shadow-lg overflow-hidden"
                   >
                     <button

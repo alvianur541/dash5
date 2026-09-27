@@ -10,7 +10,6 @@ import { StatusBanner } from './components/StatusBanner';
 import { UnitModel } from './types';
 import { AlertCircle, Loader2, Menu, SquarePen, Sun, Moon, WifiOff, Wifi, RotateCw, ChevronDown } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
-import { cn } from './lib/utils';
 import { useAuth } from './components/AuthProvider';
 import { useNetwork } from './hooks/useNetwork';
 import { useTheme } from './hooks/useTheme';
@@ -67,7 +66,7 @@ export default function App() {
   const userName = (user.displayName || 'Operator').split(' ')[0];
 
   return (
-    <div className={cn('flex h-full overflow-hidden transition-colors duration-400', 'bg-[var(--bg-app)] text-[var(--text-primary)]')}>
+    <div className="flex h-full overflow-hidden transition-colors duration-400 bg-[var(--bg-app)] text-[var(--text-primary)]">
       <Sidebar
         selectedModel={selectedModel}
         onSelectModel={handleSelectModel}
@@ -112,10 +111,10 @@ export default function App() {
                 <ChevronDown size={14} className="text-[var(--text-muted)]" />
               </button>
               <div className="flex items-center gap-2">
-                <button onClick={toggleTheme} className="topbar-hamburger" aria-label="Toggle tema">
+                <button onClick={toggleTheme} className="topbar-hamburger" aria-label={theme === 'dark' ? 'Tema terang' : 'Tema gelap'}>
                   {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                 </button>
-                <button onClick={startNewSession} className="topbar-newchat" aria-label="New chat">
+                <button onClick={startNewSession} className="topbar-newchat" aria-label="Chat baru">
                   <SquarePen size={16} />
                 </button>
               </div>
@@ -124,23 +123,23 @@ export default function App() {
         </AnimatePresence>
         {isSidebarCollapsed && <div className="topbar-spacer" aria-hidden="true" />}
 
-        <StatusBanner id="offline" show={showOffline} tone="warn" icon={<WifiOff size={13} className="text-amber-400" />}
+        <StatusBanner id="offline" show={showOffline} tone="warn" icon={<WifiOff size={13} />}
           action={<span className="status-pulse w-2 h-2 rounded-full bg-amber-400 shrink-0" />}>
           <strong className="font-semibold">Sinyal hilang</strong> — Riwayat tersedia. Chat aktif kembali saat sinyal pulih.
         </StatusBanner>
-        <StatusBanner id="online" show={showBackOnline} tone="ok" icon={<Wifi size={13} className="text-emerald-400" />}>
+        <StatusBanner id="online" show={showBackOnline} tone="ok" icon={<Wifi size={13} />}>
           <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, siap bertanya lagi.
         </StatusBanner>
-        <StatusBanner id="queued" show={!!queued && !isOnline} tone="warn" icon={<Loader2 size={13} className="text-amber-400 animate-spin" />}
-          action={<button onClick={() => setQueued(null)} className="text-[11px] underline text-amber-300/80">Batal</button>}>
+        <StatusBanner id="queued" show={!!queued && !isOnline} tone="warn" icon={<Loader2 size={13} className="animate-spin" />}
+          action={<button onClick={() => setQueued(null)}>Batal</button>}>
           <strong className="font-semibold">Menunggu sinyal</strong> — pertanyaan akan terkirim otomatis saat online.
         </StatusBanner>
-        <StatusBanner id="error" show={!!error} tone="error" icon={<AlertCircle size={15} className="text-red-400" />}
+        <StatusBanner id="error" show={!!error} tone="error" icon={<AlertCircle size={15} />}
           action={<div className="flex items-center gap-3">
             {lastSentRef.current && !isTyping && !isStreaming && (
-              <button onClick={() => { setError(null); retryLast(); }} className="text-xs font-semibold underline text-red-400">Kirim ulang</button>
+              <button onClick={() => { setError(null); retryLast(); }} className="font-semibold">Kirim ulang</button>
             )}
-            <button onClick={() => setError(null)} className="text-xs underline opacity-70 hover:opacity-100 text-red-400">Tutup</button>
+            <button onClick={() => setError(null)} className="opacity-70 hover:opacity-100">Tutup</button>
           </div>}>
           {error}
         </StatusBanner>

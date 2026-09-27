@@ -1,9 +1,17 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
 
 const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-xl text-[13px] outline-none bg-[var(--bg-app)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-main)]/50 transition-colors';
+
+function pwErrorText(msg = ''): string {
+  if (/different from the old/i.test(msg)) return 'Password baru harus berbeda dari password lama.';
+  if (/weak|at least|characters/i.test(msg)) return 'Password terlalu lemah. Pakai minimal 6 karakter, campur huruf dan angka.';
+  if (/network|fetch/i.test(msg)) return 'Gagal terhubung ke server. Cek koneksi kamu.';
+  if (/session|jwt|expired/i.test(msg)) return 'Sesi login habis. Keluar lalu masuk lagi, kemudian ulangi.';
+  return 'Gagal ganti password. Coba lagi.';
+}
 
 export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const [pwNew, setPwNew] = useState('');
@@ -18,6 +26,13 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
     onClose();
   };
 
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') close(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -27,7 +42,7 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
     setLoading(true);
     const { error: err } = await supabase.auth.updateUser({ password: pwNew });
     setLoading(false);
-    if (err) { setError(err.message || 'Gagal ganti password.'); return; }
+    if (err) { setError(pwErrorText(err.message)); return; }
     setSuccess(true);
     setTimeout(() => { setPwNew(''); setPwConfirm(''); setSuccess(false); onClose(); }, 1500);
   };
@@ -43,6 +58,9 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
           onClick={close}
         >
           <m.div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Ganti Password"
             initial={{ opacity: 0, scale: 0.95, y: 8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 8 }}
@@ -64,6 +82,8 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
                   onChange={e => setPwNew(e.target.value)}
                   placeholder="Password baru"
                   required
+                  minLength={6}
+                  autoComplete="new-password"
                   autoFocus
                   className={INPUT_CLASS}
                 />
@@ -73,21 +93,22 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
                   onChange={e => setPwConfirm(e.target.value)}
                   placeholder="Konfirmasi password"
                   required
+                  autoComplete="new-password"
                   className={INPUT_CLASS}
                 />
-                {error && <p className="text-[12px] text-red-400">{error}</p>}
+                {error && <p role="alert" className="text-[12px] text-[var(--status-danger)]">{error}</p>}
                 <div className="flex gap-2.5 pt-1">
                   <button
                     type="button"
                     onClick={close}
-                    className="flex-1 h-9 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
+                    className="flex-1 h-10 rounded-xl border border-[var(--border-main)] text-[var(--text-muted)] hover:text-[var(--text-primary)] text-[13px] font-medium transition-colors"
                   >
                     Batal
                   </button>
                   <button
                     type="submit"
                     disabled={loading}
-                    className="flex-1 h-9 rounded-xl bg-[var(--accent-main)] hover:brightness-110 text-white text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center"
+                    className="flex-1 h-10 rounded-xl bg-[var(--accent-main)] hover:brightness-110 text-white text-[13px] font-semibold transition-all disabled:opacity-50 flex items-center justify-center"
                   >
                     {loading ? <Loader2 size={14} className="animate-spin" /> : 'Simpan'}
                   </button>

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
@@ -12,6 +13,13 @@ interface ModelSheetProps {
 }
 
 export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProps) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
+
   return (
     <AnimatePresence>
       {open && (
@@ -28,6 +36,9 @@ export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProp
             exit={{ y: 40, opacity: 0 }}
             transition={{ duration: 0.2, ease: [0.32, 0.72, 0, 1] }}
             className="model-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Pilih unit"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-center pt-3 pb-1"><div className="w-9 h-1 rounded-full bg-[var(--border-main)]" /></div>
@@ -42,6 +53,7 @@ export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProp
                   <button
                     key={model}
                     onClick={() => onSelect(model)}
+                    aria-current={model === selected ? 'true' : undefined}
                     className={cn('model-sheet-item', model === selected && 'model-sheet-item-active')}
                   >
                     <span className={cn('w-2 h-2 rounded-full shrink-0', model === selected ? 'bg-[var(--accent-active)]' : 'bg-[var(--text-muted)]/40')} />

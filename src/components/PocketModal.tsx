@@ -3,7 +3,7 @@ import { Suspense, lazy, useEffect } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { X, Trash2 } from 'lucide-react';
 import { PocketItem } from '../services/storage';
-import { stripLatex } from './ChatWindow';
+import { stripLatex, MD_COMPONENTS } from './ChatWindow';
 
 const Markdown = lazy(() => import('./Markdown'));
 
@@ -60,13 +60,7 @@ export function PocketModal({ item, onClose, onDelete }: {
               <div className="pocket-question">{item.question || '(tanpa pertanyaan)'}</div>
               <div className="markdown-body">
                 <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
-                  <Markdown
-                    components={{
-                      table: ({ children }) => (
-                        <div className="markdown-table-wrap"><table>{children}</table></div>
-                      ),
-                    }}
-                  >{stripLatex(item.answer)}</Markdown>
+                  <Markdown components={MD_COMPONENTS}>{stripLatex(item.answer)}</Markdown>
                 </Suspense>
               </div>
             </div>
