@@ -19,7 +19,6 @@ const DOC_DESC: Record<string, string> = {
   'ENGINE MANUAL':             'DTC P-code & internal engine',
   'OPERATIONAL PRINCIPLE':     'cara kerja sistem (hydraulic/electrical flow)',
   'OPERATOR MANUAL':           'prosedur operasi, interval, kapasitas fluida',
-  'HYDRAULIC CIRCUIT DIAGRAM': 'tekanan/setting/displacement hidrolik',
   'Circuit Diagram':           'wiring & electrical circuit diagram — nomor kabel, kode warna (JASO D607), ukuran sq, tipe kabel (AVSS/AVS/CAVS/AVSSCS), connector, harness, plus hydraulic circuit diagram',
   'PARTS CATALOG':             'PN body, per section',
   'ENGINE PARTS CATALOG':      'PN internal engine',
@@ -46,7 +45,7 @@ function unitProfile(model: UnitModel) {
 }
 
 const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
-  'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'HYDRAULIC CIRCUIT DIAGRAM', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
+  'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'Circuit Diagram', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
@@ -157,6 +156,12 @@ export const SYSTEM_PROMPT = (model: UnitModel): string => {
 
   const wiringNote = model === 'ZX200-5G'
     ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk connector/harness yang harus dicek — SEBUT LEVEL KOMPONEN saja (nama connector/harness), SIMPAN detail per-pin/warna/nomor kabel kecuali user eksplisit minta detail wiring/pin. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
+    : model === 'ZW140' || model === 'ZX48U-5A'
+      ? `\n**Wiring diagram tersedia** (Circuit Diagram): wire list per harness, pinout controller/ECU, fuse & relay${model === 'ZX48U-5A' ? ', plus hydraulic circuit (control valve, pilot, travel, swing)' : ''}. Wire list sering berbeda per nomor seri — kalau data menyebut rentang s/n, sebut rentangnya dan tanyakan s/n unit bila beda versi memberi jawaban berbeda. Jangan mengarang nomor/warna kabel atau nomor pin yang tidak tertulis.`
+      : '';
+
+  const variantNote = model === 'ZX138MF-5G'
+    ? `\n**Manual ${model} adalah manual gabungan ZX110MF-5G / ZX130-5G / ZX138MF-5G.** Section yang judulnya menyebut varian dalam kurung — mis. "Travel Device (ZX130-5G)" vs "Travel Device (ZX110MF-5G/138MF-5G)" — berlaku HANYA untuk varian itu. Nilai (berat, torque, tekanan, PN) dari section bertanda "(ZX130-5G)" JANGAN disajikan sebagai nilai ${model}; pakai section yang menyebut 138MF. Kalau hanya versi varian lain yang ada di data, katakan jelas bahwa nilai itu untuk varian lain.`
     : '';
 
   const faultCodeSource = isKcm
@@ -346,7 +351,8 @@ Ketika data terbatas atau tidak tersedia, sampaikan langsung dengan arah yang ko
 Pivot ke: (1) sumber yang bisa langsung dicek (manual fisik, MPDr), (2) escalation ke TSD (Technical Support Department), atau (3) clarifying question untuk narrow scope.
 
 **Data yang disisipkan = hasil pencarian untuk pertanyaan INI, bukan isi seluruh manual/katalog ${model}.** Karena itu:
-- Topiknya ADA di data tapi nilai yang ditanya tidak tertulis → sebut spesifik: "nilai X tidak tercantum di (dokumen — section) itu".
+- Topiknya ADA di data tapi nilai yang ditanya tidak tertulis → sebut spesifik: "nilai X tidak tercantum di (dokumen — section) itu". JANGAN diperluas jadi "tidak ada di manual" / "manual tidak mencantumkan" — section lain bisa memuatnya. Tawarkan "ketik: cari lebih dalam <nama komponen + nilai>".
+- Data memuat nilai untuk komponen yang MIRIP tapi BUKAN yang ditanya (mis. ditanya swing motor, data hanya swing device) → sebut jelas itu komponen berbeda; JANGAN menyajikannya sebagai jawaban.
 - Topiknya TIDAK muncul sama sekali di data → JANGAN menyimpulkan manual/katalog ${model} tidak memuatnya, dan JANGAN menyebut section/dokumen apa saja yang "tersedia saat ini" atau "ditarik saat ini" (itu isi hasil pencarian, bukan isi katalog). Katakan bagian itu belum ketemu di pencarian kali ini, lalu beri SATU cara tanya ulang yang konkret memakai istilah katalog/manual (mis. "coba ketik: part number piston engine", "berat travel device"). Klaim "dokumen itu tidak ada untuk ${model}" hanya boleh untuk dokumen di daftar TIDAK tersedia pada seksi SUMBER DATA.
 - Teknisi minta cek ulang ("cek lagi", "coba cari lagi", "kenapa tadi nggak ada") dan data sekarang memuat jawabannya → sajikan langsung; kalau jawabanmu sebelumnya bilang tidak ada, akui dalam satu kalimat: pencarian pertama belum menemukannya.
 
@@ -361,7 +367,7 @@ Pivot ke: (1) sumber yang bisa langsung dicek (manual fisik, MPDr), (2) escalati
 Dokumen yang BENAR-BENAR ada untuk **${model}** (hanya ini — jangan rujuk selainnya):
 ${sourceList}
 
-Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${newsNote}${wiringNote}
+Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${newsNote}${wiringNote}${variantNote}
 ${SOURCE_INVENTORY[model]?.includes('PROMO') ? 'Untuk **PROMO**: pakai harga dari data yang disisipkan apa adanya — hanya satu periode aktif yang tersimpan.\n' : ''}
 **Format chunk:** header \`Section: ...\` / \`Document: ...\` boleh dipakai untuk grouping, **jangan disalin verbatim**.
 **Label section tidak selalu bermakna.** Sebagian katalog memakai kode internal (mis. \`AICA (7)\`, \`BICA (8)\`) yang tidak berarti apa pun bagi teknisi. JANGAN sebut kode section semacam itu sebagai petunjuk lokasi — sebut nama komponennya saja.

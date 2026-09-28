@@ -25,7 +25,7 @@ module.exports = async function () {
   t(b && b.kategori === 'BROSUR MANUAL' && b.available, '"broaur manual" (typo) -> BROSUR MANUAL, tersedia di ZX200-5G');
   t(docKategoriFor('Hei bro gabut', 'ZX200-5G') === null, '"Hei bro" bukan permintaan brosur');
   t(docKategoriFor('cek di operator manual', 'ZX65USB-5A')?.available === false, 'Operator Manual ZX65USB-5A dikenali TIDAK tersedia');
-  t(docKategoriFor('lihat circuit diagram', 'ZX48U-5A')?.kategori === 'HYDRAULIC CIRCUIT DIAGRAM', 'circuit diagram ZX48U-5A -> HYDRAULIC CIRCUIT DIAGRAM');
+  t(docKategoriFor('lihat circuit diagram', 'ZX48U-5A')?.kategori === 'Circuit Diagram' && docKategoriFor('lihat circuit diagram', 'ZX48U-5A')?.available, 'circuit diagram ZX48U-5A -> Circuit Diagram (HCD lama diganti 28 Sep)');
   t(docKategoriFor('lihat wiring diagram', 'ZX200-5G')?.kategori === 'Circuit Diagram', 'wiring diagram ZX200-5G -> Circuit Diagram');
 
   {
