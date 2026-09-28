@@ -104,11 +104,17 @@ function TableBlock({ children, sticky }: { children?: ReactNode; sticky?: strin
   );
 }
 
+// The model sometimes wraps its "(Manual — Section)" citation in backticks; as nowrap code it widens the whole chat.
+const CITE_RE = /\b(manual|catalog|katalog|bulletin|brosur|diagram|principle)\b[^()`]*[—–-]/i;
+const LONG_CODE = 28;
+
 function CodeSpan({ children }: { children?: ReactNode }) {
   const toast = useToast();
   const text = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : String(children ?? '');
-  const copyable = PN_CODE_RE.test(text.trim()) && /\d/.test(text);
-  if (!copyable) return <code>{children}</code>;
+  const t = text.trim();
+  if (SOURCE_RE.test(t) || (t.length > LONG_CODE && CITE_RE.test(t))) return <span className="md-cite">{t}</span>;
+  const copyable = PN_CODE_RE.test(t) && /\d/.test(text);
+  if (!copyable) return <code className={t.length > LONG_CODE ? 'code-long' : undefined}>{children}</code>;
   const copy = async () => {
     try { await navigator.clipboard.writeText(text.trim()); toast('Disalin: ' + text.trim()); try { navigator.vibrate?.(6); } catch { } } catch { }
   };
@@ -474,7 +480,7 @@ export function ChatWindow({
   return (
     <div
       className={`flex-1 bg-[var(--bg-app)] transition-colors duration-300 ${
-        isWelcome ? 'flex flex-col overflow-hidden' : 'overflow-y-auto scrollbar-hide'
+        isWelcome ? 'flex flex-col overflow-hidden' : 'overflow-y-auto overflow-x-hidden scrollbar-hide'
       }`}
       ref={scrollRef}
       onScroll={handleScroll}
