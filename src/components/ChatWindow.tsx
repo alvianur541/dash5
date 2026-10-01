@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, Su
 import type { Components } from 'react-markdown';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore, BookOpen } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -107,12 +107,31 @@ function TableBlock({ children, sticky }: { children?: ReactNode; sticky?: strin
 // The model sometimes wraps its "(Manual — Section)" citation in backticks; as nowrap code it widens the whole chat.
 const CITE_RE = /\b(manual|catalog|katalog|bulletin|brosur|diagram|principle)\b[^()`]*[—–-]/i;
 const LONG_CODE = 28;
+// A measured value ("22 kg", "3.9 MPa", "1300±100 min⁻¹", "∞ Ω") reads as a number, not as a code to copy.
+const VALUE_RE = /^[±~≈<>≤≥]?\s?[\d∞][\d.,]*\s?(?:[±~–-]\s?[\d.,]+\s?)?(?:[a-zµ°·/³²⁻¹Ω%]{1,12}(?:\s\([^()]{1,24}\))?)?$/i;
+const isValue = (t: string) => t.length <= LONG_CODE && /\s|[a-zµ°Ω%]/i.test(t) && VALUE_RE.test(t);
+const stripParens = (t: string) => t.replace(/^\(\s*/, '').replace(/\s*\)\.?$/, '');
+
+function Cite({ text }: { text: string }) {
+  return <span className="md-cite"><BookOpen size={11} strokeWidth={2.2} aria-hidden="true" />{stripParens(text)}</span>;
+}
+
+// Plain-text citations inside a sentence ("… (Workshop Manual — Pump Device, Removal & Installation).") get the same tag.
+const INLINE_CITE_RE = /(\([^()]{0,40}\b(?:Manual|Catalog|Katalog|Bulletin|News|Brosur|Promo|Diagram|Principle)\b[^()]{0,140}\))/;
+
+function withCites(children: ReactNode): ReactNode {
+  const split = (s: string, k: string) => s.split(INLINE_CITE_RE).map((part, i) => (i % 2 ? <Cite key={`${k}-${i}`} text={part} /> : part));
+  if (typeof children === 'string') return INLINE_CITE_RE.test(children) ? split(children, 'c') : children;
+  if (Array.isArray(children)) return children.map((c, i) => (typeof c === 'string' && INLINE_CITE_RE.test(c) ? split(c, `c${i}`) : c));
+  return children;
+}
 
 function CodeSpan({ children }: { children?: ReactNode }) {
   const toast = useToast();
   const text = typeof children === 'string' ? children : Array.isArray(children) ? children.join('') : String(children ?? '');
   const t = text.trim();
-  if (SOURCE_RE.test(t) || (t.length > LONG_CODE && CITE_RE.test(t))) return <span className="md-cite">{t}</span>;
+  if (SOURCE_RE.test(t) || (t.length > LONG_CODE && CITE_RE.test(t))) return <Cite text={t} />;
+  if (isValue(t)) return <span className="md-val">{t}</span>;
   const copyable = PN_CODE_RE.test(t) && /\d/.test(text);
   if (!copyable) return <code className={t.length > LONG_CODE ? 'code-long' : undefined}>{children}</code>;
   const copy = async () => {
@@ -139,6 +158,7 @@ function StrongText({ children }: { children?: ReactNode }) {
         || (/^[A-Za-z°]+$/.test(words[1]) && words[1].length <= 5))
     && text.length <= 30
   );
+  if (isPartLike && isValue(text.trim())) return <span className="md-val">{text}</span>;
   return isPartLike ? <code>{text}</code> : <strong>{children}</strong>;
 }
 
@@ -149,7 +169,11 @@ const NUM_CELL_RE = /^(rp\s?)?[\d.,±~–-]+\s?(%|[a-zµ°·/³²⁻¹]{1,8})?$/
 const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|diagram|principle)[^()]*\)\.?$/i;
 
 export const MD_COMPONENTS: Components = {
-  p: ({ node, children }) => <p className={SOURCE_RE.test(nodeText(node as HNode).trim()) ? 'md-source' : undefined}>{children}</p>,
+  p: ({ node, children }) => {
+    const t = nodeText(node as HNode).trim();
+    return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
+  },
+  li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
   td: ({ node, children, ...rest }) => <td {...rest} className={NUM_CELL_RE.test(nodeText(node as HNode).trim()) ? 'md-num' : undefined}>{children}</td>,
   table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
   code: ({ children }) => <CodeSpan>{children}</CodeSpan>,

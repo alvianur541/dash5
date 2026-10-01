@@ -132,12 +132,24 @@ img {
   margin-bottom: 0.8em;
 }
 .markdown-body li > p { margin-bottom: 0.3em; }
-.markdown-body .md-source {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-bottom: 0.6em;
+.markdown-body .md-source { margin-bottom: 0.65em; line-height: 1.5; }
+.markdown-body :is(h1, h2, h3) + .md-source { margin-top: -0.1em; }
+/* Source label: a quiet accent tag, not grey text that reads as faded body copy. */
+.markdown-body .md-cite {
+  font-size: 11.5px; font-weight: 500; letter-spacing: 0;
+  color: color-mix(in srgb, var(--accent-main) 55%, var(--text-secondary));
+  background: color-mix(in srgb, var(--accent-main) 9%, transparent);
+  padding: 0.12em 0.5em 0.12em 0.42em; border-radius: 5px;
+  -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
-.markdown-body :is(h1, h2, h3) + .md-source { margin-top: -0.15em; }
+.markdown-body .md-cite svg { display: inline-block; vertical-align: -0.12em; margin-right: 0.32em; }
+/* Measured values stay in the body face — monospace is kept for part numbers and codes. */
+.markdown-body .md-val {
+  font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--accent-main) 10%, transparent);
+  padding: 0.04em 0.28em; border-radius: 5px;
+}
 
 .markdown-body p:last-child {
   margin-bottom: 0;
@@ -163,7 +175,7 @@ img {
   padding-left: 0.2em;
 }
 .markdown-body li::marker { color: var(--text-muted); }
-.markdown-body ol > li::marker { font-weight: 600; font-variant-numeric: tabular-nums; }
+.markdown-body ol > li::marker { color: var(--accent-main); font-weight: 650; font-variant-numeric: tabular-nums; }
 
 .markdown-body code {
   font-family: var(--font-mono);
@@ -178,7 +190,6 @@ img {
 }
 .markdown-body :not(pre) > code { white-space: nowrap; }
 .markdown-body :not(pre) > code.code-long { white-space: normal; overflow-wrap: anywhere; }
-.markdown-body .md-cite { font-size: 12px; color: var(--text-muted); }
 .markdown-body { min-width: 0; overflow-wrap: break-word; }
 .light-theme .markdown-body code {
   background: rgba(0, 0, 0, 0.05);
