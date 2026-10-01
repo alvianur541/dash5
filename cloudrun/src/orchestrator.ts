@@ -185,9 +185,12 @@ export async function generateResponseStream(
   deps().meta.confidence = ragConfidence;
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  const thinkingLevel: ThinkingLevel = 'low';
+  // Small talk stays fast; anything technical gets medium thinking (Alvian, 1 Oct).
+  const thinkingLevel: ThinkingLevel = isCasual ? 'low' : 'medium';
   const isFollowUp = !offer && isShortFollowUp(trimmed, history);
-  const maxOutputTokens  = ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536;
+  // Thinking tokens count against maxOutputTokens — medium needs headroom or long answers end in MAX_TOKENS.
+  const thinkHeadroom    = thinkingLevel === 'medium' ? 4096 : 0;
+  const maxOutputTokens  = (ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536) + thinkHeadroom;
   const followUpNote = isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab intinya dalam ≤ 8 kalimat atau 1 tabel kecil; boleh diawali satu kalimat pengantar singkat yang natural. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
     : '';
@@ -376,9 +379,9 @@ export async function generateResponse(
     contents,
     ...system,
     generationConfig: {
-      maxOutputTokens: sendImageToModel ? 8192 : 4096,
+      maxOutputTokens: (sendImageToModel ? 8192 : 4096) + 4096,
       temperature: 0.3,
-      thinkingConfig: { thinkingLevel: 'low' },
+      thinkingConfig: { thinkingLevel: 'medium' },
     },
   };
 
