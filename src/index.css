@@ -358,9 +358,9 @@ img {
   flex-shrink: 0;
 }
 
-@media all and (display-mode: standalone) {
-  .safe-area-spacer {
-    height: 24px;  }
+/* Room for the iPhone home indicator only — the installed desktop app is also "standalone". */
+@media all and (display-mode: standalone) and (max-width: 767px) {
+  .safe-area-spacer { height: 24px; }
 }
 
 .welcome-screen {
@@ -384,7 +384,7 @@ img {
 
 .sidebar-header { padding-top: 20px; }
 
-@media all and (display-mode: standalone) {
+@media all and (display-mode: standalone) and (max-width: 767px) {
   .sidebar-footer-safe { padding-bottom: 18px; }
 }
 
