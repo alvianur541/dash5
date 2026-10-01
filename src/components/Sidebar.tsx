@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, MoreHorizontal, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, History as HistoryIcon, Search, WifiOff, RotateCw } from 'lucide-react';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
@@ -46,6 +46,8 @@ interface SidebarProps {
   onOpenPocketItem?: (item: PocketItem) => void;
   onDeletePocketItem?: (id: string) => void;
   isOffline?: boolean;
+  onRefresh?: () => void;
+  isRefreshing?: boolean;
 }
 
 export function Sidebar({
@@ -65,6 +67,8 @@ export function Sidebar({
   onOpenPocketItem,
   onDeletePocketItem,
   isOffline = false,
+  onRefresh,
+  isRefreshing = false,
 }: SidebarProps) {
   const [historyQuery, setHistoryQuery] = useState('');
   const filteredSessions = historyQuery.trim()
@@ -138,6 +142,17 @@ export function Sidebar({
           <div className="sidebar-header flex items-center justify-between pl-6 pr-4 pb-3 shrink-0">
             <img src="/hexindo-wordmark.png" alt="Hexindo" className="sidebar-wordmark" />
             <div className="flex items-center gap-1">
+              {!isMobile && onRefresh && (
+                <button
+                  onClick={onRefresh}
+                  disabled={isRefreshing}
+                  className="p-1.5 hover:bg-white/8 rounded-lg text-[var(--text-muted)] hover:text-[var(--text-primary)] transition-colors"
+                  aria-label="Muat ulang aplikasi"
+                  title="Muat ulang (ambil versi terbaru)"
+                >
+                  <RotateCw size={14} className={isRefreshing ? 'animate-spin' : ''} />
+                </button>
+              )}
               {!isMobile && onThemeToggle && (
                 <button
                   onClick={onThemeToggle}
