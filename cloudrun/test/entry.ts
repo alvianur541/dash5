@@ -2,7 +2,7 @@ export { callProxyStream, STREAM_HALT_NOTE, STREAM_CUT_NOTE, SERVICE_INTERVAL_RE
 export { extractPartNumber, isPartsQuery, extractSearchTerms } from '../src/rag';
 export { runWithDeps } from '../src/deps';
 export { MODEL_CHAIN, clampThinking } from '../src/vertex';
-export { scrubLeaks, generateResponse } from '../src/orchestrator';
+export { scrubLeaks, generateResponse, generateResponseStream } from '../src/orchestrator';
 export { stripMeasuredValues, stripModelFromQuery } from '../src/rag';
 export { isCasualExact, docKategoriFor, resolvePartsQuery, isPromoPriceLine } from '../src/routes';
 export { exactPartRows, findComponentWeight, weightComponent, findPerformanceStandard, engineSectionRows, searchPartsCatalog, searchTechnicalManualMulti, manualTerms } from '../src/rag';

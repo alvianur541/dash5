@@ -31,7 +31,10 @@ export function scrubLeaks(text: string): string {
   return out;
 }
 
-const userTag = (userName: string) => `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}]`;
+// The model cannot reliably count its own greetings, so later turns are marked explicitly.
+const userTag = (userName: string, history: Message[]) =>
+  `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}${
+    history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
 
 function systemFor(unit: UnitModel, casual: boolean): Pick<VRequest, 'systemInstruction'> {
   return { systemInstruction: { parts: [{ text: casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit) }] } };
@@ -202,7 +205,7 @@ export async function generateResponseStream(
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
 
-  contents.push({ role: 'user', parts: [{ text: `${userTag(userName)}\n${userText}` }] });
+  contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}` }] });
 
   const fullText = scrubLeaks(await callProxyStream({
     contents,
@@ -365,7 +368,7 @@ export async function generateResponse(
   if (directive) currentParts.push({ text: directive });
   if (sendImageToModel) currentParts.unshift(...imageParts);
 
-  contents.push({ role: 'user', parts: [{ text: userTag(userName) }, ...currentParts] });
+  contents.push({ role: 'user', parts: [{ text: userTag(userName, history) }, ...currentParts] });
 
   emit({ type: 'thinking', message: 'Menyusun diagnosis…' });
 
