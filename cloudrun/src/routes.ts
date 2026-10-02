@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSymptomSections, extractCatalogCode, isFaultCode } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -444,9 +444,10 @@ export async function resolveNaturalLanguageQuery(
     ragResult = null;
   }
   if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
-  const [perf, berat, simtom] = await Promise.all([
+  const [perf, berat, nilai, simtom] = await Promise.all([
     findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content),
     findComponentWeight(model, trimmed, ragResult.content),
+    findSpecLines(model, query, ragResult.content),
     symptomPromise,
   ]);
   const have = ragResult.content;
@@ -454,7 +455,7 @@ export async function resolveNaturalLanguageQuery(
   const simtomNote = simtom.length
     ? `[SIMTOM MANUAL PALING MIRIP: ${simtom.map(c => `"${c.split('\n')[0].replace(/^Section:\s*/, '').replace(/\r/g, '').trim()}"`).join(', ')} — pakai prosedurnya HANYA kalau gejalanya cocok dengan keluhan teknisi. Kalau tidak persis sama, sebut sebagai "simtom terdekat di manual" dan jelaskan bedanya; jangan bilang prosedurnya belum ketemu.]\n\n`
     : '';
-  const extra = [perf, berat, ...simtomFresh].filter(Boolean).join('\n\n---\n\n');
+  const extra = [perf, berat, nilai, ...simtomFresh].filter(Boolean).join('\n\n---\n\n');
   if (extra) {
     ragResult = {
       ...ragResult,

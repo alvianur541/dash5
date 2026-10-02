@@ -149,6 +149,64 @@ export function weightComponent(text: string): string | null {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// Weight has its own finder; these are the other values technicians ask for by name.
+const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
+  { re: /\brelief\b/i, line: 'relief[^\\n]{0,40}?pressure|relief valve set', word: 'relief' },
+  { re: /\bcharg(?:e|ing)\b/i, line: 'charg(?:e|ing)[^\\n]{0,30}?pressure|low[- ]pressure relief', word: 'pressure' },
+  { re: /\bpressure\b/i, line: 'pressure', word: 'pressure' },
+  { re: /\bflow\b/i, line: 'flow rate|flow', word: 'flow' },
+  { re: /\bcapacit(?:y|ies)\b/i, line: 'capacity', word: 'capacit' },
+  { re: /\btorque\b/i, line: 'torque|tightening', word: 'torque' },
+  { re: /\b(?:speed|rpm)\b/i, line: 'speed|rpm', word: 'speed' },
+  { re: /\bvoltage\b/i, line: 'voltage', word: 'voltage' },
+  { re: /\bresistance\b/i, line: 'resistance', word: 'resistance' },
+  { re: /\bcurrent\b/i, line: 'current', word: 'current' },
+  { re: /\btemperature\b/i, line: 'temperature', word: 'temperature' },
+  { re: /\bclearance\b/i, line: 'clearance', word: 'clearance' },
+  { re: /\bdisplacement\b/i, line: 'displacement', word: 'displacement' },
+];
+const SPEC_UNIT = '(?:MPa|kPa|bar|psi|kgf/cm|L/min|N·m|Nm|kgf·m|mm|cm3|cm³|mL|L|kg|rpm|min-1|min⁻¹|km/h|V|Ω|ohm|mA|A|°C|kW)';
+const SPEC_NOT_COMPONENT = new Set([
+  'pressure', 'relief', 'charge', 'charging', 'flow', 'rate', 'capacity', 'torque', 'speed', 'rpm', 'voltage', 'resistance',
+  'current', 'temperature', 'clearance', 'displacement', 'value', 'values', 'standard', 'specification', 'spec', 'set',
+  'setting', 'check', 'measure', 'measurement', 'normal', 'maximum', 'minimum', 'max', 'min', 'nominal', 'rated', 'mpa',
+  'kpa', 'bar', 'psi', 'what', 'how', 'much', 'the', 'and', 'for', 'of', 'unit', 'machine', 'test', 'delivery', 'valve',
+]);
+
+// A spec value is one "Relief Valve Set Pressure ....44.6 MPa" line in a chunk titled for something else (ZW140 HST specs sit under "BATTERY").
+export async function findSpecLines(model: string, query: string, have: string): Promise<string | null> {
+  const attr = SPEC_ATTRS.find(a => a.re.test(query));
+  if (!attr || !sb() || !wantsNumeric(query)) return null;
+  const comp = query.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
+    .filter(w => w.length >= 3 && !/^\d/.test(w) && !SPEC_NOT_COMPONENT.has(w)).slice(0, 3);
+  if (!comp.length) return null;
+  const valueRe = new RegExp(`(?:${attr.line})[^\\n]{0,80}?\\d[\\d.,±~\\-–]*\\s*${SPEC_UNIT}(?![a-z])`, 'gi');
+  try {
+    let q = sb().from('documents').select('content').contains('metadata', { Model: model });
+    for (const w of comp) q = q.ilike('content', `%${escapeLike(w)}%`);
+    // Postgres caps regex repetition at 255, so the database only checks "attribute … number unit"; nearness is checked here.
+    const { data } = await q.filter('content', 'imatch', `(${attr.line})[^\\n]{0,80}?\\d[\\d.,±~–-]*\\s*${SPEC_UNIT}`).limit(60);
+    // The value must sit near the component's own name, not anywhere in a long chunk.
+    const near = (c: string) => [...c.matchAll(valueRe)].some(m => {
+      const before = c.slice(Math.max(0, (m.index ?? 0) - 800), m.index).toLowerCase();
+      return comp.some(w => before.includes(w) || m[0].toLowerCase().includes(w));
+    });
+    const title = (c: string) => c.split('\n')[0];
+    const cands = (data ?? []).map((d: { content?: string }) => d?.content)
+      .filter((c: unknown): c is string => typeof c === 'string' && !have.includes(title(c)) && near(c));
+    if (!cands.length) return null;
+    const { docs, error, source } = await rerankDocs(query, capRerankPayload(cands), 2);
+    if (error) return null;
+    const keep = docs.filter(d => computeConfidence([d], source).confidence !== 'low');
+    if (!keep.length) return null;
+    console.info('[spec] %d chunk nilai "%s" (%s) ditambahkan: %s', keep.length, comp.join(' '), attr.word,
+      keep.map(d => `${d.score.toFixed(2)} ${title(d.content).slice(9, 60)}`).join(' | '));
+    return keep.map(d => d.content).join('\n\n---\n\n');
+  } catch {
+    return null;
+  }
+}
+
 // A component's weight is one CAUTION line inside a long removal/disassembly chunk — vectors miss it, a literal match does not.
 export async function findComponentWeight(model: string, text: string, have: string): Promise<string | null> {
   const comp = weightComponent(text);
