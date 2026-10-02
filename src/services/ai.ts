@@ -4,6 +4,7 @@ import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 // Above the server deadline (120 s) so the server's own message wins instead of us guessing.
 const ASK_IDLE_TIMEOUT_MS = 130_000;
+const RETRY_DELAY_MS = 700;
 export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
 
 type ThinkLevel = 'low' | 'medium' | 'high';
@@ -110,13 +111,22 @@ async function ask(
   let cacheable = false;
   let serverError: string | null = null;
   try {
+    const send = async () => fetch(`${PROXY_URL}/v1/ask`, {
+      method: 'POST', headers: await authHeaders(), body: JSON.stringify(body), signal: ctrl.signal,
+    });
     let res: Response;
     try {
-      res = await fetch(`${PROXY_URL}/v1/ask`, {
-        method: 'POST', headers: await authHeaders(), body: JSON.stringify(body), signal: ctrl.signal,
-      });
-    } catch (e) {
-      throw ctrl.signal.aborted ? abortReason() : e;
+      res = await send();
+    } catch {
+      if (ctrl.signal.aborted) throw abortReason();
+      // A PWA resumed from the background often sends its first request on a dead connection; one fresh try fixes it.
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
+      if (ctrl.signal.aborted) throw abortReason();
+      try {
+        res = await send();
+      } catch (e) {
+        throw ctrl.signal.aborted ? abortReason() : e;
+      }
     }
     if (!res.ok) {
       let detail = '';
