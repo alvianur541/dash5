@@ -1,7 +1,7 @@
 import { deps } from '../deps';
 import { getEmbedding } from './embed';
 import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
-import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, batangKata, escapeLike, stripModelFromQuery } from './terms';
+import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, SYMPTOM_RE, batangKata, escapeLike, stripModelFromQuery } from './terms';
 
 export const sb = () => deps().supabase as any;
 
@@ -33,6 +33,9 @@ interface Candidates {
 }
 
 export function wantsNumeric(primaryQuery: string): boolean {
+  if (NUMERIC_INTENT_RE.test(primaryQuery)) return true;
+  // "engine speed drops" is a complaint; reserving slots for the speed tables crowded out the troubleshooting procedure.
+  if (SYMPTOM_RE.test(primaryQuery)) return false;
   return primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
       .some(w => SPEC_TERMS.has(w))

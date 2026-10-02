@@ -15,3 +15,4 @@ export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';
 export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs } from '../src/rag/rerank';
+export { wantsNumeric } from '../src/rag/retrieve';

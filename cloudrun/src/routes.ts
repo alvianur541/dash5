@@ -432,7 +432,8 @@ export async function resolveNaturalLanguageQuery(
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
   // A short reply ("iya di gigi 2", "listrik dulu") only makes sense together with the complaint before it.
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
-  const symptomPromise = findSymptomSections(model, [query, trimmed, prevUser].filter(Boolean).join(' — '), `${trimmed} ${query} ${prevUser}`);
+  const complaint = prevUser ? `${prevUser} — lanjutan: ${trimmed}` : trimmed;
+  const symptomPromise = findSymptomSections(model, [query, complaint], complaint, `${trimmed} ${query} ${prevUser}`);
   const doc = docKategoriFor(trimmed, model);
   let ragResult = doc?.available ? await searchTechnicalManualMulti([query], model, 4, doc.kategori) : null;
   let docNote = '';
