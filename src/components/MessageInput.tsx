@@ -107,8 +107,8 @@ export function MessageInput({
 
   useEffect(() => {
     const pick = () => { if (!disabled) fileInputRef.current?.click(); };
-    window.addEventListener('hta:pick-photo', pick);
-    return () => window.removeEventListener('hta:pick-photo', pick);
+    window.addEventListener('dash:pick-photo', pick);
+    return () => window.removeEventListener('dash:pick-photo', pick);
   }, [disabled]);
 
   useEffect(() => {

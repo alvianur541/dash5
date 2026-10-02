@@ -10,7 +10,7 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode }
   }
 
   componentDidCatch(error: Error, info: React.ErrorInfo) {
-    console.error('[HTA] Render error:', error.message, info.componentStack);
+    console.error('[ErrorBoundary] Render error:', error.message, info.componentStack);
   }
 
   render() {

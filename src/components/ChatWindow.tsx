@@ -537,7 +537,7 @@ export function ChatWindow({
                   transition={{ duration: 0.3, delay: 0.12 }}
                 >
                   Tanya <em>fault code</em>, <em>part number</em>, <em>spesifikasi teknis</em>, atau kirim{' '}
-                  <button type="button" className="welcome-chip" onClick={() => window.dispatchEvent(new Event('hta:pick-photo'))}>
+                  <button type="button" className="welcome-chip" onClick={() => window.dispatchEvent(new Event('dash:pick-photo'))}>
                     <Camera size={13} strokeWidth={2.2} /> Foto monitor
                   </button>
                 </m.div>
