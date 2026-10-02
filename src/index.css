@@ -63,7 +63,6 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size-adjust: from-font;
-  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-overflow-scrolling: auto;
 }
 
@@ -722,16 +721,10 @@ img {
   background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
 }
 
-::view-transition-old(root),
-::view-transition-new(root) {
-  animation-duration: 0.38s;
-  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
-}
-.theme-anim *,
-.theme-anim *::before,
-.theme-anim *::after {
-  transition: background-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), color 0.35s cubic-bezier(0.4, 0, 0.2, 1),
-    border-color 0.35s cubic-bezier(0.4, 0, 0.2, 1), fill 0.35s, stroke 0.35s !important;
+.theme-switching *,
+.theme-switching *::before,
+.theme-switching *::after {
+  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
