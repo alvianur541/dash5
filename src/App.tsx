@@ -84,8 +84,6 @@ export default function App() {
         onOpenPocketItem={pocket.setPocketView}
         onDeletePocketItem={pocket.remove}
         isOffline={!isOnline}
-        onRefresh={handleRefresh}
-        isRefreshing={isRefreshing}
       />
 
       <main ref={mainRef} className="flex-1 flex flex-col overflow-hidden min-w-0 relative" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
