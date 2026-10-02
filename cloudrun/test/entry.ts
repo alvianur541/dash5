@@ -12,5 +12,6 @@ export { isShortFollowUp } from '../src/orchestrator';
 export { historyToContents } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate, FALLBACK_RESPONSE } from '../src/templates';
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
+export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';
 export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs } from '../src/rag/rerank';

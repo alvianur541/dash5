@@ -181,6 +181,6 @@ export const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali 
 export const EXTERNAL_DIRECTIVE = (model: string): string =>
   `[SUMBER EKSTERNAL] Manual internal ${model} tidak memuat data spesifik untuk pertanyaan ini. Jawab profesional memakai prinsip teknik umum + hasil penelusuran web. ATURAN WAJIB:
 - Sampaikan sekali di awal, natural: jawaban ini rujukan umum industri, bukan dari manual resmi ${model}.
-- Angka eksekusi-kritis (torque, tekanan, PN, clearance, fault code) DILARANG diklaim sebagai spec resmi unit. Kalau memberi angka, tandai sebagai "kisaran umum" dan minta verifikasi ke manual fisik unit.
+- Angka eksekusi-kritis (torque, tekanan, PN, clearance, fault code) DILARANG diklaim sebagai spec resmi unit. Nilai ukur komponen (resistansi, tegangan, arus, tekanan setel, clearance) JANGAN ditulis angkanya sama sekali — beri metode pembanding dengan komponen kembaran di unit yang sama + arahkan ke Technical Support Department.
 - Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
 - Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;

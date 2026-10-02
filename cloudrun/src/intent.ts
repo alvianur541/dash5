@@ -95,6 +95,12 @@ Rules (apply in order):
    - Symptom+component: 3-4  → "hydraulic pump no suction", "swing motor slow"
    - Procedure/multi-factor: 5-7 → "engine no start after fuel filter replacement"
    - NEVER pad short queries. NEVER truncate complex queries.
+9. SHORT FOLLOW-UP REPLY ("iya di gigi 2", "listrik dulu", "berapa standarnya", "yang kiri") answers the AI's
+   last question → restate the WHOLE topic from context: component + symptom + the new detail.
+   A bare "2nd gear" or "electrical" finds nothing.
+10. SYMPTOM WORDS → the manual's own wording: ngedrop/drop/anjlok → "speed drops"/"stalls", mati sendiri → "stops",
+   lemah → "weak", lambat → "slow", tersendat → "hesitation", berisik → "abnormal noise", warning/lampu/buzzer
+   nyala → "warning indicator lights" + "buzzer". Keep the operation that triggers it (travel, swing, boom raise).
 
 ═══ EXAMPLES ═══
 
@@ -114,6 +120,11 @@ Technical — specs & symptoms:
 "engine tidak mau hidup setelah ganti filter" → technical, "engine no start after fuel filter replacement"
 "tekanan hydraulic turun saat boom diangkat"  → technical, "hydraulic pressure drop boom lift"
 "masih bocor juga tuh" [ctx: hydraulic cyl]  → technical, "hydraulic cylinder leak"
+"handle travel digerakkan mesin ngedrop"      → technical, "engine speed drops stalls when traveling"
+"warning transmisi & buzzer nyala sesekali"   → technical, "HST warning indicator buzzer lights intermittently"
+"iya di gigi2" [ctx: warning transmisi muncul di atas 13 km/jam] → technical, "HST warning indicator buzzer 2nd speed above 13 km/h"
+"listrik dulu" [ctx: mundur lemah, cek listrik atau hidrolik?]   → technical, "reverse travel weak electrical solenoid check"
+"berapa standarnya" [ctx: ukur resistansi reverse solenoid]     → technical, "reverse solenoid resistance standard"
 
 Technical — wheel loader (KCM/ZW: steering, transmission, lift arm, brake):
 "steering berat sebelah"                      → technical, "steering heavy one side"

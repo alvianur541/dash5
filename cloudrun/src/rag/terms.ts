@@ -145,6 +145,14 @@ export const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
+// A complaint about the machine (Indonesian or the English intent query), as opposed to a spec/PN lookup.
+export const SYMPTOM_RE = new RegExp([
+  '\\b(?:ngga?k?|nggak|gak|ga|tidak|tdk|tak|kurang|belum)\\s+(?:bisa|mau|jalan|nyala|hidup|kuat|normal|berfungsi|fungsi|bekerja|kerja|keluar|naik|turun|stabil|respon\\w*)\\b',
+  '\\b(?:mati\\w*|mogok|macet|lambat|lemot|lemah|bocor|rembes|overheat\\w*|panas|rusak|error|eror|trouble\\w*|alarm|warning|buzzer|indikator|bunyi|berisik|getar\\w*|goyang|tersendat|selip|slip|n?gedrop|drop|anjlok|ngempos|asap|berasap|hunting|melorot|kedip\\w*|blank|restart|gangguan|keluhan)\\b',
+  '\\b(?:susah|sulit)\\s+(?:start|hidup|nyala|distarter)\\b|\\bnaik\\s+turun\\b|\\bturun\\s+sendiri\\b|\\bberat\\s+sebelah\\b|\\b(?:stir|setir|steering)\\s+berat\\b',
+  '\\bnot\\s+(?:work\\w*|operat\\w*|start\\w*|mov\\w*|rotat\\w*|function\\w*)\\b|\\b(?:slow|weak|stall\\w*|leak\\w*|nois[ey]|abnormal|faulty|malfunction\\w*|fail\\w*|hunts?|hunting|drifts?|vibrat\\w*|intermittent\\w*|smoke|does\\s*n[o\']t|won\'t)\\b',
+].join('|'), 'i');
+
 export const NUMERIC_INTENT_RE = /\b(berapa|nilai|standar|standard|spesifikasi|spec|minimum|minimal|maksimum|maksimal|normal|batas|limit|toleransi|range)\b/i;
 
 export const SPEC_TERMS = new Set([

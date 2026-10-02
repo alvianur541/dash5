@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, extractCatalogCode, isFaultCode } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSymptomSections, extractCatalogCode, isFaultCode } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -430,6 +430,9 @@ export async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
+  // A short reply ("iya di gigi 2", "listrik dulu") only makes sense together with the complaint before it.
+  const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
+  const symptomPromise = findSymptomSections(model, [query, trimmed, prevUser].filter(Boolean).join(' — '), `${trimmed} ${query} ${prevUser}`);
   const doc = docKategoriFor(trimmed, model);
   let ragResult = doc?.available ? await searchTechnicalManualMulti([query], model, 4, doc.kategori) : null;
   let docNote = '';
@@ -440,12 +443,17 @@ export async function resolveNaturalLanguageQuery(
     ragResult = null;
   }
   if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
-  const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
-  const [perf, berat] = await Promise.all([
+  const [perf, berat, simtom] = await Promise.all([
     findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content),
     findComponentWeight(model, trimmed, ragResult.content),
+    symptomPromise,
   ]);
-  const extra = [perf, berat].filter(Boolean).join('\n\n---\n\n');
+  const have = ragResult.content;
+  const simtomFresh = simtom.filter(c => !have.includes(c.split('\n')[0]));
+  const simtomNote = simtom.length
+    ? `[SIMTOM MANUAL PALING MIRIP: ${simtom.map(c => `"${c.split('\n')[0].replace(/^Section:\s*/, '').replace(/\r/g, '').trim()}"`).join(', ')} — pakai prosedurnya HANYA kalau gejalanya cocok dengan keluhan teknisi. Kalau tidak persis sama, sebut sebagai "simtom terdekat di manual" dan jelaskan bedanya; jangan bilang prosedurnya belum ketemu.]\n\n`
+    : '';
+  const extra = [perf, berat, ...simtomFresh].filter(Boolean).join('\n\n---\n\n');
   if (extra) {
     ragResult = {
       ...ragResult,
@@ -455,7 +463,7 @@ export async function resolveNaturalLanguageQuery(
       ragError: isRerankError(ragResult.ragError) ? ragResult.ragError : undefined,
     };
   }
-  if (docNote && ragResult.hasResults) ragResult = { ...ragResult, content: docNote + ragResult.content };
+  const notes = docNote + simtomNote;
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
@@ -473,7 +481,7 @@ export async function resolveNaturalLanguageQuery(
     console.info('[compress] skip (confidence=%s totalChars=%d)', ragResult.confidence, totalBefore);
     return {
       type: 'rag_found',
-      content: ragResult.content,
+      content: notes + ragResult.content,
       dataLabel: RAG_LABEL.manual,
       confidence: ragResult.confidence,
       rerankDegraded: isRerankError(ragResult.ragError),
@@ -481,8 +489,10 @@ export async function resolveNaturalLanguageQuery(
   }
 
   const chunks = ragResult.content.split('\n\n---\n\n');
-  const compressed = await compressChunks(chunks, trimmed);
-  const finalContent = compressed.filter(c => c.trim()).join('\n\n---\n\n');
+  // The compressor's 600-token cap would cut a matched troubleshooting procedure mid-step.
+  const compressed = await compressChunks(chunks.filter(c => !simtomFresh.includes(c)), trimmed);
+  let k = 0;
+  const finalContent = chunks.map(c => simtomFresh.includes(c) ? c : compressed[k++]).filter(c => c.trim()).join('\n\n---\n\n');
 
   const reduction = totalBefore > 0 ? Math.round((1 - finalContent.length / totalBefore) * 100) : 0;
   console.info('[compress] chunks=%d %d→%d chars (%d%% reduction)',
@@ -490,7 +500,7 @@ export async function resolveNaturalLanguageQuery(
 
   return {
     type: 'rag_found',
-    content: finalContent || ragResult.content,
+    content: notes + (finalContent || ragResult.content),
     dataLabel: RAG_LABEL.manual,
     confidence: ragResult.confidence,
     rerankDegraded: isRerankError(ragResult.ragError),

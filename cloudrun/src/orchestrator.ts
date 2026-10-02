@@ -1,17 +1,17 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery } from './rag';
 import { deps } from './deps';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
-import { RERANK_DEGRADED_NOTE, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
+import { RERANK_DEGRADED_NOTE, RAG_LABEL, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact, extractImageFacts, REDO_RE, type RagRouteResult } from './routes';
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang di kalimat PERTAMA bahwa bagian itu belum ketemu di data ini (jangan simpulkan manualnya tidak memuat), jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
 
-const LEAK_RE = /^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
+const LEAK_RE = /^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
 const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
 
 const LATEX_SYMBOL: Record<string, string> = {
@@ -21,7 +21,7 @@ const LATEX_SYMBOL: Record<string, string> = {
 
 export function scrubLeaks(text: string): string {
   text = text.replace(/\$\s*\\([A-Za-z]+)\s*\$/g, (m, k: string) => LATEX_SYMBOL[k] ?? m);
-  if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|Fault Code:)/.test(text)) return text;
+  if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|SIMTOM|Fault Code:)/.test(text)) return text;
   const before = text.length;
   let out = text.replace(LEAK_RE, '');
   const head = out.slice(0, 400);
@@ -185,9 +185,12 @@ export async function generateResponseStream(
   deps().meta.confidence = ragConfidence;
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
-  // Small talk stays fast; anything technical gets medium thinking (Alvian, 1 Oct).
-  const thinkingLevel: ThinkingLevel = isCasual ? 'low' : 'medium';
   const isFollowUp = !offer && isShortFollowUp(trimmed, history);
+  const recentComplaint = trimmed.split(/\s+/).length <= 8
+    && history.filter(m => m.role === 'user').slice(-2).some(m => isSymptomQuery(m.content));
+  // Diagnosis and explanations think at medium; spec/PN/price lookups only quote a row, so low keeps them fast (Alvian, 2 Oct).
+  const diagnostic = isFaultCode || isSymptomQuery(q) || WANTS_DETAIL_RE.test(q) || recentComplaint;
+  const thinkingLevel: ThinkingLevel = isCasual || dataLabel === RAG_LABEL.parts || !diagnostic ? 'low' : 'medium';
   // Thinking tokens count against maxOutputTokens — medium needs headroom or long answers end in MAX_TOKENS.
   const thinkHeadroom    = thinkingLevel === 'medium' ? 4096 : 0;
   const maxOutputTokens  = (ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536) + thinkHeadroom;
