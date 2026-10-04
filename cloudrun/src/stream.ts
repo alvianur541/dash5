@@ -29,6 +29,24 @@ interface UsageMeta {
   thoughtsTokenCount?: number; cachedContentTokenCount?: number;
 }
 
+// Circuit breaker: a model that just answered 429 or hung is tried last for a while, so during a capacity
+// crunch each question does not first wait 20-30 s on it (4 Oct: 3.7 429 after 22.7 s, then 3.6 answered).
+const SAKIT_MS = 5 * 60_000;
+const sakitSampai = new Map<string, number>();
+export function resetPemutus(): void { sakitSampai.clear(); }
+function tandaiSakit(model: string, sebab: string): void {
+  if (!sakitSampai.has(model)) console.warn('[pemutus] %s ditandai sakit %d mnt (%s)', model, SAKIT_MS / 60_000, sebab);
+  sakitSampai.set(model, Date.now() + SAKIT_MS);
+}
+function urutanModel(): string[] {
+  const now = Date.now();
+  for (const [m, t] of sakitSampai) if (t <= now) sakitSampai.delete(m);
+  const sehat = MODEL_CHAIN.filter(m => !sakitSampai.has(m));
+  if (sehat.length === MODEL_CHAIN.length || !sehat.length) return [...MODEL_CHAIN];
+  console.warn('[pemutus] lewati dulu %s → %s', MODEL_CHAIN.filter(m => sakitSampai.has(m)).join(','), sehat[0]);
+  return [...sehat, ...MODEL_CHAIN.filter(m => sakitSampai.has(m))];
+}
+
 function catatSebab(sebab: string): void {
   // First cause only — that is what made the primary model fail.
   try { const m = deps().meta; if (!m.fallbackSebab) m.fallbackSebab = sebab; } catch { /* di luar konteks */ }
@@ -58,13 +76,18 @@ export async function callProxyStream(
   let fullText = '';
   let modelUsed = MODEL;
   let usage: UsageMeta | null = null;
-  const modelAt = (n: number) => MODEL_CHAIN[Math.min(n - 1, MODEL_CHAIN.length - 1)];
+  const chain = urutanModel();
+  const modelAt = (n: number) => chain[Math.min(n - 1, chain.length - 1)];
 
   while (true) {
     attempt++;
     fullText = '';
     usage = null;
     modelUsed = modelAt(attempt);
+    if (attempt === 1 && modelUsed !== MODEL) {
+      try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+      catatSebab('pemutus');
+    }
     if (attempt > 1) {
       console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
       try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
@@ -117,6 +140,7 @@ export async function callProxyStream(
       if (attempt < MAX_ATTEMPT && !pastDeadline()) {
         console.warn('[fallback] %s 429 (kapasitas penuh) — pindah model', modelUsed);
         catatSebab('429');
+        tandaiSakit(modelUsed, '429');
         continue;
       }
       throw new Error('KUOTA_PENUH');
@@ -149,6 +173,7 @@ export async function callProxyStream(
     if (!firstTokenSeen && !fullText.trim() && canRetry) {
       console.warn('[stream] tak ada token sama sekali — percobaan %d/%d, pindah model', attempt, MAX_ATTEMPT);
       catatSebab('hang');
+      tandaiSakit(modelUsed, 'hang');
       await tunggu(300);
       continue;
     }

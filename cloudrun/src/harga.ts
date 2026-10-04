@@ -1,0 +1,97 @@
+import type { Message } from './types';
+import type { HasilWeb } from './rag';
+import { callProxy, getText, INTENT_MODEL } from './vertex';
+import type { Lang } from './templates';
+
+// Fast price path (4 Oct): the main model used to read ~24k tokens just to copy prices into a table.
+// Now flash-lite only PICKS which candidate rows answer the question; code builds the table, so every
+// number is copied straight from hexindoparts.com and the format never drifts.
+
+export const BUKAN_HARGA_SAJA_RE = /\b(?:cara|prosedur|langkah|pasang|bongkar|lepas|ganti(?!\s*rugi)|torque|torsi|spec|spesifikasi|kenapa|mengapa|rusak|error|fault|bocor|lambat|ukur|tekanan|pressure|berat|weight|fungsi|letak|posisi|lokasi|dimana|di\s*mana|interval|jadwal|kapasitas|beda|perbedaan|bandingkan|compare|why|install|remove)\b/i;
+
+interface Kandidat { pn: string; nama: string; section: string; harga: string }
+
+const LABEL: Record<Lang, { pn: string; nama: string; harga: string; ket: string; kosong: string; gagal: string; sumber: string }> = {
+  id: { pn: 'Part Number', nama: 'Nama Part', harga: 'Harga', ket: 'Keterangan', kosong: 'Belum tersedia', gagal: 'Gagal dicek, kirim ulang', sumber: 'Sumber harga: Hexindoparts.com' },
+  en: { pn: 'Part Number', nama: 'Part Name', harga: 'Price', ket: 'Note', kosong: 'Not listed', gagal: 'Check failed, resend', sumber: 'Price source: Hexindoparts.com' },
+  ja: { pn: '部品番号', nama: '部品名', harga: '価格', ket: '備考', kosong: '掲載なし', gagal: '確認失敗・再送してください', sumber: '価格の出典: Hexindoparts.com' },
+};
+
+// PN → catalog name + section title, read from the retrieved chunks.
+function katalogPn(content: string): Map<string, { nama: string; section: string }> {
+  const peta = new Map<string, { nama: string; section: string }>();
+  let section = '';
+  for (const line of content.split('\n')) {
+    const judul = line.match(/^Section:\s*(.+)$/i);
+    if (judul) { section = judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^DAFTAR PARTS\s*-\s*|^\d+\s*-\s*/i, '').replace(/\s*\(Part \d+\/\d+\)\s*$/i, '').trim(); continue; }
+    const sel = line.split('|').map(x => x.trim());
+    const i = sel.findIndex(x => /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/.test(x));
+    if (i >= 0 && sel[i + 1] && !peta.has(sel[i])) peta.set(sel[i], { nama: sel[i + 1], section });
+  }
+  return peta;
+}
+
+function kandidatDari(pnsUrut: string[], web: HasilWeb, content: string, lang: Lang): Kandidat[] {
+  const kat = katalogPn(content);
+  const L = LABEL[lang];
+  const out: Kandidat[] = [];
+  for (const pn of pnsUrut) {
+    const v = web.get(pn);
+    if (v === undefined) continue;
+    const info = kat.get(pn);
+    if (v === null) { out.push({ pn, nama: info?.nama ?? '', section: info?.section ?? '', harga: L.gagal }); continue; }
+    if (!v.length) { out.push({ pn, nama: info?.nama ?? '', section: info?.section ?? '', harga: L.kosong }); continue; }
+    for (const w of v) out.push({ pn: w.pn, nama: info?.nama || w.nama, section: info?.section ?? '', harga: w.harga });
+  }
+  return out;
+}
+
+async function pilihBaris(q: string, history: Message[], kandidat: Kandidat[], lang: Lang): Promise<{ pilih: number[]; pembuka: string } | null> {
+  const lalu = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
+  const daftar = kandidat.map((k, i) => `${i + 1} | ${k.pn} | ${k.nama} | ${k.section || '-'}`).join('\n');
+  const bahasa = lang === 'en' ? 'English' : lang === 'ja' ? 'Japanese' : 'Bahasa Indonesia santai';
+  const prompt = `Pertanyaan teknisi: "${q}"${lalu ? `\nPertanyaan sebelumnya: "${lalu.slice(0, 200)}"` : ''}
+
+Kandidat part (no | PN | nama | section katalog):
+${daftar}
+
+Pilih nomor baris yang BENAR-BENAR diminta teknisi (part yang dia tanyakan harganya, termasuk varian PN-nya). Buang part lain yang cuma kebetulan satu section atau mirip namanya. Kalau tidak ada yang cocok, "pilih" kosong.
+Balas HANYA JSON satu baris: {"pilih":[nomor,...],"pembuka":"<kalimat pengantar ≤12 kata, ${bahasa}, tanpa angka harga, tanpa salam, sapa dengan "kamu" bukan "Anda">"}`;
+  try {
+    const res = await callProxy({
+      contents: [{ role: 'user', parts: [{ text: prompt }] }],
+      generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+    }, false, INTENT_MODEL);
+    const raw = getText(res.candidates?.[0]?.content?.parts ?? []);
+    const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
+    const p = JSON.parse(json) as { pilih?: unknown; pembuka?: unknown };
+    const pilih = Array.isArray(p.pilih) ? p.pilih.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= kandidat.length) : [];
+    return { pilih: [...new Set(pilih)], pembuka: typeof p.pembuka === 'string' ? p.pembuka.replace(/Rp\s?[\d.]+/g, '').trim() : '' };
+  } catch (err) {
+    console.warn('[harga-cepat] pemilih gagal: %s', (err as Error)?.message);
+    return null;
+  }
+}
+
+export async function jawabanHargaCepat(q: string, history: Message[], pnsUrut: string[], web: HasilWeb, content: string, lang: Lang): Promise<string | null> {
+  const kandidat = kandidatDari(pnsUrut, web, content, lang);
+  if (!kandidat.some(k => /Rp\s?\d/.test(k.harga))) return null;
+  const t0 = Date.now();
+  const hasil = await pilihBaris(q, history, kandidat, lang);
+  if (!hasil?.pilih.length) {
+    console.info('[harga-cepat] dilewati (%s) — pakai model utama', hasil ? 'tak ada baris cocok' : 'pemilih gagal');
+    return null;
+  }
+  const ada = (k: Kandidat) => (/Rp\s?\d/.test(k.harga) ? 0 : 1);
+  const baris = hasil.pilih.map(n => kandidat[n - 1]).sort((a, b) => ada(a) - ada(b));
+  const L = LABEL[lang];
+  const pakaiKet = new Set(baris.map(b => b.section).filter(Boolean)).size > 1;
+  const kepala = pakaiKet ? `| ${L.pn} | ${L.nama} | ${L.harga} | ${L.ket} |\n|---|---|---|---|` : `| ${L.pn} | ${L.nama} | ${L.harga} |\n|---|---|---|`;
+  const isi = baris.map(b => {
+    const sel = [`\`${b.pn}\``, b.nama.replace(/\|/g, '/'), b.harga];
+    if (pakaiKet) sel.push(b.section.replace(/\|/g, '/') || '-');
+    return `| ${sel.join(' | ')} |`;
+  });
+  console.info('[harga-cepat] %d dari %d kandidat dipilih (%dms)', baris.length, kandidat.length, Date.now() - t0);
+  return `${hasil.pembuka ? `${hasil.pembuka}\n\n` : ''}${kepala}\n${isi.join('\n')}\n\n*${L.sumber}*`;
+}

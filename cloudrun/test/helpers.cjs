@@ -4,6 +4,7 @@ const bundle = require(path.join(__dirname, '.build', 'entry.cjs'));
 const USAGE = { promptTokenCount: 10, candidatesTokenCount: 5 };
 
 function mockDeps(script, extra = {}) {
+  bundle.resetPemutus();
   let n = 0;
   const d = {
     supabase: null,

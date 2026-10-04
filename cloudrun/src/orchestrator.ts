@@ -345,18 +345,18 @@ export async function generateResponse(
       let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;
       if (imagePN) {
         emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
-        route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit);
+        route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit, undefined, false);
       }
       // Captions rarely name the part ("carikan part number ini"), so search by what the photo shows.
       if (route?.type !== 'rag_found' && scan.component && partsAsk) {
         emit({ type: 'thinking', message: `Terlihat ${scan.component} — mencari di katalog…` });
         const byComponent = `${scan.component} part number`;
-        route = await resolvePartsQuery(byComponent, [], model, emit, byComponent);
+        route = await resolvePartsQuery(byComponent, [], model, emit, byComponent, false);
       }
       if (!route && (scan.component || (q.split(/\s+/).length >= 3 && !isCasualExact(q)))) {
         const searchQ = scan.component ? `${q} ${scan.component}`.trim() : q;
         route = isPartsQuery(q)
-          ? await resolvePartsQuery(searchQ, history, model, emit)
+          ? await resolvePartsQuery(searchQ, history, model, emit, undefined, false)
           : await resolveNaturalLanguageQuery(searchQ, history, model, emit);
       }
       if (route?.type === 'rag_found') {

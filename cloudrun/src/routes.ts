@@ -6,6 +6,9 @@ import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
 import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
 import type { Lang } from './templates';
+import { jawabanHargaCepat, BUKAN_HARGA_SAJA_RE } from './harga';
+import { promoAktif } from './promo';
+import { deps } from './deps';
 
 export type AgentEventEmit = (event: AgentEvent) => void;
 
@@ -292,6 +295,7 @@ export async function resolvePartsQuery(
   model: UnitModel,
   emit: AgentEventEmit = () => {},
   precomputedOpt?: string,
+  izinkanCepat = true,
 ): Promise<RagRouteResult> {
   const hasLiteralPN = !!extractPartNumber(trimmed);
   const isLongQuery  = trimmed.split(/\s+/).length >= 4;
@@ -329,10 +333,12 @@ export async function resolvePartsQuery(
   const lastUser = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
   const mintaHarga = MINTA_HARGA_RE.test(trimmed)
     || (MINTA_HARGA_RE.test(lastUser) && trimmed.split(/\s+/).length <= 6 && !/\b(?:part\s*number|pn|nomor\s*part)\b/i.test(trimmed));
+  let pnsHarga: string[] = literalPN ? [literalPN] : [];
   if (!intervalHours && (mintaHarga || literalPN)) {
     const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
     const pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
       .filter(pn => pn !== literalPN);
+    pnsHarga = [...pnsHarga, ...pns];
     if (pns.length) {
       emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
       for (const [pn, v] of await hargaWeb(pns)) webHasil.set(pn, v);
@@ -340,6 +346,16 @@ export async function resolvePartsQuery(
   }
   const webLiteral = blokHargaWeb(webHasil);
   const adaHargaWeb = adaHarga(webHasil);
+
+  // Pure price question → flash-lite picks the rows, code writes the table (no main-model call).
+  if (izinkanCepat && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
+    const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
+      ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history));
+    if (cepat) {
+      try { deps().meta.route = 'harga_cepat'; } catch { /* di luar konteks */ }
+      return { type: 'rag_canned', text: cepat };
+    }
+  }
 
   if (!ragResult.hasResults && adaHargaWeb) {
     const note = literalPN
