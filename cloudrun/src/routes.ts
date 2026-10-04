@@ -187,6 +187,8 @@ export function streamCanned(text: string, onChunk: (text: string) => void): str
 const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/gi;
 
 export function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
+  // "SN 70015" / "serial number 70015" is a unit serial, not a fault code (Arip 4 Oct).
+  if (/\b(?:s\/?n|serial(?:\s*n(?:umber|o)\w*)?|no\.?\s*seri|nomor\s*seri)\b/i.test(trimmed)) return { isFaultCode: false, faultQuery: trimmed };
   if (isFaultCode(trimmed)) return { isFaultCode: true, faultQuery: trimmed };
   const embedded = [...trimmed.matchAll(EMBEDDED_FAULT_CODE_RE)].map(m => m[1].trim()).find(isFaultCode);
   return { isFaultCode: !!embedded, faultQuery: embedded ?? trimmed };

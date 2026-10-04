@@ -1,13 +1,28 @@
 import type { Message } from './types';
 import type { HasilWeb } from './rag';
 import { callProxy, getText, INTENT_MODEL } from './vertex';
+import { komponenBaris } from './rag/hexparts';
 import type { Lang } from './templates';
 
 // Fast price path (4 Oct): the main model used to read ~24k tokens just to copy prices into a table.
 // Now flash-lite only PICKS which candidate rows answer the question; code builds the table, so every
 // number is copied straight from hexindoparts.com and the format never drifts.
 
-export const BUKAN_HARGA_SAJA_RE = /\b(?:cara|prosedur|langkah|pasang|bongkar|lepas|ganti(?!\s*rugi)|torque|torsi|spec|spesifikasi|kenapa|mengapa|rusak|error|fault|bocor|lambat|ukur|tekanan|pressure|berat|weight|fungsi|letak|posisi|lokasi|dimana|di\s*mana|interval|jadwal|kapasitas|beda|perbedaan|bandingkan|compare|why|install|remove)\b/i;
+export const BUKAN_HARGA_SAJA_RE = /\b(?:cara|prosedur|langkah|pasang|bongkar|lepas|ganti(?!\s*rugi)|torque|torsi|spec|spesifikasi|kenapa|mengapa|rusak|error|fault|bocor|lambat|ukur|tekanan|pressure|berat|weight|fungsi|letak|posisi|lokasi|dimana|di\s*mana|interval|jadwal|kapasitas|beda|perbedaan|bandingkan|compare|why|install|remove|yang\s*mana|yg\s*mana|mana\s*yang|mana\s*yg|yg\s*mna|yang\s*mna|mna\s*y\w*|betul|benar|cocok|sesuai|serial|s\/?n)\b/i;
+
+export const PEMILIH_MS = 3500;
+
+// Catalog section → the component name technicians use, so the picker sees "Main Pump" on every pump row.
+const KOMPONEN: Array<[RegExp, string]> = [
+  [/^(?:PUMP DEVICE|PUMP;UNIT|REGULATOR;PUMP|PUMP;GEAR|MAIN PUMP)\b/i, 'Main Pump'],
+  [/^(?:SWING DEVICE|MOTOR;SWING|SWING MOTOR|DEVICE;SWING)\b/i, 'Swing Motor'],
+  [/^(?:TRAVEL DEVICE|MOTOR;TRAVEL|TRAVEL MOTOR|DEVICE;TRAVEL)\b/i, 'Travel Motor'],
+  [/^(?:VALVE;CONTROL|CONTROL VALVE)\b/i, 'Control Valve'],
+];
+const labelKomponen = (section: string): string => {
+  const k = KOMPONEN.find(([re]) => re.test(section))?.[1];
+  return k && k.toUpperCase() !== section.toUpperCase() ? `${k} (${section})` : section;
+};
 
 interface Kandidat { pn: string; nama: string; section: string; harga: string }
 
@@ -26,7 +41,7 @@ function katalogPn(content: string): Map<string, { nama: string; section: string
     if (judul) { section = judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^DAFTAR PARTS\s*-\s*|^\d+\s*-\s*/i, '').replace(/\s*\(Part \d+\/\d+\)\s*$/i, '').trim(); continue; }
     const sel = line.split('|').map(x => x.trim());
     const i = sel.findIndex(x => /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/.test(x));
-    if (i >= 0 && sel[i + 1] && !peta.has(sel[i])) peta.set(sel[i], { nama: sel[i + 1], section });
+    if (i >= 0 && sel[i + 1] && !peta.has(sel[i])) peta.set(sel[i], { nama: sel[i + 1], section: komponenBaris(line) ?? section });
   }
   return peta;
 }
@@ -48,20 +63,26 @@ function kandidatDari(pnsUrut: string[], web: HasilWeb, content: string, lang: L
 
 async function pilihBaris(q: string, history: Message[], kandidat: Kandidat[], lang: Lang): Promise<{ pilih: number[]; pembuka: string } | null> {
   const lalu = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
-  const daftar = kandidat.map((k, i) => `${i + 1} | ${k.pn} | ${k.nama} | ${k.section || '-'}`).join('\n');
+  const daftar = kandidat.map((k, i) => `${i + 1} | ${k.pn} | ${k.nama} | ${k.section ? labelKomponen(k.section) : '-'}`).join('\n');
   const bahasa = lang === 'en' ? 'English' : lang === 'ja' ? 'Japanese' : 'Bahasa Indonesia santai';
   const prompt = `Pertanyaan teknisi: "${q}"${lalu ? `\nPertanyaan sebelumnya: "${lalu.slice(0, 200)}"` : ''}
 
 Kandidat part (no | PN | nama | section katalog):
 ${daftar}
 
-Pilih nomor baris yang BENAR-BENAR diminta teknisi (part yang dia tanyakan harganya, termasuk varian PN-nya). Buang part lain yang cuma kebetulan satu section atau mirip namanya. Kalau tidak ada yang cocok, "pilih" kosong.
+Pilih SEMUA nomor baris yang (a) jenis part-nya sama dengan yang ditanya — tulisan berbeda tetap sama: KIT;SEAL = Kit; Seal = seal kit = SEAL (di section pompa/motor) — DAN (b) milik komponen yang ditanya. Jangan berhenti di satu baris kalau ada beberapa yang memenuhi. Buang jenis part lain (KIT;MAINTENANCE bukan seal kit, rotor bukan seal kit) dan part milik komponen LAIN (seal kit main pump ≠ seal kit swing motor). Kalau tidak ada yang cocok, "pilih" kosong.
+Kolom section sudah menyebut komponennya (mis. "Main Pump (REGULATOR;PUMP)" = bagian main pump); pilih semua baris komponen itu yang jenis part-nya cocok.
 Balas HANYA JSON satu baris: {"pilih":[nomor,...],"pembuka":"<kalimat pengantar ≤12 kata, ${bahasa}, tanpa angka harga, tanpa salam, sapa dengan "kamu" bukan "Anda">"}`;
   try {
-    const res = await callProxy({
-      contents: [{ role: 'user', parts: [{ text: prompt }] }],
-      generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
-    }, false, INTENT_MODEL);
+    // A slow picker must not make the fast path slower than the main model (seen once: 19,5 s).
+    let batas: ReturnType<typeof setTimeout> | undefined;
+    const res = await Promise.race([
+      callProxy({
+        contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
+      }, false, INTENT_MODEL),
+      new Promise<never>((_, tolak) => { batas = setTimeout(() => tolak(new Error(`batas ${PEMILIH_MS} ms`)), PEMILIH_MS); }),
+    ]).finally(() => clearTimeout(batas));
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []);
     const json = raw.slice(raw.indexOf('{'), raw.lastIndexOf('}') + 1);
     const p = JSON.parse(json) as { pilih?: unknown; pembuka?: unknown };

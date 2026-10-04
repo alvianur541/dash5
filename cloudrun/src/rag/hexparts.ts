@@ -130,6 +130,11 @@ const kataCocok = (k: string, w: string): boolean =>
 const kataDari = (t: string): string[] => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 const KOMPONEN_UTAMA_RE = /\b(?:KIT|ASSY|ASM|ASS'Y)\b/i;
 
+/** Trailing component tag of a promo row: "... Rp 2.102.691  [Swing Motor]" → "Swing Motor". */
+export function komponenBaris(line: string): string | null {
+  return line.match(/\[([A-Za-z][A-Za-z0-9 ;&/.-]{2,40})\]\s*$/)?.[1].trim() ?? null;
+}
+
 const skorNama = (kunci: string[], kata: string[]): number => {
   let n = 0;
   for (const k of kunci) {
@@ -144,19 +149,34 @@ const skorNama = (kunci: string[], kata: string[]): number => {
 // With no match, a short follow-up ("harganya berapa") prices the PNs quoted in the previous answer.
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
   const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
-  const skor = new Map<string, { n: number; nama: string }>();
+  const skor = new Map<string, { n: number; nama: string; komp: number }>();
   if (kunci.length) {
     let skorSection = 0;
+    let judulKata: string[] = [];
     for (const line of content.split('\n')) {
       const judul = line.match(/^Section:\s*(.+)$/i);
-      if (judul) { skorSection = skorNama(kunci, kataDari(judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^\d+\s*-\s*/i, ''))); continue; }
+      if (judul) { judulKata = kataDari(judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^\d+\s*-\s*/i, '')); skorSection = skorNama(kunci, judulKata); continue; }
       const sel = line.split('|').map(x => x.trim());
       const i = sel.findIndex(x => PN_SEL_RE.test(x));
       if (i < 0 || !sel[i + 1]) continue;
-      const nama = skorNama(kunci, kataDari(sel[i + 1]));
-      const n = nama * 2 + (skorSection >= 3 ? 1 + (KOMPONEN_UTAMA_RE.test(sel[i + 1]) ? 2 : 0) : 0);
-      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase() });
+      const kataNama = kataDari(sel[i + 1]);
+      const nama = skorNama(kunci, kataNama);
+      // Promo rows carry their own component tag ("[Main Pump]") under a shared title that lists several
+      // components; judge the row by its tag, not the title (Arip 4 Oct: swing motor got main pump seal kits).
+      const tag = komponenBaris(line);
+      const kataKomp = tag ? kataDari(tag) : judulKata;
+      const skorKomp = tag ? skorNama(kunci, kataKomp) : skorSection;
+      // -1 = the question names nothing beyond this part's own name, so there is no component to disagree with.
+      const sisa = kunci.filter(k => !kataNama.some(w => kataCocok(k, w)));
+      const komp = sisa.length ? skorKomp : -1;
+      const n = nama * 2 + (skorKomp >= 3 ? 1 + (KOMPONEN_UTAMA_RE.test(sel[i + 1]) ? 2 : 0) : 0);
+      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp });
     }
+  }
+  // The question names a component beyond the part ("kit seal SWING MOTOR") and some rows sit in that
+  // component → drop rows that sit in a different one.
+  if ([...skor.values()].some(v => v.komp >= 3)) {
+    for (const [pn, v] of skor) if (v.komp === 0) skor.delete(pn);
   }
   // At most 6 PNs per part name, so a dozen arm-cylinder variants cannot crowd out the seal kit.
   const perNama = new Map<string, number>();
