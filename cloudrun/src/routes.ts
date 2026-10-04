@@ -322,22 +322,30 @@ export async function resolvePartsQuery(
         .split('\n').filter(l => !l.trim().startsWith('|')).join('\n').slice(0, 800)
     : '';
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-  const literalPN = extractPartNumber(trimmed);
-  const webPromise = literalPN ? hargaWeb([literalPN]) : null;
+  // Catalog-format codes too (4S00509HPA, YD00005194): PART_NUMBER_RE stays narrow for routing only.
+  const kodeQuery = [...new Set(trimmed.split(/[\s,;/()]+/).map(tok => extractCatalogCode(tok))
+    .filter((c): c is string => !!c && /\d/.test(c) && !/^(?:ZX|ZW)\d/.test(c)))];
+  const pnLiteral = extractPartNumber(trimmed);
+  if (pnLiteral && !kodeQuery.includes(pnLiteral)) kodeQuery.unshift(pnLiteral);
+  const literalPN = kodeQuery[0] ?? null;
+  const webPromise = kodeQuery.length ? hargaWeb(kodeQuery) : null;
   const ragResult = intervalHours
     ? await searchServiceIntervalParts(searchQuery, model)
     : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
   const webHasil: HasilWeb = webPromise ? await webPromise : new Map();
-  // "solenoid di hst motor" right after "harga solenoid motor" still asks for the price.
-  const lastUser = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
-  const mintaHarga = MINTA_HARGA_RE.test(trimmed)
-    || (MINTA_HARGA_RE.test(lastUser) && trimmed.split(/\s+/).length <= 6 && !/\b(?:part\s*number|pn|nomor\s*part)\b/i.test(trimmed));
-  let pnsHarga: string[] = literalPN ? [literalPN] : [];
+  // A price conversation carries over: "solenoid di hst motor" after "harga solenoid motor", "klo seal kit swing
+  // cylinder" after a bare PN that was priced. A bare code is itself a price/lookup ask.
+  const kodeSaja = (t: string) => t.trim().split(/\s+/).every(tok => !!extractCatalogCode(tok));
+  const userLalu = history.filter(m => m.role === 'user').slice(-3).map(m => m.content);
+  const percakapanHarga = userLalu.some(u => MINTA_HARGA_RE.test(u) || kodeSaja(u));
+  const mintaHarga = MINTA_HARGA_RE.test(trimmed) || (kodeQuery.length > 0 && kodeSaja(trimmed))
+    || (percakapanHarga && trimmed.split(/\s+/).length <= 8 && !/\b(?:part\s*number|pn|nomor\s*part)\b/i.test(trimmed));
+  let pnsHarga: string[] = [...kodeQuery];
   if (!intervalHours && (mintaHarga || literalPN)) {
     const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
     const pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
-      .filter(pn => pn !== literalPN);
+      .filter(pn => !kodeQuery.includes(pn));
     pnsHarga = [...pnsHarga, ...pns];
     if (pns.length) {
       emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
@@ -459,6 +467,7 @@ export async function resolveNaturalLanguageQuery(
   history: Message[],
   model: UnitModel,
   emit: AgentEventEmit = () => {},
+  izinkanCepat = true,
 ): Promise<RagRouteResult> {
   if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
     console.info('[intent] sapaan terdeteksi deterministik — analyzeIntent dilewati');
@@ -470,7 +479,7 @@ export async function resolveNaturalLanguageQuery(
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
-    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
+    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery, izinkanCepat);
   }
 
   const rawOpt = intent.optimizedQuery?.trim() ?? '';

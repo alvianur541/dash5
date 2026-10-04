@@ -11,14 +11,25 @@ export function isFaultCode(query: string): boolean {
 
 const PARTS_KEYWORDS_RE = /\b(part\s*number\w*|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part|hexindo\s*parts?)\b/i;
 
-const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|oli|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft|roller|idler|sprocket|track|link|shoe|tooth|teeth|adapter|cutting\s*edge|undercarriage|bucket)\b/i;
+const HARGA_COMPONENT_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg|hraga\w*|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|oli|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft|roller|idler|sprocket|track|link|shoe|tooth|teeth|adapter|cutting\s*edge|undercarriage|bucket)\b/i;
 
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
+// Price words only ("berapa" alone also asks pressures/weights, so it does not count here).
+const KATA_HARGA_RE = /\b(?:harg\w*|hrg\w*|hraga\w*|price\w*|prise|biaya|cost)\b/i;
+
 export function isPartsQuery(query: string): boolean {
   return PARTS_KEYWORDS_RE.test(query)
+    || KATA_HARGA_RE.test(query)
     || HARGA_COMPONENT_RE.test(query)
-    || PART_NUMBER_RE.test(query.toUpperCase());
+    || PART_NUMBER_RE.test(query.toUpperCase())
+    || kodeKatalogSaja(query);
+}
+
+// A bare catalog code ("4S00509HPA", "cek YD00005194") is a parts lookup even when PART_NUMBER_RE misses its shape.
+function kodeKatalogSaja(query: string): boolean {
+  const tok = query.trim().replace(/^(?:(?:cek|check|harga\w*|hrga\w*|hrg|brp|berapa)\s+)+/i, '').split(/\s+/);
+  return tok.length === 1 && tok[0].length >= 6 && /\d/.test(tok[0]) && /[A-Z]/i.test(tok[0]) && !/^(?:ZX|ZW)\d/i.test(tok[0]) && !!extractCatalogCode(tok[0]);
 }
 
 export function extractPartNumber(query: string): string | null {

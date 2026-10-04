@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE } from './rag';
 import { deps } from './deps';
 import { promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
@@ -341,7 +341,9 @@ export async function generateResponse(
       const codes = extractPartNumber(q) ? [] : scan.pns;
       const listMode = codes.length >= 2 || (codes.length === 1 && extractPartNumber(codes[0]) !== codes[0]);
       const imagePN = listMode ? null : codes[0] ?? null;
-      const partsAsk = isPartsQuery(q) || !!imagePN || listMode;
+      // "cek hrgany" + photo (Reyhan, 4 Oct): a price ask must reach hexindoparts.com even when the caption names no part.
+      const hargaFoto = MINTA_HARGA_RE.test(q);
+      const partsAsk = isPartsQuery(q) || !!imagePN || listMode || hargaFoto;
       let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;
       if (imagePN) {
         emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
@@ -350,14 +352,14 @@ export async function generateResponse(
       // Captions rarely name the part ("carikan part number ini"), so search by what the photo shows.
       if (route?.type !== 'rag_found' && scan.component && partsAsk) {
         emit({ type: 'thinking', message: `Terlihat ${scan.component} — mencari di katalog…` });
-        const byComponent = `${scan.component} part number`;
+        const byComponent = hargaFoto ? `harga ${scan.component}` : `${scan.component} part number`;
         route = await resolvePartsQuery(byComponent, [], model, emit, byComponent, false);
       }
       if (!route && (scan.component || (q.split(/\s+/).length >= 3 && !isCasualExact(q)))) {
         const searchQ = scan.component ? `${q} ${scan.component}`.trim() : q;
-        route = isPartsQuery(q)
+        route = isPartsQuery(q) || hargaFoto
           ? await resolvePartsQuery(searchQ, history, model, emit, undefined, false)
-          : await resolveNaturalLanguageQuery(searchQ, history, model, emit);
+          : await resolveNaturalLanguageQuery(searchQ, history, model, emit, false);
       }
       if (route?.type === 'rag_found') {
         deps().meta.confidence = route.confidence;

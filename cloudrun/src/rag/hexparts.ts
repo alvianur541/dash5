@@ -103,7 +103,8 @@ export function blokHargaWeb(hasil: HasilWeb): string {
 }
 
 const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price', 'prices', 'berapa', 'brp', 'berpa', 'cek', 'check', 'ada', 'ngga', 'nggak', 'gak', 'tidak', 'part', 'parts', 'number', 'nomor', 'unit', 'model', 'yang', 'untuk', 'buat', 'dan', 'atau', 'klo', 'kalau', 'kalo', 'dong', 'tolong', 'coba', 'minta', 'info', 'hexindoparts', 'com', 'web', 'website', 'the', 'for', 'and', 'what', 'how', 'much', 'cost', 'biaya', 'catalog', 'katalog', 'list', 'daftar', 'semua']);
-export const MINTA_HARGA_RE = /\b(?:harga\w*|price\w*|berapa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
+// Technicians type fast on site: "hrga", "hrgany", "hraga", "brapa" (Reyhan, 4 Oct) must count as a price ask.
+export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|price\w*|prise|berapa|brapa|brpa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
 
 const PN_SEL_RE = /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/;
 const PN_JAWABAN_RE = /`([A-Z0-9][A-Z0-9-]{3,21})`/g;
@@ -142,7 +143,7 @@ const skorNama = (kunci: string[], kata: string[]): number => {
 // rows under a matching section title count too (seal kit inside "CYL.;ARM"), kits/assemblies first.
 // With no match, a short follow-up ("harganya berapa") prices the PNs quoted in the previous answer.
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
-  const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !/^\d+$/.test(w)))];
+  const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
   const skor = new Map<string, { n: number; nama: string }>();
   if (kunci.length) {
     let skorSection = 0;
