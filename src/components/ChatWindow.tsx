@@ -58,7 +58,7 @@ function stickyClass(children: ReactNode): string | undefined {
   return c ? `sticky-pn sticky-col-${c}` : undefined;
 }
 
-const NOTE_RE = /^[\s*>|-]*((?:periode|masa berlaku|berlaku)[^\n|]{0,110}|[^\n|]{0,60}(?:belum termasuk|exclude|excl\.?)\s*ppn[^\n|]{0,40})$/gim;
+const NOTE_RE = /^[\s*>|-]*((?:periode|masa berlaku|berlaku)[^\n|]{0,110}|[^\n|]{0,60}(?:belum termasuk|exclude|excl\.?)\s*ppn[^\n|]{0,40}|[^\n|]{0,60}hexindoparts\.com[^\n|]{0,110}|[^\n|]{0,60}belum tersedia di[^\n|]{0,110})$/gim;
 
 function tableNotes(content: string): string[] {
   const seen = new Set<string>();
