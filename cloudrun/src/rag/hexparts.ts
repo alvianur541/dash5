@@ -31,7 +31,18 @@ export const tanpaStripKcm = (pn: string): string => (/^\d+(?:-\d+)+$/.test(pn) 
 
 export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<WebPart[]> {
   const asli = pn.toUpperCase().trim();
-  const kunci = tanpaStripKcm(asli);
+  // The site is inconsistent with dashes: KCM always undashed; ZW mixed (26418-82071 listed with the dash,
+  // 263E2-52031 only as 263E252031 — Abdul 4 Oct). Try the likely spelling first, then the other one.
+  const tanpa = asli.replace(/-/g, '');
+  const ejaan = tanpa === asli ? [asli] : (tanpaStripKcm(asli) !== asli ? [tanpa, asli] : [asli, tanpa]);
+  for (const kunci of ejaan) {
+    const hasil = await cariSatu(asli, kunci, signal);
+    if (hasil.length) return hasil;
+  }
+  return [];
+}
+
+async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Promise<WebPart[]> {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), BATAS_MS);
   const lepas = () => ctrl.abort();
