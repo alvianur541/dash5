@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, adaHarga } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, KATA_HARGA_RE, adaHarga } from './rag';
 import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
@@ -608,7 +608,7 @@ export async function resolveMultiAspectQuery(
   // Price asked in a multi-aspect question ("harga sensor X dan standar nilainya"): the parts aspects must get
   // hexindoparts.com prices too, otherwise the model writes "Ketik PN untuk cek" (Reyhan 4 Oct).
   let blokHarga = '';
-  if (MINTA_HARGA_RE.test(trimmed)) {
+  if (KATA_HARGA_RE.test(trimmed)) {
     const pns = [...new Set(perAspect.flatMap(a => (a.parts.hasResults && a.parts.content)
       ? (pilihPnHarga(a.parts.content, [a.sub, trimmed]).length ? pilihPnHarga(a.parts.content, [a.sub, trimmed]) : pnChunkTeratas(a.parts.content, 4)) : []))].slice(0, 14);
     if (pns.length) {

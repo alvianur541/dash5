@@ -1,4 +1,4 @@
-export { extractCatalogCode, extractPartNumber, extractSearchTerms, isFaultCode, isPartsQuery, manualTerms, stripMeasuredValues, stripModelFromQuery } from './terms';
+export { KATA_HARGA_RE, extractCatalogCode, extractPartNumber, extractSearchTerms, isFaultCode, isPartsQuery, manualTerms, stripMeasuredValues, stripModelFromQuery } from './terms';
 export { getEmbedding } from './embed';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from './symptom';
 export { findComponentWeight, findPerformanceStandard, findSpecLines, getTroubleshootingKategori, searchEngineManual, searchTechnicalManualMulti, weightComponent } from './manual';

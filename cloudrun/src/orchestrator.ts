@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE, KATA_HARGA_RE } from './rag';
 import { deps } from './deps';
 import { promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
@@ -345,7 +345,8 @@ export async function generateResponse(
       const listMode = codes.length >= 2 || (codes.length === 1 && extractPartNumber(codes[0]) !== codes[0]);
       const imagePN = listMode ? null : codes[0] ?? null;
       // "cek hrgany" + photo (Reyhan, 4 Oct): a price ask must reach hexindoparts.com even when the caption names no part.
-      const hargaFoto = MINTA_HARGA_RE.test(q);
+      // "berapa" alone asks pressures and weights too; only real price words send a photo to the parts route.
+      const hargaFoto = KATA_HARGA_RE.test(q);
       console.info('[foto] komponen=%s pn=%s harga=%s', scan.component || '-', codes.join(',') || '-', hargaFoto ? 1 : 0);
       const partsAsk = isPartsQuery(q) || !!imagePN || listMode || hargaFoto;
       let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;

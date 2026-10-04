@@ -1,4 +1,4 @@
-const { resolvePartsQuery, isPartsQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { resolvePartsQuery, isPartsQuery, KATA_HARGA_RE, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 // Sesi Reyhan 4 Okt: harga baru muncul kalau PN diketik sendiri. Penyebab: "hrga/hrgany" tak dikenali, kode katalog
 // 4S00509HPA tak dianggap PN, lanjutan sesudah PN polos tidak mewarisi niat harga.
@@ -35,6 +35,9 @@ module.exports = async () => {
 
   t(['Cek hrga roller lower', 'Cek hrga 4S00509HPA', 'Ad koq cek yg betul hrgany', '4S00509HPA', 'Cek hrgany'].every(isPartsQuery), 'typo harga & kode katalog polos → jalur parts');
   t(!isPartsQuery('Cek berat travel device') && !isPartsQuery('berapa tekanan pompa'), '"berapa" saja (tekanan/berat) tidak dipaksa ke parts');
+  // Photo captions and multi-aspect questions use the same strict test: a gauge photo asking a pressure is not a price ask.
+  t(['cek hrgany', 'harga ini', 'brp harganya', 'Cek hrga roller lower'].every(s => KATA_HARGA_RE.test(s)), 'caption foto "cek hrgany" / "brp harganya" → minta harga');
+  t(!['berapa tekanan standarnya', 'brp nilai ini', 'berapa tekanan dan berat swing motor'].some(s => KATA_HARGA_RE.test(s)), 'caption "berapa tekanan standarnya" bukan minta harga');
   {
     const { r, dicek } = await jalan('Cek hrga 4S00509HPA');
     t(dicek.includes('4S00509HPA') && r.text?.includes('Rp 9.876.543'), `"Cek hrga 4S00509HPA" → dicek ke web & harga tampil (${dicek.join(',')})`);

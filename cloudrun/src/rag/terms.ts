@@ -16,7 +16,7 @@ const HARGA_COMPONENT_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg|hraga\w*|price)\s+
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
 // Price words only ("berapa" alone also asks pressures/weights, so it does not count here).
-const KATA_HARGA_RE = /\b(?:harg\w*|hrg\w*|hraga\w*|price\w*|prise|biaya|cost)\b/i;
+export const KATA_HARGA_RE = /\b(?:harg\w*|hrg\w*|hraga\w*|price\w*|prise|biaya|cost)\b/i;
 
 export function isPartsQuery(query: string): boolean {
   return PARTS_KEYWORDS_RE.test(query)
