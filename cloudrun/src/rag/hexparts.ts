@@ -197,6 +197,21 @@ export function pnChunkTeratas(content: string, maks = 8): string[] {
 }
 
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
+  // Several components at once ("piston, connecting rod, main bearing, injection pump" from a photo): rank per
+  // component and take turns, else one component with many rows (injection pump) fills every slot (Abdul 4 Oct).
+  const frasa = teks.join(' , ').split(/\s*(?:,|;|\bdan\b|&|\+)\s*/i).map(f => f.trim()).filter(f => kataDari(f).some(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w)));
+  if (frasa.length >= 2 && frasa.length <= 6 && teks.join(' ').includes(',')) {
+    const daftar = [...new Set(frasa)].map(f => pilihPnHargaSatu(content, [f], '', maks));
+    const out: string[] = [];
+    for (let i = 0; out.length < maks && daftar.some(d => i < d.length); i++) {
+      for (const d of daftar) if (d[i] && !out.includes(d[i]) && out.length < maks) out.push(d[i]);
+    }
+    if (out.length) return out;
+  }
+  return pilihPnHargaSatu(content, teks, jawabanSebelumnya, maks);
+}
+
+function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
   const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
   const skor = new Map<string, { n: number; nama: string; komp: number; grup: string }>();
   if (kunci.length) {
