@@ -3,10 +3,9 @@ import { capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './re
 import { HybridResult, RAGResult, SearchResult, hybrid, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
 import type { UnitModel } from '../types';
+import { PROMO_KATEGORI } from '../promo';
 import type { RerankSource } from '../deps';
 
-// The DB keeps one promo period; rename this when the next period's chunks replace it.
-const PROMO_KATEGORI = 'PROMO Q2 FY2026';
 
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 

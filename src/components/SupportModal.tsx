@@ -71,7 +71,7 @@ const FAQS = [
   },
   {
     q: 'Jenis pertanyaan apa yang dapat diajukan?',
-    a: 'Arti dan penanganan fault code, analisa gejala kerusakan, langkah troubleshooting sistem hydraulic, electrical, dan engine, spesifikasi komponen, kapasitas fluida, prosedur pembongkaran dan pemasangan, part number, harga promo parts, serta daftar parts Periodic Maintenance per interval jam kerja.',
+    a: 'Arti dan penanganan fault code, analisa gejala kerusakan, langkah troubleshooting sistem hydraulic, electrical, dan engine, spesifikasi komponen, kapasitas fluida, prosedur pembongkaran dan pemasangan, part number, harga parts, serta daftar parts Periodic Maintenance per interval jam kerja.',
   },
   {
     q: 'Bagaimana cara bertanya agar jawabannya tepat?',
@@ -87,7 +87,7 @@ const FAQS = [
   },
   {
     q: 'Apa yang berada di luar cakupan?',
-    a: 'Unit di luar daftar model yang tersedia, topik non-teknis, pemesanan parts, klaim warranty, dan keputusan komersial. Harga promo bersifat informasi, belum termasuk PPN, dan perlu dikonfirmasi ke Parts Counter sebelum transaksi.',
+    a: 'Unit di luar daftar model yang tersedia, topik non-teknis, pemesanan parts, klaim warranty, dan keputusan komersial. Harga parts bersifat informasi, belum termasuk PPN, dan perlu dikonfirmasi ke Parts Counter sebelum transaksi.',
   },
   {
     q: 'Apakah riwayat percakapan tersimpan?',

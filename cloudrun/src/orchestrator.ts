@@ -3,6 +3,7 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery } from './rag';
 import { deps } from './deps';
+import { promoAktif, hargaNormalSaja } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
@@ -174,11 +175,13 @@ export async function generateResponseStream(
   if (routeResult.type === 'rag_canned') return streamCanned(routeResult.text, onChunk);
 
   const gsTechnical      = routeResult.type === 'google_search' && routeResult.mode === 'technical';
-  const ragContent       = routeResult.type === 'rag_found'
+  const promoOn          = promoAktif();
+  const ragRaw           = routeResult.type === 'rag_found'
     ? routeResult.content
         .replace(/Hitachi\s+Astrea\s*/gi, '')
         .replace(/\{?(mm|cm|m)\}?\^([23])\b/g, (_, u: string, d: string) => u + (d === '2' ? '²' : '³'))
     : '';
+  const ragContent       = promoOn ? ragRaw : hargaNormalSaja(ragRaw);
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
   deps().meta.route      = routeResult.type === 'google_search' ? `google_${routeResult.mode}` : routeResult.type;
@@ -358,6 +361,7 @@ export async function generateResponse(
         deps().meta.confidence = route.confidence;
         const caveat = route.confidence === 'medium' ? MEDIUM_CAVEAT : '';
         ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
+        if (!promoAktif()) ragBlock = hargaNormalSaja(ragBlock);
       }
       const ask = q || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.';
       currentParts.push({ text: ragBlock
