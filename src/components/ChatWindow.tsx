@@ -3,7 +3,7 @@ import { createContext, useContext, useEffect, useRef, useState, useCallback, Su
 import type { Components } from 'react-markdown';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore, BookOpen } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore, BookOpen, Tag } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -167,10 +167,23 @@ type HNode = { type: string; value?: string; children?: HNode[] };
 const nodeText = (n?: HNode): string => (n ? (n.type === 'text' ? n.value ?? '' : (n.children ?? []).map(nodeText).join('')) : '');
 const NUM_CELL_RE = /^(rp\s?)?[\d.,±~–-]+\s?(%|[a-zµ°·/³²⁻¹]{1,8})?$/i;
 const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|diagram|principle)[^()]*\)\.?$/i;
+// "Sumber harga: Hexindoparts.com" (also en/ja variants) under price tables → highlighted tag linking to the store.
+const PRICE_SRC_RE = /^\s*(sumber harga|price source|価格の出典)\s*[:：]\s*hexindoparts\.com\.?\s*$/i;
+
+function PriceSource({ label }: { label: string }) {
+  return (
+    <a className="md-price-src" href="https://hexindoparts.com" target="_blank" rel="noopener noreferrer">
+      <Tag size={12} strokeWidth={2.2} aria-hidden="true" />
+      <span>{label}</span><b>Hexindoparts.com</b>
+    </a>
+  );
+}
 
 export const MD_COMPONENTS: Components = {
   p: ({ node, children }) => {
     const t = nodeText(node as HNode).trim();
+    const ps = t.replace(/[*_`]/g, '').match(PRICE_SRC_RE);
+    if (ps) return <p className="md-source"><PriceSource label={ps[1]} /></p>;
     return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
   },
   li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
