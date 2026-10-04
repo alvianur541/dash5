@@ -1,4 +1,4 @@
-const { resolveMultiAspectQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { pilihPnHarga, resolveMultiAspectQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 // Reyhan 4 Okt: "Carikan saya harga sensor coolant temperature dan standar nilainya" → jalur multi-aspek,
 // hexindoparts.com tidak pernah dicek, jawaban "Ketik PN untuk cek" padahal 4436537 ada di web.
@@ -35,6 +35,12 @@ module.exports = async () => {
   {
     const { dicek } = await jalan('Cari part number sensor coolant temperature dan standar nilainya');
     t(dicek.length === 0, 'tanpa kata harga → web tidak dicek');
+  }
+  {
+    // Alvian 4 Okt: foto silinder KCM + "Cek hrga kit sealny" → kata "kit seal" harus ikut ke pemilihan PN harga.
+    const c = 'Section: LIFT CYLINDER\nParts List:\n 1 | 37A-1KM-1000 | CYLINDER ASSY,LIFT | qty:2\n 2 | 49327-90920 | SEAL KIT | qty:1';
+    t(!pilihPnHarga(c, ['harga hydraulic cylinder']).includes('49327-90920'), 'tanpa kata caption, seal kit tak terpilih (penyebab bug)');
+    t(pilihPnHarga(c, ['harga Cek kit sealny hydraulic cylinder'])[0] === '49327-90920', 'caption ikut → seal kit dicek lebih dulu');
   }
   return done();
 };

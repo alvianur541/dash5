@@ -352,7 +352,9 @@ export async function generateResponse(
       // Captions rarely name the part ("carikan part number ini"), so search by what the photo shows.
       if (route?.type !== 'rag_found' && scan.component && partsAsk) {
         emit({ type: 'thinking', message: `Terlihat ${scan.component} — mencari di katalog…` });
-        const byComponent = hargaFoto ? `harga ${scan.component}` : `${scan.component} part number`;
+        // Keep the caption's part words ("kit seal") with the component, else the price check picks the
+        // cylinders themselves and the seal kits stay "Ketik PN untuk cek" (Alvian 4 Oct, KCM 60ZV photo).
+        const byComponent = hargaFoto ? `harga ${q.replace(MINTA_HARGA_RE, ' ').replace(/\s+/g, ' ').trim()} ${scan.component}`.replace(/\s+/g, ' ') : `${scan.component} part number`;
         route = await resolvePartsQuery(byComponent, [], model, emit, byComponent, false);
       }
       if (!route && (scan.component || (q.split(/\s+/).length >= 3 && !isCasualExact(q)))) {
