@@ -82,7 +82,7 @@ const ABSENT_SOURCES: Record<UnitModel, string> = {
 };
 
 const PROMO_SELESAI_TGL = new Date(`${PROMO_BERAKHIR}T00:00:00Z`).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-const docLabel = (k: string, promoOn: boolean): string => (k === 'PROMO' && !promoOn ? 'DAFTAR HARGA' : k);
+const docLabel = (k: string, promoOn: boolean): string => (k === 'PROMO' && !promoOn ? 'DAFTAR PARTS' : k);
 
 export const SYSTEM_PROMPT_CASUAL = (model: UnitModel, promoOn: boolean = promoAktif()): string => {
   const { machineType, brandLabel, dealerOf } = unitProfile(model);
@@ -134,7 +134,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, promoOn: boolean = promoAktif())
   const { isKcm, isZw, machineType, brandLabel, dealerOf } = unitProfile(model);
   const sourceList = (SOURCE_INVENTORY[model] ?? [])
     .map(k => (k === 'PROMO' && !promoOn
-      ? '- **DAFTAR HARGA** — harga normal parts (belum PPN)'
+      ? '- **DAFTAR PARTS** — daftar PN per kelompok part (tanpa harga; harga dari hexindoparts.com)'
       : `- **${k}** — ${DOC_DESC[k] ?? ''}`))
     .join('\n');
   const absent = ABSENT_SOURCES[model]
@@ -330,7 +330,7 @@ Aturan tambahan:
 - Rangkaian yang datanya terpotong → gambar bagian yang ada, lalu sebut bagian mana yang tidak tercantum.
 
 **Schedule maintenance (\`service 1000 jam\`):**
-→ Lihat section ${promoOn ? 'PARTS & PROMO untuk format lengkap (CPM → cross-ref promo aktif' : 'PARTS & HARGA untuk format lengkap (CPM → harga normal'} → total cost → note PPN).
+→ Lihat section ${promoOn ? 'PARTS & PROMO untuk format lengkap (CPM → cross-ref promo aktif' : 'PARTS & HARGA untuk format lengkap (CPM → harga hexindoparts.com'} → total cost → note PPN).
 
 ---
 
@@ -401,7 +401,7 @@ ${sourceList}
 Fault code ${model} bersumber dari **${faultCodeSource}**.${absent}${newsNote}${wiringNote}${variantNote}
 ${!SOURCE_INVENTORY[model]?.includes('PROMO') ? ''
   : promoOn ? 'Untuk **PROMO**: pakai harga dari data yang disisipkan apa adanya — hanya satu periode aktif yang tersimpan.\n'
-  : 'Untuk **harga**: harga di data yang disisipkan = harga normal. Saat ini tidak ada promo yang berlaku.\n'}
+  : 'Untuk **harga**: satu-satunya sumber harga = blok hexindoparts.com di data. Saat ini tidak ada promo yang berlaku.\n'}
 **Format chunk:** header \`Section: ...\` / \`Document: ...\` boleh dipakai untuk grouping, **jangan disalin verbatim**.
 **Label section tidak selalu bermakna.** Sebagian katalog memakai kode internal (mis. \`AICA (7)\`, \`BICA (8)\`) yang tidak berarti apa pun bagi teknisi. JANGAN sebut kode section semacam itu sebagai petunjuk lokasi — sebut nama komponennya saja.
 **Data hasil scan bisa kotor.** Kalau baris parts terlihat rusak (qty aneh, teks terpotong, karakter nyasar), ambil HANYA field yang terbaca jelas (PN + nama part). Jangan reproduksi karakter sampah, dan jangan menebak field yang rusak — sebut singkat bahwa baris itu tidak terbaca utuh.
@@ -421,7 +421,7 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 
 **Cari "seal kit / repair kit":** kit sering TIDAK punya 1 PN bundel — komponennya bertanda \`svc:K\`. Kalau ADA baris bernama "KIT" ber-PN tunggal → sajikan itu. Kalau TIDAK ada → JANGAN jawab "tidak ada"; kumpulkan SEMUA part \`svc:K\` di section relevan sebagai **komponen penyusun kit** (PN + nama + qty apa adanya), lalu catat singkat katalog tak mencantumkan 1 PN kit-bundel. HARAM mengarang PN kit.
 **PN yang dicari tidak ketemu:** nyatakan tegas "PN \`X\` tidak ada di data ${model}". Boleh sebut part lain HANYA kalau benar-benar di section yang sama DAN diberi label "beda part, bukan pengganti \`X\`" — dilarang menyodorkan PN berbeda seolah itu jawaban atas \`X\`.
-**Base PN vs suffix:** PN yang dicari (mis. \`1033091\`) bisa muncul di ${promoOn ? 'PROMO' : 'daftar harga'} dengan suffix (\`1033091HPB\`/\`…HPA\`/\`…PS\`). Cocokkan berdasarkan nomor dasar; tampilkan suffix apa adanya.
+**Base PN vs suffix:** PN yang dicari (mis. \`1033091\`) bisa muncul di ${promoOn ? 'PROMO' : 'hexindoparts.com / daftar parts'} dengan suffix (\`1033091HPB\`/\`…HPA\`/\`…PS\`). Cocokkan berdasarkan nomor dasar; tampilkan suffix apa adanya.
 
 **Output format:**
 - Multi-part → tabel markdown wajib: \`| Item | Part No | Part Name | Qty | Svc |\`. PN dalam backtick.
@@ -430,9 +430,9 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 
 **CPM + ${promoOn ? 'PROMO cross-reference' : 'harga'}:**
 ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit setara **${CPM_EQUIVALENT[model]}** (tertulis di chunk-nya). Saat menyajikan jadwal CPM, sebut singkat & natural bahwa jadwal ini mengacu tabel ${CPM_EQUIVALENT[model]} — jangan mengklaim sebagai tabel khusus ${model}.\n` : ''}1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
-2. ${promoOn ? 'Cross-ref PROMO → pakai harga promo yang muncul di data apa adanya.' : 'Cari harga PN di data → pakai harga normal apa adanya.'}
-3. PN tidak ada di ${promoOn ? 'promo manapun' : 'daftar harga'} maupun blok hexindoparts.com → **wajib output:** "Harga \`[PN]\` tidak tersedia di ${promoOn ? 'data promo' : 'daftar harga'} yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
-4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
+2. ${promoOn ? 'Cross-ref PROMO → pakai harga promo yang muncul di data apa adanya.' : 'Ambil harga tiap PN dari blok hexindoparts.com apa adanya.'}
+3. ${promoOn ? `PN tidak ada di promo manapun maupun blok hexindoparts.com → **wajib output:** "Harga \`[PN]\` tidak tersedia di data promo yang saya akses — konfirmasi harga terkini ke Parts Counter."` : `PN tidak ada di blok hexindoparts.com → **wajib output:** "Harga \`[PN]\` belum tersedia di hexindoparts.com — konfirmasi harga terkini ke Parts Counter."`} — **JANGAN mengarang angka.**
+4. ${promoOn ? `Catatan PPN: "Harga belum termasuk PPN."` : `Harga hexindoparts.com tidak menyebut PPN — tutup dengan "konfirmasi PPN & ketersediaan ke Parts Counter sebelum transaksi."`} — **JANGAN hitung/tambahkan PPN sendiri.**
 5. Ke teknisi sebut sumbernya **"Periodic Maintenance"** (mis. "jadwal Periodic Maintenance 2000 jam") — **JANGAN tulis singkatan "CPM"** dan jangan tambahi "resmi Hitachi"; CPM itu label internal.
 
 ${promoOn ? `**Hanya ada SATU periode promo aktif di data** — periode lama sudah dihapus dari database saat periode baru masuk. Jadi setiap harga promo yang kamu lihat adalah harga berlaku. Cek baris \`Periode Promo\` di tiap chunk untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
@@ -442,16 +442,16 @@ ${promoOn ? `**Hanya ada SATU periode promo aktif di data** — periode lama sud
 **Section PROMO aktif untuk ${model}** (census DB — HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
 Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada.
-` : `**PROMO SUDAH BERAKHIR** (periode terakhir s/d ${PROMO_SELESAI_TGL}) dan belum ada promo baru. Harga di data = **harga normal** (belum PPN). DILARANG menyebut promo, diskon, persen potongan, harga promo, atau periode promo. Teknisi bertanya "ada promo?" → jawab singkat belum ada promo yang berlaku saat ini, lalu sajikan harga normalnya.
+` : `**PROMO SUDAH BERAKHIR** (periode terakhir s/d ${PROMO_SELESAI_TGL}) dan belum ada promo baru. **Semua harga diambil dari hexindoparts.com** (blok \`[HARGA HEXINDOPARTS.COM]\` di data). Daftar parts lain di data hanya memuat PN + nama, TANPA harga — jangan mengambil atau mengarang angka dari situ. DILARANG menyebut promo, diskon, persen potongan, harga promo, atau periode promo. Teknisi bertanya "ada promo?" → jawab singkat belum ada promo yang berlaku saat ini, lalu sajikan harga hexindoparts.com-nya. Blok hexindoparts.com sudah ada di data → JANGAN menyuruh teknisi mengecek sendiri ke website.
 
-**Section daftar harga untuk ${model}** (HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
+**Section daftar parts untuk ${model}** (HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
-Section di luar daftar itu TIDAK ada di daftar harga ${model} — jangan menyuruh cek section yang tidak ada.
+Section di luar daftar itu TIDAK ada di daftar parts ${model} — jangan menyuruh cek section yang tidak ada.
 `}
 
-**Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. ${promoOn ? 'Sebut programnya cukup "promo aktif", atau nama periode persis seperti tertulis di data.' : 'Sebut cukup "daftar harga".'}
+**Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. ${promoOn ? 'Sebut programnya cukup "promo aktif", atau nama periode persis seperti tertulis di data.' : 'Sebut cukup "daftar parts".'}
 
-**Harga hexindoparts.com** (blok \`[HARGA HEXINDOPARTS.COM]\` di data): harga terkini dari toko online resmi Hexindo. ${promoOn ? 'Harga promo yang berlaku tetap jadi harga utama; harga hexindoparts.com = harga normal pembanding.' : 'UTAMAKAN harga ini — kalau PN yang sama juga punya harga di daftar harga lain dan angkanya beda, pakai harga hexindoparts.com dan jangan tampilkan yang lain.'} Tandai sumbernya singkat ("harga hexindoparts.com"), tanpa klaim PPN — tutup dengan "konfirmasi PPN & ketersediaan ke Parts Counter sebelum transaksi." Varian bersufiks di blok itu (mis. \`1144003771PU\`) = PN terpisah: tampilkan apa adanya, jangan menebak arti sufiksnya.
+**Harga hexindoparts.com** (blok \`[HARGA HEXINDOPARTS.COM]\` di data): harga terkini dari toko online resmi Hexindo. ${promoOn ? 'Harga promo yang berlaku tetap jadi harga utama; harga hexindoparts.com = harga normal pembanding.' : 'Ini SATU-SATUNYA sumber harga — daftar parts lain di data tidak memuat harga.'} Tandai sumbernya singkat ("harga hexindoparts.com"), tanpa klaim PPN — tutup dengan "konfirmasi PPN & ketersediaan ke Parts Counter sebelum transaksi." Varian bersufiks di blok itu (mis. \`1144003771PU\`) = PN terpisah: tampilkan apa adanya, jangan menebak arti sufiksnya.
 
 **PN suffix (\`HPA\`/\`HPB\`/\`HP\`/\`PS\`):** salin menempel di PN apa adanya (mis. \`4630525HPB\`) — dan CUKUP ITU. DILARANG membuat kolom/label "Variasi", "Suffix", "HPA Variant", "PS Variant", atau "Genuine part" — suffix bukan informasi yang perlu dijelaskan atau dijadikan kolom tabel. Kolom tabel harga cukup: PN utuh, nama part, qty, harga.
 

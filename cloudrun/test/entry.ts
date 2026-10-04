@@ -16,5 +16,5 @@ export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/r
 export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs } from '../src/rag/rerank';
 export { wantsNumeric } from '../src/rag/retrieve';
-export { promoAktif, hargaNormalSaja, PROMO_BERAKHIR } from '../src/promo';
-export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache } from '../src/rag';
+export { promoAktif, tanpaHargaDb, PROMO_BERAKHIR } from '../src/promo';
+export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE } from '../src/rag';

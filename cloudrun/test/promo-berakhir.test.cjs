@@ -1,6 +1,6 @@
-const { promoAktif, hargaNormalSaja, PROMO_BERAKHIR, generateResponseStream, runWithDeps, mockDeps, suite, USAGE } = require('./helpers.cjs');
+const { promoAktif, tanpaHargaDb, PROMO_BERAKHIR, generateResponseStream, runWithDeps, mockDeps, suite, USAGE } = require('./helpers.cjs');
 
-// Promo berakhir → harga normal saja, tanpa diskon / harga promo / periode (Alvian, 3 Okt).
+// Promo berakhir → harga DB dibuang, harga hanya dari hexindoparts.com (Alvian, 3–4 Okt).
 const CHUNK = [
   'Section: PROMO Q2 FY2026 - LUBRICANT (Engine Oil, Hydraulic Oil, Gear Oil, Grease) — Berlaku Semua Model',
   'Model: ZX200-5G',
@@ -30,23 +30,26 @@ function fakeSupabase(rpcRows) {
 }
 
 module.exports = async () => {
-  const { t, done } = suite('promo berakhir: hanya harga normal yang sampai ke AI');
+  const { t, done } = suite('promo berakhir: harga DB dibuang, harga dari hexindoparts.com');
 
   const jkt = iso => new Date(`${iso}+07:00`);
   t(promoAktif(jkt(`${PROMO_BERAKHIR}T23:59:00`)), 'hari terakhir promo (23:59 WIB) masih aktif');
   t(!promoAktif(new Date(jkt(`${PROMO_BERAKHIR}T23:59:00`).getTime() + 2 * 60_000)),
     'lewat tengah malam WIB → tidak aktif (zona waktu Jakarta, bukan UTC)');
 
-  const out = hargaNormalSaja(CHUNK);
-  t(out.includes('Rp 2.337.200') && out.includes('Rp 645.593'), 'harga normal tetap ada');
+  const out = tanpaHargaDb(CHUNK);
+  t(!/Rp\s?\d/.test(out), 'semua harga DB (normal & promo) dibuang');
+  t(/HTCDH1P\s+\| HTC ENG OIL DH1 PAIL\s*$/m.test(out) && out.includes('4658521'), 'PN + deskripsi tetap ada');
   t(!out.includes('Rp 1.986.620') && !out.includes('Rp 516.474'), 'harga promo dibuang');
   t(!/\d+%/.test(out) && !/Disc/i.test(out), 'kolom diskon dibuang');
   t(!/promo/i.test(out), `tidak ada kata "promo" tersisa (${(out.match(/.*promo.*/gi) || []).join(' / ')})`);
-  t(/Harga Normal\s*$/m.test(out), 'header tabel berakhir di "Harga Normal"');
-  t(/Catatan\s*: Harga normal, belum termasuk PPN\./.test(out), 'catatan PPN dipertahankan');
-  t(out.includes('Section: DAFTAR HARGA PARTS - LUBRICANT') && out.includes('Total: 2 part number'), 'judul section & total tetap terbaca');
-  t(hargaNormalSaja(LAMA).trim().endsWith('Normal: Rp 2.337.200'), 'format lama "Normal: … Promo: …" juga dipotong');
-  t(hargaNormalSaja('Torque 245 N·m | Rp bukan harga') === 'Torque 245 N·m | Rp bukan harga', 'baris non-harga tidak disentuh');
+  t(/Part Number\s+\| Description\s*$/m.test(out), 'header tabel tanpa kolom harga');
+  t(!/Syarat|Catatan/.test(out), 'baris syarat promo dibuang');
+  t(out.includes('Section: DAFTAR PARTS - LUBRICANT') && out.includes('Total: 2 part number'), 'judul section & total tetap terbaca');
+  t(tanpaHargaDb(LAMA).trim().endsWith('HTC ENG OIL DH1 PAIL'), 'format lama "Normal: … Promo: …" juga dibersihkan');
+  const WEB = '[HARGA HEXINDOPARTS.COM — harga terkini toko online resmi Hexindo]\n  Part Number | Description | Harga\n  HTCDH1P | ENG OILDH1 PAIL | Rp 2.337.200';
+  t(tanpaHargaDb(`${WEB}\n\n${CHUNK}`).startsWith(WEB), 'blok harga hexindoparts.com tidak ikut dibuang');
+  t(tanpaHargaDb('Torque 245 N·m | Rp bukan harga') === 'Torque 245 N·m | Rp bukan harga', 'baris non-harga tidak disentuh');
 
   // End-to-end: paket service → isi yang dikirim ke model.
   const rpc = args => (args.filter.Kategori === 'CPM' ? [{ ...CPM, similarity: 0.9 }]
@@ -62,9 +65,9 @@ module.exports = async () => {
   if (promoAktif()) {
     t(user.includes('Rp 1.986.620'), 'promo masih aktif → harga promo tetap dikirim');
   } else {
-    t(user.includes('Rp 2.337.200') && !user.includes('Rp 1.986.620'), 'paket 2000: model hanya menerima harga normal');
+    t(!user.includes('Rp 2.337.200') && !user.includes('Rp 1.986.620'), 'paket 2000 tanpa web: tidak ada harga DB yang sampai ke model');
     t(!/Periode Promo|HARGA PROMO|\d+%/.test(user), 'paket 2000: tanpa periode, label, atau persen promo');
-    t(sys.includes('PROMO SUDAH BERAKHIR') && !sys.includes('Cross-ref PROMO'), 'system prompt memakai aturan harga normal');
+    t(sys.includes('Semua harga diambil dari hexindoparts.com') && !sys.includes('Cross-ref PROMO'), 'system prompt: harga hanya dari hexindoparts.com');
   }
 
   return done();

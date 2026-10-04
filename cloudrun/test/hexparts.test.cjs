@@ -1,4 +1,4 @@
-const { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, resolvePartsQuery, searchPhotoCodes, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, resolvePartsQuery, searchPhotoCodes, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 // Harga dari hexindoparts.com kalau daftar harga DB tidak punya (Alvian, 3 Okt). Bentuk JSON = respons asli situs.
 const produk = (name, desc, amount) => ({ name, short_description: desc, price: { amount: `${amount}.0000` }, special_price: null });
@@ -91,6 +91,34 @@ module.exports = async () => {
     const r = await runWithDeps(d, () => searchPhotoCodes(['HTCDH1C', 'ZZ12345'], 'ZX200-5G', () => {}));
     t(r && r.content.includes('Rp 591.600') && /ZZ12345 — sebut "belum ketemu/.test(r.content) && !/HTCDH1C(, | —)/.test(r.content.split('[KODE BELUM KETEMU')[1] ?? ''),
       'foto: kode yang ada di web tidak lagi disebut "belum ketemu"');
+  }
+
+  {
+    const TURBO = 'Section: 036 - TURBOCHARGER SYSTEM\nParts List:\n    001(C) | 1144003771     | TURBOCHARGER ASM                       | qty:1\n       002 | 1141451401     | GASKET; TURBOCHARGER TO EXH MANIF      | qty:1\n       146 | 8973202040     | PLUG                                   | qty:1';
+    const pick = pilihPnHarga(TURBO, ['cek harga turbocharger']);
+    t(pick[0] === '1144003771' && pick.includes('1141451401') && !pick.includes('8973202040'), `NL "harga turbocharger": PN yang namanya diawali kata dicari duluan (${pick.join(',')})`);
+    const AC = 'Section: AIR CONDITIONER (1)\n  72 | YD00007143 | COMPRESSOR | qty:1 | svc:S\n  72 | 4615804 | COMPRESSOR | qty:1 | svc:S\n  73 | 4444444 | HOSE | qty:1 | svc:S';
+    t(pilihPnHarga(AC, ['harga komressor ac']).join(',') === 'YD00007143,4615804', 'salah ketik "komressor" tetap cocok ke COMPRESSOR');
+    t(pilihPnHarga('tanpa tabel', ['hargany berpa'], 'Oli `HTCDH1C` dan filter `4665128` untuk `ZX48U-5A`, isi `7.4 L`').join(',') === 'HTCDH1C,4665128',
+      'follow-up "hargany berpa" → PN dari jawaban sebelumnya');
+    t(MINTA_HARGA_RE.test('klo cek di hexindoparts.com') && MINTA_HARGA_RE.test('hargany berpa') && !MINTA_HARGA_RE.test('part number turbo'), 'deteksi minta harga');
+  }
+
+  {
+    resetHargaWebCache();
+    const ROW = { metadata: { Model: 'ZX200-5G', Kategori: 'ENGINE PARTS CATALOG' }, content: 'Section: 036 - TURBOCHARGER SYSTEM\nParts List:\n    001(C) | 1144003771     | TURBOCHARGER ASM                       | qty:1' };
+    const c = [];
+    const { d } = mockDeps([[]], { supabase: fakeSupabase([ROW], () => [{ ...ROW, similarity: 0.9 }]), embed: async () => [0.1],
+      rerank: async (_q, docs) => ({ results: docs.map((_, i) => ({ index: i, score: 0.9 })), source: 'google' }),
+      generate: async () => ({ candidates: [{ content: { parts: [{ text: JSON.stringify({ shouldSearch: true, searchType: 'parts', optimizedQuery: 'turbocharger price' }) }] } }] }),
+      webPrice: web(c) });
+    const r = await runWithDeps(d, () => resolvePartsQuery('cek harga turbocharger', [], 'ZX200-5G'));
+    t(r.type === 'rag_found' && r.content.includes('Rp 49.587.999') && c.includes('1144003771'), 'NL "cek harga turbocharger" → harga hexindoparts.com ikut (kasus sesi 4 Okt)');
+    const { d: d2 } = mockDeps([[]], { supabase: fakeSupabase([ROW], () => [{ ...ROW, similarity: 0.9 }]), embed: async () => [0.1],
+      rerank: async (_q, docs) => ({ results: docs.map((_, i) => ({ index: i, score: 0.9 })), source: 'google' }), webPrice: web(c) });
+    const before = c.length;
+    await runWithDeps(d2, () => resolvePartsQuery('part number turbocharger', [], 'ZX200-5G'));
+    t(c.length === before, 'tanya PN tanpa minta harga → tidak memanggil web');
   }
 
   return done();

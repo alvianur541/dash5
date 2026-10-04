@@ -73,3 +73,50 @@ export function blokHargaWeb(hasil: Map<string, WebPart[]>): string {
   const baris = [...hasil.values()].flat().map(p => `  ${p.pn.padEnd(22)} | ${p.nama.padEnd(30)} | ${p.harga}`);
   return `[HARGA HEXINDOPARTS.COM — harga terkini toko online resmi Hexindo]\n  Part Number            | Description                    | Harga\n${baris.join('\n')}`;
 }
+
+const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price', 'prices', 'berapa', 'brp', 'berpa', 'cek', 'check', 'ada', 'ngga', 'nggak', 'gak', 'tidak', 'part', 'parts', 'number', 'nomor', 'unit', 'model', 'yang', 'untuk', 'buat', 'dan', 'atau', 'klo', 'kalau', 'kalo', 'dong', 'tolong', 'coba', 'minta', 'info', 'hexindoparts', 'com', 'web', 'website', 'the', 'for', 'and', 'what', 'how', 'much', 'cost', 'biaya', 'catalog', 'katalog', 'list', 'daftar', 'semua']);
+export const MINTA_HARGA_RE = /\b(?:harga\w*|price\w*|berapa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
+
+const PN_SEL_RE = /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/;
+const PN_JAWABAN_RE = /`([A-Z0-9][A-Z0-9-]{3,21})`/g;
+
+function jarak(a: string, b: string): number {
+  const d = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    let prev = d[0]; d[0] = i;
+    for (let j = 1; j <= b.length; j++) {
+      const tmp = d[j];
+      d[j] = Math.min(d[j] + 1, d[j - 1] + 1, prev + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = tmp;
+    }
+  }
+  return d[b.length];
+}
+
+const kataCocok = (k: string, w: string): boolean =>
+  w === k || (k.length >= 4 && w.startsWith(k)) || (k.length >= 6 && w.length >= 6 && jarak(k, w) <= 2);
+
+// Rows ("item | PN | NAME | …" or "PN | DESC | …") whose name matches the question pick which PNs get a web price;
+// with no match, a short follow-up ("harganya berapa") prices the PNs quoted in the previous answer.
+export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 8): string[] {
+  const kunci = [...new Set(teks.join(' ').toLowerCase().split(/[^a-z0-9]+/)
+    .filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !/^\d+$/.test(w)))];
+  const skor = new Map<string, number>();
+  if (kunci.length) {
+    for (const line of content.split('\n')) {
+      const sel = line.split('|').map(s => s.trim());
+      const i = sel.findIndex(s => PN_SEL_RE.test(s));
+      if (i < 0 || !sel[i + 1]) continue;
+      const kata = sel[i + 1].toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+      let n = 0;
+      for (const k of kunci) {
+        if (kata[0] && kataCocok(k, kata[0])) n += 3;
+        else if (kata.some(w => kataCocok(k, w))) n += 1;
+      }
+      if (n > 0) skor.set(sel[i], Math.max(skor.get(sel[i]) ?? 0, n));
+    }
+  }
+  const dariData = [...skor.entries()].sort((a, b) => b[1] - a[1]).map(([pn]) => pn);
+  const dariJawaban = dariData.length ? [] : [...jawabanSebelumnya.matchAll(PN_JAWABAN_RE)].map(m => m[1]).filter(p => /\d/.test(p) && !/^(?:ZX|ZW)\d/.test(p));
+  return [...new Set([...dariData, ...dariJawaban])].slice(0, maks);
+}

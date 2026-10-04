@@ -7,20 +7,22 @@ const tanggalJakarta = (now: Date): string =>
 
 export const promoAktif = (now: Date = new Date()): boolean => tanggalJakarta(now) <= PROMO_BERAKHIR;
 
-const RP = String.raw`Rp\s?[\d.]+`;
-const BARIS_HARGA_RE = new RegExp(String.raw`^(.*?\|\s*(?:Normal:\s*)?${RP})\s*\|.*${RP}.*$`);
+const SEL_HARGA_RE = /\|\s*(?:(?:Normal|Promo|Disc):\s*)?(?:Rp\s?[\d.]+|\d{1,3}\s*%)\s*(?=\||$)/g;
+const BLOK_WEB = '[HARGA HEXINDOPARTS.COM';
 
-// After the period ends the same rows serve as a normal price list: discount and promo price are dropped.
-export function hargaNormalSaja(text: string): string {
+// Outside a promo period every price comes from hexindoparts.com: price-list chunks keep PN + description only.
+export function tanpaHargaDb(text: string): string {
+  let diBlokWeb = false;
   return text.split('\n').flatMap(line => {
-    if (/^\s*(Periode Promo|Document:\s*PROMO)/i.test(line)) return [];
-    if (/^\s*Syarat\s*:/i.test(line)) return ['Catatan        : Harga normal, belum termasuk PPN.'];
-    if (/Harga Normal\s*\|\s*Disc\s*\|\s*Harga Promo/i.test(line)) return [line.replace(/\s*\|\s*Disc\s*\|\s*Harga Promo\s*$/i, '')];
-    const harga = line.match(BARIS_HARGA_RE);
-    if (harga) return [harga[1]];
+    if (line.startsWith(BLOK_WEB)) diBlokWeb = true;
+    else if (!line.trim()) diBlokWeb = false;
+    if (diBlokWeb) return [line];
+    if (/^\s*(Periode Promo|Document:\s*PROMO|Syarat\s*:)/i.test(line)) return [];
+    if (/Harga Normal\s*\|\s*Disc\s*\|\s*Harga Promo/i.test(line)) return [line.replace(/\s*\|\s*Harga Normal\s*\|\s*Disc\s*\|\s*Harga Promo\s*$/i, '')];
+    if (/Rp\s?[\d.]+/.test(line) && line.includes('|')) return [line.replace(SEL_HARGA_RE, '').replace(/\s+$/, '')];
     return [line
-      .replace(/\bPROMO Q\d FY\d{4}\b/g, 'DAFTAR HARGA PARTS')
-      .replace(/HARGA PROMO/g, 'HARGA NORMAL')
-      .replace(/PARTS CATALOG & PROMO/g, 'PARTS CATALOG & HARGA')];
+      .replace(/\bPROMO Q\d FY\d{4}\b/g, 'DAFTAR PARTS')
+      .replace(/--- HARGA PROMO \(khusus PN di atas\) ---/g, '--- PARTS TERDAFTAR (khusus PN di atas) ---')
+      .replace(/PARTS CATALOG & PROMO/g, 'PARTS CATALOG')];
   }).join('\n');
 }

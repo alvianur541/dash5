@@ -9,7 +9,7 @@ export function isFaultCode(query: string): boolean {
   return FAULT_CODE_RE.test(q) && !NOT_CODE_PREFIX_RE.test(q);
 }
 
-const PARTS_KEYWORDS_RE = /\b(part\s*number\w*|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part)\b/i;
+const PARTS_KEYWORDS_RE = /\b(part\s*number\w*|part\s*no\.?|p\/?n[\s:]+\w|spare\s*part|suku\s*cadang|nomor\s*part|kode\s*part|harga\s*part|katalog\s*part|parts?\s*catalog|cross[-\s]?ref(?:erence)?|kompatibel|compatibility|substitu(?:te|si)|pengganti\s*part|hexindo\s*parts?)\b/i;
 
 const HARGA_COMPONENT_RE = /\b(?:harga|price)\s+(?:promo\s+)?(?:seal|kit|pump|valve|motor|cylinder|filter|gasket|bearing|o-?ring|element|hose|sensor|coupling|grease|oil|oli|coolant|breaker|controller|reman|rotor|piston|spring|nozzle|injector|alternator|starter|battery|belt|fan|radiator|shaft|roller|idler|sprocket|track|link|shoe|tooth|teeth|adapter|cutting\s*edge|undercarriage|bucket)\b/i;
 

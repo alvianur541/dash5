@@ -1,5 +1,6 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, MINTA_HARGA_RE } from './rag';
+import type { WebPart } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -323,10 +324,22 @@ export async function resolvePartsQuery(
     ? await searchServiceIntervalParts(searchQuery, model)
     : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
-  const webLiteral = webPromise ? blokHargaWeb(await webPromise) : '';
+  const webHasil = webPromise ? await webPromise : new Map<string, WebPart[]>();
+  if (!intervalHours && (MINTA_HARGA_RE.test(trimmed) || literalPN)) {
+    const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
+    const pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
+      .filter(pn => pn !== literalPN);
+    if (pns.length) {
+      emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
+      for (const [pn, v] of await hargaWeb(pns)) webHasil.set(pn, v);
+    }
+  }
+  const webLiteral = blokHargaWeb(webHasil);
 
   if (!ragResult.hasResults && webLiteral) {
-    const note = `[CATATAN: PN \`${literalPN}\` belum ketemu di katalog ${model}, tapi terdaftar di hexindoparts.com. Sajikan nama + harganya, dan sebut jelas bahwa kecocokan PN ini untuk ${model} belum terverifikasi dari katalog unit.]`;
+    const note = literalPN
+      ? `[CATATAN: PN \`${literalPN}\` belum ketemu di katalog ${model}, tapi terdaftar di hexindoparts.com. Sajikan nama + harganya, dan sebut jelas bahwa kecocokan PN ini untuk ${model} belum terverifikasi dari katalog unit.]`
+      : '[CATATAN: Harga untuk PN dari jawaban sebelumnya, dicek di hexindoparts.com.]';
     return { type: 'rag_found', content: `${note}\n\n${webLiteral}`, dataLabel: RAG_LABEL.parts };
   }
 
