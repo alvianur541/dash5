@@ -262,6 +262,9 @@ export async function generateResponse(
     .map(toInlineData);
   if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
   let sendImageToModel = true;
+  // Photo + parts/price ask ("cek harga kit sealnya") is a lookup, not a diagnosis: medium thinking added ~6 s
+  // before the first word (log median 8.2 s vs 2.0 s on low). Fault codes and visual diagnosis keep medium.
+  let thinkFoto: ThinkingLevel = 'medium';
 
   try {
     emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
@@ -364,6 +367,7 @@ export async function generateResponse(
           ? await resolvePartsQuery(searchQ, history, model, emit, undefined, false)
           : await resolveNaturalLanguageQuery(searchQ, history, model, emit, false);
       }
+      if (route?.type === 'rag_found' && partsAsk && (route.dataLabel === RAG_LABEL.parts || listMode)) thinkFoto = 'low';
       if (route?.type === 'rag_found') {
         deps().meta.confidence = route.confidence;
         const caveat = route.confidence === 'medium' ? MEDIUM_CAVEAT : '';
@@ -395,7 +399,7 @@ export async function generateResponse(
     generationConfig: {
       maxOutputTokens: (sendImageToModel ? 8192 : 4096) + 4096,
       temperature: 0.3,
-      thinkingConfig: { thinkingLevel: 'medium' },
+      thinkingConfig: { thinkingLevel: thinkFoto },
     },
   };
 
