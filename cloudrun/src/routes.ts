@@ -335,8 +335,9 @@ export async function resolvePartsQuery(
     }
   }
   const webLiteral = blokHargaWeb(webHasil);
+  const adaHargaWeb = [...webHasil.values()].some(v => v.length);
 
-  if (!ragResult.hasResults && webLiteral) {
+  if (!ragResult.hasResults && adaHargaWeb) {
     const note = literalPN
       ? `[CATATAN: PN \`${literalPN}\` belum ketemu di katalog ${model}, tapi terdaftar di hexindoparts.com. Sajikan nama + harganya, dan sebut jelas bahwa kecocokan PN ini untuk ${model} belum terverifikasi dari katalog unit.]`
       : '[CATATAN: Harga untuk PN dari jawaban sebelumnya, dicek di hexindoparts.com.]';

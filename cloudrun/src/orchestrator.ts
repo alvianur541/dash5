@@ -111,15 +111,16 @@ export async function searchPhotoCodes(codes: string[], model: string, emit: Age
   const seen = new Set<string>();
   const promo: string[] = [], other: string[] = [], missing: string[] = [];
   codes.forEach((c, i) => {
-    if (!hits[i].length && !web.has(c.toUpperCase())) missing.push(c);
+    if (!hits[i].length && !web.get(c.toUpperCase())?.length) missing.push(c);
     for (const h of hits[i]) {
       if (seen.has(h.content)) continue;
       seen.add(h.content);
       (/^PROMO/.test(h.metadata?.Kategori ?? '') ? promo : other).push(h.content);
     }
   });
-  emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 || web.size > 0 });
-  if (!seen.size && !web.size) return null;
+  const adaDiWeb = [...web.values()].some(v => v.length);
+  emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 || adaDiWeb });
+  if (!seen.size && !adaDiWeb) return null;
   const webBlok = blokHargaWeb(web);
   const miss = missing.length
     ? `\n\n[KODE BELUM KETEMU DI PENCARIAN]\n${missing.join(', ')} — sebut "belum ketemu di pencarian"; JANGAN bilang kode ini tidak terdaftar / tidak ada di promo atau katalog.`

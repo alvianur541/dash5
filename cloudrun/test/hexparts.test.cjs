@@ -48,11 +48,12 @@ module.exports = async () => {
     const { d } = mockDeps([[]], { webPrice: web(c) });
     const a = await runWithDeps(d, () => hargaWeb(['1144003771', '1144003771', 'zz9999']));
     const b = await runWithDeps(d, () => hargaWeb(['1144003771']));
-    t(a.has('1144003771') && !a.has('ZZ9999') && b.has('1144003771'), 'hasil per PN; PN tak ketemu tidak ikut');
+    t(a.get('1144003771').length === 2 && a.get('ZZ9999').length === 0 && b.has('1144003771'), 'hasil per PN; PN dicek tapi tak ada = daftar kosong');
     t(c.length === 2, `PN kembar digabung & hasil di-cache (panggilan situs: ${c.length})`);
     const { d: tanpa } = mockDeps([[]]);
     t((await runWithDeps(tanpa, () => hargaWeb(['1144003771']))).size === 0, 'tanpa webPrice (uji/offline) → tidak ada panggilan web');
-    t(/^\[HARGA HEXINDOPARTS\.COM/.test(blokHargaWeb(a)) && blokHargaWeb(new Map()) === '', 'blok berlabel sumber; kosong kalau tak ada hasil');
+    t(/^\[HARGA HEXINDOPARTS\.COM/.test(blokHargaWeb(a)) && blokHargaWeb(new Map()) === '', 'blok berlabel sumber; kosong kalau tak ada yang dicek');
+    t(/Dicek, TIDAK ADA di hexindoparts\.com: ZZ9999/.test(blokHargaWeb(a)), 'PN yang dicek tapi tak ada disebut terpisah (beda dengan belum dicek)');
   }
 
   {
@@ -96,7 +97,7 @@ module.exports = async () => {
   {
     const TURBO = 'Section: 036 - TURBOCHARGER SYSTEM\nParts List:\n    001(C) | 1144003771     | TURBOCHARGER ASM                       | qty:1\n       002 | 1141451401     | GASKET; TURBOCHARGER TO EXH MANIF      | qty:1\n       146 | 8973202040     | PLUG                                   | qty:1';
     const pick = pilihPnHarga(TURBO, ['cek harga turbocharger']);
-    t(pick[0] === '1144003771' && pick.includes('1141451401') && !pick.includes('8973202040'), `NL "harga turbocharger": PN yang namanya diawali kata dicari duluan (${pick.join(',')})`);
+    t(pick[0] === '1144003771' && pick.indexOf('1141451401') < pick.indexOf('8973202040'), `NL "harga turbocharger": nama diawali kata dulu, baris lain di section yang sama belakangan (${pick.join(',')})`);
     const AC = 'Section: AIR CONDITIONER (1)\n  72 | YD00007143 | COMPRESSOR | qty:1 | svc:S\n  72 | 4615804 | COMPRESSOR | qty:1 | svc:S\n  73 | 4444444 | HOSE | qty:1 | svc:S';
     t(pilihPnHarga(AC, ['harga komressor ac']).join(',') === 'YD00007143,4615804', 'salah ketik "komressor" tetap cocok ke COMPRESSOR');
     t(pilihPnHarga('tanpa tabel', ['hargany berpa'], 'Oli `HTCDH1C` dan filter `4665128` untuk `ZX48U-5A`, isi `7.4 L`').join(',') === 'HTCDH1C,4665128',
@@ -119,6 +120,15 @@ module.exports = async () => {
     const before = c.length;
     await runWithDeps(d2, () => resolvePartsQuery('part number turbocharger', [], 'ZX200-5G'));
     t(c.length === before, 'tanya PN tanpa minta harga → tidak memanggil web');
+  }
+
+  {
+    // Sesi 4 Okt: "klo cek harga cylinder arm" — seal kit di section CYL.;ARM tidak dicek ke web.
+    const ARM = 'Section: CYL.;ARM\nParts List:\n       1 | 4711561            | CYL.;ARM                            | qty:1\n      10 | 4422222            | BOLT                                | qty:8\n     100 | YA00001400         | KIT;SEAL                            | qty:1\n'
+      + '\nSection: SWING MOTOR\n      5 | 4333333            | KIT;SEAL                            | qty:1';
+    const pick = pilihPnHarga(ARM, ['klo cek harga cylinder arm', 'arm cylinder price']);
+    t(pick[0] === '4711561' && pick[1] === 'YA00001400' && !pick.includes('4333333'),
+      `seal kit di section CYL.;ARM ikut dicek, kit section lain tidak (${pick.join(',')})`);
   }
 
   return done();
