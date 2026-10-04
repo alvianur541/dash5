@@ -69,6 +69,7 @@ module.exports = async () => {
     t(!/Periode Promo|HARGA PROMO|\d+%/.test(user), 'paket 2000: tanpa periode, label, atau persen promo');
     t(sys.includes('Semua harga diambil dari hexindoparts.com') && !sys.includes('Cross-ref PROMO'), 'system prompt: harga hanya dari hexindoparts.com');
     t(/Ada harga di jawaban → WAJIB tabel, walau cuma 1 PN/.test(sys) && /Harga `Belum tersedia`/.test(sys), 'system prompt: jawaban harga wajib tabel (bisa disimpan jadi gambar), PN tanpa harga tetap jadi baris');
+    t(sys.includes('"Sumber harga: Hexindoparts.com"') && !/konfirmasi PPN & ketersediaan/.test(sys), 'catatan harga cukup "Sumber harga: Hexindoparts.com", tanpa PPN/Parts Counter');
   }
 
   return done();

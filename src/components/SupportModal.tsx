@@ -87,7 +87,7 @@ const FAQS = [
   },
   {
     q: 'Apa yang berada di luar cakupan?',
-    a: 'Unit di luar daftar model yang tersedia, topik non-teknis, pemesanan parts, klaim warranty, dan keputusan komersial. Harga parts bersifat informasi, belum termasuk PPN, dan perlu dikonfirmasi ke Parts Counter sebelum transaksi.',
+    a: 'Unit di luar daftar model yang tersedia, topik non-teknis, pemesanan parts, klaim warranty, dan keputusan komersial. Harga parts bersumber dari Hexindoparts.com.',
   },
   {
     q: 'Apakah riwayat percakapan tersimpan?',
