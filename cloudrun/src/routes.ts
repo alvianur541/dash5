@@ -604,6 +604,18 @@ export async function resolveMultiAspectQuery(
     return { sub, kind, tm, parts };
   }));
 
+  // Price asked in a multi-aspect question ("harga sensor X dan standar nilainya"): the parts aspects must get
+  // hexindoparts.com prices too, otherwise the model writes "Ketik PN untuk cek" (Reyhan 4 Oct).
+  let blokHarga = '';
+  if (MINTA_HARGA_RE.test(trimmed)) {
+    const pns = [...new Set(perAspect.flatMap(a => (a.parts.hasResults && a.parts.content)
+      ? pilihPnHarga(a.parts.content, [a.sub, trimmed]) : []))].slice(0, 14);
+    if (pns.length) {
+      emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
+      blokHarga = blokHargaWeb(await hargaWeb(pns));
+    }
+  }
+
   const seen = new Set<string>();
   const blocks: string[] = [];
   const missing: string[] = [];
@@ -630,5 +642,5 @@ export async function resolveMultiAspectQuery(
     `Data tiap aspek ada di blok [ASPEK n/${subs.length}]. Aspek yang datanya ada tapi kamu lewati = jawaban tidak lengkap.` +
     (missing.length ? ` Aspek berikut belum ketemu di pencarian ini: ${missing.join('; ')} — katakan singkat belum ketemu (jangan simpulkan manual ${model} tidak memuatnya) dan sarankan satu istilah lain untuk ditanyakan ulang; jangan dikarang.` : '');
 
-  return { type: 'rag_found', content: `${directive}\n\n${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual };
+  return { type: 'rag_found', content: `${directive}\n\n${blokHarga ? `${blokHarga}\n\n=====\n\n` : ''}${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual };
 }
