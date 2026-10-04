@@ -865,7 +865,8 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .dark-theme .sidebar-wordmark { filter: invert(1); }
 
 /* Dark theme uses Hexindo's own dark-background artwork (haplogo-dark.png = the hexindoparts.com header
-   logo, 1418x364: white wordmark, emblem with white outline) instead of a light box behind the light logo. */
+   logo, 1418x364: white wordmark, emblem with white outline) instead of a light box behind the light logo.
+   Its aspect ratio differs (3.9 vs 4.5), so it is sized by width: 252px = width of the 56px-tall light logo. */
 .login-logo { display: inline-flex; padding: 10px 16px; }
 .login-logo .logo-dark { display: none; }
 .dark-theme .login-logo .logo-light { display: none; }
