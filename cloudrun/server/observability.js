@@ -1,3 +1,5 @@
+// Rp per USD as used by the Cloud Billing account (derived from the 2026-10-03 SKU report).
+const KURS_IDR = 17977;
 const { GOOGLE_RANK_MODEL, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
 
 const _stat = { mulai: Date.now(), req: [], err: [] };
@@ -65,7 +67,7 @@ function registerMetrics(app) {
       biaya: {
         token_in: tokenIn, token_out: tokenOut,
         usd: Number(biaya.toFixed(4)),
-        idr: Math.round(biaya * 16300),
+        idr: Math.round(biaya * KURS_IDR),
       },
       config: {
         model: process.env.VERTEX_MODEL || '-',
@@ -99,7 +101,7 @@ function barisPemakaian(req, d, pakaiKolomBaru) {
     llm_calls: d.usage.calls,
     tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
     cost_usd: Number(d.biaya.toFixed(6)),
-    cost_idr: Math.round(d.biaya * 16300),
+    cost_idr: Math.round(d.biaya * KURS_IDR),
   };
   if (!pakaiKolomBaru) return dasar;
   return {
