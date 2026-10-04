@@ -26,7 +26,7 @@ export interface StreamChunk {
 }
 export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 
-export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number }
+export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number; cost?: number }
 export function newUsage(): Usage { return { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }
 
 const store = new AsyncLocalStorage<Deps>();

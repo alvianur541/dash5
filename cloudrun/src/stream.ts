@@ -212,7 +212,7 @@ export async function callProxyStream(
   }
 
   const u = usage as UsageMeta | null;
-  addUsage(u?.promptTokenCount, u?.candidatesTokenCount, u?.thoughtsTokenCount, u?.cachedContentTokenCount);
+  addUsage(u?.promptTokenCount, u?.candidatesTokenCount, u?.thoughtsTokenCount, u?.cachedContentTokenCount, modelUsed);
   const inp = u?.promptTokenCount ?? 0;
   const cache = u?.cachedContentTokenCount ?? 0;
   deps().meta.modelUsed = modelUsed;

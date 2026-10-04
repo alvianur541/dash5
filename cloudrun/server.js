@@ -201,14 +201,15 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     });
     const totalMs = Date.now() - tMulai;
     const m = deps.meta;
-    const biaya = deps.usage.input / 1e6 * 0.30 + (deps.usage.output + deps.usage.thinking) / 1e6 * 2.50;
+    // usage.output already includes thinking; cost is summed per call at each model's list price (vertex.ts HARGA_MODEL).
+    const biaya = deps.usage.cost || 0;
     console.info(
       '[ask] rid=%s user=%s unit=%s q="%s" route=%s conf=%s model=%s ' +
       'ttft=%d rag=%d rerank=%d total=%d in=%d out=%d calls=%d cost=%s%s%s',
       requestId, userName, unit, ringkasTanya(userInput, images.length),
       m.route || '-', m.confidence || '-', m.modelUsed || orch.MODEL,
       ttft, m.msRag || 0, m.msRerank || 0, totalMs,
-      deps.usage.input, deps.usage.output + deps.usage.thinking, deps.usage.calls,
+      deps.usage.input, deps.usage.output, deps.usage.calls,
       biaya.toFixed(5),
       m.degraded ? ' degraded=1' : '',
       m.fallbackTo ? ` fallback=${m.fallbackTo}${m.fallbackSebab ? `(${m.fallbackSebab})` : ''}` : '');
@@ -218,7 +219,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     });
     catatStat(_stat.req, {
       t: Date.now(), ttft, total: totalMs, unit, route: m.route || '-',
-      in: deps.usage.input, out: deps.usage.output + deps.usage.thinking,
+      in: deps.usage.input, out: deps.usage.output,
       cost: biaya, fallback: !!m.fallbackTo, sebabFallback: m.fallbackSebab || null, degraded: m.degraded === true,
     });
     sseWrite(res, 'meta', {

@@ -95,7 +95,7 @@ function barisPemakaian(req, d, pakaiKolomBaru) {
     session_id: d.sessionId,
     model: d.unit,
     input_tokens: d.usage.input,
-    output_tokens: d.usage.output + d.usage.thinking,
+    output_tokens: d.usage.output,
     llm_calls: d.usage.calls,
     tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
     cost_usd: Number(d.biaya.toFixed(6)),
