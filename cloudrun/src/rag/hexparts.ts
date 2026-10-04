@@ -147,6 +147,20 @@ const skorNama = (kunci: string[], kata: string[]): number => {
 // Rows ("item | PN | NAME | …" or "PN | DESC | …") whose name matches the question pick which PNs get a web price;
 // rows under a matching section title count too (seal kit inside "CYL.;ARM"), kits/assemblies first.
 // With no match, a short follow-up ("harganya berapa") prices the PNs quoted in the previous answer.
+// No row name matched the question (technician says "harness", catalog says "CABLE ASSY"): price the rows of the
+// best-ranked chunk instead, since that chunk is what the answer will be built from (Abdul 4 Oct, KCM 60ZV).
+export function pnChunkTeratas(content: string, maks = 8): string[] {
+  const pertama = content.split('\n\n---\n\n')[0] ?? '';
+  const out: string[] = [];
+  for (const line of pertama.split('\n')) {
+    const sel = line.split('|').map(x => x.trim());
+    const pn = sel.find(x => PN_SEL_RE.test(x));
+    if (pn && /\d/.test(pn) && !out.includes(pn)) out.push(pn);
+    if (out.length >= maks) break;
+  }
+  return out;
+}
+
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
   const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
   const skor = new Map<string, { n: number; nama: string; komp: number }>();

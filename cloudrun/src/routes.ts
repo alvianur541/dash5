@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, MINTA_HARGA_RE, adaHarga } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, adaHarga } from './rag';
 import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
@@ -346,8 +346,9 @@ export async function resolvePartsQuery(
   let pnsHarga: string[] = [...kodeQuery];
   if (!intervalHours && (mintaHarga || literalPN)) {
     const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
-    const pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
+    let pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
       .filter(pn => !kodeQuery.includes(pn));
+    if (!pns.length && !kodeQuery.length && ragResult.hasResults) pns = pnChunkTeratas(ragResult.content);
     pnsHarga = [...pnsHarga, ...pns];
     if (pns.length) {
       emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
@@ -609,7 +610,7 @@ export async function resolveMultiAspectQuery(
   let blokHarga = '';
   if (MINTA_HARGA_RE.test(trimmed)) {
     const pns = [...new Set(perAspect.flatMap(a => (a.parts.hasResults && a.parts.content)
-      ? pilihPnHarga(a.parts.content, [a.sub, trimmed]) : []))].slice(0, 14);
+      ? (pilihPnHarga(a.parts.content, [a.sub, trimmed]).length ? pilihPnHarga(a.parts.content, [a.sub, trimmed]) : pnChunkTeratas(a.parts.content, 4)) : []))].slice(0, 14);
     if (pns.length) {
       emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
       blokHarga = blokHargaWeb(await hargaWeb(pns));

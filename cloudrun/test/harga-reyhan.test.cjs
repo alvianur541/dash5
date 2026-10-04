@@ -52,5 +52,10 @@ module.exports = async () => {
     t(dicek.length > 0, `lanjutan sesudah PN polos mewarisi niat harga (${dicek.join(',') || 'tak dicek'})`);
   }
 
+  {
+    // Abdul 4 Okt (KCM 60ZV): "harga harness body", katalog menyebutnya CABLE ASSY → nama tak cocok, tetap harus dicek.
+    const { dicek } = await jalan('harga harness body');
+    t(dicek.length > 0, `nama beda istilah (harness vs CABLE/ROLLER) → PN chunk teratas tetap dicek (${dicek.join(',') || 'tak dicek'})`);
+  }
   return done();
 };
