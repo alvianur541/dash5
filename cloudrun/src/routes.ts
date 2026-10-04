@@ -1,6 +1,6 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, MINTA_HARGA_RE } from './rag';
-import type { WebPart } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, MINTA_HARGA_RE, adaHarga } from './rag';
+import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -324,8 +324,12 @@ export async function resolvePartsQuery(
     ? await searchServiceIntervalParts(searchQuery, model)
     : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
-  const webHasil = webPromise ? await webPromise : new Map<string, WebPart[]>();
-  if (!intervalHours && (MINTA_HARGA_RE.test(trimmed) || literalPN)) {
+  const webHasil: HasilWeb = webPromise ? await webPromise : new Map();
+  // "solenoid di hst motor" right after "harga solenoid motor" still asks for the price.
+  const lastUser = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
+  const mintaHarga = MINTA_HARGA_RE.test(trimmed)
+    || (MINTA_HARGA_RE.test(lastUser) && trimmed.split(/\s+/).length <= 6 && !/\b(?:part\s*number|pn|nomor\s*part)\b/i.test(trimmed));
+  if (!intervalHours && (mintaHarga || literalPN)) {
     const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
     const pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
       .filter(pn => pn !== literalPN);
@@ -335,7 +339,7 @@ export async function resolvePartsQuery(
     }
   }
   const webLiteral = blokHargaWeb(webHasil);
-  const adaHargaWeb = [...webHasil.values()].some(v => v.length);
+  const adaHargaWeb = adaHarga(webHasil);
 
   if (!ragResult.hasResults && adaHargaWeb) {
     const note = literalPN

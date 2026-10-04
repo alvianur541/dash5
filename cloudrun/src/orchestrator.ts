@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga } from './rag';
 import { deps } from './deps';
 import { promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
@@ -111,14 +111,14 @@ export async function searchPhotoCodes(codes: string[], model: string, emit: Age
   const seen = new Set<string>();
   const promo: string[] = [], other: string[] = [], missing: string[] = [];
   codes.forEach((c, i) => {
-    if (!hits[i].length && !web.get(c.toUpperCase())?.length) missing.push(c);
+    if (!hits[i].length && !adaHarga(web, c)) missing.push(c);
     for (const h of hits[i]) {
       if (seen.has(h.content)) continue;
       seen.add(h.content);
       (/^PROMO/.test(h.metadata?.Kategori ?? '') ? promo : other).push(h.content);
     }
   });
-  const adaDiWeb = [...web.values()].some(v => v.length);
+  const adaDiWeb = adaHarga(web);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 || adaDiWeb });
   if (!seen.size && !adaDiWeb) return null;
   const webBlok = blokHargaWeb(web);

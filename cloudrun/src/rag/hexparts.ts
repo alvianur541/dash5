@@ -5,9 +5,15 @@ export interface WebPart { pn: string; nama: string; harga: string }
 const URL_CARI = 'https://hexindoparts.com/products?query=';
 const BATAS_MS = 3_000;
 const CACHE_MS = 6 * 3600_000;
+const CACHE_KOSONG_MS = 3600_000;
 const CACHE_MAX = 500;
 const MAKS_PN = 16;
+const PARALEL = 6;
+const JEDA_ULANG_MS = 400;
 const cache = new Map<string, { t: number; v: WebPart[] }>();
+
+// PN → listings; [] = checked and not listed; null = lookup failed (site error/timeout), never cached.
+export type HasilWeb = Map<string, WebPart[] | null>;
 
 const rupiah = (n: number): string => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
@@ -18,6 +24,7 @@ const cocok = (pn: string, nama: string): boolean => {
 };
 
 // Real lookup against the hexindoparts.com JSON listing; wired into deps().webPrice by server.js.
+// Non-JSON or non-2xx throws so a site hiccup is retried and never cached as "not listed".
 export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<WebPart[]> {
   const kunci = pn.toUpperCase().trim();
   const ctrl = new AbortController();
@@ -30,8 +37,7 @@ export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<W
       signal: ctrl.signal,
     });
     if (!res.ok || !(res.headers.get('content-type') ?? '').includes('json')) {
-      console.warn('[hexparts] %s status=%d type=%s', kunci, res.status, res.headers.get('content-type'));
-      return [];
+      throw new Error(`HTTP ${res.status} ${res.headers.get('content-type') ?? ''}`.trim());
     }
     const data = await res.json() as { products?: { data?: Array<{ name?: string; short_description?: string; price?: { amount?: string | number } }> } };
     return (data.products?.data ?? [])
@@ -44,38 +50,56 @@ export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<W
   }
 }
 
-// An empty list = checked and not listed on the site; PNs whose lookup failed are absent from the map.
-export async function hargaWeb(pns: string[]): Promise<Map<string, WebPart[]>> {
-  const hasil = new Map<string, WebPart[]>();
+export async function hargaWeb(pns: string[]): Promise<HasilWeb> {
+  const hasil: HasilWeb = new Map();
   const cari = deps().webPrice;
   const daftar = [...new Set(pns.map(p => p.toUpperCase().trim()).filter(p => p.length >= 4))].slice(0, MAKS_PN);
   if (!cari || !daftar.length) return hasil;
   const t0 = Date.now();
-  await Promise.all(daftar.map(async pn => {
+  let gagal = 0;
+  const satu = async (pn: string): Promise<void> => {
     const c = cache.get(pn);
-    if (c && Date.now() - c.t < CACHE_MS) { hasil.set(pn, c.v); return; }
-    try {
-      const v = await cari(pn);
-      if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
-      cache.set(pn, { t: Date.now(), v });
-      hasil.set(pn, v);
-    } catch (err) {
-      console.warn('[hexparts] %s gagal: %s', pn, (err as Error)?.message);
+    if (c && Date.now() - c.t < (c.v.length ? CACHE_MS : CACHE_KOSONG_MS)) { hasil.set(pn, c.v); return; }
+    for (let coba = 1; coba <= 2; coba++) {
+      try {
+        const v = await cari(pn);
+        if (cache.size >= CACHE_MAX) cache.delete(cache.keys().next().value as string);
+        cache.set(pn, { t: Date.now(), v });
+        hasil.set(pn, v);
+        return;
+      } catch (err) {
+        console.warn('[hexparts] %s gagal (coba %d): %s', pn, coba, (err as Error)?.message);
+        if (coba === 1) await new Promise(r => setTimeout(r, JEDA_ULANG_MS));
+      }
     }
+    gagal++;
+    hasil.set(pn, null);
+  };
+  // A small pool: a burst of 16 parallel hits made the site answer 500 (Hikmal, 4 Oct).
+  const antre = [...daftar];
+  await Promise.all(Array.from({ length: Math.min(PARALEL, antre.length) }, async () => {
+    for (let pn = antre.shift(); pn; pn = antre.shift()) await satu(pn);
   }));
-  console.info('[hexparts] %d PN → %d ketemu (%dms)', daftar.length, [...hasil.values()].filter(v => v.length).length, Date.now() - t0);
+  console.info('[hexparts] %d PN → %d ketemu, %d gagal (%dms)', daftar.length,
+    [...hasil.values()].filter(v => v?.length).length, gagal, Date.now() - t0);
   return hasil;
 }
 
 export function resetHargaWebCache(): void { cache.clear(); }
 
-export function blokHargaWeb(hasil: Map<string, WebPart[]>): string {
-  const kosong = [...hasil.entries()].filter(([, v]) => !v.length).map(([pn]) => pn);
+export const adaHarga = (hasil: HasilWeb, pn?: string): boolean =>
+  pn ? !!hasil.get(pn.toUpperCase())?.length : [...hasil.values()].some(v => v?.length);
+
+export function blokHargaWeb(hasil: HasilWeb): string {
   if (!hasil.size) return '';
-  const baris = [...hasil.values()].flat().map(p => `  ${p.pn.padEnd(22)} | ${p.nama.padEnd(30)} | ${p.harga}`);
+  const entri = [...hasil.entries()];
+  const kosong = entri.filter(([, v]) => v && !v.length).map(([pn]) => pn);
+  const gagal = entri.filter(([, v]) => v === null).map(([pn]) => pn);
+  const baris = entri.flatMap(([, v]) => v ?? []).map(p => `  ${p.pn.padEnd(22)} | ${p.nama.padEnd(30)} | ${p.harga}`);
   const head = baris.length ? `\n  Part Number            | Description                    | Harga\n${baris.join('\n')}` : '';
   const tidakAda = kosong.length ? `\n  Dicek, TIDAK ADA di hexindoparts.com: ${kosong.join(', ')}` : '';
-  return `[HARGA HEXINDOPARTS.COM — harga terkini toko online resmi Hexindo]${head}${tidakAda}`;
+  const error = gagal.length ? `\n  GAGAL dicek (hexindoparts.com sedang tidak merespons): ${gagal.join(', ')}` : '';
+  return `[HARGA HEXINDOPARTS.COM — harga terkini toko online resmi Hexindo]${head}${tidakAda}${error}`;
 }
 
 const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price', 'prices', 'berapa', 'brp', 'berpa', 'cek', 'check', 'ada', 'ngga', 'nggak', 'gak', 'tidak', 'part', 'parts', 'number', 'nomor', 'unit', 'model', 'yang', 'untuk', 'buat', 'dan', 'atau', 'klo', 'kalau', 'kalo', 'dong', 'tolong', 'coba', 'minta', 'info', 'hexindoparts', 'com', 'web', 'website', 'the', 'for', 'and', 'what', 'how', 'much', 'cost', 'biaya', 'catalog', 'katalog', 'list', 'daftar', 'semua']);

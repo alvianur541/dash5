@@ -39,7 +39,9 @@ module.exports = async () => {
     const filter = await fetchHexParts('4658521');
     t(filter.map(p => p.pn).join(',') === '4658521,4658521RCP', 'PN lain yang kebetulan berawalan sama (46585219) ditolak');
     t((await fetchHexParts('ZZ999999')).length === 0, 'PN tak terdaftar → kosong, bukan tebakan');
-    t((await fetchHexParts('BLOCKED')).length === 0, 'halaman blokir/HTML (Cloudflare) → kosong tanpa error');
+    let lempar = false;
+    try { await fetchHexParts('BLOCKED'); } catch { lempar = true; }
+    t(lempar, 'halaman blokir/HTML (Cloudflare) → dianggap GAGAL, bukan "tidak ada"');
   } finally { global.fetch = asli; }
 
   {
@@ -129,6 +131,41 @@ module.exports = async () => {
     const pick = pilihPnHarga(ARM, ['klo cek harga cylinder arm', 'arm cylinder price']);
     t(pick[0] === '4711561' && pick[1] === 'YA00001400' && !pick.includes('4333333'),
       `seal kit di section CYL.;ARM ikut dicek, kit section lain tidak (${pick.join(',')})`);
+  }
+
+  {
+    // Sesi Hikmal 4 Okt: situs balas HTTP 500 sekali untuk YB00003778 → dulu tampil "Belum tersedia".
+    resetHargaWebCache();
+    let n = 0, jalan = 0, puncak = 0;
+    const kadangError = async pn => {
+      jalan++; puncak = Math.max(puncak, jalan);
+      await new Promise(r => setTimeout(r, 5));
+      jalan--;
+      if (pn === 'YB00003778' && n++ === 0) throw new Error('HTTP 500');
+      if (pn === 'MATI01') throw new Error('HTTP 503');
+      return pn === 'YB00003778' ? [{ pn, nama: 'KIT;SEAL', harga: 'Rp 3.572.034' }] : [];
+    };
+    const { d } = mockDeps([[]], { webPrice: kadangError });
+    const pns = ['YB00003778', 'MATI01', 'A0000001', 'A0000002', 'A0000003', 'A0000004', 'A0000005', 'A0000006'];
+    const h = await runWithDeps(d, () => hargaWeb(pns));
+    t(h.get('YB00003778')?.[0]?.harga === 'Rp 3.572.034', 'error 500 sekali → dicoba ulang, harga seal kit center joint ketemu');
+    t(h.get('MATI01') === null && /GAGAL dicek[^\n]*MATI01/.test(blokHargaWeb(h)) && !/TIDAK ADA[^\n]*MATI01/.test(blokHargaWeb(h)),
+      'situs error terus → ditandai GAGAL dicek, bukan "tidak ada"');
+    t(puncak <= 6, `paling banyak 6 permintaan bersamaan ke situs (puncak ${puncak})`);
+    const h2 = await runWithDeps(d, () => hargaWeb(['MATI01']));
+    t(h2.get('MATI01') === null, 'kegagalan tidak di-cache sebagai "tidak ada"');
+  }
+
+  {
+    resetHargaWebCache();
+    const ROW = { metadata: { Model: 'ZW140', Kategori: 'PARTS CATALOG' }, content: 'Section: MOTOR (HST)\nParts List:\n       2 | 263E2-57381        | SOLENOID; CONTROL                   | qty:1' };
+    const c = [];
+    const { d } = mockDeps([[]], { supabase: fakeSupabase([ROW], () => [{ ...ROW, similarity: 0.9 }]), embed: async () => [0.1],
+      rerank: async (_q, docs) => ({ results: docs.map((_, i) => ({ index: i, score: 0.9 })), source: 'google' }),
+      webPrice: async pn => { c.push(pn); return []; } });
+    const hist = [{ role: 'user', content: 'harga solenoid motor' }, { role: 'assistant', content: 'Solenoid motor belum ketemu.' }];
+    await runWithDeps(d, () => resolvePartsQuery('solenoid di hst motor', hist, 'ZW140'));
+    t(c.includes('263E2-57381'), 'lanjutan singkat sesudah tanya harga ("solenoid di hst motor") tetap dicek harganya');
   }
 
   return done();
