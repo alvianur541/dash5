@@ -25,8 +25,13 @@ const cocok = (pn: string, nama: string): boolean => {
 
 // Real lookup against the hexindoparts.com JSON listing; wired into deps().webPrice by server.js.
 // Non-JSON or non-2xx throws so a site hiccup is retried and never cached as "not listed".
+// KCM catalogs write PNs with a dash ("49327-90920"); hexindoparts.com lists them without ("4932790920")
+// and returns nothing for the dashed form (Reyhan 4 Oct, KCM 60ZV seal kits).
+export const tanpaStripKcm = (pn: string): string => (/^\d+(?:-\d+)+$/.test(pn) ? pn.replace(/-/g, '') : pn);
+
 export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<WebPart[]> {
-  const kunci = pn.toUpperCase().trim();
+  const asli = pn.toUpperCase().trim();
+  const kunci = tanpaStripKcm(asli);
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), BATAS_MS);
   const lepas = () => ctrl.abort();
@@ -43,7 +48,8 @@ export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<W
     return (data.products?.data ?? [])
       .filter(p => p.name && cocok(kunci, p.name) && Number(p.price?.amount) > 0)
       .slice(0, 4)
-      .map(p => ({ pn: p.name!.trim(), nama: (p.short_description ?? '').trim(), harga: rupiah(Number(p.price!.amount)) }));
+      // Keep the catalog spelling so the answer's PN matches the table row.
+      .map(p => ({ pn: kunci === asli ? p.name!.trim() : asli + p.name!.trim().toUpperCase().slice(kunci.length), nama: (p.short_description ?? '').trim(), harga: rupiah(Number(p.price!.amount)) }));
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', lepas);

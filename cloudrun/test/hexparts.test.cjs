@@ -6,6 +6,7 @@ const SITUS = {
   '1144003771': [produk('1144003771', 'TURBOCHARGER', 49587999), produk('1144003771PU', 'TURBOCHARGER', 53920759)],
   '4658521': [produk('4658521', 'FILTER;OIL', 658152), produk('4658521RCP', 'FILTER;OIL', 759296), produk('46585219', 'LAIN', 1)],
   'HTCDH1C': [produk('HTCDH1C', 'HAP ENG OIL DH 1 CAN', 591600)],
+  '4932790920': [produk('4932790920', 'KIT;SEAL', 1198487)],
 };
 
 function fakeFetch(calls) {
@@ -39,6 +40,9 @@ module.exports = async () => {
     const filter = await fetchHexParts('4658521');
     t(filter.map(p => p.pn).join(',') === '4658521,4658521RCP', 'PN lain yang kebetulan berawalan sama (46585219) ditolak');
     t((await fetchHexParts('ZZ999999')).length === 0, 'PN tak terdaftar → kosong, bukan tebakan');
+    // Reyhan 4 Okt: katalog KCM menulis 49327-90920, situs mendaftarkan 4932790920.
+    const kcm = await fetchHexParts('49327-90920');
+    t(kcm.length === 1 && kcm[0].harga === 'Rp 1.198.487' && kcm[0].pn === '49327-90920', `PN KCM berstrip dicari tanpa strip, tampil ejaan katalog (${kcm.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
     let lempar = false;
     try { await fetchHexParts('BLOCKED'); } catch { lempar = true; }
     t(lempar, 'halaman blokir/HTML (Cloudflare) → dianggap GAGAL, bukan "tidak ada"');
