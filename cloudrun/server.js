@@ -145,6 +145,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     meta: {},
     deadlineAt,
     embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
+    webPrice: (pn) => orch.fetchHexParts(pn, ctrl.signal),
     rerank: async (query, documents, topN) => {
       if (RERANKER === 'google') {
         try {

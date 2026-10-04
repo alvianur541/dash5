@@ -1,5 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
@@ -317,10 +317,18 @@ export async function resolvePartsQuery(
         .split('\n').filter(l => !l.trim().startsWith('|')).join('\n').slice(0, 800)
     : '';
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
+  const literalPN = extractPartNumber(trimmed);
+  const webPromise = literalPN ? hargaWeb([literalPN]) : null;
   const ragResult = intervalHours
     ? await searchServiceIntervalParts(searchQuery, model)
     : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
+  const webLiteral = webPromise ? blokHargaWeb(await webPromise) : '';
+
+  if (!ragResult.hasResults && webLiteral) {
+    const note = `[CATATAN: PN \`${literalPN}\` belum ketemu di katalog ${model}, tapi terdaftar di hexindoparts.com. Sajikan nama + harganya, dan sebut jelas bahwa kecocokan PN ini untuk ${model} belum terverifikasi dari katalog unit.]`;
+    return { type: 'rag_found', content: `${note}\n\n${webLiteral}`, dataLabel: RAG_LABEL.parts };
+  }
 
   if (!ragResult.hasResults) {
     if (MODELS_WITHOUT_PARTS_CATALOG.has(model)) {
@@ -351,16 +359,20 @@ export async function resolvePartsQuery(
       )];
 
       const cpmHeader = `⚠️ PARTS WAJIB GANTI ${hours} JAM (Periodic Maintenance):\n${partsList}\n\nGunakan PERSIS PN di atas. JANGAN substitusi dengan PN lain dari training.`;
+      const webCpm = blokHargaWeb(await hargaWeb(cpmPNs));
 
-      finalContent = promoLines.length > 0
-        ? `${cpmHeader}\n\n--- HARGA PROMO (khusus PN di atas) ---\n${[...periodeLines, ...promoLines].join('\n')}`
-        : cpmHeader;
+      finalContent = [
+        cpmHeader,
+        webCpm,
+        promoLines.length > 0 ? `--- HARGA PROMO (khusus PN di atas) ---\n${[...periodeLines, ...promoLines].join('\n')}` : '',
+      ].filter(Boolean).join('\n\n');
     } else {
       finalContent = ragResult.content.split('\n\n---\n\n').slice(0, 6).join('\n\n---\n\n');
     }
   } else if (KIT_QUERY_RE.test(trimmed) && /svc:K/i.test(finalContent)) {
     finalContent = `${KIT_HINT}\n\n${finalContent}`;
   }
+  if (webLiteral && !intervalHours) finalContent = `${webLiteral}\n\n${finalContent}`;
 
   return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
 }

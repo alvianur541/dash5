@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb } from './rag';
 import { deps } from './deps';
 import { promoAktif, hargaNormalSaja } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
@@ -107,25 +107,26 @@ async function searchAcCode(code: string, num: string, model: UnitModel, topN: n
 export async function searchPhotoCodes(codes: string[], model: string, emit: AgentEventEmit): Promise<RagRouteResult | null> {
   emit({ type: 'thinking', message: `Terbaca ${codes.length} kode part — mencari satu per satu…` });
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-  const hits = await Promise.all(codes.map(c => exactPartRows(c, model)));
+  const [hits, web] = await Promise.all([Promise.all(codes.map(c => exactPartRows(c, model))), hargaWeb(codes)]);
   const seen = new Set<string>();
   const promo: string[] = [], other: string[] = [], missing: string[] = [];
   codes.forEach((c, i) => {
-    if (!hits[i].length) missing.push(c);
+    if (!hits[i].length && !web.has(c.toUpperCase())) missing.push(c);
     for (const h of hits[i]) {
       if (seen.has(h.content)) continue;
       seen.add(h.content);
       (/^PROMO/.test(h.metadata?.Kategori ?? '') ? promo : other).push(h.content);
     }
   });
-  emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 });
-  if (!seen.size) return null;
+  emit({ type: 'tool_result', tool: 'search_parts_catalog', found: seen.size > 0 || web.size > 0 });
+  if (!seen.size && !web.size) return null;
+  const webBlok = blokHargaWeb(web);
   const miss = missing.length
     ? `\n\n[KODE BELUM KETEMU DI PENCARIAN]\n${missing.join(', ')} — sebut "belum ketemu di pencarian"; JANGAN bilang kode ini tidak terdaftar / tidak ada di promo atau katalog.`
     : '';
   return {
     type: 'rag_found',
-    content: `Kode part terbaca di foto: ${codes.join(', ')}\n\n` + [...promo, ...other].slice(0, 8).join('\n\n---\n\n') + miss,
+    content: `Kode part terbaca di foto: ${codes.join(', ')}\n\n` + [webBlok, ...promo, ...other].filter(Boolean).slice(0, 9).join('\n\n---\n\n') + miss,
     dataLabel: 'DATA PARTS CATALOG & PROMO',
     confidence: 'high',
   };

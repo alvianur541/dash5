@@ -7,6 +7,7 @@ export {
   INTENT_MODEL,
 } from './orchestrator';
 export { UNIT_MODELS } from './types';
+export { fetchHexParts } from './rag';
 export { SYSTEM_PROMPT } from './constants';
 export { MODEL_CHAIN, FALLBACK_MODELS } from './vertex';
 export type { UnitModel, Message, InlineImage, AgentEvent } from './types';

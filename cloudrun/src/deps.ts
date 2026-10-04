@@ -11,6 +11,7 @@ export interface Deps {
   rerank(query: string, docs: string[], topN: number): Promise<RerankOut>;
   generate(body: any, model: string, enableGoogleSearch?: boolean): Promise<any>;
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
+  webPrice?(pn: string): Promise<Array<{ pn: string; nama: string; harga: string }>>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
   meta: {

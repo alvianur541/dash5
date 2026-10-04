@@ -431,7 +431,7 @@ Service code: \`D\` = dealer stock (tidak bebas), \`S\` = service/retail, \`K\` 
 **CPM + ${promoOn ? 'PROMO cross-reference' : 'harga'}:**
 ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit setara **${CPM_EQUIVALENT[model]}** (tertulis di chunk-nya). Saat menyajikan jadwal CPM, sebut singkat & natural bahwa jadwal ini mengacu tabel ${CPM_EQUIVALENT[model]} — jangan mengklaim sebagai tabel khusus ${model}.\n` : ''}1. CPM → ambil HANYA baris dengan PN (bukan \`-\`)
 2. ${promoOn ? 'Cross-ref PROMO → pakai harga promo yang muncul di data apa adanya.' : 'Cari harga PN di data → pakai harga normal apa adanya.'}
-3. PN tidak ada di ${promoOn ? 'promo manapun' : 'daftar harga'} → **wajib output:** "Harga \`[PN]\` tidak tersedia di ${promoOn ? 'data promo' : 'daftar harga'} yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
+3. PN tidak ada di ${promoOn ? 'promo manapun' : 'daftar harga'} maupun blok hexindoparts.com → **wajib output:** "Harga \`[PN]\` tidak tersedia di ${promoOn ? 'data promo' : 'daftar harga'} yang saya akses — konfirmasi harga terkini ke Parts Counter." — **JANGAN mengarang angka.**
 4. Catatan PPN: "Harga belum termasuk PPN." — **JANGAN hitung/tambahkan PPN sendiri.**
 5. Ke teknisi sebut sumbernya **"Periodic Maintenance"** (mis. "jadwal Periodic Maintenance 2000 jam") — **JANGAN tulis singkatan "CPM"** dan jangan tambahi "resmi Hitachi"; CPM itu label internal.
 
@@ -450,6 +450,8 @@ Section di luar daftar itu TIDAK ada di daftar harga ${model} — jangan menyuru
 `}
 
 **Nama "Hitachi Astrea" DILARANG TOTAL.** Istilah itu TIDAK ADA — kalau nyangkut di header dokumen, abaikan. ${promoOn ? 'Sebut programnya cukup "promo aktif", atau nama periode persis seperti tertulis di data.' : 'Sebut cukup "daftar harga".'}
+
+**Harga hexindoparts.com** (blok \`[HARGA HEXINDOPARTS.COM]\` di data): harga terkini dari toko online resmi Hexindo. ${promoOn ? 'Harga promo yang berlaku tetap jadi harga utama; harga hexindoparts.com = harga normal pembanding.' : 'UTAMAKAN harga ini — kalau PN yang sama juga punya harga di daftar harga lain dan angkanya beda, pakai harga hexindoparts.com dan jangan tampilkan yang lain.'} Tandai sumbernya singkat ("harga hexindoparts.com"), tanpa klaim PPN — tutup dengan "konfirmasi PPN & ketersediaan ke Parts Counter sebelum transaksi." Varian bersufiks di blok itu (mis. \`1144003771PU\`) = PN terpisah: tampilkan apa adanya, jangan menebak arti sufiksnya.
 
 **PN suffix (\`HPA\`/\`HPB\`/\`HP\`/\`PS\`):** salin menempel di PN apa adanya (mis. \`4630525HPB\`) — dan CUKUP ITU. DILARANG membuat kolom/label "Variasi", "Suffix", "HPA Variant", "PS Variant", atau "Genuine part" — suffix bukan informasi yang perlu dijelaskan atau dijadikan kolom tabel. Kolom tabel harga cukup: PN utuh, nama part, qty, harga.
 
