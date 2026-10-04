@@ -343,6 +343,7 @@ export async function generateResponse(
       const imagePN = listMode ? null : codes[0] ?? null;
       // "cek hrgany" + photo (Reyhan, 4 Oct): a price ask must reach hexindoparts.com even when the caption names no part.
       const hargaFoto = MINTA_HARGA_RE.test(q);
+      console.info('[foto] komponen=%s pn=%s harga=%s', scan.component || '-', codes.join(',') || '-', hargaFoto ? 1 : 0);
       const partsAsk = isPartsQuery(q) || !!imagePN || listMode || hargaFoto;
       let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;
       if (imagePN) {

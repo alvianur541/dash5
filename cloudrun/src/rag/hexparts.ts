@@ -116,6 +116,14 @@ export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|pri
 // (" 53A 49327-70060        SEAL KIT            1      101 -") and must be read as [item, PN, name] too,
 // otherwise no KCM row ever gets a web price (Alvian 4 Oct, KCM 60ZV seal kits).
 const KCM_BARIS_RE = /^\s*(\d{1,3}[A-Z]?)\s+(\d{5}-\d{5}(?:-\d+)?)\s{2,}(\S.*?)\s{2,}\d/;
+// KCM scanned pages carry their own title line ("          LIFT CYLINDER") and one chunk can hold several pages
+// under a wrong Section label (lift cylinder rows inside "CAB OPTION - Cab Structure"); use it as sub-section.
+const KCM_JUDUL_RE = /^\s{6,}([A-Z][A-Z ,&/.()-]{3,40}?)\s*$/;
+export function judulKcm(line: string): string | null {
+  const m = line.match(KCM_JUDUL_RE);
+  return m && !/\d/.test(m[1]) && !/^(?:PART|SYM|BOL|REMARKS|UNIT|SERIAL)/.test(m[1].trim()) ? m[1].trim() : null;
+}
+
 export function selBaris(line: string): string[] {
   if (line.includes('|')) return line.split('|').map(x => x.trim());
   const m = line.match(KCM_BARIS_RE);
@@ -179,13 +187,15 @@ export function pnChunkTeratas(content: string, maks = 8): string[] {
 
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
   const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
-  const skor = new Map<string, { n: number; nama: string; komp: number }>();
+  const skor = new Map<string, { n: number; nama: string; komp: number; grup: string }>();
   if (kunci.length) {
     let skorSection = 0;
     let judulKata: string[] = [];
     for (const line of content.split('\n')) {
       const judul = line.match(/^Section:\s*(.+)$/i);
       if (judul) { judulKata = kataDari(judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^\d+\s*-\s*/i, '')); skorSection = skorNama(kunci, judulKata); continue; }
+      const jk = judulKcm(line);
+      if (jk) { judulKata = kataDari(jk); skorSection = skorNama(kunci, judulKata); continue; }
       const sel = selBaris(line);
       const i = sel.findIndex(x => PN_SEL_RE.test(x));
       if (i < 0 || !sel[i + 1]) continue;
@@ -200,7 +210,7 @@ export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya 
       const sisa = kunci.filter(k => !kataNama.some(w => kataCocok(k, w)));
       const komp = sisa.length ? skorKomp : -1;
       const n = nama * 2 + (skorKomp >= 3 ? 1 + (KOMPONEN_UTAMA_RE.test(sel[i + 1]) ? 2 : 0) : 0);
-      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp });
+      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp, grup: kataKomp.join(' ') });
     }
   }
   // The question names a component beyond the part ("kit seal SWING MOTOR") and some rows sit in that
@@ -208,10 +218,11 @@ export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya 
   if ([...skor.values()].some(v => v.komp >= 3)) {
     for (const [pn, v] of skor) if (v.komp === 0) skor.delete(pn);
   }
-  // At most 6 PNs per part name, so a dozen arm-cylinder variants cannot crowd out the seal kit.
+  // At most 3 PNs per part name within one component, so a dozen arm-cylinder variants cannot crowd out the
+  // seal kit, and seal kits of one component cannot crowd out another's (KCM: 8 SEAL KIT rows, lift cylinder lost).
   const perNama = new Map<string, number>();
   const dariData = [...skor.entries()].sort((a, b) => b[1].n - a[1].n)
-    .filter(([, v]) => { const c = (perNama.get(v.nama) ?? 0) + 1; perNama.set(v.nama, c); return c <= 6; })
+    .filter(([, v]) => { const k = `${v.nama}|${v.grup}`; const c = (perNama.get(k) ?? 0) + 1; perNama.set(k, c); return c <= 3; })
     .map(([pn]) => pn);
   const dariJawaban = dariData.length ? [] : [...jawabanSebelumnya.matchAll(PN_JAWABAN_RE)].map(m => m[1]).filter(p => /\d/.test(p) && !/^(?:ZX|ZW)\d/.test(p));
   return [...new Set([...dariData, ...dariJawaban])].slice(0, maks);

@@ -47,5 +47,12 @@ module.exports = async () => {
     const c = 'Section: HYDRAULICS - Lift Cylinder\n  3  37A-1KM-1000        CYLINDER ASSY,LIFT  2      101 -\n 14A 49327-90920        SEAL KIT (FR PISTON)  1      101 -';
     t(pilihPnHarga(c, ['Cek harga kit seal lift cylinder'])[0] === '49327-90920', 'baris KCM lebar-tetap terbaca, seal kit dipilih');
   }
+  {
+    // Chunk KCM berlabel salah ("CAB OPTION") tapi berisi halaman LIFT CYLINDER; >6 SEAL KIT lain tak boleh mendesak.
+    const lain = Array.from({ length: 8 }, (_, i) => ` ${i + 1}A 49327-7${i}000        SEAL KIT             1      101 -`).join('\n');
+    const c = `Section: HYDRAULICS - Control Valve\n          CONTROL VALVE\n${lain}\n\n---\n\nSection: CAB OPTION - Cab Structure\n          LIFT CYLINDER\n 30A 49327-90920        SEAL KIT             1      101 -`;
+    const r = pilihPnHarga(c, ['harga kit seal hydraulic cylinder']);
+    t(r.includes('49327-90920'), `seal kit lift cylinder tetap terpilih walau banyak seal kit lain (${r.length} PN)`);
+  }
   return done();
 };
