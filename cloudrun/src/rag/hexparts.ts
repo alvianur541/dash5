@@ -112,6 +112,16 @@ const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price'
 // Technicians type fast on site: "hrga", "hrgany", "hraga", "brapa" (Reyhan, 4 Oct) must count as a price ask.
 export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|price\w*|prise|berapa|brapa|brpa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
 
+// Catalog row → cells. Hitachi chunks are pipe tables; KCM catalogs are fixed-width text
+// (" 53A 49327-70060        SEAL KIT            1      101 -") and must be read as [item, PN, name] too,
+// otherwise no KCM row ever gets a web price (Alvian 4 Oct, KCM 60ZV seal kits).
+const KCM_BARIS_RE = /^\s*(\d{1,3}[A-Z]?)\s+(\d{5}-\d{5}(?:-\d+)?)\s{2,}(\S.*?)\s{2,}\d/;
+export function selBaris(line: string): string[] {
+  if (line.includes('|')) return line.split('|').map(x => x.trim());
+  const m = line.match(KCM_BARIS_RE);
+  return m ? [m[1], m[2], m[3].trim()] : [];
+}
+
 const PN_SEL_RE = /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/;
 const PN_JAWABAN_RE = /`([A-Z0-9][A-Z0-9-]{3,21})`/g;
 
@@ -159,7 +169,7 @@ export function pnChunkTeratas(content: string, maks = 8): string[] {
   const pertama = content.split('\n\n---\n\n')[0] ?? '';
   const out: string[] = [];
   for (const line of pertama.split('\n')) {
-    const sel = line.split('|').map(x => x.trim());
+    const sel = selBaris(line);
     const pn = sel.find(x => PN_SEL_RE.test(x));
     if (pn && /\d/.test(pn) && !out.includes(pn)) out.push(pn);
     if (out.length >= maks) break;
@@ -176,7 +186,7 @@ export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya 
     for (const line of content.split('\n')) {
       const judul = line.match(/^Section:\s*(.+)$/i);
       if (judul) { judulKata = kataDari(judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^\d+\s*-\s*/i, '')); skorSection = skorNama(kunci, judulKata); continue; }
-      const sel = line.split('|').map(x => x.trim());
+      const sel = selBaris(line);
       const i = sel.findIndex(x => PN_SEL_RE.test(x));
       if (i < 0 || !sel[i + 1]) continue;
       const kataNama = kataDari(sel[i + 1]);

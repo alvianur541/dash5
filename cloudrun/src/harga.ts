@@ -1,7 +1,7 @@
 import type { Message } from './types';
 import type { HasilWeb } from './rag';
 import { callProxy, getText, INTENT_MODEL } from './vertex';
-import { komponenBaris } from './rag/hexparts';
+import { komponenBaris, selBaris } from './rag/hexparts';
 import type { Lang } from './templates';
 
 // Fast price path (4 Oct): the main model used to read ~24k tokens just to copy prices into a table.
@@ -39,7 +39,7 @@ function katalogPn(content: string): Map<string, { nama: string; section: string
   for (const line of content.split('\n')) {
     const judul = line.match(/^Section:\s*(.+)$/i);
     if (judul) { section = judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^DAFTAR PARTS\s*-\s*|^\d+\s*-\s*/i, '').replace(/\s*\(Part \d+\/\d+\)\s*$/i, '').trim(); continue; }
-    const sel = line.split('|').map(x => x.trim());
+    const sel = selBaris(line);
     const i = sel.findIndex(x => /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/.test(x));
     if (i >= 0 && sel[i + 1] && !peta.has(sel[i])) peta.set(sel[i], { nama: sel[i + 1], section: komponenBaris(line) ?? section });
   }

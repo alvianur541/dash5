@@ -42,5 +42,10 @@ module.exports = async () => {
     t(!pilihPnHarga(c, ['harga hydraulic cylinder']).includes('49327-90920'), 'tanpa kata caption, seal kit tak terpilih (penyebab bug)');
     t(pilihPnHarga(c, ['harga Cek kit sealny hydraulic cylinder'])[0] === '49327-90920', 'caption ikut → seal kit dicek lebih dulu');
   }
+  {
+    // KCM katalog = teks lebar-tetap, bukan tabel pipa → baris tetap harus terbaca (Alvian 4 Okt).
+    const c = 'Section: HYDRAULICS - Lift Cylinder\n  3  37A-1KM-1000        CYLINDER ASSY,LIFT  2      101 -\n 14A 49327-90920        SEAL KIT (FR PISTON)  1      101 -';
+    t(pilihPnHarga(c, ['Cek harga kit seal lift cylinder'])[0] === '49327-90920', 'baris KCM lebar-tetap terbaca, seal kit dipilih');
+  }
   return done();
 };
