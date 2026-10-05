@@ -109,7 +109,9 @@ const CITE_RE = /\b(manual|catalog|katalog|bulletin|brosur|diagram|principle)\b[
 const LONG_CODE = 28;
 // A measured value ("22 kg", "3.9 MPa", "1300±100 min⁻¹", "∞ Ω") reads as a number, not as a code to copy.
 const VALUE_RE = /^[±~≈<>≤≥]?\s?[\d∞][\d.,]*\s?(?:[±~–-]\s?[\d.,]+\s?)?(?:[a-zµ°·/³²⁻¹Ω%]{1,12}(?:\s\([^()]{1,24}\))?)?$/i;
-const isValue = (t: string) => t.length <= LONG_CODE && /\s|[a-zµ°Ω%]/i.test(t) && VALUE_RE.test(t);
+// Part numbers with a letter suffix (9248706HPA, 4633367HPB) look like "number + unit" to VALUE_RE; they are codes.
+const PN_SUFFIX_RE = /^\d{5,}[A-Z]{1,4}$/;
+const isValue = (t: string) => t.length <= LONG_CODE && !PN_SUFFIX_RE.test(t) && /\s|[a-zµ°Ω%]/i.test(t) && VALUE_RE.test(t);
 const stripParens = (t: string) => t.replace(/^\(\s*/, '').replace(/\s*\)\.?$/, '');
 
 function Cite({ text }: { text: string }) {
@@ -187,7 +189,12 @@ export const MD_COMPONENTS: Components = {
     return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
   },
   li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
-  td: ({ node, children, ...rest }) => <td {...rest} className={NUM_CELL_RE.test(nodeText(node as HNode).trim()) ? 'md-num' : undefined}>{children}</td>,
+  // Long text cells (part names, notes) get a minimum width so a narrow phone does not stack them 4 lines high.
+  td: ({ node, children, ...rest }) => {
+    const t = nodeText(node as HNode).trim();
+    const cls = NUM_CELL_RE.test(t) || /^rp\s?[\d.]+$/i.test(t) ? 'md-num' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
+    return <td {...rest} className={cls}>{children}</td>;
+  },
   table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
   code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
   strong: ({ children }) => <StrongText>{children}</StrongText>,
