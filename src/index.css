@@ -219,9 +219,9 @@ img {
 .markdown-body blockquote {
   margin: 0.6rem 0;
   padding: 0.55rem 0.95rem;
-  border-left: 3px solid color-mix(in srgb, var(--accent-main) 55%, transparent);
-  background: color-mix(in srgb, var(--accent-main) 5%, transparent);
-  border-radius: 0 10px 10px 0;
+  border: 1px solid color-mix(in srgb, var(--accent-main) 18%, transparent);
+  background: color-mix(in srgb, var(--accent-main) 6%, transparent);
+  border-radius: 12px;
   color: var(--text-secondary);
 }
 .markdown-body blockquote p:last-child { margin-bottom: 0; }
