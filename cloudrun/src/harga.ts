@@ -34,16 +34,28 @@ const LABEL: Record<Lang, { pn: string; nama: string; harga: string; ket: string
 
 // PN → catalog name + section title, read from the retrieved chunks.
 function katalogPn(content: string): Map<string, { nama: string; section: string }> {
-  const peta = new Map<string, { nama: string; section: string }>();
+  // A PN often appears twice: in the price/parts list (generic title "ZX MINI PARTS (Filter, Seal Kit, …)", no
+  // component) and in the catalog page that says where it fits ("CYL.;ARM"). The catalog page wins, otherwise every
+  // seal kit looks the same and "seal kit arm" returns all of them (Alvian 5 Oct, ZX48U-5A).
+  const peta = new Map<string, { nama: string; section: string; umum: boolean }>();
   let section = '';
+  let umum = false;
   for (const line of content.split('\n')) {
     const judul = line.match(/^Section:\s*(.+)$/i);
-    if (judul) { section = judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^DAFTAR PARTS\s*-\s*|^\d+\s*-\s*/i, '').replace(/\s*\(Part \d+\/\d+\)\s*$/i, '').trim(); continue; }
+    if (judul) {
+      umum = /^(?:PROMO Q\d|DAFTAR PARTS)/i.test(judul[1].trim());
+      section = judul[1].replace(/^PROMO Q\d FY\d{4}\s*-\s*|^DAFTAR PARTS\s*-\s*|^\d+\s*-\s*/i, '').replace(/\s*\(Part \d+\/\d+\)\s*$/i, '').trim();
+      continue;
+    }
     const jk = judulKcm(line);
-    if (jk) { section = jk.replace(/\b\w/g, c => c).toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); continue; }
+    if (jk) { section = jk.toLowerCase().replace(/\b\w/g, c => c.toUpperCase()); umum = false; continue; }
     const sel = selBaris(line);
     const i = sel.findIndex(x => /^(?=[A-Z0-9 .-]*\d)[A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9]$/.test(x));
-    if (i >= 0 && sel[i + 1] && !peta.has(sel[i])) peta.set(sel[i], { nama: sel[i + 1], section: komponenBaris(line) ?? section });
+    if (i < 0 || !sel[i + 1]) continue;
+    const tag = komponenBaris(line);
+    const baru = { nama: sel[i + 1], section: tag ?? section, umum: umum && !tag };
+    const lama = peta.get(sel[i]);
+    if (!lama || (lama.umum && !baru.umum)) peta.set(sel[i], baru);
   }
   return peta;
 }
