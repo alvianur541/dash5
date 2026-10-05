@@ -1,4 +1,4 @@
-const { lengkapiHarga, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { lengkapiHarga, tanpaHargaDb, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 // Alvian 5 Okt (nepple grease adjuster): tabel jawaban berisi "Ketik PN untuk cek" padahal 2 dari 3 PN ada di situs.
 // Audit 2-5 Okt: 66 dari 79 baris seperti itu sebenarnya punya harga. Jaring pengaman sesudah jawaban selesai.
@@ -16,6 +16,18 @@ module.exports = async () => {
   t(!/Ketik PN untuk cek/.test(out) && !/Ketik salah satu part number/.test(out), 'tak ada sisa "Ketik PN", tawaran cek ikut dibuang');
   t(out.includes('Sumber harga: Hexindoparts.com'), 'catatan sumber tetap');
   const biasa = 'Tekanan pilot 3,9 MPa.';
-  t(await runWithDeps(d, () => lengkapiHarga(biasa)) === biasa && dicek.length === 3, 'jawaban tanpa tabel harga tidak disentuh');
+  t(await runWithDeps(d, () => lengkapiHarga(biasa)) === biasa, 'jawaban tanpa tabel harga tidak disentuh');
+  {
+    // Alvian 5 Okt: HAPDH1-CI4 tidak ada di situs, tapi harga promo lama lolos dari DB karena tag "[New Item]".
+    const baris = '  HAPDH1-CI4             | HAP ENG OIL CI4. DRUM                        |     Rp 16.458.600 |   20% |     Rp 13.166.880  [New Item]';
+    const b = tanpaHargaDb(baris);
+    t(!/Rp/.test(b) && b.includes('HAPDH1-CI4'), `harga DB bertag [New Item] ikut dibuang ("${b.trim()}")`);
+    t(tanpaHargaDb('  YB01 | KIT;SEAL | Rp 1.000 | 10% | Rp 900  [Main Pump]').includes('[Main Pump]'), 'tag komponen tetap ada');
+    const ngarang = '| Part Number | Nama Part | Harga |\n|---|---|---|\n| `HAPDH1-CI4` | HAP ENG OIL CI4. DRUM | Rp 13.166.880 |\n| `YA00020592` | VALVE | Rp 1.000.000 |\n| `YA00026375` | VALVE | Rp 900.827 |';
+    const o2 = await runWithDeps(d, () => lengkapiHarga(ngarang));
+    t(o2.includes('| `HAPDH1-CI4` | HAP ENG OIL CI4. DRUM | Belum tersedia |'), 'harga yang tak ada di situs → Belum tersedia');
+    t(o2.includes('| `YA00020592` | VALVE | Rp 942.464 |'), 'harga beda dari situs → dikoreksi ke harga situs');
+    t(o2.includes('| `YA00026375` | VALVE | Rp 900.827 |'), 'harga yang sudah benar tidak diubah');
+  }
   return done();
 };

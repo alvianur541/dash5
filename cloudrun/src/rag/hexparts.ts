@@ -275,33 +275,46 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
   return [...new Set([...dariData, ...dariJawaban])].slice(0, maks);
 }
 
-// Safety net after the answer is written: any table row the model left as "Ketik PN untuk cek" is looked up now
-// and filled in (the client replaces the streamed text with meta.full). Audit 2-5 Oct: 66 of 79 such PNs were
-// actually listed on hexindoparts.com — PN selection before the answer can never be perfect.
+// Safety net after the answer is written, so every price shown comes from hexindoparts.com:
+// - rows still saying "Ketik PN untuk cek" are looked up and filled (audit 2-5 Oct: 66 of 79 were listed);
+// - rows WITH a Rupiah price are re-checked against the site: a price the site does not list (old promo price
+//   from the DB, invented number) is replaced by the site price or "Belum tersedia" (Alvian 5 Oct, HAPDH1-CI4).
+// The client replaces the streamed text with meta.full.
 const KETIK_RE = /Ketik PN untuk cek/i;
+const RP_RE = /Rp\s?\d{1,3}(?:\.\d{3})+(?:,\d+)?|Rp\s?\d+/;
 const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
+const angka = (rp: string): number => Number(rp.replace(/[^\d]/g, ''));
 export async function lengkapiHarga(text: string): Promise<string> {
-  if (!KETIK_RE.test(text)) return text;
+  if (!text.includes('|') || !(KETIK_RE.test(text) || RP_RE.test(text))) return text;
   const t0 = Date.now();
   const baris = text.split('\n');
   const pnBaris = new Map<number, string>();
   baris.forEach((l, i) => {
-    if (!l.includes('|') || !KETIK_RE.test(l)) return;
+    if (!l.trim().startsWith('|') || !(KETIK_RE.test(l) || RP_RE.test(l))) return;
     const pn = l.match(/`([A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9])`/)?.[1] ?? l.split('|').map(x => x.trim()).find(x => PN_SEL_RE.test(x) && /\d/.test(x));
     if (pn) pnBaris.set(i, pn);
   });
   if (!pnBaris.size) return text;
   const web = await hargaWeb([...new Set(pnBaris.values())]);
-  let isi = 0;
+  let isi = 0, koreksi = 0;
   for (const [i, pn] of pnBaris) {
     const v = web.get(pn.toUpperCase());
-    if (v === undefined) continue;
-    const harga = v === null ? 'Gagal dicek, kirim ulang' : v.length ? (v.find(w => w.pn.toUpperCase() === pn.toUpperCase()) ?? v[0]).harga : 'Belum tersedia';
-    if (v && v.length) isi++;
-    baris[i] = baris[i].replace(KETIK_RE, harga);
+    if (v === undefined || v === null) {
+      if (KETIK_RE.test(baris[i])) baris[i] = baris[i].replace(KETIK_RE, 'Gagal dicek, kirim ulang');
+      continue; // site error: keep what the model wrote rather than guess
+    }
+    const pas = v.find(w => w.pn.toUpperCase() === pn.toUpperCase());
+    const harga = pas ? pas.harga : 'Belum tersedia';
+    if (KETIK_RE.test(baris[i])) { baris[i] = baris[i].replace(KETIK_RE, harga); if (pas) isi++; continue; }
+    const tertulis = baris[i].match(RP_RE)?.[0];
+    if (tertulis && (!pas || angka(tertulis) !== angka(pas.harga))) {
+      console.warn('[harga-susulan] %s tertulis %s, situs %s — dikoreksi', pn, tertulis, harga);
+      baris[i] = baris[i].replace(RP_RE, harga);
+      koreksi++;
+    }
   }
   let out = baris.join('\n');
   if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  console.info('[harga-susulan] %d PN tertinggal → %d dapat harga (%dms)', pnBaris.size, isi, Date.now() - t0);
+  console.info('[harga-susulan] %d baris dicek → %d diisi, %d dikoreksi (%dms)', pnBaris.size, isi, koreksi, Date.now() - t0);
   return out;
 }

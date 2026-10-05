@@ -19,7 +19,14 @@ export function tanpaHargaDb(text: string): string {
     if (diBlokWeb) return [line];
     if (/^\s*(Periode Promo|Document:\s*PROMO|Syarat\s*:)/i.test(line)) return [];
     if (/Harga Normal\s*\|\s*Disc\s*\|\s*Harga Promo/i.test(line)) return [line.replace(/\s*\|\s*Harga Normal\s*\|\s*Disc\s*\|\s*Harga Promo\s*$/i, '')];
-    if (/Rp\s?[\d.]+/.test(line) && line.includes('|')) return [line.replace(SEL_HARGA_RE, '').replace(/\s+$/, '')];
+    // A trailing tag ("Rp 13.166.880  [New Item]", "[Main Pump]") used to shield the last price cell from the
+    // regex, so expired promo prices reached the answer as if they were current (Alvian 5 Oct, HAPDH1-CI4).
+    if (/Rp\s?[\d.]+/.test(line) && line.includes('|')) {
+      const tag = line.match(/\s*(\[[^\]]{2,40}\])\s*$/)?.[1];
+      const tanpaTag = tag ? line.replace(/\s*\[[^\]]{2,40}\]\s*$/, '') : line;
+      const bersih = tanpaTag.replace(SEL_HARGA_RE, '').replace(/\s+$/, '').replace(/\s*\|\s*Rp\s?[\d.]+\s*/g, ' ');
+      return [tag && !/new item/i.test(tag) ? `${bersih}  ${tag}` : bersih];
+    }
     return [line
       .replace(/\bPROMO Q\d FY\d{4}\b/g, 'DAFTAR PARTS')
       .replace(/--- HARGA PROMO \(khusus PN di atas\) ---/g, '--- PARTS TERDAFTAR (khusus PN di atas) ---')
