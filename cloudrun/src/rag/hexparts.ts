@@ -274,3 +274,34 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
   const dariJawaban = dariData.length ? [] : [...jawabanSebelumnya.matchAll(PN_JAWABAN_RE)].map(m => m[1]).filter(p => /\d/.test(p) && !/^(?:ZX|ZW)\d/.test(p));
   return [...new Set([...dariData, ...dariJawaban])].slice(0, maks);
 }
+
+// Safety net after the answer is written: any table row the model left as "Ketik PN untuk cek" is looked up now
+// and filled in (the client replaces the streamed text with meta.full). Audit 2-5 Oct: 66 of 79 such PNs were
+// actually listed on hexindoparts.com — PN selection before the answer can never be perfect.
+const KETIK_RE = /Ketik PN untuk cek/i;
+const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
+export async function lengkapiHarga(text: string): Promise<string> {
+  if (!KETIK_RE.test(text)) return text;
+  const t0 = Date.now();
+  const baris = text.split('\n');
+  const pnBaris = new Map<number, string>();
+  baris.forEach((l, i) => {
+    if (!l.includes('|') || !KETIK_RE.test(l)) return;
+    const pn = l.match(/`([A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9])`/)?.[1] ?? l.split('|').map(x => x.trim()).find(x => PN_SEL_RE.test(x) && /\d/.test(x));
+    if (pn) pnBaris.set(i, pn);
+  });
+  if (!pnBaris.size) return text;
+  const web = await hargaWeb([...new Set(pnBaris.values())]);
+  let isi = 0;
+  for (const [i, pn] of pnBaris) {
+    const v = web.get(pn.toUpperCase());
+    if (v === undefined) continue;
+    const harga = v === null ? 'Gagal dicek, kirim ulang' : v.length ? (v.find(w => w.pn.toUpperCase() === pn.toUpperCase()) ?? v[0]).harga : 'Belum tersedia';
+    if (v && v.length) isi++;
+    baris[i] = baris[i].replace(KETIK_RE, harga);
+  }
+  let out = baris.join('\n');
+  if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  console.info('[harga-susulan] %d PN tertinggal → %d dapat harga (%dms)', pnBaris.size, isi, Date.now() - t0);
+  return out;
+}

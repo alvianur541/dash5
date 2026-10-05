@@ -1,7 +1,7 @@
 import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
-import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE, KATA_HARGA_RE } from './rag';
+import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE, KATA_HARGA_RE, lengkapiHarga } from './rag';
 import { deps } from './deps';
 import { promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
@@ -36,6 +36,14 @@ export function scrubLeaks(text: string): string {
 const userTag = (userName: string, history: Message[]) =>
   `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}${
     history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
+
+// Never let the price safety net break an answer: on any error the original text stands.
+async function lengkapiHargaAman(text: string): Promise<string> {
+  try { return await lengkapiHarga(text); } catch (err) {
+    console.warn('[harga-susulan] gagal: %s', (err as Error)?.message);
+    return text;
+  }
+}
 
 function systemFor(unit: UnitModel, casual: boolean): Pick<VRequest, 'systemInstruction'> {
   return { systemInstruction: { parts: [{ text: casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit) }] } };
@@ -218,11 +226,11 @@ export async function generateResponseStream(
 
   contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}` }] });
 
-  const fullText = scrubLeaks(await callProxyStream({
+  const fullText = await lengkapiHargaAman(scrubLeaks(await callProxyStream({
     contents,
     ...systemFor(model, isCasual),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical));
+  }, onChunk, gsTechnical)));
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
@@ -404,6 +412,6 @@ export async function generateResponse(
     },
   };
 
-  const streamed = scrubLeaks(await callProxyStream(body, onChunk));
+  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)));
   return streamed || FALLBACK_RESPONSE;
 }

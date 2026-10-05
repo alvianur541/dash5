@@ -18,5 +18,5 @@ export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs } from '../src/rag/rerank';
 export { wantsNumeric } from '../src/rag/retrieve';
 export { promoAktif, tanpaHargaDb, PROMO_BERAKHIR } from '../src/promo';
-export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE } from '../src/rag';
+export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';
 export { BUKAN_HARGA_SAJA_RE } from '../src/harga';
