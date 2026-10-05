@@ -359,7 +359,11 @@ export async function resolvePartsQuery(
   const adaHargaWeb = adaHarga(webHasil);
 
   // Pure price question → flash-lite picks the rows, code writes the table (no main-model call).
-  if (izinkanCepat && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
+  // Fast path picks rows by name only. A bulletin in the data or a serial number in the conversation means the
+  // right PN depends on S/N or supersession, which only the main model reads (Reyhan 5 Oct, ZX48U harness).
+  const butuhSn = /Kategori:\s*TECHNICAL NEWS/i.test(ragResult.content ?? '')
+    || [trimmed, ...userLalu].some(u => /\b(?:s\/?n|sn|serial|nomor\s*seri|no\.?\s*seri)\w*\b[^\n]{0,12}\d{4,}/i.test(u));
+  if (izinkanCepat && !butuhSn && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
     const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
       ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history));
     if (cepat) {

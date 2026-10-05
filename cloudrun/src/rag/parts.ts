@@ -154,7 +154,11 @@ export async function searchPartsCatalog(
     hybrid(queryText, embedding, cpmCount, { Model: model, Kategori: 'CPM' }, 0.30),
     hybrid(queryText, embedding, promoCount, { Model: model, Kategori: PROMO_KATEGORI }, 0.25),
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
+    // Service bulletins carry PN tables the catalog lacks or that supersede it (per-S/N harness PNs,
+    // Technical News 06/2023 ZX48U-5A): without them a parts question never sees the newest data (Reyhan 5 Oct).
+    hybrid(queryText, embedding, 2, { Model: model, Kategori: 'TECHNICAL NEWS' }, 0.35),
   ];
+  const NEWS_IDX = queries.length - 1;
 
   const exactPromise = partNum ? exactPartRows(partNum.toUpperCase(), model) : Promise.resolve([] as HybridResult[]);
   const sectionPromise = partNum ? Promise.resolve([] as HybridResult[]) : engineSectionRows(`${query}\n${sectionHint}`, model);
@@ -170,8 +174,10 @@ export async function searchPartsCatalog(
   const cpmData: HybridResult[]    = getData(CPM_IDX);
   const promoData: HybridResult[]  = getData(PROMO_IDX);
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
+  const newsData: HybridResult[]   = getData(NEWS_IDX);
+  if (newsData.length) console.info('[parts] technical news: %d chunk ikut', newsData.length);
 
-  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0
+  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0 && newsData.length === 0
       && sectionRows.length === 0 && exact.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
@@ -241,7 +247,8 @@ export async function searchPartsCatalog(
     }
   }
 
-  const pinned = [...exact, ...sectionRows];
+  // Bulletins pinned right after literal PN hits: they are the most specific source when they match.
+  const pinned = [...exact, ...newsData, ...sectionRows];
   const merged = [
     ...pinned,
     ...cpmData,
