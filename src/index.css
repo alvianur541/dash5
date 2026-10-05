@@ -795,9 +795,11 @@ table.sticky-col-3 th:nth-child(3), table.sticky-col-3 td:nth-child(3) {
 table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body table .code-copy { border-bottom: none; }
 .markdown-body td.md-num { white-space: nowrap; }
-/* Balanced columns on phones: codes and prices stay on one line, long names wrap at ~2 lines instead of 4;
-   the table scrolls sideways (PN column is sticky) when the row does not fit. */
-.markdown-body td.md-text { min-width: 8.5em; font-size: 12px; line-height: 1.4; }
+/* Rows run long instead of squeezing (Alvian): cells stay on one line and the table scrolls sideways with the
+   PN column sticky; only very long notes (md-long, >44 chars) wrap, at a comfortable width. */
+.markdown-body table { width: max-content; min-width: 100%; }
+.markdown-body tbody td, .markdown-body td.md-text { white-space: nowrap; }
+.markdown-body td.md-long { white-space: normal; min-width: 16em; max-width: 22em; }
 .markdown-body table code.code-copy { font-size: 11.5px; }
 .markdown-body tbody td:has(> code.code-copy:only-child) { white-space: nowrap; }
 

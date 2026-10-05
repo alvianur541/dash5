@@ -189,10 +189,10 @@ export const MD_COMPONENTS: Components = {
     return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
   },
   li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
-  // Long text cells (part names, notes) get a minimum width so a narrow phone does not stack them 4 lines high.
+  // Cells stay on one line (table scrolls sideways); only very long notes (>44 chars) wrap.
   td: ({ node, children, ...rest }) => {
     const t = nodeText(node as HNode).trim();
-    const cls = NUM_CELL_RE.test(t) || /^rp\s?[\d.]+$/i.test(t) ? 'md-num' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
+    const cls = NUM_CELL_RE.test(t) || /^rp\s?[\d.]+$/i.test(t) ? 'md-num' : t.length > 44 ? 'md-long' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
     return <td {...rest} className={cls}>{children}</td>;
   },
   table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
