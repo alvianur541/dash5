@@ -210,6 +210,15 @@ const SINONIM: Array<[RegExp, string[]]> = [
   [/^(?:saringan)$/, ['filter', 'element']],
   [/^(?:sil|seal|sealkit)$/, ['seal']],
   [/^(?:oring|o-ring)$/, ['ring', 'o-ring']],
+  // Isuzu/Hitachi catalog abbreviations: "SEAL; OIL,CR/SHF,RR" = rear crankshaft oil seal (Alvian 5 Oct).
+  [/^(?:crankshaft|cranksh?aft|cranksfat|crankshat|krenk\w*|kruk\w*|crank\w*)$/, ['crankshaft', 'cr', 'shf', 'crank']],
+  [/^(?:camshaft|camsh?aft|nok\w*)$/, ['camshaft', 'cam']],
+  [/^(?:belakang|blkg|blakang|belakng|rear)$/, ['rear', 'rr']],
+  [/^(?:depan|dpn|front)$/, ['front', 'fr']],
+  [/^(?:kiri)$/, ['lh', 'left']],
+  [/^(?:kanan)$/, ['rh', 'right']],
+  [/^(?:atas)$/, ['upper', 'upr']],
+  [/^(?:bawah)$/, ['lower', 'lwr']],
 ];
 function denganSinonim(kunci: string[]): string[] {
   const out = [...kunci];
@@ -284,6 +293,18 @@ const KETIK_RE = /Ketik PN untuk cek/i;
 const RP_RE = /Rp\s?\d{1,3}(?:\.\d{3})+(?:,\d+)?|Rp\s?\d+/;
 const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
 const angka = (rp: string): number => Number(rp.replace(/[^\d]/g, ''));
+// Once the table has real prices, prose written around the old placeholder ("harga online-nya belum sempat
+// ditarik", "ketik PN untuk cek harganya") contradicts it: drop those sentences, keep the rest (Alvian 5 Oct).
+const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
+function buangKlaimTanpaHarga(text: string): string {
+  return text.split('\n').map(l => {
+    if (l.trim().startsWith('|')) return l;
+    const kal = l.match(/[^.?!]+[.?!]*\s*/g) ?? [l];
+    const sisa = kal.filter(k => !KLAIM_TANPA_HARGA_RE.test(k) || /Belum tersedia\b/.test(k) && /\|/.test(k));
+    return sisa.length === kal.length ? l : sisa.join('').trim();
+  }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 export async function lengkapiHarga(text: string): Promise<string> {
   if (!text.includes('|') || !(KETIK_RE.test(text) || RP_RE.test(text))) return text;
   const t0 = Date.now();
@@ -314,7 +335,8 @@ export async function lengkapiHarga(text: string): Promise<string> {
     }
   }
   let out = baris.join('\n');
-  if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!KETIK_RE.test(out) && (isi || koreksi)) out = buangKlaimTanpaHarga(out);
+  else if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   console.info('[harga-susulan] %d baris dicek → %d diisi, %d dikoreksi (%dms)', pnBaris.size, isi, koreksi, Date.now() - t0);
   return out;
 }
