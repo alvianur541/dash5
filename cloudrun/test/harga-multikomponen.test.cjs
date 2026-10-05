@@ -10,5 +10,11 @@ module.exports = async () => {
   t(['8973585740', '1122301292'].every(pn => r.includes(pn)), `piston & conrod ikut dicek walau injection pump banyak baris (${r.length} PN)`);
   t(r.some(pn => pn.startsWith('11560')), 'injection pump tetap kebagian');
   t(pilihPnHarga(inj, ['harga injection pump']).length > 0, 'satu komponen: perilaku lama');
+  {
+    // Alvian 5 Okt: "nepple grease adjuster" → baris katalog VALVE di section ADJUSTER (20 baris) tak terpilih.
+    const adj = sec('ADJUSTER', [...Array.from({ length: 18 }, (_, i) => [`47${String(i).padStart(5, '0')}`, i % 2 ? 'BOLT' : 'SPRING']), ['YA00020592', 'VALVE'], ['YA00026375', 'VALVE']]);
+    const r2 = pilihPnHarga(adj, ['Cek harga nepple grease adjuster']);
+    t(r2.slice(0, 4).includes('YA00020592'), `istilah bengkel "nepple" → VALVE didahulukan (${r2.slice(0, 3).join(',')})`);
+  }
   return done();
 };

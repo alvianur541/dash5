@@ -7,7 +7,7 @@ const BATAS_MS = 3_000;
 const CACHE_MS = 6 * 3600_000;
 const CACHE_KOSONG_MS = 3600_000;
 const CACHE_MAX = 500;
-const MAKS_PN = 16;
+const MAKS_PN = 20;
 const PARALEL = 6;
 const JEDA_ULANG_MS = 400;
 const cache = new Map<string, { t: number; v: WebPart[] }>();
@@ -196,7 +196,28 @@ export function pnChunkTeratas(content: string, maks = 8): string[] {
   return out;
 }
 
-export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
+// Workshop words → catalog words. Technicians say "nepple grease", the catalog row is VALVE under ADJUSTER;
+// "metal duduk" is METAL KIT; CRANKSHAFT; "bearing" is often METAL (Isuzu). Only adds words, never removes.
+const SINONIM: Array<[RegExp, string[]]> = [
+  [/^(?:nipp?le|nepp?le|nepel|niple|nepple|nippel)$/, ['valve', 'fitting', 'nipple']],
+  [/^(?:harness|harnes|kabel|wiring)$/, ['harness', 'cable', 'wire']],
+  [/^(?:bearing|laher|bantalan)$/, ['bearing', 'metal']],
+  [/^(?:selang)$/, ['hose']],
+  [/^(?:baut)$/, ['bolt']],
+  [/^(?:mur)$/, ['nut']],
+  [/^(?:pin|pen)$/, ['pin']],
+  [/^(?:busing|bushing|bosh|bos)$/, ['bushing']],
+  [/^(?:saringan)$/, ['filter', 'element']],
+  [/^(?:sil|seal|sealkit)$/, ['seal']],
+  [/^(?:oring|o-ring)$/, ['ring', 'o-ring']],
+];
+function denganSinonim(kunci: string[]): string[] {
+  const out = [...kunci];
+  for (const k of kunci) for (const [re, alt] of SINONIM) if (re.test(k)) for (const a of alt) if (!out.includes(a)) out.push(a);
+  return out;
+}
+
+export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 20): string[] {
   // Several components at once ("piston, connecting rod, main bearing, injection pump" from a photo): rank per
   // component and take turns, else one component with many rows (injection pump) fills every slot (Abdul 4 Oct).
   const frasa = teks.join(' , ').split(/\s*(?:,|;|\bdan\b|&|\+)\s*/i).map(f => f.trim()).filter(f => kataDari(f).some(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w)));
@@ -211,8 +232,8 @@ export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya 
   return pilihPnHargaSatu(content, teks, jawabanSebelumnya, maks);
 }
 
-function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '', maks = 14): string[] {
-  const kunci = [...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))];
+function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '', maks = 20): string[] {
+  const kunci = denganSinonim([...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))]);
   const skor = new Map<string, { n: number; nama: string; komp: number; grup: string }>();
   if (kunci.length) {
     let skorSection = 0;
