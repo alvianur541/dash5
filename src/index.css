@@ -795,6 +795,7 @@ table.sticky-col-3 th:nth-child(3), table.sticky-col-3 td:nth-child(3) {
 table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body table .code-copy { border-bottom: none; }
 .markdown-body td.md-num { white-space: nowrap; }
+.markdown-body td.md-price { font-variant-numeric: tabular-nums; }
 /* Rows run long instead of squeezing (Alvian): cells stay on one line and the table scrolls sideways with the
    PN column sticky; only very long notes (md-long, >44 chars) wrap, at a comfortable width. */
 .markdown-body table { width: max-content; min-width: 100%; }

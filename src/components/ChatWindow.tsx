@@ -1,5 +1,5 @@
 
-import { createContext, useContext, useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
+import { createContext, isValidElement, useContext, useEffect, useRef, useState, useCallback, Suspense, lazy, memo } from 'react';
 import type { Components } from 'react-markdown';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
@@ -172,6 +172,15 @@ const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|d
 // "Sumber harga: Hexindoparts.com" (also en/ja variants) under price tables → highlighted tag linking to the store.
 const PRICE_SRC_RE = /^\s*(sumber harga|price source|価格の出典)\s*[:：]\s*hexindoparts\.com\.?\s*$/i;
 
+// Harga di tabel: angka saja, rata kanan; mata uang di judul kolom.
+const RP_CELL_RE = /^rp\.?\s?[\d.,]+$/i;
+const PRICE_HEAD_RE = /^(harga(?:\s+satuan|\s+total)?|sub-?total|total|(?:unit\s+)?price|価格)(?:\s*\(?(?:rp|idr)\)?)?$/i;
+const tanpaRp = (c: React.ReactNode): React.ReactNode =>
+  typeof c === 'string' ? c.replace(/^\s*rp\.?\s?/i, '')
+    : Array.isArray(c) ? c.map((x, i) => (i === 0 ? tanpaRp(x) : x))
+    : isValidElement<{ children?: React.ReactNode }>(c) ? <strong>{tanpaRp(c.props.children)}</strong>
+    : c;
+
 function PriceSource({ label }: { label: string }) {
   return (
     <a className="md-price-src" href="https://hexindoparts.com" target="_blank" rel="noopener noreferrer">
@@ -192,8 +201,14 @@ export const MD_COMPONENTS: Components = {
   // Cells stay on one line (table scrolls sideways); only very long notes (>44 chars) wrap.
   td: ({ node, children, ...rest }) => {
     const t = nodeText(node as HNode).trim();
-    const cls = NUM_CELL_RE.test(t) || /^rp\s?[\d.]+$/i.test(t) ? 'md-num' : t.length > 44 ? 'md-long' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
+    if (RP_CELL_RE.test(t)) return <td {...rest} className="md-num md-price" style={{ ...rest.style, textAlign: 'right' }}>{tanpaRp(children)}</td>;
+    const cls = NUM_CELL_RE.test(t) ? 'md-num' : t.length > 44 ? 'md-long' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
     return <td {...rest} className={cls}>{children}</td>;
+  },
+  th: ({ node, children, ...rest }) => {
+    const m = nodeText(node as HNode).trim().match(PRICE_HEAD_RE);
+    if (!m) return <th {...rest}>{children}</th>;
+    return <th {...rest} style={{ ...rest.style, textAlign: 'right' }}>{`${m[1]} IDR`}</th>;
   },
   table: ({ children }) => <TableBlock sticky={stickyClass(children)}>{children}</TableBlock>,
   code: ({ children }) => <CodeSpan>{children}</CodeSpan>,
