@@ -22,6 +22,24 @@ function applyTheme(theme: Theme) {
   meta.name = 'theme-color';
   meta.content = THEME_COLOR[theme];
   document.head.appendChild(meta);
+  tintStatusBar(THEME_COLOR[theme]);
+}
+
+// iOS 26+ ignores theme-color: it paints the status-bar strip from the background of a position:fixed element
+// at the top edge (else html/body) and only samples it when such an element appears, not when a CSS variable
+// flips. Toggling the theme on the login screen left the strip in the old colour (Alvian 6 Oct, iPhone PWA).
+// So: solid inline html/body backgrounds, plus a 1px fixed strip that is re-created on every theme change,
+// which makes WebKit sample the new colour.
+function tintStatusBar(color: string) {
+  document.documentElement.style.backgroundColor = color;
+  if (!document.body) return;
+  document.body.style.backgroundColor = color;
+  document.getElementById('ios-status-tint')?.remove();
+  const strip = document.createElement('div');
+  strip.id = 'ios-status-tint';
+  strip.setAttribute('aria-hidden', 'true');
+  strip.style.cssText = `position:fixed;top:0;left:0;right:0;height:1px;background-color:${color};pointer-events:none;z-index:2147483647`;
+  document.body.appendChild(strip);
 }
 
 export function useTheme() {
