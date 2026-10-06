@@ -163,7 +163,8 @@ export async function callProxyStream(
       ));
     };
     const cadangan = chain.find(m => m !== modelUsed);
-    const hedgeMs = Number(process.env.HEDGE_MS) || 20_000;
+    const lvl = clampThinking(body, modelUsed).generationConfig?.thinkingConfig?.thinkingLevel;
+    const hedgeMs = Number(process.env.HEDGE_MS) || (lvl === 'low' || lvl === 'minimal' ? 10_000 : 20_000);
     const hedgeTimer = cadangan ? setTimeout(() => {
       if (!winner && !ctrl.signal.aborted && !lanes[0]?.done && !pastDeadline()) {
         console.warn('[hedge] %s belum menjawab %d dtk — kirim %s paralel', modelUsed, hedgeMs / 1000, cadangan);

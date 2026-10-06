@@ -1,0 +1,40 @@
+Section: CYL.;ARM
+Model: ZX48U-5A
+Category: PARTS CATALOG
+Catalog: EQUIPMENT COMPONENTS PARTS CATALOG
+
+Parts List:
+       1 | XB00003772         | TUBE                                | qty:1
+      10 | A811075            | O-RING                              | qty:2 | svc:K (Kit)
+     100 | YD00005193         | KIT;SEAL                            | qty:1
+      11 | XB00003782         | RING;BACK-UP                        | qty:3 | svc:K (Kit)
+      12 | A811080            | O-RING                              | qty:1 | svc:K (Kit)
+      13 | XB00003784         | PISTON                              | qty:1
+      14 | YD00001148         | RING;WIPER                          | qty:1 | svc:K (Kit)
+      15 | XB00003786         | SEAL                                | qty:1 | svc:K (Kit)
+      16 | XB00003787         | RING;WEAR                           | qty:1 | svc:K (Kit)
+      17 | A811030            | O-RING                              | qty:1 | svc:K (Kit)
+      18 | XB00003760         | RING;BACK-UP                        | qty:2 | svc:K (Kit)
+      19 | YD00000023         | BALL;STEEL                          | qty:1
+       2 | XB00003773         | ROD                                 | qty:1
+      20 | YD00000024         | SCREW;SET                           | qty:1
+      21 | XB00003788         | RING;CUSHION                        | qty:1
+      22 | XB00003789         | PIPE                                | qty:1
+      23 | XB00003762         | BOLT                                | qty:1
+      24 | XB00003763         | O-RING                              | qty:2 | svc:K (Kit)
+      25 | J900816            | BOLT                                | qty:1
+      26 | 4332744            | BUSHING                             | qty:2
+      27 | YD00001152         | SEAL;DUST                           | qty:4 | svc:K (Kit)
+      28 | J75481             | FITTING;GREASE                      | qty:2
+      29 | XB00003791         | VALVE;CHECK                         | qty:1
+       3 | XB00003774         | HEAD;CYL.                           | qty:1
+      30 | YD00000044         | SPRING                              | qty:1
+      31 | YD00000045         | PLUG                                | qty:1
+       4 | XB00003775         | SEAL;DUST                           | qty:1 | svc:K (Kit)
+       5 | YD00000052         | RING;RETAIN                         | qty:1
+       6 | XB00003777         | SEAL                                | qty:1 | svc:K (Kit)
+       7 | YD00001145         | RING;BACK-UP                        | qty:1 | svc:K (Kit)
+       8 | YD00001146         | RING;BUFFER                         | qty:1 | svc:K (Kit)
+       9 | YD00000053         | BUSHING;DU                          | qty:1
+
+Total: 32 parts in this section

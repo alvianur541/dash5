@@ -214,6 +214,7 @@ const SINONIM: Array<[RegExp, string[]]> = [
   [/^(?:sil|seal|sealkit)$/, ['seal']],
   [/^(?:oring|o-ring)$/, ['ring', 'o-ring']],
   // Isuzu/Hitachi catalog abbreviations: "SEAL; OIL,CR/SHF,RR" = rear crankshaft oil seal (Alvian 5 Oct).
+  [/^(?:sealkit|sealkid|silkit|sielkit|selkit)$/, ['seal', 'kit']],
   [/^(?:crankshaft|cranksh?aft|cranksfat|crankshat|krenk\w*|kruk\w*|crank\w*)$/, ['crankshaft', 'cr', 'shf', 'crank']],
   [/^(?:camshaft|camsh?aft|nok\w*)$/, ['camshaft', 'cam']],
   [/^(?:belakang|blkg|blakang|belakng|rear)$/, ['rear', 'rr']],
@@ -294,27 +295,32 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
 // The client replaces the streamed text with meta.full.
 const KETIK_RE = /Ketik PN untuk cek/i;
 const RP_RE = /Rp\s?\d{1,3}(?:\.\d{3})+(?:,\d+)?|Rp\s?\d+/;
+const BELUM_RE = /\|\s*(?:Belum tersedia|Tidak tersedia|Not (?:yet )?available)\s*\|/i;
 const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
 const angka = (rp: string): number => Number(rp.replace(/[^\d]/g, ''));
 // Once the table has real prices, prose written around the old placeholder ("harga online-nya belum sempat
 // ditarik", "ketik PN untuk cek harganya") contradicts it: drop those sentences, keep the rest (Alvian 5 Oct).
-const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
+const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu|tersedia)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
 function buangKlaimTanpaHarga(text: string): string {
   return text.split('\n').map(l => {
     if (l.trim().startsWith('|')) return l;
-    const kal = l.match(/[^.?!]+[.?!]*\s*/g) ?? [l];
-    const sisa = kal.filter(k => !KLAIM_TANPA_HARGA_RE.test(k) || /Belum tersedia\b/.test(k) && /\|/.test(k));
-    return sisa.length === kal.length ? l : sisa.join('').trim();
+    const kal = l.match(/.+?(?:[.?!]+(?=\s|$)\s*|$)/g)?.filter(Boolean) ?? [l];
+    const sisa = kal.map(k => {
+      if (!KLAIM_TANPA_HARGA_RE.test(k) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
+      const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1');
+      return potong !== k && !KLAIM_TANPA_HARGA_RE.test(potong) ? potong : '';
+    }).filter(Boolean);
+    return sisa.join('') === kal.join('') ? l : sisa.join('').trim();
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
 export async function lengkapiHarga(text: string): Promise<string> {
-  if (!text.includes('|') || !(KETIK_RE.test(text) || RP_RE.test(text))) return text;
+  if (!text.includes('|') || !(KETIK_RE.test(text) || RP_RE.test(text) || BELUM_RE.test(text))) return text;
   const t0 = Date.now();
   const baris = text.split('\n');
   const pnBaris = new Map<number, string>();
   baris.forEach((l, i) => {
-    if (!l.trim().startsWith('|') || !(KETIK_RE.test(l) || RP_RE.test(l))) return;
+    if (!l.trim().startsWith('|') || !(KETIK_RE.test(l) || RP_RE.test(l) || BELUM_RE.test(l))) return;
     const pn = l.match(/`([A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9])`/)?.[1] ?? l.split('|').map(x => x.trim()).find(x => PN_SEL_RE.test(x) && /\d/.test(x));
     if (pn) pnBaris.set(i, pn);
   });
@@ -330,6 +336,7 @@ export async function lengkapiHarga(text: string): Promise<string> {
     const pas = v.find(w => w.pn.toUpperCase() === pn.toUpperCase());
     const harga = pas ? pas.harga : 'Belum tersedia';
     if (KETIK_RE.test(baris[i])) { baris[i] = baris[i].replace(KETIK_RE, harga); if (pas) isi++; continue; }
+    if (BELUM_RE.test(baris[i])) { if (pas) { baris[i] = baris[i].replace(BELUM_RE, m => m.replace(/[^|\s][^|]*[^|\s]/, harga)); isi++; } continue; }
     const tertulis = baris[i].match(RP_RE)?.[0];
     if (tertulis && (!pas || angka(tertulis) !== angka(pas.harga))) {
       console.warn('[harga-susulan] %s tertulis %s, situs %s — dikoreksi', pn, tertulis, harga);

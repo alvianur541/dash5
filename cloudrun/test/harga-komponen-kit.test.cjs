@@ -33,5 +33,11 @@ module.exports = async () => {
   const baris = prompt.split('\n').filter(l => /YD0000519[34]/.test(l));
   t(baris.some(l => l.includes('YD00005193') && l.includes('CYL.;ARM')), `YD00005193 diberi section CYL.;ARM (${baris.find(l => l.includes('YD00005193')) || 'tak ada'})`);
   t(baris.some(l => l.includes('YD00005194') && l.includes('CYL.;BUCKET')), 'YD00005194 diberi section CYL.;BUCKET');
+  {
+    const { pilihPnHarga } = require('./helpers.cjs');
+    const arm = require('fs').readFileSync(require('path').join(__dirname, 'fixtures-arm-zx48.txt'), 'utf8');
+    const r = pilihPnHarga(arm, ['Sealkit arm cylinder hrga brpa']);
+    t(r[0] === 'YD00005193', `"Sealkit" (satu kata) → KIT;SEAL YD00005193 dipilih pertama (${r.slice(0, 3).join(',')})`);
+  }
   return done();
 };

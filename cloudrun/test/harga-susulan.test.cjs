@@ -2,7 +2,7 @@ const { lengkapiHarga, tanpaHargaDb, resetHargaWebCache, runWithDeps, mockDeps, 
 
 // Alvian 5 Okt (nepple grease adjuster): tabel jawaban berisi "Ketik PN untuk cek" padahal 2 dari 3 PN ada di situs.
 // Audit 2-5 Okt: 66 dari 79 baris seperti itu sebenarnya punya harga. Jaring pengaman sesudah jawaban selesai.
-const WEB = { 8970728231: [{ pn: '8970728231', nama: 'SEAL', harga: 'Rp 1.108.655' }], YA00020592: [{ pn: 'YA00020592', nama: 'VALVE', harga: 'Rp 942.464' }], YA00026375: [{ pn: 'YA00026375', nama: 'VALVE', harga: 'Rp 900.827' }], 4724585: [] };
+const WEB = { YD00005193: [{ pn: 'YD00005193', nama: 'KIT;SEAL', harga: 'Rp 8.493.254' }], 8970728231: [{ pn: '8970728231', nama: 'SEAL', harga: 'Rp 1.108.655' }], YA00020592: [{ pn: 'YA00020592', nama: 'VALVE', harga: 'Rp 942.464' }], YA00026375: [{ pn: 'YA00026375', nama: 'VALVE', harga: 'Rp 900.827' }], 4724585: [] };
 const JAWAB = 'Untuk nipple grease adjuster:\n\n| Part Number | Nama Part | Harga |\n| :--- | :--- | :--- |\n| `4724585` | VALVE | Ketik PN untuk cek |\n| `YA00020592` | VALVE | Ketik PN untuk cek |\n| `YA00026375` | VALVE | Ketik PN untuk cek |\n\nSumber harga: Hexindoparts.com\n\nKetik salah satu part number di atas kalau mau dicek harganya.';
 
 module.exports = async () => {
@@ -41,6 +41,13 @@ module.exports = async () => {
     const c = 'Section: 025 - TIMING GEAR CASE AND FLYWHEEL HOUSING\nParts List:\n       175 | 8970728231     | SEAL; OIL,CR/SHF,RR                    | qty:1\n       176 | 8970728240     | SEAL; OIL,CR/SHF,FR                    | qty:1\n       010 | 1111111111     | GASKET; FLYWHEEL HOUSING               | qty:1';
     const r = pilihPnHarga(c, ['Harga seal cranksfat belakang brpa']);
     t(r[0] === '8970728231', `"seal cranksfat belakang" → SEAL; OIL,CR/SHF,RR dipilih pertama (${r.join(',')})`);
+  }
+  {
+    // Alvian 6 Okt: model menulis "Belum tersedia" padahal situs punya harganya.
+    const j = 'Part number untuk seal kit arm cylinder ZX48U-5A adalah `YD00005193`, dan saat ini harganya belum tersedia di data hexindoparts.com.\n\n| Part Number | Nama Part | Qty | Harga |\n| :--- | :--- | :---: | :--- |\n| `YD00005193` | KIT;SEAL (Arm Cylinder) | 1 | Belum tersedia |\n\nSumber harga: Hexindoparts.com\n\nMau dicek harga seal kit cylinder lainnya (boom atau bucket)?';
+    const o = await runWithDeps(d, () => lengkapiHarga(j));
+    t(o.includes('| Rp 8.493.254 |') && !/belum tersedia/i.test(o) && o.startsWith('Part number untuk seal kit arm cylinder ZX48U-5A adalah `YD00005193`.\n'), `"Belum tersedia" diganti harga situs + kalimatnya dibuang (${o.split('\n')[0].slice(0, 90)})`);
+    t(o.includes('Mau dicek harga seal kit cylinder lainnya'), 'tawaran lanjutan tetap ada');
   }
   return done();
 };
