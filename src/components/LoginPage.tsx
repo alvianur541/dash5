@@ -56,7 +56,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
       >
         <div className="flex flex-col items-center gap-3">
           <div className="flex items-center justify-center">
-            <span className="login-logo"><img src="/haplogo.png" alt="Hexindo Technical Assistant" className="logo-light h-14 w-auto" decoding="sync" fetchPriority="high" /><img src="/haplogo-dark.png" alt="Hexindo Technical Assistant" className="logo-dark h-14 w-auto" decoding="sync" fetchPriority="high" /></span>
+            <span className="login-logo"><img src="/haplogo.png" alt="Hexindo Technical Assistant" className="logo-light h-14 w-auto" decoding="sync" fetchPriority="high" /><img src="/haplogo-dark.png" alt="Hexindo Technical Assistant" className="logo-dark h-[68.6px] w-auto" decoding="sync" fetchPriority="high" /></span>
           </div>
           <h1 className="text-[20px] font-bold tracking-tight text-[var(--text-primary)]">
             Hexindo Technical Assistant

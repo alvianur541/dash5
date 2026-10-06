@@ -873,11 +873,13 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 /* Dark theme uses Hexindo's own dark-background artwork (hexindoparts.com header logo: white wordmark, emblem
    with white outline), recomposed on the light logo's exact layout at 4x (1440x320: emblem full height from x=0,
-   wordmark in the same box), so both themes render at h-14 with identical width, height and text size. */
+   wordmark in the same box). Its orange triangle is matched to the light logo's orange (same size and spot);
+   the white outline overflows into a 9px margin (1512x392): drawn 68.6px tall with a -6.3px margin it occupies
+   exactly the light logo's 252x56 box. Regenerate with dash5-ops/scripts/logo_dark_compose.py. */
 .login-logo { display: inline-flex; padding: 10px 16px; }
 .login-logo .logo-dark { display: none; }
 .dark-theme .login-logo .logo-light { display: none; }
-.dark-theme .login-logo .logo-dark { display: block; }
+.dark-theme .login-logo .logo-dark { display: block; margin: -6.3px; max-width: none; }
 
 /* Visible height from visualViewport (shrinks with the keyboard); 100% chain as fallback, never 100dvh. */
 #root { height: var(--app-h, 100%); }
