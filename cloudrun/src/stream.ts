@@ -109,8 +109,33 @@ export async function callProxyStream(
       }
     }, FIRST_TOKEN_TIMEOUT_MS);
 
-    try {
-      await deps().stream(clampThinking(body, modelUsed), modelUsed, c => {
+    // Hedge: model cadangan paralel bila model utama diam
+    type Lane = { model: string; ctrl: AbortController; done: boolean };
+    const lanes: Lane[] = [];
+    const running: Promise<void>[] = [];
+    let winner: Lane | null = null;
+    const ambil = (lane: Lane) => {
+      if (winner) return;
+      winner = lane;
+      for (const l of lanes) if (l !== lane) l.ctrl.abort();
+      if (lane.model !== modelUsed) {
+        console.warn('[hedge] %s lebih dulu menjawab dari %s', lane.model, modelUsed);
+        modelUsed = lane.model;
+        try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+        catatSebab('hedge');
+      }
+    };
+    const masihAdaLain = (lane: Lane) => !winner && lanes.some(l => l !== lane && !l.done);
+    const startLane = (m: string) => {
+      const lane: Lane = { model: m, ctrl: new AbortController(), done: false };
+      lanes.push(lane);
+      if (ctrl.signal.aborted) lane.ctrl.abort();
+      ctrl.signal.addEventListener('abort', () => lane.ctrl.abort());
+      running.push(deps().stream(clampThinking(body, m), m, c => {
+        if (winner && winner !== lane) return;
+        if (c.error && masihAdaLain(lane)) { lane.ctrl.abort(); return; }
+        if (!c.error && (c.live || c.text)) ambil(lane);
+
         if (c.error) {
           if (c.code === 429) { quotaFull = true; ctrl.abort(); return; }
           upstreamError = String(c.error);
@@ -128,10 +153,29 @@ export async function callProxyStream(
             ctrl.abort();
           }
         }
-      }, { enableGoogleSearch, signal: ctrl.signal });
-    } catch (err) {
-      if (!ctrl.signal.aborted) upstreamError = (err as Error)?.message ?? 'Stream gagal';
+      }, { enableGoogleSearch, signal: lane.ctrl.signal }).then(
+        () => { lane.done = true; },
+        err => {
+          lane.done = true;
+          if (lane.ctrl.signal.aborted || masihAdaLain(lane)) return;
+          if (!ctrl.signal.aborted) upstreamError = (err as Error)?.message ?? 'Stream gagal';
+        },
+      ));
+    };
+    const cadangan = chain.find(m => m !== modelUsed);
+    const hedgeMs = Number(process.env.HEDGE_MS) || 20_000;
+    const hedgeTimer = cadangan ? setTimeout(() => {
+      if (!winner && !ctrl.signal.aborted && !lanes[0]?.done && !pastDeadline()) {
+        console.warn('[hedge] %s belum menjawab %d dtk — kirim %s paralel', modelUsed, hedgeMs / 1000, cadangan);
+        startLane(cadangan);
+      }
+    }, hedgeMs) : null;
+
+    try {
+      startLane(modelUsed);
+      for (let n = 0; n !== running.length;) { n = running.length; await Promise.all(running); }
     } finally {
+      if (hedgeTimer) clearTimeout(hedgeTimer);
       clearTimeout(watchdog);
       clearTimeout(hardTimer);
     }
