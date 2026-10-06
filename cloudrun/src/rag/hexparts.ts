@@ -35,6 +35,9 @@ export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<W
   // 263E2-52031 only as 263E252031 — Abdul 4 Oct). Try the likely spelling first, then the other one.
   const tanpa = asli.replace(/-/g, '');
   const ejaan = tanpa === asli ? [asli] : (tanpaStripKcm(asli) !== asli ? [tanpa, asli] : [asli, tanpa]);
+  // Yanmar engine PNs: catalogs write "YNM729630-51520", the site lists about half of them without the prefix
+  // ("729630-51520", injection pump ZX48U-5A — Alvian 6 Oct; sample of 30: 5 with YNM, 5 bare, 20 absent).
+  if (/^YNM\d/.test(asli)) ejaan.push(asli.slice(3));
   for (const kunci of ejaan) {
     const hasil = await cariSatu(asli, kunci, signal);
     if (hasil.length) return hasil;

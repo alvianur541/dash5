@@ -8,6 +8,7 @@ const SITUS = {
   'HTCDH1C': [produk('HTCDH1C', 'HAP ENG OIL DH 1 CAN', 591600)],
   '4932790920': [produk('4932790920', 'KIT;SEAL', 1198487)],
   '263E252031': [produk('263E252031', 'COUPLING ASSY', 18308172)],
+  '729630-51520': [produk('729630-51520', 'INJECTION PUMP', 52677007)],
   '26418-82071': [produk('26418-82071', 'LEVER', 9372279)],
 };
 
@@ -47,6 +48,9 @@ module.exports = async () => {
     t(zw1.length === 1 && zw1[0].pn === '263E2-52031' && zw1[0].harga === 'Rp 18.308.172', `PN ZW berstrip tak ketemu → coba tanpa strip (${zw1.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
     const zw2 = await fetchHexParts('26418-82071');
     t(zw2.length === 1 && zw2[0].harga === 'Rp 9.372.279', 'PN ZW yang terdaftar dengan strip tetap ketemu');
+    // Alvian 6 Okt: katalog Yanmar menulis YNM729630-51520, situs mendaftarkan 729630-51520.
+    const ynm = await fetchHexParts('YNM729630-51520');
+    t(ynm.length === 1 && ynm[0].harga === 'Rp 52.677.007' && ynm[0].pn === 'YNM729630-51520', `PN YNM dicari juga tanpa prefix, tampil ejaan katalog (${ynm.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
     // Reyhan 4 Okt: katalog KCM menulis 49327-90920, situs mendaftarkan 4932790920.
     const kcm = await fetchHexParts('49327-90920');
     t(kcm.length === 1 && kcm[0].harga === 'Rp 1.198.487' && kcm[0].pn === '49327-90920', `PN KCM berstrip dicari tanpa strip, tampil ejaan katalog (${kcm.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
