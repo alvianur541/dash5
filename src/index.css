@@ -63,6 +63,7 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size-adjust: from-font;
+  transition: background-color 0.4s cubic-bezier(0.4, 0, 0.2, 1), color 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   -webkit-overflow-scrolling: auto;
 }
 
@@ -731,12 +732,6 @@ img {
 
 .light-theme .topbar-center {
   background: color-mix(in srgb, var(--accent-main) 8%, var(--bg-card));
-}
-
-.theme-switching *,
-.theme-switching *::before,
-.theme-switching *::after {
-  transition: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
