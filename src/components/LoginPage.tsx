@@ -35,7 +35,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
 
   return (
     <div className={cn(
-      "vv-fill overflow-y-auto flex flex-col items-center justify-center px-4 transition-colors duration-400 bg-[var(--bg-app)]"
+      "relative h-full w-full overflow-y-auto flex flex-col items-center justify-center px-4 bg-[var(--bg-app)]"
     )}>
       <button
         onClick={onThemeToggle}
