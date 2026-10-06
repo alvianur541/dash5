@@ -25,21 +25,23 @@ function applyTheme(theme: Theme) {
   tintStatusBar(THEME_COLOR[theme]);
 }
 
-// iOS 26+ ignores theme-color: it paints the status-bar strip from the background of a position:fixed element
-// at the top edge (else html/body) and only samples it when such an element appears, not when a CSS variable
-// flips. Toggling the theme on the login screen left the strip in the old colour (Alvian 6 Oct, iPhone PWA).
-// So: solid inline html/body backgrounds, plus a 1px fixed strip that is re-created on every theme change,
-// which makes WebKit sample the new colour.
+// iOS status bar ikut tema
 function tintStatusBar(color: string) {
-  document.documentElement.style.backgroundColor = color;
+  const paint = () => {
+    document.documentElement.style.backgroundColor = color;
+    document.body.style.backgroundColor = color;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color);
+    document.getElementById('ios-status-tint')?.remove();
+    const strip = document.createElement('div');
+    strip.id = 'ios-status-tint';
+    strip.setAttribute('aria-hidden', 'true');
+    strip.style.cssText = `position:fixed;top:0;left:0;right:0;height:1px;background-color:${color};pointer-events:none;z-index:2147483647`;
+    document.body.appendChild(strip);
+  };
   if (!document.body) return;
-  document.body.style.backgroundColor = color;
-  document.getElementById('ios-status-tint')?.remove();
-  const strip = document.createElement('div');
-  strip.id = 'ios-status-tint';
-  strip.setAttribute('aria-hidden', 'true');
-  strip.style.cssText = `position:fixed;top:0;left:0;right:0;height:1px;background-color:${color};pointer-events:none;z-index:2147483647`;
-  document.body.appendChild(strip);
+  paint();
+  requestAnimationFrame(() => requestAnimationFrame(paint));
+  setTimeout(paint, 300);
 }
 
 export function useTheme() {
