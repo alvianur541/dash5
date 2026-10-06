@@ -876,7 +876,10 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
    wordmark in the same box). Its orange triangle is matched to the light logo's orange (same size and spot);
    the white outline overflows into a 9px margin (1512x392): drawn 68.6px tall with a -6.3px margin it occupies
    exactly the light logo's 252x56 box. Regenerate with dash5-ops/scripts/logo_dark_compose.py. */
+/* Both images opt out of preflight's img{max-width:100%}: inside the shrink-wrapped span it let desktop
+   browsers shrink the LIGHT logo ~12% at 125% zoom while the dark one kept full size (Alvian 6 Oct). */
 .login-logo { display: inline-flex; padding: 10px 16px; }
+.login-logo img { max-width: none; flex-shrink: 0; }
 .login-logo .logo-dark { display: none; }
 .dark-theme .login-logo .logo-light { display: none; }
 .dark-theme .login-logo .logo-dark { display: block; margin: -6.3px; max-width: none; }
