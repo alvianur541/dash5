@@ -114,7 +114,7 @@ module.exports = async () => {
   {
     const TURBO = 'Section: 036 - TURBOCHARGER SYSTEM\nParts List:\n    001(C) | 1144003771     | TURBOCHARGER ASM                       | qty:1\n       002 | 1141451401     | GASKET; TURBOCHARGER TO EXH MANIF      | qty:1\n       146 | 8973202040     | PLUG                                   | qty:1';
     const pick = pilihPnHarga(TURBO, ['cek harga turbocharger']);
-    t(pick[0] === '1144003771' && pick.indexOf('1141451401') < pick.indexOf('8973202040'), `NL "harga turbocharger": nama diawali kata dulu, baris lain di section yang sama belakangan (${pick.join(',')})`);
+    t(pick.join() === '1144003771', `NL "harga turbocharger": cukup TURBOCHARGER ASM, isi ditawarkan (${pick.join(',')})`);
     const AC = 'Section: AIR CONDITIONER (1)\n  72 | YD00007143 | COMPRESSOR | qty:1 | svc:S\n  72 | 4615804 | COMPRESSOR | qty:1 | svc:S\n  73 | 4444444 | HOSE | qty:1 | svc:S';
     t(pilihPnHarga(AC, ['harga komressor ac']).join(',') === 'YD00007143,4615804', 'salah ketik "komressor" tetap cocok ke COMPRESSOR');
     t(pilihPnHarga('tanpa tabel', ['hargany berpa'], 'Oli `HTCDH1C` dan filter `4665128` untuk `ZX48U-5A`, isi `7.4 L`').join(',') === 'HTCDH1C,4665128',

@@ -122,6 +122,8 @@ export function blokHargaWeb(hasil: HasilWeb): string {
   return `[HARGA HEXINDOPARTS.COM — harga terkini toko online resmi Hexindo]${head}${tidakAda}${error}`;
 }
 
+const ASSY_RE = /\b(?:ASM|ASSY|ASS'Y|ASSEMBLY|ASSEMBLE)\b/;
+const INTERNAL_RE = /\b(?:kit|seal\w*|sealkit|brush|armature|yoke|bearing|bushing|o-?ring|gasket|internal\w*|dalam|isi\w*|komponen\w*|component\w*|parts?\s+list|rincian|detail|semua|all|repair|overhaul|rekondisi)\b/i;
 const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price', 'prices', 'berapa', 'brp', 'berpa', 'cek', 'check', 'ada', 'ngga', 'nggak', 'gak', 'tidak', 'part', 'parts', 'number', 'nomor', 'unit', 'model', 'yang', 'untuk', 'buat', 'dan', 'atau', 'klo', 'kalau', 'kalo', 'dong', 'tolong', 'coba', 'minta', 'info', 'hexindoparts', 'com', 'web', 'website', 'the', 'for', 'and', 'what', 'how', 'much', 'cost', 'biaya', 'catalog', 'katalog', 'list', 'daftar', 'semua']);
 // Technicians type fast on site: "hrga", "hrgany", "hraga", "brapa" (Reyhan, 4 Oct) must count as a price ask.
 export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|price\w*|prise|berapa|brapa|brpa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
@@ -247,7 +249,7 @@ export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya 
 
 function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '', maks = 20): string[] {
   const kunci = denganSinonim([...new Set(kataDari(teks.join(' ')).filter(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w) && !/^\d+$/.test(w)))]);
-  const skor = new Map<string, { n: number; nama: string; komp: number; grup: string }>();
+  const skor = new Map<string, { n: number; nama: string; komp: number; grup: string; cocokNama?: boolean }>();
   if (kunci.length) {
     let skorSection = 0;
     let judulKata: string[] = [];
@@ -270,13 +272,20 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
       const sisa = kunci.filter(k => !kataNama.some(w => kataCocok(k, w)));
       const komp = sisa.length ? skorKomp : -1;
       const n = nama * 2 + (skorKomp >= 3 ? 1 + (KOMPONEN_UTAMA_RE.test(sel[i + 1]) ? 2 : 0) : 0);
-      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp, grup: kataKomp.join(' ') });
+      if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp, grup: kataKomp.join(' '), cocokNama: nama > 0 });
     }
   }
   // The question names a component beyond the part ("kit seal SWING MOTOR") and some rows sit in that
   // component → drop rows that sit in a different one.
   if ([...skor.values()].some(v => v.komp >= 3)) {
     for (const [pn, v] of skor) if (v.komp === 0) skor.delete(pn);
+  }
+  // Assembly diminta (mis. "harga starter") → cukup baris ASSY; isi internal ditawarkan, bukan dicek semua.
+  const assy = [...skor.entries()].filter(([, v]) => v.cocokNama && ASSY_RE.test(v.nama));
+  const setujuIsi = /komponen internal|internal (?:parts|components)/i.test(jawabanSebelumnya.slice(-400))
+    && /^(?:ok\w*|oke\w*|ya\w*|iya|boleh|lanjut\w*|gas|siap|mau|yes|sip|listkan|tampilkan)\b/i.test((teks[0] ?? '').trim());
+  if (assy.length && !setujuIsi && !INTERNAL_RE.test(teks.join(' '))) {
+    return assy.sort((a, b) => b[1].n - a[1].n).slice(0, 3).map(([pn]) => pn);
   }
   // At most 3 PNs per part name within one component, so a dozen arm-cylinder variants cannot crowd out the
   // seal kit, and seal kits of one component cannot crowd out another's (KCM: 8 SEAL KIT rows, lift cylinder lost).
