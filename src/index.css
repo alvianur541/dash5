@@ -899,3 +899,9 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .status-banner button { color: inherit; text-decoration: underline; font-size: 12px; min-height: 32px; }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
+
+.move-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #F0811F; color: #1A1915; font-size: 13.5px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+.move-banner span { flex: 1; }
+.move-banner a { background: #1A1915; color: #fff; border-radius: 999px; padding: 7px 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
+.move-banner button { display: flex; padding: 6px; border-radius: 999px; }
+@media (min-width: 768px) { .move-banner { left: auto; right: 20px; bottom: 20px; max-width: 460px; } }

@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
+import { MoveBanner } from './components/MoveBanner';
 import { PocketModal } from './components/PocketModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ModelSheet } from './components/ModelSheet';
@@ -61,11 +62,13 @@ export default function App() {
     );
   }
 
-  if (!user) return <LoginPage theme={theme} onThemeToggle={toggleTheme} />;
+  if (!user) return <><MoveBanner /><LoginPage theme={theme} onThemeToggle={toggleTheme} /></>;
 
   const userName = (user.displayName || 'Operator').split(' ')[0];
 
   return (
+    <>
+    <MoveBanner />
     <div className="flex h-full overflow-hidden transition-colors duration-400 bg-[var(--bg-app)] text-[var(--text-primary)]">
       <Sidebar
         selectedModel={selectedModel}
@@ -200,5 +203,6 @@ export default function App() {
         onCancel={() => setDeleteConfirmId(null)}
       />
     </div>
+    </>
   );
 }
