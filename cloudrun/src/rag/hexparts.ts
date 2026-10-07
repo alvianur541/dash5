@@ -7,7 +7,7 @@ const BATAS_MS = 3_000;
 const CACHE_MS = 6 * 3600_000;
 const CACHE_KOSONG_MS = 3600_000;
 const CACHE_MAX = 500;
-const MAKS_PN = 20;
+
 const PARALEL = 6;
 const JEDA_ULANG_MS = 400;
 const cache = new Map<string, { t: number; v: WebPart[] }>();
@@ -70,10 +70,10 @@ async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Prom
   }
 }
 
-export async function hargaWeb(pns: string[]): Promise<HasilWeb> {
+export async function hargaWeb(pns: string[], maks = MAKS_PN_OH): Promise<HasilWeb> {
   const hasil: HasilWeb = new Map();
   const cari = deps().webPrice;
-  const daftar = [...new Set(pns.map(p => p.toUpperCase().trim()).filter(p => p.length >= 4))].slice(0, MAKS_PN);
+  const daftar = [...new Set(pns.map(p => p.toUpperCase().trim()).filter(p => p.length >= 4))].slice(0, maks);
   if (!cari || !daftar.length) return hasil;
   const t0 = Date.now();
   let gagal = 0;
@@ -131,6 +131,8 @@ export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|pri
 // Catalog row → cells. Hitachi chunks are pipe tables; KCM catalogs are fixed-width text
 // (" 53A 49327-70060        SEAL KIT            1      101 -") and must be read as [item, PN, name] too,
 // otherwise no KCM row ever gets a web price (Alvian 4 Oct, KCM 60ZV seal kits).
+// OH PACKAGE: "    1  4613831       Seal;Oil        1"
+const OH_BARIS_RE = /^\s*(\d{1,3})\s{2,}([A-Z0-9][A-Z0-9-]{4,21})\s{2,}(\S.*?)\s{2,}(?:\d+|-)(?:\s{2,}\S.*)?\s*$/;
 const KCM_BARIS_RE = /^\s*(\d{1,3}[A-Z]?)\s+(\d{5}-\d{5}(?:-\d+)?)\s{2,}(\S.*?)\s{2,}\d/;
 // KCM scanned pages carry their own title line ("          LIFT CYLINDER") and one chunk can hold several pages
 // under a wrong Section label (lift cylinder rows inside "CAB OPTION - Cab Structure"); use it as sub-section.
@@ -232,6 +234,21 @@ function denganSinonim(kunci: string[]): string[] {
   return out;
 }
 
+// Pertanyaan menyebut paket OH yang ada di data → semua item paket itu (urut nomor), bukan pilihan per nama.
+const MAKS_PN_OH = 40;
+function itemPaketOh(content: string, kunci: string[]): string[] {
+  let best: { skor: number; pns: string[] } = { skor: 0, pns: [] };
+  for (const blok of content.split(/\n-{3,}\n/)) {
+    const judul = blok.match(/^Section:\s*OH PACKAGE - (?!Indeks)(.+)$/m)?.[1];
+    if (!judul) continue;
+    const skor = skorNama(kunci.filter(k => !/^(?:paket|package|overhaul|reseal|oh)$/.test(k)), kataDari(judul));
+    const pns = blok.split('\n').map(l => l.match(OH_BARIS_RE)?.[2]).filter((x): x is string => !!x);
+    if (skor > best.skor && pns.length) best = { skor, pns };
+  }
+  return best.skor >= 2 && OH_KATA_RE.test(kunci.join(' ')) ? best.pns : [];
+}
+const OH_KATA_RE = /\b(?:overhaul\w*|oh|reseal\w*|paket|package|turun|rekondisi)\b/;
+
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 20): string[] {
   // Several components at once ("piston, connecting rod, main bearing, injection pump" from a photo): rank per
   // component and take turns, else one component with many rows (injection pump) fills every slot (Abdul 4 Oct).
@@ -280,6 +297,8 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
   if ([...skor.values()].some(v => v.komp >= 3)) {
     for (const [pn, v] of skor) if (v.komp === 0) skor.delete(pn);
   }
+  const oh = itemPaketOh(content, kunci);
+  if (oh.length) return oh.slice(0, MAKS_PN_OH);
   // Assembly diminta (mis. "harga starter") → cukup baris ASSY; isi internal ditawarkan, bukan dicek semua.
   const assy = [...skor.entries()].filter(([, v]) => v.cocokNama && ASSY_RE.test(v.nama));
   const setujuIsi = /komponen internal|internal (?:parts|components)/i.test(jawabanSebelumnya.slice(-400))

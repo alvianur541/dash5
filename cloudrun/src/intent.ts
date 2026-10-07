@@ -52,6 +52,8 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
 
 "parts"    → Part numbers, spare parts lookup, cross-reference, compatibility, service interval parts (CPM),
              maintenance schedule per X jam/hm, promo harga parts.
+             ALSO overhaul / reseal package part lists ("paket OH travel motor", "part apa saja untuk reseal control valve",
+             "BOM overhaul engine") → "parts". Only overhaul PROCEDURES (langkah, cara, urutan bongkar) → "technical".
              RULE: ANY query mentioning interval (500/1000/2000 jam/hm/hr) → "parts".
              optimizedQuery MUST be ≥3 words. Interval pattern: "X hour service maintenance parts".
 

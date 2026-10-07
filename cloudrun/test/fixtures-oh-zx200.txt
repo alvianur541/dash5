@@ -1,0 +1,174 @@
+Section: OH PACKAGE - Travel Motor (LH-RH) ZX200-5G
+Model: ZX200-5G
+Kategori: OH PACKAGE
+Document: OH Package (Daftar Part Paket Overhaul & Reseal)
+
+Paket    : Travel Motor (LH-RH)
+Paket (ID): Motor travel (motor jalan) kiri-kanan
+Unit     : ZX200-5G
+Sumber   : sheet 'TRAVEL MTR'
+Jumlah   : 12 item
+Istilah terkait: paket overhaul, OH, turun mesin, reseal, ganti seal, kit seal, seal kit, daftar part, BOM overhaul, part number, kebutuhan part perbaikan.
+
+Ringkasan: paket motor travel (motor jalan) kiri-kanan untuk ZX200-5G, 12 item, antara lain seal oil, shaft, brg roll, rotor, o-ring, plate valve, bushing, friction.
+
+DAFTAR PART
+   No  Part Number   Part Name     Qty
+  ------------------------------------
+    1  4613831       Seal;Oil        1
+    2  2049166       Shaft           -
+    3  4600133       BRG;Roll        -
+    4  4631910       BRG;Roll        -
+    5  2051451       Rotor           -
+    6  4396775       O-Ring          1
+    7  4396774       O-Ring          1
+    8  3106481       Plate;Valve     -
+    9  4397757       Bushing         -
+   10  YB00002175    Friction        -
+   11  4420958       O-Ring          1
+   12  4506415       O-Ring          2
+
+CATATAN
+Qty hanya tercantum untuk sebagian item; item lain qty tidak tercantum di sumber.
+
+Qty adalah kebutuhan per paket sesuai daftar sumber. '-' = qty tidak tercantum di sumber.
+
+
+---
+
+Section: OH PACKAGE - Engine Overhaul ZX200-5G
+Model: ZX200-5G
+Kategori: OH PACKAGE
+Document: OH Package (Daftar Part Paket Overhaul & Reseal)
+
+Paket    : Engine Overhaul
+Paket (ID): Overhaul engine (turun mesin)
+Unit     : ZX200-5G
+Sumber   : sheet 'ENGINE', kode paket ZX200-5ENGP
+Jumlah   : 34 item
+Istilah terkait: paket overhaul, OH, turun mesin, reseal, ganti seal, kit seal, seal kit, daftar part, BOM overhaul, part number, kebutuhan part perbaikan.
+
+Ringkasan: paket overhaul engine (turun mesin) untuk ZX200-5G, 34 item, antara lain belt v, thermostat, gasket set o/h, valve in, valve ex, metal camshaft, metal kit crankshaft(std), metal set con rod, bushing con rod, dust nozzle holder, seat valve, liner set grade 2, spring valve, hose bypass.
+
+DAFTAR PART
+   No  Part Number   Part Name                   Qty
+  --------------------------------------------------
+    1  8981529060    Belt V                        1
+    2  1137700700    Thermostat                    1
+    3  1878143440    Gasket Set O/H                1
+    4  1125511650    Valve In                      6
+    5  1125521110    Valve Ex                      6
+    6  9116930351    Metal CamShaft                5
+    7  9116910481    Metal CamShaft                1
+    8  1115100743    Metal Kit CrankShaft(std)     1
+    9  9122716080    Metal Set Con Rod             6
+   10  1122510320    Bushing Con rod               6
+   11  9153390510    Dust Nozzle Holder            6
+   12  8970376861    Seat Valve                    6
+   13  5117110280    Seat Valve                    6
+   14  1878141060    LINER SET GRADE 2             6
+   15  1125610991    Spring valve                 12
+   16  8972242040    Hose Bypass                   1
+   17  1133421322    Jet; Oil, Piston Cooling      6
+   18  1112820290    Gasket oil cooler             2
+   19  8973296180    valve oil jet                 6
+   20  8943673681    PACKING TAPPET                3
+   21  9098600190    PLUG; PLATE, CA               1
+   22  8943706751    Gasket FIP                    1
+   23  4658521       filter oil                    1
+   24  4616545       Filter Fuel                   1
+   25  4616544       Filter Fuel                   1
+   26  HTCDH1C       Engine Oil can                1
+   27  HTCDH1P       Engine Oil pail               1
+   28  8982497240    Switch press                  1   (PN lain tercatat: 1824101701, 8982526810)
+   29  4371318       Switch thermo                 1   (PN lain tercatat: 8971256011)
+   30  4436537       Sensor thermo                 1
+   31  1115300741    Metal Kit CrShft(0,25)        1
+   32  9122736080    Metal Con Rod(0,25)           6
+   33  1115400741    Metal Kit CrShft(0,50)        1
+   34  9122746080    Metal Con Rod(0,50)           6
+
+CATATAN
+Metal crankshaft dan metal con rod tersedia ukuran standar, 0,25 dan 0,50 (undersize) - pilih sesuai hasil ukur crankshaft. Engine oil tercatat dalam dua kemasan: HTCDH1C (can) dan HTCDH1P (pail).
+
+Qty adalah kebutuhan per paket sesuai daftar sumber. '-' = qty tidak tercantum di sumber.
+
+
+---
+
+Section: OH PACKAGE - Control Valve Reseal ZX200-5G
+Model: ZX200-5G
+Kategori: OH PACKAGE
+Document: OH Package (Daftar Part Paket Overhaul & Reseal)
+
+Paket    : Control Valve Reseal
+Paket (ID): Reseal control valve (C/V)
+Unit     : ZX200-5G
+Sumber   : sheet 'C VALVE', kode paket ZX200-5CVP
+Jumlah   : 30 item
+Istilah terkait: paket overhaul, OH, turun mesin, reseal, ganti seal, kit seal, seal kit, daftar part, BOM overhaul, part number, kebutuhan part perbaikan.
+
+Ringkasan: paket reseal control valve (c/v) untuk ZX200-5G, 30 item, antara lain o-ring, ring back-up, o ring box, coupling.
+
+DAFTAR PART
+   No  Part Number           Part Name      Qty
+  ---------------------------------------------
+    1  0682503               O-RING           3
+    2  976602                O-RING          16
+    3  4506320 / XB00008504  O-RING          14
+    4  A811045               O-RING          19
+    5  0332924               RING;BACK-UP     3
+    6  4506406               O-RING          23
+    7  939356                O-RING           2
+    8  4105067               RING;BACK-UP     2
+    9  933226                O-RING           2
+   10  0792003               O-RING           2
+   11  4226446               O-RING           9
+   12  985098                O-RING          11
+   13  0224422               O-RING           1
+   14  971823                O-RING           1
+   15  4509180               O-RING          43
+   16  966993                O-RING           6
+   17  957366                O-RING          27
+   18  A811040               O-RING           1
+   19  971489                O-RING          14
+   20  4613376 / 4506418     O-RING           6
+   21  0111804               O-RING           7
+   22  4013748               O-RING           1
+   23  0250914               RING;BACK-UP     1
+   24  U12547U               O-RING           1
+   25  0413616               O-RING           1
+   26  4506418               O-RING           6
+   27  4506424               O-RING           1
+   28  4S00491HP             O Ring box       1
+   29  4069801               Coupling         2
+   30  4067834               Coupling         1
+
+CATATAN
+Beberapa item mencantumkan dua nomor part (dipisah '/'), keduanya tercatat di sumber. Untuk isi kit O-ring XP00000001PS lihat chunk 'Isi Kit O-Ring C/V XP00000001PS ZX200-5G'.
+
+Qty adalah kebutuhan per paket sesuai daftar sumber. '-' = qty tidak tercantum di sumber.
+
+
+---
+
+Section: OH PACKAGE - Indeks Paket OH & Reseal ZX200-5G
+Model: ZX200-5G
+Kategori: OH PACKAGE
+Document: OH Package (Daftar Part Paket Overhaul & Reseal)
+
+Daftar paket overhaul / reseal yang tersedia untuk ZX200-5G dalam OH Package.
+Istilah terkait: paket overhaul, OH, turun mesin, reseal, ganti seal, kit seal, seal kit, daftar part, BOM overhaul, part number, kebutuhan part perbaikan.
+
+  - Main Pump (ZX200-5G): 16 item; kit: 4455719, YB00000330, 4487340, 4451036, 4451039
+  - Swing Motor (ZX200-1 / ZX200-5G): 12 item; kit: XB00010860
+  - Travel Motor (LH-RH) (ZX200-5G): 12 item
+  - Engine Overhaul (ZX200-5G): 34 item; kit: 1115100743, 1115300741, 1115400741
+  - Control Valve Reseal (ZX200-5G): 30 item
+  - Isi Kit O-Ring C/V XP00000001PS (ZX200-5G): 21 item; kit: XP00000001PS
+  - Cylinder Front Attachment Reseal (Boom, Arm, Bucket) (ZX200 / ZX200-5G): 26 item; kit: YA00001396, XP00000079PS, YA00001400, XP00000078PS, YA00001392, XP00000080PS
+  - Center Joint Reseal (ZX200 / ZX200-5G (judul kolom sumber: ZX210F-5G)): 9 item
+  - Undercarriage (ZX200-5G): 10 item
+  - Point Tooth & Seal Handle (ZX200-5G): 8 item
+
+Rincian part tiap paket ada di chunk OH PACKAGE masing-masing komponen.

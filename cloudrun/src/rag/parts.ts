@@ -111,6 +111,16 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
   return out;
 }
 
+// Paket overhaul/reseal (Kategori OH PACKAGE, Alvian 7 Okt).
+export const OH_RE = /\b(?:overhaul\w*|over\s*haul|o\/h|oh|reseal\w*|re-?seal|turun\s*mesin|rekondisi|bom)\b|\bpaket\s+(?:oh|overhaul|reseal|perbaikan|repair)\b/i;
+
+async function ohIndeks(model: string): Promise<HybridResult[]> {
+  const { data } = await sb().from('documents').select('content, metadata')
+    .contains('metadata', { Model: model, Kategori: 'OH PACKAGE' })
+    .ilike('content', 'Section: OH PACKAGE - Indeks%').limit(1);
+  return (data ?? []).map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'section_title' }));
+}
+
 export async function searchPartsCatalog(
   query: string,
   model: string,
@@ -143,6 +153,7 @@ export async function searchPartsCatalog(
   const cpmCount = 1;
 
   const queryText = stripped;
+  const mintaOh = OH_RE.test(`${query}\n${sectionHint.split('\n')[0]}`);
 
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
@@ -157,8 +168,10 @@ export async function searchPartsCatalog(
     // Service bulletins carry PN tables the catalog lacks or that supersede it (per-S/N harness PNs,
     // Technical News 06/2023 ZX48U-5A): without them a parts question never sees the newest data (Reyhan 5 Oct).
     hybrid(queryText, embedding, 2, { Model: model, Kategori: 'TECHNICAL NEWS' }, 0.35),
+    hybrid(queryText, embedding, mintaOh ? 2 : 1, { Model: model, Kategori: 'OH PACKAGE' }, mintaOh ? 0.2 : 0.4),
   ];
-  const NEWS_IDX = queries.length - 1;
+  const NEWS_IDX = queries.length - 2;
+  const OH_IDX = queries.length - 1;
 
   const exactPromise = partNum ? exactPartRows(partNum.toUpperCase(), model) : Promise.resolve([] as HybridResult[]);
   const sectionPromise = partNum ? Promise.resolve([] as HybridResult[]) : engineSectionRows(`${query}\n${sectionHint}`, model);
@@ -176,8 +189,12 @@ export async function searchPartsCatalog(
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
   const newsData: HybridResult[]   = getData(NEWS_IDX);
   if (newsData.length) console.info('[parts] technical news: %d chunk ikut', newsData.length);
+  const isOh = (d: HybridResult) => /^Section: OH PACKAGE/m.test(d.content);
+  let ohData: HybridResult[] = getData(OH_IDX).filter(isOh);
+  if (mintaOh && !ohData.length) ohData = (await ohIndeks(model).catch(() => [])).filter(isOh);
+  if (ohData.length) console.info('[parts] OH package: %d chunk ikut', ohData.length);
 
-  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0 && newsData.length === 0
+  if (bodyData.length === 0 && engineData.length === 0 && promoData.length === 0 && cpmData.length === 0 && newsData.length === 0 && ohData.length === 0
       && sectionRows.length === 0 && exact.length === 0) {
     const fallbackQueries = [
       sb().rpc('match_documents', {
@@ -248,7 +265,7 @@ export async function searchPartsCatalog(
   }
 
   // Bulletins pinned right after literal PN hits: they are the most specific source when they match.
-  const pinned = [...exact, ...newsData, ...sectionRows];
+  const pinned = mintaOh ? [...exact, ...ohData, ...newsData, ...sectionRows] : [...exact, ...newsData, ...sectionRows, ...ohData];
   const merged = [
     ...pinned,
     ...cpmData,

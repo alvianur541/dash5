@@ -1,4 +1,5 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
+import { OH_RE } from './rag/parts';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, KATA_HARGA_RE, adaHarga } from './rag';
 import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
@@ -362,6 +363,7 @@ export async function resolvePartsQuery(
   // Fast path picks rows by name only. A bulletin in the data or a serial number in the conversation means the
   // right PN depends on S/N or supersession, which only the main model reads (Reyhan 5 Oct, ZX48U harness).
   const butuhSn = /Kategori:\s*TECHNICAL NEWS/i.test(ragResult.content ?? '')
+    || (/^Section: OH PACKAGE/m.test(ragResult.content ?? '') && OH_RE.test(trimmed))
     || [trimmed, ...userLalu].some(u => /\b(?:s\/?n|sn|serial|nomor\s*seri|no\.?\s*seri)\w*\b[^\n]{0,12}\d{4,}/i.test(u));
   if (izinkanCepat && !butuhSn && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
     const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
