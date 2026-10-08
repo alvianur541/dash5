@@ -144,7 +144,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
 
       {IS_DEMO_HOST && !demoTutup && (
         <div className="move-banner" role="note">
-          <span>Coba demo: username <b>H000</b>, password <b>H000</b>.</span>
+          <span><b>Demo Account</b> : Username <b>H000</b> · Password <b>H000</b></span>
           <button type="button" className="isi" onClick={() => { setUsername('H000'); setPassword('H000'); }}>Isi</button>
           <button type="button" aria-label="Tutup" onClick={() => setDemoTutup(true)}><X size={16} /></button>
         </div>
