@@ -33,7 +33,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 registerMetrics(app);
 
-registerTranscribe(app, { verifyToken, rateLimit, bigJson });
+registerTranscribe(app, { verifyToken, rateLimit, demoLimit, bigJson });
 
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
@@ -93,7 +93,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
   }
 }
 
-app.post('/v1/ask', verifyToken, rateLimit, demoLimit, bigJson, async (req, res) => {
+app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const b = req.body || {};
   const unit = typeof b.model === 'string' ? b.model : '';
   if (!ASK_MODELS.has(unit)) return res.status(400).json({ error: 'Model unit tidak dikenal' });
@@ -121,6 +121,9 @@ app.post('/v1/ask', verifyToken, rateLimit, demoLimit, bigJson, async (req, res)
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }
+  let demoAllowed = false;
+  demoLimit(req, res, () => { demoAllowed = true; });
+  if (!demoAllowed) return;
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   res.setHeader('Content-Type', 'text/event-stream');

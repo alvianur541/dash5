@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react';
 import { m, AnimatePresence } from 'motion/react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { supabase } from '../services/supabase';
+import { useAuth } from './AuthProvider';
 
-const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-xl text-[13px] outline-none bg-[var(--bg-app)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-main)]/50 transition-colors';
+const INPUT_CLASS = 'w-full px-3 py-2.5 rounded-xl text-[16px] outline-none bg-[var(--bg-app)] border border-[var(--border-main)] text-[var(--text-primary)] placeholder-[var(--text-muted)] focus:border-[var(--accent-main)]/50 transition-colors';
 
 function pwErrorText(msg = ''): string {
   if (/different from the old/i.test(msg)) return 'Password baru harus berbeda dari password lama.';
@@ -14,6 +15,8 @@ function pwErrorText(msg = ''): string {
 }
 
 export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { user } = useAuth();
+  const isDemo = user?.isDemoAccount === true;
   const [pwNew, setPwNew] = useState('');
   const [pwConfirm, setPwConfirm] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,6 +38,7 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isDemo) return;
     setError(null);
     if (pwNew.length < 6) { setError('Password minimal 6 karakter.'); return; }
     if (pwNew !== pwConfirm) { setError('Password tidak cocok.'); return; }
@@ -69,7 +73,12 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
             onClick={e => e.stopPropagation()}
           >
             <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-4">Ganti Password</p>
-            {success ? (
+            {isDemo ? (
+              <div className="space-y-3 text-[13px] text-[var(--text-secondary)]">
+                <p>Ganti password akun demo dinonaktifkan di tampilan ini. Ini bukan pengamanan API; akses demo publik ditunda sampai backend dan RLS aman.</p>
+                <button type="button" onClick={close}>Tutup</button>
+              </div>
+            ) : success ? (
               <div className="flex flex-col items-center gap-2 py-4">
                 <CheckCircle2 className="w-8 h-8 text-green-400" />
                 <p className="text-[13px] text-[var(--text-secondary)]">Password berhasil diubah!</p>

@@ -1,11 +1,10 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff, X } from 'lucide-react';
+import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
 
-const IS_DEMO_HOST = typeof window !== 'undefined' && window.location.hostname === 'app.dash5.id';
 
 interface LoginPageProps {
   theme: 'dark' | 'light';
@@ -19,7 +18,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
-  const [demoTutup, setDemoTutup] = useState(false);
+
 
   const isDark = theme === 'dark';
 
@@ -30,7 +29,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   };
 
   const inputClass = cn(
-    "w-full px-4 py-3 rounded-xl text-[14px] outline-none transition-all",
+    "w-full px-4 py-3 rounded-xl text-[16px] outline-none transition-all",
     "bg-[var(--bg-card)] border text-[var(--text-primary)] placeholder-[var(--text-muted)]",
     "focus:ring-2 focus:ring-[var(--accent-main)]/20 focus:border-[var(--accent-main)]/50",
     isDark ? "border-[var(--border-main)]" : "border-black/10 shadow-sm"
@@ -142,13 +141,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
         </div>
       </m.div>
 
-      {IS_DEMO_HOST && !demoTutup && (
-        <div className="move-banner" role="note">
-          <span><b>Demo Account</b> : Username <b>H000</b> · Password <b>H000</b></span>
-          <button type="button" className="isi" onClick={() => { setUsername('H000'); setPassword('H000'); }}>Isi</button>
-          <button type="button" aria-label="Tutup" onClick={() => setDemoTutup(true)}><X size={16} /></button>
-        </div>
-      )}
 
     </div>
   );

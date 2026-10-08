@@ -321,11 +321,11 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
 // - rows WITH a Rupiah price are re-checked against the site: a price the site does not list (old promo price
 //   from the DB, invented number) is replaced by the site price or "Belum tersedia" (Alvian 5 Oct, HAPDH1-CI4).
 // The client replaces the streamed text with meta.full.
-const KETIK_RE = /Ketik PN untuk cek/i;
-const RP_RE = /Rp\s?\d{1,3}(?:\.\d{3})+(?:,\d+)?|Rp\s?\d+/;
+const KETIK_RE = /Ketik PN untuk cek|(?:type|enter|send) (?:the )?(?:PN|part number) to check/i;
+const RP_RE = /\b(?:Rp|IDR)\.?\s*\d[\d.,]*/i;
 const BELUM_RE = /\|\s*(?:Belum tersedia|Tidak tersedia|Not (?:yet )?available)\s*\|/i;
 const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
-const angka = (rp: string): number => Number(rp.replace(/[^\d]/g, ''));
+const PRICE_HEADER_RE = /^(?:harga|price|unit price|cost|amount|total)(?:\s|$)/i;
 // Once the table has real prices, prose written around the old placeholder ("harga online-nya belum sempat
 // ditarik", "ketik PN untuk cek harganya") contradicts it: drop those sentences, keep the rest (Alvian 5 Oct).
 const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu|tersedia)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
@@ -334,7 +334,7 @@ function buangKlaimTanpaHarga(text: string): string {
     if (l.trim().startsWith('|')) return l;
     const kal = l.match(/.+?(?:[.?!]+(?=\s|$)\s*|$)/g)?.filter(Boolean) ?? [l];
     const sisa = kal.map(k => {
-      if (!KLAIM_TANPA_HARGA_RE.test(k) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
+      if (!(KLAIM_TANPA_HARGA_RE.test(k) || /\bprice\b[^.?!]*\b(?:not (?:yet )?available|unavailable|not (?:checked|retrieved))\b/i.test(k)) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
       const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1');
       return potong !== k && !KLAIM_TANPA_HARGA_RE.test(potong) ? potong : '';
     }).filter(Boolean);
@@ -343,38 +343,42 @@ function buangKlaimTanpaHarga(text: string): string {
 }
 
 export async function lengkapiHarga(text: string): Promise<string> {
-  if (!text.includes('|') || !(KETIK_RE.test(text) || RP_RE.test(text) || BELUM_RE.test(text))) return text;
-  const t0 = Date.now();
+  const failed = 'Gagal dicek, kirim ulang';
   const baris = text.split('\n');
-  const pnBaris = new Map<number, string>();
-  baris.forEach((l, i) => {
-    if (!l.trim().startsWith('|') || !(KETIK_RE.test(l) || RP_RE.test(l) || BELUM_RE.test(l))) return;
-    const pn = l.match(/`([A-Z0-9][A-Z0-9 .-]{2,21}[A-Z0-9])`/)?.[1] ?? l.split('|').map(x => x.trim()).find(x => PN_SEL_RE.test(x) && /\d/.test(x));
-    if (pn) pnBaris.set(i, pn);
+  const rows = new Map<number, { pn: string; cells: string[]; prices: number[] }>();
+  let priceCols: number[] = [];
+  baris.forEach((line, i) => {
+    if (!line.trim().startsWith('|')) {
+      priceCols = [];
+      baris[i] = line.replace(new RegExp(RP_RE.source, 'gi'), failed);
+      return;
+    }
+    const cells = line.split('|');
+    const headers = cells.flatMap((c, n) => PRICE_HEADER_RE.test(c.replace(/[*`]/g, '').trim()) ? [n] : []);
+    if (headers.length) { priceCols = headers; return; }
+    if (cells.every(c => !c.trim() || /^:?-+:?$/.test(c.trim()))) return;
+    const prices = [...new Set([...priceCols, ...cells.flatMap((c, n) => RP_RE.test(c) || KETIK_RE.test(c) || BELUM_RE.test(`|${c}|`) ? [n] : [])])];
+    if (!prices.length) return;
+    const pn = cells.filter((_, n) => !prices.includes(n)).map(c => c.replace(/[*`]/g, '').trim()).find(c => PN_SEL_RE.test(c) && /\d/.test(c));
+    if (pn) rows.set(i, { pn, cells, prices });
+    else {
+      for (const n of prices) if (cells[n]?.trim()) cells[n] = ` ${failed} `;
+      baris[i] = cells.join('|');
+    }
   });
-  if (!pnBaris.size) return text;
-  const web = await hargaWeb([...new Set(pnBaris.values())]);
-  let isi = 0, koreksi = 0;
-  for (const [i, pn] of pnBaris) {
+  if (!rows.size) return baris.join('\n');
+  const web = await hargaWeb([...new Set([...rows.values()].map(r => r.pn))]);
+  let verified = false;
+  for (const [i, { pn, cells, prices }] of rows) {
     const v = web.get(pn.toUpperCase());
-    if (v === undefined || v === null) {
-      if (KETIK_RE.test(baris[i])) baris[i] = baris[i].replace(KETIK_RE, 'Gagal dicek, kirim ulang');
-      continue; // site error: keep what the model wrote rather than guess
-    }
-    const pas = v.find(w => w.pn.toUpperCase() === pn.toUpperCase());
-    const harga = pas ? pas.harga : 'Belum tersedia';
-    if (KETIK_RE.test(baris[i])) { baris[i] = baris[i].replace(KETIK_RE, harga); if (pas) isi++; continue; }
-    if (BELUM_RE.test(baris[i])) { if (pas) { baris[i] = baris[i].replace(BELUM_RE, m => m.replace(/[^|\s][^|]*[^|\s]/, harga)); isi++; } continue; }
-    const tertulis = baris[i].match(RP_RE)?.[0];
-    if (tertulis && (!pas || angka(tertulis) !== angka(pas.harga))) {
-      console.warn('[harga-susulan] %s tertulis %s, situs %s — dikoreksi', pn, tertulis, harga);
-      baris[i] = baris[i].replace(RP_RE, harga);
-      koreksi++;
-    }
+    const pas = v?.find(w => w.pn.toUpperCase() === pn.toUpperCase());
+    const value = v == null ? failed : pas ? pas.harga : 'Belum tersedia';
+    for (const [index, n] of prices.entries()) cells[n] = ` ${index === 0 ? value : failed} `;
+    baris[i] = cells.join('|');
+    if (pas) verified = true;
   }
   let out = baris.join('\n');
-  if (!KETIK_RE.test(out) && (isi || koreksi)) out = buangKlaimTanpaHarga(out);
-  else if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
-  console.info('[harga-susulan] %d baris dicek → %d diisi, %d dikoreksi (%dms)', pnBaris.size, isi, koreksi, Date.now() - t0);
+  if (verified) out = buangKlaimTanpaHarga(out);
+  if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   return out;
 }

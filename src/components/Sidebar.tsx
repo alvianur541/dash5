@@ -332,6 +332,7 @@ export function Sidebar({
                     <div className="history-search">
                       <Search size={12} className="shrink-0 text-[var(--text-muted)]" />
                       <input
+                        style={{ fontSize: '16px' }}
                         value={historyQuery}
                         onChange={e => setHistoryQuery(e.target.value)}
                         placeholder="Cari riwayat…"
@@ -445,11 +446,16 @@ export function Sidebar({
                   >
                     <button
                       onClick={() => { setShowUserMenu(false); setShowChangePw(true); }}
+                      disabled={user?.isDemoAccount}
+                      title={user?.isDemoAccount ? 'Dinonaktifkan untuk akun demo — pembatasan tampilan, bukan pengamanan API.' : undefined}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
                     >
                       <KeyRound size={14} className="text-[var(--text-muted)]" />
                       <span>Ganti Password</span>
                     </button>
+                    {user?.isDemoAccount && (
+                      <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">Ganti password demo dinonaktifkan di tampilan, bukan pengamanan API. Demo publik ditunda sampai backend dan RLS aman.</p>
+                    )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowSupport(true); }}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"

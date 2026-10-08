@@ -1,6 +1,5 @@
 import { UnitModel, Message, AgentEvent } from '../types';
 import { getAuthToken } from './supabase';
-import { ANSWER_CACHE_PREFIX } from './cacheGen';
 
 // Above the server deadline (120 s) so the server's own message wins instead of us guessing.
 const ASK_IDLE_TIMEOUT_MS = 130_000;
@@ -27,54 +26,7 @@ export function warmupProxy(): void {
   fetch(`${PROXY_URL}/health`).catch(() => { });
 }
 
-const ANSWER_CACHE_TTL_MS = 3 * 24 * 60 * 60 * 1000;
-const CONTEXT_REF_RE = /\b(itu|ini|nya|tadi|tersebut|barusan|sebelumnya)\b/i;
-
-// Follow-ups like "cek lg" mean different things per chat, so the key carries the last exchange.
-function contextTag(history: Message[]): string {
-  const last = history.slice(-2).map(m => m.content).join('\n');
-  if (!last) return '';
-  let h = 5381;
-  for (let i = 0; i < last.length; i++) h = (h * 33 + last.charCodeAt(i)) | 0;
-  return `::c${(h >>> 0).toString(36)}`;
-}
-
-function answerCacheKey(model: string, query: string, history: Message[]): string | null {
-  const q = query.toLowerCase().replace(/\s+/g, ' ').trim();
-  if (q.length < 6 || q.length > 300) return null;
-  if (CONTEXT_REF_RE.test(q)) return null;
-  return `${ANSWER_CACHE_PREFIX}${model}::${q}${contextTag(history)}`;
-}
-
-function readAnswerCache(key: string): string | null {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    const { text, exp } = JSON.parse(raw) as { text?: unknown; exp?: unknown };
-    if (typeof text !== 'string' || typeof exp !== 'number' || Date.now() > exp) {
-      localStorage.removeItem(key);
-      return null;
-    }
-    return text;
-  } catch { return null; }
-}
-
-function writeAnswerCache(key: string, text: string): void {
-  try {
-    if (text.length < 40 || text.length > 20000) return;
-    localStorage.setItem(key, JSON.stringify({ text, exp: Date.now() + ANSWER_CACHE_TTL_MS }));
-  } catch { }
-}
-
-async function streamCanned(text: string, onChunk: (t: string) => void): Promise<string> {
-  const CHUNK = 24;
-  for (let i = 0; i < text.length; i += CHUNK) {
-    onChunk(text.slice(i, i + CHUNK));
-    await new Promise(r => setTimeout(r, 12));
-  }
-  return text;
-}
-
+// Answer caching is disabled: shared browsers and live prices require a fresh authorized request.
 interface AskBody {
   model: UnitModel;
   userName: string;
@@ -90,14 +42,13 @@ export interface AskOptions {
   signal?: AbortSignal;
 }
 
-const FALLBACK_RESPONSE = 'Maaf, AI tidak berhasil menyusun jawaban kali ini (respons server terlalu lama). Kirim ulang pertanyaanmu.';
 
 async function ask(
   body: AskBody,
   onChunk: (text: string) => void,
   onAgentEvent: ((e: AgentEvent) => void) | undefined,
   cancel: AbortSignal | undefined,
-): Promise<{ text: string; cacheable: boolean }> {
+): Promise<{ text: string }> {
   const ctrl = new AbortController();
   const stop = () => ctrl.abort();
   cancel?.addEventListener('abort', stop);
@@ -108,7 +59,8 @@ async function ask(
   const abortReason = () => (cancel?.aborted ? new DOMException('Dibatalkan', 'AbortError') : new Error('SERVER_DIAM'));
 
   let text = '';
-  let cacheable = false;
+  let completed = false;
+  let receivedFinal = false;
   let serverError: string | null = null;
   try {
     const send = async () => fetch(`${PROXY_URL}/v1/ask`, {
@@ -144,8 +96,7 @@ async function ask(
         step = await reader.read();
       } catch (e) {
         if (!ctrl.signal.aborted) throw e;
-        if (cancel?.aborted || !text.trim()) throw abortReason();
-        break;
+        throw abortReason();
       }
       if (step.done) break;
       tick();
@@ -166,9 +117,14 @@ async function ask(
             if (frame.event && onAgentEvent) onAgentEvent(frame.event as AgentEvent);
             break;
           case 'meta':
-            cacheable = frame.cacheable === true;
             // Server text is final: retries and leak/LaTeX cleanup can make it shorter than what streamed.
-            if (typeof frame.full === 'string' && frame.full.trim()) text = frame.full;
+            if (typeof frame.full === 'string' && frame.full.trim()) {
+              text = frame.full;
+              receivedFinal = true;
+            }
+            break;
+          case 'done':
+            completed = true;
             break;
           case 'error':
             serverError = String(frame.message || 'Gagal memproses pertanyaan.');
@@ -181,8 +137,10 @@ async function ask(
     cancel?.removeEventListener('abort', stop);
   }
 
-  if (serverError && !text.trim()) throw new Error(serverError);
-  return { text: text || FALLBACK_RESPONSE, cacheable };
+  if (serverError) throw new Error(serverError);
+  if (ctrl.signal.aborted) throw abortReason();
+  if (!completed || !receivedFinal || !text.trim()) throw new Error('Stream terputus sebelum jawaban selesai.');
+  return { text };
 }
 
 export async function generateResponseStream(
@@ -194,21 +152,10 @@ export async function generateResponseStream(
   onAgentEvent?: (event: AgentEvent) => void,
   { sessionId, signal }: AskOptions = {},
 ): Promise<string> {
-  const trimmed = userInput.trim();
-  const cacheKey = THINK_OVERRIDE ? null : answerCacheKey(model, trimmed, history);
-  if (cacheKey) {
-    const cached = readAnswerCache(cacheKey);
-    if (cached) {
-      console.info('[answer-cache] HIT');
-      return streamCanned(cached, onChunk);
-    }
-  }
-
-  const { text, cacheable } = await ask(
+  const { text } = await ask(
     { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, sessionId },
     onChunk, onAgentEvent, signal,
   );
-  if (cacheKey && cacheable) writeAnswerCache(cacheKey, text);
   return text;
 }
 

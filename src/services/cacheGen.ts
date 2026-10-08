@@ -1,6 +1,3 @@
-const CACHE_GEN = 10;
-
-export const ANSWER_CACHE_PREFIX = `dash-ans-g${CACHE_GEN}:`;
 
 export function purgeStaleAnswerCaches(): void {
   try {
@@ -11,10 +8,10 @@ export function purgeStaleAnswerCaches(): void {
       const k = localStorage.key(i);
       if (!k) continue;
       if (!akar.some(a => k.startsWith(a))) continue;
-      if (k.startsWith(ANSWER_CACHE_PREFIX)) continue;
+
       buang.push(k);
     }
     for (const k of buang) localStorage.removeItem(k);
-    if (buang.length) console.info('[cache] %d entri generasi lama dihapus', buang.length);
+    if (buang.length) console.info('[cache] %d entri jawaban lama dihapus', buang.length);
   } catch { }
 }

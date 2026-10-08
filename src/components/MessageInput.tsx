@@ -7,7 +7,7 @@ import { UnitModel } from '../types';
 import { authHeaders, PROXY_URL } from '../services/ai';
 
 interface MessageInputProps {
-  onSendMessage: (content: string, attachments?: File[]) => void;
+  onSendMessage: (content: string, attachments?: File[]) => boolean;
   disabled?: boolean;
   selectedModel: UnitModel;
   isOffline?: boolean;
@@ -145,7 +145,8 @@ export function MessageInput({
     const text = input.trim();
     if (!text && !pendingImage) return;
     buzz();
-    onSendMessage(text, pendingImage ? [pendingImage.file] : undefined);
+    const accepted = onSendMessage(text, pendingImage ? [pendingImage.file] : undefined);
+    if (!accepted) return;
     setPendingImage(null);
     resetBox();
   };
@@ -197,9 +198,14 @@ export function MessageInput({
               flash('Jawaban masih berjalan — pesan suaramu disimpan di kotak ketik.');
               return;
             }
+            const accepted = onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined);
+            if (!accepted) {
+              setInput(combined);
+              flash('Pesan belum terkirim — tersimpan di kotak ketik. Kirim lagi saat siap.');
+              return;
+            }
             resetBox();
             buzz();
-            onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined);
             setPendingImage(null);
           } else {
             flash('Suara tidak tertangkap — coba bicara lebih dekat ke mikrofon.');
@@ -305,7 +311,7 @@ export function MessageInput({
               rows={1}
               disabled={disabled || isTranscribing}
               style={{ height: '24px', resize: 'none' }}
-              className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-[14px] placeholder:text-[var(--text-muted)] py-0 leading-[24px] max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide block"
+              className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] text-[16px] placeholder:text-[var(--text-muted)] py-0 leading-[24px] max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide block"
             />
           </div>
 

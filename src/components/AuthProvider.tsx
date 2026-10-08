@@ -8,6 +8,7 @@ interface AuthUser {
   displayName: string;
   role: string;
   email: string | null;
+  isDemoAccount: boolean;
 }
 
 interface AuthContextType {
@@ -27,6 +28,7 @@ function toAuthUser(u: User): AuthUser {
     displayName: meta.display_name || 'Operator',
     role: meta.role || 'Field Technician',
     email: u.email ?? null,
+    isDemoAccount: u.app_metadata?.demo === true || u.email?.toLowerCase() === 'h000@dash5.internal',
   };
 }
 

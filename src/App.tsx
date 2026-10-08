@@ -30,7 +30,7 @@ export default function App() {
     messages, isTyping, isStreaming, error, setError, agentEvents,
     sessionList, currentSessionId, loadingSession,
     deleteConfirmId, setDeleteConfirmId, deleteAllConfirm, setDeleteAllConfirm,
-    mountedRef, messagesRef, lastSentRef, queued, setQueued,
+    mountedRef, messagesRef, lastSentRef,
     stopStreaming, startNewSession, handleSelectSession,
     confirmDelete, confirmDeleteAll, handleSendMessage, retryLast,
   } = useChat(user, isOnline);
@@ -133,10 +133,7 @@ export default function App() {
         <StatusBanner id="online" show={showBackOnline} tone="ok" icon={<Wifi size={13} />}>
           <strong className="font-semibold">Sinyal kembali</strong> — Koneksi aktif, siap bertanya lagi.
         </StatusBanner>
-        <StatusBanner id="queued" show={!!queued && !isOnline} tone="warn" icon={<Loader2 size={13} className="animate-spin" />}
-          action={<button onClick={() => setQueued(null)}>Batal</button>}>
-          <strong className="font-semibold">Menunggu sinyal</strong> — pertanyaan akan terkirim otomatis saat online.
-        </StatusBanner>
+
         <StatusBanner id="error" show={!!error} tone="error" icon={<AlertCircle size={15} />}
           action={<div className="flex items-center gap-3">
             {lastSentRef.current && !isTyping && !isStreaming && (
@@ -162,6 +159,7 @@ export default function App() {
 
         <div ref={inputBarRef} className="input-bar-float">
           <MessageInput
+            key={user.uid}
             onSendMessage={handleSendMessage}
             disabled={isTyping}
             selectedModel={selectedModel}

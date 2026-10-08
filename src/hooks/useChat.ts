@@ -11,7 +11,7 @@ import { makeThumbnails } from '../lib/thumbnail';
 import { errorMessage } from '../lib/errorMessage';
 import { createPacer } from '../lib/streamPacer';
 
-type Queued = { content: string; attachments?: File[] };
+
 type User = { uid: string; displayName?: string | null } | null;
 
 export function useChat(user: User, isOnline: boolean) {
@@ -26,7 +26,7 @@ export function useChat(user: User, isOnline: boolean) {
   const [deleteAllConfirm, setDeleteAllConfirm] = useState(false);
   const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
   const [loadingSession, setLoadingSession] = useState(false);
-  const [queued, setQueued] = useState<Queued | null>(null);
+
 
   const lastSentRef = useRef<{ content: string; attachments?: File[] } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
@@ -34,11 +34,14 @@ export function useChat(user: User, isOnline: boolean) {
   const sessionListRef = useRef<SessionMeta[]>([]);
   const mountedRef = useRef(true);
   const abortStreamRef = useRef<AbortController | null>(null);
+  const sendingRef = useRef(false);
+  const userIdRef = useRef(user?.uid);
+  userIdRef.current = user?.uid;
 
   useEffect(() => {
     mountedRef.current = true;
     warmupProxy();
-    return () => { mountedRef.current = false; };
+    return () => { mountedRef.current = false; abortStreamRef.current?.abort(); };
   }, []);
 
   useEffect(() => { sessionIdRef.current = currentSessionId; }, [currentSessionId]);
@@ -56,6 +59,12 @@ export function useChat(user: User, isOnline: boolean) {
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
     setMessages([]);
+    messagesRef.current = [];
+    lastSentRef.current = null;
+    setIsTyping(false);
+    setIsStreaming(false);
+    setAgentEvents([]);
+    setLoadingSession(false);
     setError(null);
     setCurrentSessionId(null);
     sessionIdRef.current = null;
@@ -68,7 +77,7 @@ export function useChat(user: User, isOnline: boolean) {
       deleteAllChatSessions(uid, clearAt).then(ok => { if (ok && pendingClearAt(uid) === clearAt) clearPendingClear(uid); });
     }
     const list = await fetchUserSessionList(uid).catch(() => null);
-    if (list === null || !mountedRef.current) return;
+    if (list === null || !mountedRef.current || userIdRef.current !== uid) return;
     // A delete-all made while this request was in flight makes its answer stale.
     if (pendingClearAt(uid) > startedAt) return;
     const tomb = loadSessionTombstones(uid);
@@ -87,10 +96,10 @@ export function useChat(user: User, isOnline: boolean) {
   // Keyed on uid, not the user object: a token refresh must not reset the open chat.
   const uid = user?.uid;
   useEffect(() => {
+    startNewSession();
     if (!uid) { setSessionList([]); return; }
     const tomb = loadSessionTombstones(uid);
     setSessionList(loadSessionList(uid).filter(s => !tomb[s.id]));
-    startNewSession();
     syncSessions(uid);
     return onForeground(() => syncSessions(uid));
   }, [uid, startNewSession, syncSessions]);
@@ -99,6 +108,9 @@ export function useChat(user: User, isOnline: boolean) {
     if (!user) return;
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
+    setIsTyping(false);
+    setIsStreaming(false);
+    setAgentEvents([]);
     const local = loadSessionData(user.uid, id);
     setCurrentSessionId(id);
     sessionIdRef.current = id;
@@ -111,7 +123,7 @@ export function useChat(user: User, isOnline: boolean) {
       setLoadingSession(true);
     }
     const remote = await fetchSessionData(id, user.uid);
-    if (!mountedRef.current || sessionIdRef.current !== id) return;
+    if (!mountedRef.current || sessionIdRef.current !== id || userIdRef.current !== user.uid) return;
     setLoadingSession(false);
     if (remote) {
       setMessages(remote.messages);
@@ -146,9 +158,8 @@ export function useChat(user: User, isOnline: boolean) {
     if (await deleteAllChatSessions(uid, at) && pendingClearAt(uid) === at) clearPendingClear(uid);
   }, [user, startNewSession]);
 
-  const handleSendMessage = useCallback(async (content: string, attachments?: File[]) => {
+  const sendMessage = useCallback(async (content: string, attachments?: File[]) => {
     if (!user) return;
-    if (!navigator.onLine) { setQueued({ content, attachments }); return; }
     lastSentRef.current = { content, attachments };
 
     let sessionId = sessionIdRef.current;
@@ -159,6 +170,7 @@ export function useChat(user: User, isOnline: boolean) {
     }
 
     const attachmentUrls = attachments?.length ? await makeThumbnails(attachments) : [];
+    if (!mountedRef.current || userIdRef.current !== user.uid || sessionIdRef.current !== sessionId) return;
     const userMessage: Message = {
       id: crypto.randomUUID(), role: 'user', content: content.trim(), timestamp: Date.now(), attachments: attachmentUrls,
     };
@@ -190,7 +202,8 @@ export function useChat(user: User, isOnline: boolean) {
     const sessionSnapshot = sessionId;
     const streamCtrl = new AbortController();
     abortStreamRef.current = streamCtrl;
-    const stillActive = () => mountedRef.current && sessionIdRef.current === sessionSnapshot && !streamCtrl.signal.aborted;
+    const ownsSession = () => mountedRef.current && userIdRef.current === user.uid && sessionIdRef.current === sessionSnapshot;
+    const stillActive = () => ownsSession() && !streamCtrl.signal.aborted;
     const upsertAssistant = (text: string) => setMessages(prev => {
       const exists = prev.some(m => m.id === assistantId);
       if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: text, timestamp: assistantTs }];
@@ -215,20 +228,23 @@ export function useChat(user: User, isOnline: boolean) {
         : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, opts);
     } catch (err) {
       pacer.cancel();
+      if (!ownsSession()) return;
       setIsTyping(false);
       setIsStreaming(false);
+      setAgentEvents([]);
       if (!streamCtrl.signal.aborted) {
         console.error('AI Error:', (err as Error)?.message);
-        setError(errorMessage(err));
+        setMessages(prev => prev.filter(m => m.id !== assistantId));
+        messagesRef.current = messagesRef.current.filter(m => m.id !== assistantId);
+        setError(`Jawaban belum selesai dan tidak disimpan. ${errorMessage(err)}`);
         return;
       }
-      // Stop cancels the request; what was already on screen is kept.
-      fullText = pacer.text();
+      fullText = pacer.text().trim() ? `${pacer.text()}\n\n_Jawaban dihentikan oleh pengguna; belum selesai._` : '';
     }
 
     setIsTyping(false);
     const release = () => { if (!abortStreamRef.current || abortStreamRef.current === streamCtrl) setIsStreaming(false); };
-    if (!mountedRef.current || sessionIdRef.current !== sessionSnapshot || !fullText.trim()) {
+    if (!ownsSession() || !fullText.trim()) {
       pacer.cancel();
       release();
       return;
@@ -243,12 +259,18 @@ export function useChat(user: User, isOnline: boolean) {
     release();
   }, [user, selectedModel]);
 
-  useEffect(() => {
-    if (!isOnline || !queued) return;
-    const q = queued;
-    setQueued(null);
-    handleSendMessage(q.content, q.attachments);
-  }, [isOnline, queued, handleSendMessage]);
+  const handleSendMessage = useCallback((content: string, attachments?: File[]): boolean => {
+    if (!user || !mountedRef.current || userIdRef.current !== user.uid || sendingRef.current || (!content.trim() && !attachments?.length)) return false;
+    if (!isOnline || !navigator.onLine) {
+      setError('Sedang offline. Pesan tidak dikirim otomatis; kirim lagi setelah sinyal kembali.');
+      return false;
+    }
+    sendingRef.current = true;
+    void sendMessage(content, attachments).catch(err => {
+      if (userIdRef.current === user.uid) setError(errorMessage(err));
+    }).finally(() => { sendingRef.current = false; });
+    return true;
+  }, [user, isOnline, sendMessage]);
 
   const retryLast = useCallback(() => {
     const last = lastSentRef.current;
@@ -260,7 +282,7 @@ export function useChat(user: User, isOnline: boolean) {
     messages, isTyping, isStreaming, error, setError, agentEvents,
     sessionList, currentSessionId, loadingSession,
     deleteConfirmId, setDeleteConfirmId, deleteAllConfirm, setDeleteAllConfirm,
-    queued, setQueued, mountedRef, messagesRef, lastSentRef,
+    mountedRef, messagesRef, lastSentRef,
     stopStreaming, startNewSession, handleSelectSession,
     confirmDelete, confirmDeleteAll, handleSendMessage, retryLast,
   };
