@@ -21,20 +21,37 @@ const DEMO_EMAILS = new Set((process.env.DEMO_EMAILS || 'h000@dash5.internal').s
 const DEMO_LIMIT = Number(process.env.DEMO_LIMIT || 10);
 const _demoHitung = new Map();
 
-// Akun demo publik: maksimal DEMO_LIMIT pertanyaan per hari (WIB), dihitung per instance.
-function demoLimit(req, res, next) {
+// Akun demo publik: maksimal DEMO_LIMIT pertanyaan per hari (WIB); hitungan di Supabase, cadangan di memori.
+async function hitungDemoDb(token) {
+  if (!token || !SUPABASE_URL || !SUPABASE_ANON_KEY) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/rpc/demo_hitung`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: '{}',
+      signal: AbortSignal.timeout(4_000),
+    });
+    if (!r.ok) return null;
+    const n = Number(await r.json());
+    return Number.isFinite(n) ? n : null;
+  } catch { return null; }
+}
+
+async function demoLimit(req, res, next) {
   const email = String((req.authUser && req.authUser.email) || '').toLowerCase();
   if (!DEMO_EMAILS.has(email)) return next();
   const hari = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
   const k = `${email}|${hari}`;
-  const n = (_demoHitung.get(k) || 0) + 1;
-  if (n > DEMO_LIMIT) return res.status(429).json({ error: `DEMO_LIMIT ${DEMO_LIMIT}` });
   if (!_demoHitung.has(k)) for (const key of _demoHitung.keys()) if (!key.endsWith(hari)) _demoHitung.delete(key);
-  _demoHitung.set(k, n);
+  const lokal = (_demoHitung.get(k) || 0) + 1;
+  _demoHitung.set(k, lokal);
+  const n = (await _demoDb(req.authToken)) ?? lokal;
+  if (n > DEMO_LIMIT) return res.status(429).json({ error: `DEMO_LIMIT ${DEMO_LIMIT}` });
   next();
 }
 
-function _resetDemo() { _demoHitung.clear(); }
+let _demoDb = hitungDemoDb;
+function _resetDemo(db) { _demoHitung.clear(); _demoDb = db || hitungDemoDb; }
 
 function securityHeaders(app) {
   app.disable('x-powered-by');
