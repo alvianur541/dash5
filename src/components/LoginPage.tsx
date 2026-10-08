@@ -5,6 +5,8 @@ import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
 
+const IS_DEMO_HOST = typeof window !== 'undefined' && window.location.hostname === 'app.dash5.id';
+
 interface LoginPageProps {
   theme: 'dark' | 'light';
   onThemeToggle: () => void;
@@ -136,6 +138,17 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               }
             </button>
           </m.form>
+          {IS_DEMO_HOST && (
+            <button
+              type="button"
+              onClick={() => { setUsername('H000'); setPassword('H000'); }}
+              className="demo-login w-full rounded-xl border border-dashed border-[var(--accent-main)]/50 bg-[var(--accent-main)]/8 px-4 py-3 text-left text-[13px] text-[var(--text-secondary)]"
+            >
+              <span className="block font-semibold text-[var(--text-primary)]">Demo login</span>
+              Username <b className="font-mono">H000</b> · Password <b className="font-mono">H000</b>
+              <span className="block text-[12px] text-[var(--text-muted)] mt-0.5">Ketuk untuk mengisi otomatis</span>
+            </button>
+          )}
         </div>
       </m.div>
 
