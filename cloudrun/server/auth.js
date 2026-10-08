@@ -17,6 +17,25 @@ function rateLimit(req, res, next) {
   next();
 }
 
+const DEMO_EMAILS = new Set((process.env.DEMO_EMAILS || 'h000@dash5.internal').split(',').map(x => x.trim().toLowerCase()).filter(Boolean));
+const DEMO_LIMIT = Number(process.env.DEMO_LIMIT || 10);
+const _demoHitung = new Map();
+
+// Akun demo publik: maksimal DEMO_LIMIT pertanyaan per hari (WIB), dihitung per instance.
+function demoLimit(req, res, next) {
+  const email = String((req.authUser && req.authUser.email) || '').toLowerCase();
+  if (!DEMO_EMAILS.has(email)) return next();
+  const hari = new Date(Date.now() + 7 * 3600_000).toISOString().slice(0, 10);
+  const k = `${email}|${hari}`;
+  const n = (_demoHitung.get(k) || 0) + 1;
+  if (n > DEMO_LIMIT) return res.status(429).json({ error: `DEMO_LIMIT ${DEMO_LIMIT}` });
+  if (!_demoHitung.has(k)) for (const key of _demoHitung.keys()) if (!key.endsWith(hari)) _demoHitung.delete(key);
+  _demoHitung.set(k, n);
+  next();
+}
+
+function _resetDemo() { _demoHitung.clear(); }
+
 function securityHeaders(app) {
   app.disable('x-powered-by');
   app.use((req, res, next) => {
@@ -73,4 +92,4 @@ async function fetchAuthUser(token) {
   return user;
 }
 
-module.exports = { rateLimit, securityHeaders, verifyToken };
+module.exports = { demoLimit, rateLimit, securityHeaders, verifyToken, _resetDemo };

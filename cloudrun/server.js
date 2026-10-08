@@ -9,7 +9,7 @@ setGlobalDispatcher(new Agent({
 }));
 
 const orch = require('./dist/orchestrator.cjs');
-const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
+const { demoLimit, rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
 const { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
 const { cohereRerank, embedQuery, getAccessToken, googleRerank, vertexFetch } = require('./server/upstream');
@@ -93,7 +93,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
   }
 }
 
-app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
+app.post('/v1/ask', verifyToken, rateLimit, demoLimit, bigJson, async (req, res) => {
   const b = req.body || {};
   const unit = typeof b.model === 'string' ? b.model : '';
   if (!ASK_MODELS.has(unit)) return res.status(400).json({ error: 'Model unit tidak dikenal' });
