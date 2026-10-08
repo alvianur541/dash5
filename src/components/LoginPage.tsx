@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff, X } from 'lucide-react';
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
@@ -19,6 +19,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
   const [password, setPassword] = useState('');
   const [loginLoading, setLoginLoading] = useState(false);
   const [showPw, setShowPw] = useState(false);
+  const [demoTutup, setDemoTutup] = useState(false);
 
   const isDark = theme === 'dark';
 
@@ -138,19 +139,16 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
               }
             </button>
           </m.form>
-          {IS_DEMO_HOST && (
-            <button
-              type="button"
-              onClick={() => { setUsername('H000'); setPassword('H000'); }}
-              className="demo-login w-full rounded-xl border border-dashed border-[var(--accent-main)]/50 bg-[var(--accent-main)]/8 px-4 py-3 text-left text-[13px] text-[var(--text-secondary)]"
-            >
-              <span className="block font-semibold text-[var(--text-primary)]">Demo login</span>
-              Username <b className="font-mono">H000</b> · Password <b className="font-mono">H000</b>
-              <span className="block text-[12px] text-[var(--text-muted)] mt-0.5">Ketuk untuk mengisi otomatis</span>
-            </button>
-          )}
         </div>
       </m.div>
+
+      {IS_DEMO_HOST && !demoTutup && (
+        <div className="move-banner" role="note">
+          <span>Coba demo: username <b>H000</b>, password <b>H000</b>.</span>
+          <button type="button" className="isi" onClick={() => { setUsername('H000'); setPassword('H000'); }}>Isi</button>
+          <button type="button" aria-label="Tutup" onClick={() => setDemoTutup(true)}><X size={16} /></button>
+        </div>
+      )}
 
     </div>
   );
