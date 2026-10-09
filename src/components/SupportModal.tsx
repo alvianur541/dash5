@@ -259,7 +259,7 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
                 <div className="w-8 h-8 rounded-xl bg-[var(--accent-main)]/12 flex items-center justify-center shrink-0">
                   <MessageCircleQuestion size={16} className="text-[var(--accent-main)]" />
                 </div>
-                <p className="text-[14px] font-heading font-semibold text-[var(--text-primary)]">Bantuan & Support</p>
+                <p className="text-[17px] font-heading font-semibold text-[var(--text-primary)]">Bantuan & Support</p>
               </div>
               <button
                 onClick={onClose}

@@ -264,12 +264,12 @@ export function MessageInput({
                       transition={{ duration: 1, repeat: Infinity }}
                       className="w-2 h-2 rounded-full bg-red-500 shrink-0"
                     />
-                    <span className="text-[11px] text-red-400 font-medium tabular-nums">Mendengarkan · {recordSec}s / {RECORD_MAX_SEC}s · ketuk untuk selesai</span>
+                    <span className="text-[12px] text-red-400 font-medium tabular-nums">Mendengarkan · {recordSec}s / {RECORD_MAX_SEC}s · ketuk untuk selesai</span>
                   </>
                 ) : (
                   <>
                     <Loader2 className="w-3 h-3 text-[var(--accent-main)] animate-spin shrink-0" />
-                    <span className="text-[11px] text-[var(--accent-main)] font-medium">Menyusun pertanyaan…</span>
+                    <span className="text-[12px] text-[var(--accent-main)] font-medium">Menyusun pertanyaan…</span>
                   </>
                 )}
               </m.div>
@@ -390,14 +390,14 @@ export function MessageInput({
             <m.p
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
               role="alert"
-              className="text-center text-[11px] text-[var(--status-danger)] font-medium pt-1"
+              className="text-center text-[12px] text-[var(--status-danger)] font-medium pt-1"
             >
               {transcribeError}
             </m.p>
           )}
         </AnimatePresence>
 
-        <div className="hidden md:flex items-center justify-center mt-2 text-[11px] text-[var(--text-muted)] opacity-70">
+        <div className="hidden md:flex items-center justify-center mt-2 text-[12px] text-[var(--text-muted)] opacity-70">
           <span>Hexindo Technical Assistant dapat keliru — verifikasi info penting.</span>
         </div>
 

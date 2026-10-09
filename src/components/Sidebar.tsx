@@ -160,7 +160,7 @@ export function Sidebar({
           <div className="px-3 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--accent-main)] hover:text-[var(--accent-active)] transition-colors"
+              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--accent-main)] hover:text-[var(--accent-active)] transition-colors"
             >
               <Plus size={12} className="shrink-0" />
               <span>New Chat</span>
@@ -168,7 +168,7 @@ export function Sidebar({
           </div>
 
           <div className="shrink-0 px-3 pb-1">
-            <p className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
+            <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
               <Tractor size={12} /> Model Unit
             </p>
             {MODEL_GROUPS.map(({ type, models }) => {
@@ -220,7 +220,7 @@ export function Sidebar({
                                 isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
                               )} />
                               <span className={cn(
-                                "font-heading text-[13px] truncate",
+                                "font-heading text-[14px] truncate",
                                 isActive ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-primary)] font-normal"
                               )}>
                                 {model}
@@ -245,7 +245,7 @@ export function Sidebar({
                 aria-expanded={showBookmarks}
                 className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
               >
-                <span className="flex items-center gap-1.5 pt-3 pb-2 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
+                <span className="flex items-center gap-1.5 pt-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
                   <Bookmark size={11} /> Bookmark
                   {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
                 </span>
@@ -273,7 +273,7 @@ export function Sidebar({
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
                             className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-10 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
-                            <span className="block truncate text-[12.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
+                            <span className="block truncate text-[13px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
                             </span>
                           </button>
@@ -305,7 +305,7 @@ export function Sidebar({
               aria-expanded={showHistory}
               className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
-              <span className="flex items-center gap-1.5 text-[11.5px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
+              <span className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
                 <HistoryIcon size={12} /> History
               </span>
               <ChevronRight
@@ -345,11 +345,11 @@ export function Sidebar({
                   )}
                   {sessions.length === 0 ? (
                     <div className="px-2 py-3 text-center">
-                      <p className="text-[11px] text-[var(--text-muted)]">Belum ada history chat</p>
+                      <p className="text-[12px] text-[var(--text-muted)]">Belum ada history chat</p>
                     </div>
                   ) : filteredSessions.length === 0 ? (
                     <div className="px-2 py-3 text-center">
-                      <p className="text-[11px] text-[var(--text-muted)]">Tidak ada yang cocok</p>
+                      <p className="text-[12px] text-[var(--text-muted)]">Tidak ada yang cocok</p>
                     </div>
                   ) : (
                     <div className="space-y-0.5">
@@ -365,7 +365,7 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[12.5px] transition-colors duration-100 pr-10 active:bg-white/8",
+                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[13px] transition-colors duration-100 pr-10 active:bg-white/8",
                                 isActive
                                   ? "bg-[var(--accent-active)]/20 text-[var(--text-primary)] font-medium"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
@@ -428,7 +428,7 @@ export function Sidebar({
                   <span className="text-[13px] font-medium text-[var(--text-primary)] leading-tight truncate w-full text-left">
                     {user?.displayName || 'Operator'}
                   </span>
-                  <span className="text-[11px] font-normal text-[var(--text-muted)] leading-tight text-left">
+                  <span className="text-[12px] font-normal text-[var(--text-muted)] leading-tight text-left">
                     {user?.role || 'Field Technician'}
                   </span>
                 </div>
@@ -454,7 +454,7 @@ export function Sidebar({
                       <span>Ganti Password</span>
                     </button>
                     {user?.isDemoAccount && (
-                      <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>
+                      <p className="px-4 py-2 text-[12px] text-[var(--text-muted)]">Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>
                     )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowSupport(true); }}

@@ -42,9 +42,10 @@ function partNoColumn(children: ReactNode): number {
     if (cells.length >= 12 || d > 8) return;
     if (Array.isArray(n)) { n.forEach(c => walk(c, d + 1)); return; }
     if (!n || typeof n !== 'object' || !('props' in n)) return;
-    const el = n as { type?: unknown; props: { children?: unknown } };
-    if (el.type === 'th') { cells.push(text(el.props.children).trim()); return; }
-    if (el.type === 'tbody') return;
+    const el = n as { type?: unknown; props: { children?: unknown; node?: { tagName?: string } } };
+    const tag = el.props.node?.tagName ?? el.type;
+    if (tag === 'th') { cells.push(text(el.props.children).trim()); return; }
+    if (tag === 'tbody') return;
     walk(el.props.children, d + 1);
   };
   walk(children);

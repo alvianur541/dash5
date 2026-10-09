@@ -41,8 +41,8 @@ export function ConfirmDialog({ open, title, body, confirmLabel, danger = false,
             className="bg-[var(--bg-card)] border border-[var(--border-main)] rounded-2xl p-5 w-full max-w-[320px] shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-[var(--text-primary)] font-heading font-semibold text-[15px] mb-1">{title}</p>
-            <p className="text-[var(--text-secondary)] text-[13px] leading-relaxed mb-5">{body}</p>
+            <p className="text-[var(--text-primary)] font-heading font-semibold text-[17px] mb-1">{title}</p>
+            <p className="text-[var(--text-secondary)] text-[14px] leading-relaxed mb-5">{body}</p>
             <div className="flex gap-2.5">
               <button
                 onClick={onCancel}

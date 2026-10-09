@@ -43,12 +43,12 @@ export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProp
           >
             <div className="flex justify-center pt-3 pb-1"><div className="w-9 h-1 rounded-full bg-[var(--border-main)]" /></div>
             <div className="flex items-center justify-between px-5 pb-2">
-              <p className="text-[14px] font-heading font-semibold text-[var(--text-primary)]">Pilih unit</p>
+              <p className="text-[17px] font-heading font-semibold text-[var(--text-primary)]">Pilih unit</p>
               <button onClick={onClose} className="topbar-hamburger" aria-label="Tutup"><X size={16} /></button>
             </div>
             {MODEL_GROUPS.map(({ type, models }) => (
               <div key={type} className="px-3 pb-2">
-                <p className="px-3 pt-2 pb-1 text-[11px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">{type}</p>
+                <p className="px-3 pt-2 pb-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">{type}</p>
                 {models.map(model => (
                   <button
                     key={model}
