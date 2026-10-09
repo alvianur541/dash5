@@ -72,7 +72,7 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
             className="bg-[var(--bg-card)] border border-[var(--border-main)] rounded-2xl p-5 w-full max-w-[320px] shadow-2xl"
             onClick={e => e.stopPropagation()}
           >
-            <p className="text-[var(--text-primary)] font-semibold text-[15px] mb-4">Ganti Password</p>
+            <p className="text-[var(--text-primary)] font-heading font-semibold text-[15px] mb-4">Ganti Password</p>
             {isDemo ? (
               <div className="space-y-3 text-[13px] text-[var(--text-secondary)]">
                 <p>Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>

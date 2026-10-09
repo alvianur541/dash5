@@ -220,7 +220,7 @@ export function Sidebar({
                                 isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
                               )} />
                               <span className={cn(
-                                "text-[13px] truncate",
+                                "font-heading text-[13px] truncate",
                                 isActive ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-primary)] font-normal"
                               )}>
                                 {model}

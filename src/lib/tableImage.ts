@@ -14,7 +14,7 @@ const HEAD_BG = '#F3F0E9';
 const ACCENT = '#D97757';
 const PAPER = '#FFFFFF';
 
-const SANS = 'Inter, "Helvetica Neue", Arial, sans-serif';
+const SANS = '"DM Sans", "Helvetica Neue", Arial, sans-serif';
 const MONO = 'ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace';
 
 const CODE_RE = /^[A-Z0-9][A-Z0-9./-]{4,}$/i;

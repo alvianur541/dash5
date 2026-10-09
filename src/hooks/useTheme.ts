@@ -3,7 +3,7 @@ import { flushSync } from 'react-dom';
 
 type Theme = 'dark' | 'light';
 
-const THEME_COLOR: Record<Theme, string> = { dark: '#1A1915', light: '#FAF9F5' };
+const THEME_COLOR: Record<Theme, string> = { dark: '#0B0B0D', light: '#FAF9F5' };
 
 function initialTheme(): Theme {
   const stored = localStorage.getItem('dash-theme');

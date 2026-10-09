@@ -12,7 +12,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
 
     <!-- PWA -->
-    <meta name="theme-color" content="#1A1915" />
+    <meta name="theme-color" content="#0B0B0D" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
@@ -23,7 +23,7 @@
     <!-- SEO / Social -->
     <meta name="description" content="Hexindo Technical Assistant — asisten diagnosa alat berat Hitachi &amp; KCM" />
 
-    <link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/dm-sans-400-v1.woff2" as="font" type="font/woff2" crossorigin />
 
     <title>Hexindo Technical Assistant</title>
     <!-- Theme init: apply before React renders to prevent flash -->
@@ -31,7 +31,7 @@
       (function() {
         var t = localStorage.getItem('dash-theme') || 'dark';
         document.documentElement.classList.add(t + '-theme');
-        var color = t === 'light' ? '#FAF9F5' : '#1A1915';
+        var color = t === 'light' ? '#FAF9F5' : '#0B0B0D';
         var meta = document.querySelector('meta[name="theme-color"]');
         if (meta) meta.setAttribute('content', color);
       })();
@@ -40,7 +40,7 @@
   <body>
     <div id="root">
       <!-- LCP placeholder: base64 inline, zero network roundtrip -->
-      <div style="position:fixed;inset:0;display:flex;align-items:center;justify-content:center;background:var(--bg-app,#1A1915);">
+      <div style="position:relative;height:100%;display:flex;align-items:center;justify-content:center;background:var(--bg-app,#0B0B0D);">
         <img alt="Hexindo Technical Assistant" width="64" height="64"
           style="width:64px;height:64px;border-radius:18px;object-fit:cover;"
           fetchpriority="high" decoding="sync"
