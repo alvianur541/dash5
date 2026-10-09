@@ -81,6 +81,9 @@ module.exports = async () => {
     for (const [body, status] of [
       [{ ...valid, model: 'invalid' }, 400],
       [{ ...valid, userInput: '' }, 400],
+      [{ ...valid, userInput: 'x'.repeat(config.HISTORY_MAX_CHARS + 1) }, 413],
+      [{ ...valid, attachments: [{ mimeType: 'image/webp', data: Buffer.from('RIFFxxxxWAVE').toString('base64') }] }, 415],
+      [{ ...valid, attachments: [{ mimeType: 'image/heic', data: 'AAAA' }] }, 415],
       [{ ...valid, attachments: [{ mimeType: 'text/plain', data: 'AAAA' }] }, 415],
       [{ ...valid, attachments: [{ mimeType: 'image/png', data: 'not-base64!' }] }, 400],
       [{ ...valid, attachments: [{ mimeType: 'image/png', data: 'AAAA' }] }, 415],

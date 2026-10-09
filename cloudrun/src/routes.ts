@@ -84,7 +84,7 @@ Rules:
 
   const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
   if (!raw || raw.toUpperCase() === 'NONE') return [];
-  return raw.split(',').map(c => c.trim()).filter(Boolean);
+  return [...new Set(raw.split(',').map(c => c.trim()).filter(c => isFaultCode(c) || /^A\/?C\s*:?\s*\d{1,2}$/i.test(c)))].slice(0, 15);
 }
 
 export async function extractImageFacts(imageParts: InlineDataPart[]): Promise<{ pns: string[]; component: string }> {

@@ -39,6 +39,11 @@ module.exports = async () => {
   global.fetch = fakeFetch(calls);
   try {
     const turbo = await fetchHexParts('1144003771');
+    const stop = new AbortController(); stop.abort();
+    const beforeAbort = calls.length;
+    let aborted = false;
+    try { await fetchHexParts('1144003771', stop.signal); } catch { aborted = true; }
+    t(aborted && calls.length === beforeAbort, 'already-aborted price request never calls the store');
     t(turbo.length === 2 && turbo[0].harga === 'Rp 49.587.999' && turbo[1].pn === '1144003771PU', `PN persis + varian bersufiks, format Rupiah (${turbo.map(p => p.harga).join(', ')})`);
     const filter = await fetchHexParts('4658521');
     t(filter.map(p => p.pn).join(',') === '4658521,4658521RCP', 'PN lain yang kebetulan berawalan sama (46585219) ditolak');
@@ -181,6 +186,15 @@ module.exports = async () => {
     const hist = [{ role: 'user', content: 'harga solenoid motor' }, { role: 'assistant', content: 'Solenoid motor belum ketemu.' }];
     await runWithDeps(d, () => resolvePartsQuery('solenoid di hst motor', hist, 'ZW140'));
     t(c.includes('263E2-57381'), 'lanjutan singkat sesudah tanya harga ("solenoid di hst motor") tetap dicek harganya');
+  }
+
+  {
+    resetHargaWebCache();
+    const { d: first } = mockDeps([[]], { webPrice: async pn => [{ pn, nama: 'fixture', harga: 'Rp 100' }] });
+    const { d: next } = mockDeps([[]], { webPrice: async pn => [{ pn, nama: 'fixture', harga: 'Rp 200' }] });
+    await runWithDeps(first, () => hargaWeb(['LIVE1234']));
+    const fresh = await runWithDeps(next, () => hargaWeb(['LIVE1234']));
+    t(fresh.get('LIVE1234')?.[0]?.harga === 'Rp 200', 'a new request rechecks current site price instead of a six-hour shared result');
   }
 
   return done();

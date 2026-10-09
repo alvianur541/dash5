@@ -118,6 +118,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   }
 
   const userInput = typeof b.userInput === 'string' ? b.userInput : '';
+  if (userInput.length > HISTORY_MAX_CHARS) return res.status(413).json({ error: `Pertanyaan terlalu panjang (maks ${HISTORY_MAX_CHARS} karakter)` });
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }

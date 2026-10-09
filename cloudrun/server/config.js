@@ -30,10 +30,17 @@ const IMAGE_MAGIC = {
 };
 
 function imageMagicMatches(mime, base64) {
+  const head = Buffer.from(base64.replace(/\s/g, '').slice(0, 128), 'base64');
+  if (mime === 'image/webp') return head.toString('ascii', 0, 4) === 'RIFF' && head.toString('ascii', 8, 12) === 'WEBP';
+  if (mime === 'image/heic' || mime === 'image/heif') {
+    if (head.length < 16 || head.toString('ascii', 4, 8) !== 'ftyp') return false;
+    const end = Math.min(head.readUInt32BE(0), head.length);
+    const brands = [head.toString('ascii', 8, 12)];
+    for (let i = 16; i + 4 <= end; i += 4) brands.push(head.toString('ascii', i, i + 4));
+    return brands.some(b => /^(?:heic|heix|hevc|hevx|mif1|msf1)$/.test(b));
+  }
   const sigs = IMAGE_MAGIC[mime];
-  if (!sigs || sigs.length === 0) return true;
-  const head = Buffer.from(base64.slice(0, 16), 'base64');
-  return sigs.some(sig => sig.every((byte, i) => head[i] === byte));
+  return !!sigs?.length && sigs.some(sig => sig.every((byte, i) => head[i] === byte));
 }
 
 const SUPABASE_URL      = process.env.SUPABASE_URL;

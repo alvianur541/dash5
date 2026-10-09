@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type MutableRefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import type { Message, UnitModel } from '../types';
 import { fetchBookmarksRemote, upsertBookmarkRemote, deleteBookmarkRemote } from '../services/supabase';
 import {
@@ -12,6 +12,12 @@ const MAX_ITEMS = 30;
 export function usePocket(uid: string | null, mountedRef: MutableRefObject<boolean>) {
   const [pocket, setPocket] = useState<PocketItem[]>([]);
   const [pocketView, setPocketView] = useState<PocketItem | null>(null);
+  const userIdRef = useRef(uid);
+  const syncGeneration = useRef(0);
+  if (userIdRef.current !== uid) {
+    userIdRef.current = uid;
+    syncGeneration.current++;
+  }
   const pocketIds = useMemo(() => new Set(pocket.map(p => p.id)), [pocket]);
 
   const push = useCallback((item: PocketItem) => {
@@ -22,10 +28,11 @@ export function usePocket(uid: string | null, mountedRef: MutableRefObject<boole
   }, [uid]);
 
   const sync = useCallback(async () => {
-    if (!uid) return;
+    if (!uid || userIdRef.current !== uid) return;
+    const generation = ++syncGeneration.current;
     const startedAt = Date.now();
     const remote = await fetchBookmarksRemote(uid).catch(() => null);
-    if (!remote || !mountedRef.current) return;
+    if (!remote || !mountedRef.current || userIdRef.current !== uid || syncGeneration.current !== generation) return;
     const tomb = loadPocketTombstones(uid);
     remote.filter(r => tomb[r.message_id])
       .forEach(r => { deleteBookmarkRemote(uid, r.message_id).catch(() => {}); });
@@ -48,7 +55,8 @@ export function usePocket(uid: string | null, mountedRef: MutableRefObject<boole
   }, [uid, mountedRef, push]);
 
   useEffect(() => {
-    if (!uid) { setPocket([]); setPocketView(null); return; }
+    setPocketView(null);
+    if (!uid) { setPocket([]); return; }
     const tomb = loadPocketTombstones(uid);
     setPocket(loadPocket(uid).filter(i => !tomb[i.id]));
     sync();

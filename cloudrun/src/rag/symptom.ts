@@ -16,9 +16,9 @@ const MAX_PICK = 2;
 
 interface Entry { content: string; snippet: string; summary: string }
 
-// The client is per request (user JWT) but the manual is the same for every signed-in technician, so cache per unit.
-const cache = new Map<string, { at: number; entries: Promise<Entry[]> }>();
-export const resetSymptomIndex = (): void => cache.clear();
+// Cached document contents must never cross the per-request JWT client boundary.
+let caches = new WeakMap<object, Map<string, { at: number; entries: Promise<Entry[]> }>>();
+export const resetSymptomIndex = (): void => { caches = new WeakMap(); };
 
 const titleOf = (c: string) => (c.match(/^Section:[^\n]*/)?.[0] ?? '').replace(/\r/g, '');
 
@@ -45,6 +45,9 @@ async function loadIndex(model: string): Promise<Entry[]> {
 }
 
 function indexFor(model: string): Promise<Entry[]> {
+  const client = sb();
+  let cache = caches.get(client);
+  if (!cache) { cache = new Map(); caches.set(client, cache); }
   const hit = cache.get(model);
   if (hit && Date.now() - hit.at < INDEX_TTL_MS) return hit.entries;
   const entries = loadIndex(model);

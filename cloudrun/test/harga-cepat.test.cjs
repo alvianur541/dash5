@@ -40,7 +40,7 @@ module.exports = async () => {
     t(/\| `YA00001400` \| KIT;SEAL \| Rp 6\.238\.417 \|/.test(r.text) && /\| `YA00001400PS` \| KIT;SEAL \| Rp 6\.738\.062 \|/.test(r.text), 'harga & varian disalin persis dari web');
     t(!r.text.includes('4711561'), 'baris yang tidak dipilih (cylinder-nya sendiri) tidak ikut');
     t(r.text.trim().endsWith('*Sumber harga: Hexindoparts.com*') && !/PPN|Parts Counter/.test(r.text), 'penutup cukup "Sumber harga: Hexindoparts.com"');
-    t(r.text.startsWith('Seal kit arm cylinder ZX200-5G:'), 'kalimat pembuka dari pemilih');
+    t(r.text.startsWith('Harga part yang cocok:'), 'kalimat pembuka deterministik, bukan teks bebas dari pemilih');
     t(/1 \| YA00001400 \| KIT;SEAL \| CYL\.;ARM/.test(prompt) && /3 \| 4711561 \| CYL\.;ARM \| CYL\.;ARM/.test(prompt), 'pemilih melihat PN + nama + section katalog, seal kit diurut duluan');
   }
   {
@@ -63,5 +63,9 @@ module.exports = async () => {
     t(r.type === 'rag_canned' && !r.text.includes('Rp 1.000') && r.text.includes('Belum tersedia'), 'nomor ngawur dibuang, angka di pembuka dihapus, PN tanpa harga = "Belum tersedia"');
   }
 
+  {
+    const { r } = await jalan('harga seal kit arm cylinder', JSON.stringify({ pilih: [1], pembuka: 'IDR 999999999; torque 99 MPa; PN FAKE9999' }));
+    t(r.type === 'rag_canned' && !/999999999|99 MPa|FAKE9999/.test(r.text), 'untrusted picker prose cannot inject unverified prices, specifications or PNs');
+  }
   return done();
 };

@@ -128,5 +128,6 @@ export async function jawabanHargaCepat(q: string, history: Message[], pnsUrut: 
     return `| ${sel.join(' | ')} |`;
   });
   console.info('[harga-cepat] %d dari %d kandidat dipilih (%dms)', baris.length, kandidat.length, Date.now() - t0);
-  return `${hasil.pembuka ? `${hasil.pembuka}\n\n` : ''}${kepala}\n${isi.join('\n')}\n\n*${L.sumber}*`;
+  const pembuka = lang === 'en' ? 'Matching part prices:' : lang === 'ja' ? '該当部品の価格:' : 'Harga part yang cocok:';
+  return `${pembuka}\n\n${kepala}\n${isi.join('\n')}\n\n*${L.sumber}*`;
 }

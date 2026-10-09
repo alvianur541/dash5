@@ -127,5 +127,14 @@ module.exports = async function () {
     t(body.generationConfig.thinkingConfig.thinkingLevel === 'medium', 'lanjutan dari keluhan → thinking medium');
   }
 
+  {
+    resetSymptomIndex();
+    const { d: staff } = mockDeps([[]], { supabase: fakeSupabase([NGEDROP]), rerank: rankerBy({ 'Engine Ngedrop': 0.9 }), generate: judge('[1]') });
+    const { d: restricted } = mockDeps([[]], { supabase: fakeSupabase([]), rerank: rankerBy({ 'Engine Ngedrop': 0.9 }), generate: judge('[1]') });
+    await run(staff, 'ZX200-5G', ['engine drops'], 'mesin ngedrop', 'mesin ngedrop');
+    const r = await run(restricted, 'ZX200-5G', ['engine drops'], 'mesin ngedrop', 'mesin ngedrop');
+    t(r.length === 0, 'a different JWT client cannot reuse documents cached by staff');
+  }
+
   return done();
 };

@@ -14,11 +14,12 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         workbox: {
           cleanupOutdatedCaches: true,
+          importScripts: ['/sw-cache-cleanup-v1.js'],
           skipWaiting: true,
           clientsClaim: true,
           globPatterns: ['**/*.{js,css,html,woff2}'],
           navigateFallback: 'index.html',
-          navigateFallbackDenylist: [/^\/api\//],
+          navigateFallbackDenylist: [/^\/(?:api|v1|supabase)(?:\/|$)/],
           runtimeCaching: [
             {
               urlPattern: /^https:\/\/[^/]+\/(rest|auth|storage|realtime)\/v1\//i,
@@ -29,7 +30,7 @@ export default defineConfig(() => {
               handler: 'NetworkOnly',
             },
             {
-              urlPattern: /^https:\/\/dash5\.my\.id\/(api|v1)\//i,
+              urlPattern: /^https:\/\/[^/]+\/(?:api|v1|supabase)(?:\/|$)/i,
               handler: 'NetworkOnly',
             },
             {

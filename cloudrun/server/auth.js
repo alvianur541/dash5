@@ -69,8 +69,14 @@ async function fetchAuthUser(token) {
   });
   if (!r.ok) { _userCache.delete(token); return null; }
   const user = await r.json();
+  let expiresAt = Date.now() + AUTH_CACHE_TTL_MS;
+  // Payload expiry only shortens caching; Supabase above remains the JWT verifier.
+  try {
+    const exp = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).exp;
+    if (typeof exp === 'number' && Number.isFinite(exp)) expiresAt = Math.min(expiresAt, exp * 1000);
+  } catch { }
   if (_userCache.size >= 200) _userCache.delete(_userCache.keys().next().value);
-  _userCache.set(token, { user, expiresAt: Date.now() + AUTH_CACHE_TTL_MS });
+  _userCache.set(token, { user, expiresAt });
   return user;
 }
 

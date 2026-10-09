@@ -1,5 +1,5 @@
 const fs = require('fs'), path = require('path');
-const { pilihPnHarga, suite } = require('./helpers.cjs');
+const { pilihPnHarga, isShortFollowUp, suite } = require('./helpers.cjs');
 
 // Alvian 7 Okt: chunk baru Kategori OH PACKAGE (paket overhaul/reseal per unit).
 module.exports = async () => {
@@ -13,5 +13,7 @@ module.exports = async () => {
   t(cv.length > 5, `reseal control valve → isi paket (${cv.length})`);
   const biasa = pilihPnHarga(oh, ['harga seal oil travel motor']);
   t(biasa.length < 12, `tanpa kata paket/OH → bukan seluruh paket (${biasa.length})`);
+  const prior = [{ role: 'user', content: 'part number travel motor' }, { role: 'assistant', content: 'Mau paket overhaul juga?' }];
+  t(!isShortFollowUp('harga paket OH travel motor', prior), 'short OH package request must not receive the one-small-table brevity directive');
   return done();
 };

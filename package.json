@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "typecheck": "tsc --noEmit",
+    "test": "node --test src/*.test.cjs src/services/*.test.cjs src/hooks/*.test.cjs src/lib/*.test.cjs",
     "lint": "eslint ."
   },
   "dependencies": {

@@ -80,7 +80,7 @@ function verifyGrounding(answer: string, context: string): void {
   }
 }
 
-const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*)\b/i;
+const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*|paket|package|overhaul\w*|reseal\w*|oh)\b/i;
 // Short but asking for a mechanism/procedure — brevity here removes the answer's substance.
 const WANTS_DETAIL_RE = /\b(?:cara\s*kerja|caranya|bagaimana|gimana|kenapa|knp|mengapa|jelas\w*|fungsi\w*|prosedur|urutan|langkah\w*|detail\w*|rinci\w*|analisa\w*|analisis)\b/i;
 

@@ -27,9 +27,9 @@ function safeSetItem(key: string, value: string): void {
         try {
           const list: { id: string; updatedAt?: number }[] = JSON.parse(localStorage.getItem(lk) || '[]');
           if (!Array.isArray(list) || list.length === 0) continue;
-          const oldest = list[list.length - 1];
-          if (!oldest?.id) continue;
           const uid = lk.replace('dash-session-list-', '');
+          const oldest = [...list].reverse().find(s => s?.id && localStorage.getItem(`dash-session-${uid}-${s.id}`) !== null);
+          if (!oldest) continue;
           localStorage.removeItem(`dash-session-${uid}-${oldest.id}`);
           evicted = true;
           break;

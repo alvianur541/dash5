@@ -168,20 +168,23 @@ export async function saveFeedback(payload: {
 
 export interface CatalogEntry { model: string; kategori: string; count: number }
 
-let _catalogCache: { data: CatalogEntry[]; expiresAt: number } | null = null;
+let _catalogCache: { token: string; data: CatalogEntry[]; expiresAt: number } | null = null;
 const CATALOG_CACHE_TTL_MS = 10 * 60 * 1000;
 
 export async function fetchDocumentCatalog(): Promise<CatalogEntry[]> {
   if (!supabase) return [];
-  if (_catalogCache && Date.now() < _catalogCache.expiresAt && _catalogCache.data.length > 0) {
+  const token = await getAuthToken();
+  if (!token) { _catalogCache = null; return []; }
+  if (_catalogCache?.token === token && Date.now() < _catalogCache.expiresAt && _catalogCache.data.length > 0) {
     return _catalogCache.data;
   }
   const { data, error } = await supabase.rpc('document_catalog');
+  if (await getAuthToken() !== token) return [];
   if (error || !Array.isArray(data)) {
     console.error('Catalog fetch error:', error?.message);
     return [];
   }
   const result = (data as CatalogEntry[]).filter(r => r.model && r.kategori);
-  _catalogCache = { data: result, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS };
+  _catalogCache = { token, data: result, expiresAt: Date.now() + CATALOG_CACHE_TTL_MS };
   return result;
 }

@@ -82,9 +82,8 @@ function registerMetrics(app) {
 
 
 function ringkasTanya(teks, jumlahGambar) {
-  const bersih = (teks || '').replace(/\s+/g, ' ').trim().slice(0, 60);
   const tag = jumlahGambar > 0 ? '[+foto] ' : '';
-  return tag + (bersih || '(tanpa teks)');
+  return `${tag}chars=${typeof teks === 'string' ? teks.length : 0}`;
 }
 
 let kolomBaruGagal = 0;

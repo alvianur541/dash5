@@ -10,7 +10,7 @@ const CACHE_MAX = 500;
 
 const PARALEL = 6;
 const JEDA_ULANG_MS = 400;
-const cache = new Map<string, { t: number; v: WebPart[] }>();
+let caches = new WeakMap<object, Map<string, { t: number; v: WebPart[] }>>();
 
 // PN → listings; [] = checked and not listed; null = lookup failed (site error/timeout), never cached.
 export type HasilWeb = Map<string, WebPart[] | null>;
@@ -46,6 +46,7 @@ export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<W
 }
 
 async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Promise<WebPart[]> {
+  signal?.throwIfAborted();
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), BATAS_MS);
   const lepas = () => ctrl.abort();
@@ -72,7 +73,10 @@ async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Prom
 
 export async function hargaWeb(pns: string[], maks = MAKS_PN_OH): Promise<HasilWeb> {
   const hasil: HasilWeb = new Map();
-  const cari = deps().webPrice;
+  const request = deps();
+  const cari = request.webPrice;
+  let cache = caches.get(request);
+  if (!cache) { cache = new Map(); caches.set(request, cache); }
   const daftar = [...new Set(pns.map(p => p.toUpperCase().trim()).filter(p => p.length >= 4))].slice(0, maks);
   if (!cari || !daftar.length) return hasil;
   const t0 = Date.now();
@@ -105,7 +109,7 @@ export async function hargaWeb(pns: string[], maks = MAKS_PN_OH): Promise<HasilW
   return hasil;
 }
 
-export function resetHargaWebCache(): void { cache.clear(); }
+export function resetHargaWebCache(): void { caches = new WeakMap(); }
 
 export const adaHarga = (hasil: HasilWeb, pn?: string): boolean =>
   pn ? !!hasil.get(pn.toUpperCase())?.length : [...hasil.values()].some(v => v?.length);

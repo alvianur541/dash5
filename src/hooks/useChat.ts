@@ -35,6 +35,7 @@ export function useChat(user: User, isOnline: boolean) {
   const mountedRef = useRef(true);
   const abortStreamRef = useRef<AbortController | null>(null);
   const sendingRef = useRef(false);
+  const selectionVersionRef = useRef(0);
   const userIdRef = useRef(user?.uid);
   userIdRef.current = user?.uid;
 
@@ -56,6 +57,7 @@ export function useChat(user: User, isOnline: boolean) {
   }, []);
 
   const startNewSession = useCallback(() => {
+    selectionVersionRef.current++;
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
     setMessages([]);
@@ -106,6 +108,7 @@ export function useChat(user: User, isOnline: boolean) {
 
   const handleSelectSession = useCallback(async (id: string) => {
     if (!user) return;
+    const selectionVersion = ++selectionVersionRef.current;
     abortStreamRef.current?.abort();
     abortStreamRef.current = null;
     setIsTyping(false);
@@ -123,7 +126,7 @@ export function useChat(user: User, isOnline: boolean) {
       setLoadingSession(true);
     }
     const remote = await fetchSessionData(id, user.uid);
-    if (!mountedRef.current || sessionIdRef.current !== id || userIdRef.current !== user.uid) return;
+    if (!mountedRef.current || selectionVersionRef.current !== selectionVersion || sessionIdRef.current !== id || userIdRef.current !== user.uid) return;
     setLoadingSession(false);
     if (remote) {
       setMessages(remote.messages);
