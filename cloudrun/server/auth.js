@@ -17,16 +17,6 @@ function rateLimit(req, res, next) {
   next();
 }
 
-const DEMO_EMAILS = new Set(['h000@dash5.internal', ...(process.env.DEMO_EMAILS || '').split(',').map(x => x.trim().toLowerCase()).filter(Boolean)]);
-
-// No public demo access until retrieval has an isolated, server-only authorization path.
-function demoLimit(req, res, next) {
-  const user = req.authUser || {};
-  if (user.id === 'd2425fad-c49f-42dd-9249-9ad2738b7e0b' || DEMO_EMAILS.has(String(user.email || '').trim().toLowerCase()) || user.app_metadata?.demo === true) {
-    return res.status(503).json({ error: 'DEMO_UNAVAILABLE: Demo sementara dinonaktifkan.' });
-  }
-  return next();
-}
 
 function securityHeaders(app) {
   app.disable('x-powered-by');
@@ -84,4 +74,4 @@ async function fetchAuthUser(token) {
   return user;
 }
 
-module.exports = { demoLimit, rateLimit, securityHeaders, verifyToken };
+module.exports = { rateLimit, securityHeaders, verifyToken };

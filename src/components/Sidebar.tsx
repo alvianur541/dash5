@@ -454,7 +454,7 @@ export function Sidebar({
                       <span>Ganti Password</span>
                     </button>
                     {user?.isDemoAccount && (
-                      <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">Ganti password demo dinonaktifkan di tampilan, bukan pengamanan API. Demo publik ditunda sampai backend dan RLS aman.</p>
+                      <p className="px-4 py-2 text-[11px] text-[var(--text-muted)]">Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>
                     )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowSupport(true); }}

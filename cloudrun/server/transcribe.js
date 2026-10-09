@@ -1,8 +1,8 @@
 const { AUDIO_MAX_BYTES, AUDIO_MIME_RE, BASE64_RE, PROJECT_ID, TRANSCRIBE_MODEL } = require('./config');
 const { resolveUpstream } = require('./upstream');
 
-module.exports = function registerTranscribe(app, { verifyToken, rateLimit, demoLimit, bigJson }) {
-  app.post('/v1/transcribe', verifyToken, rateLimit, demoLimit, bigJson, async (req, res) => {
+module.exports = function registerTranscribe(app, { verifyToken, rateLimit, bigJson }) {
+  app.post('/v1/transcribe', verifyToken, rateLimit, bigJson, async (req, res) => {
     if (!PROJECT_ID) return res.status(500).json({ error: 'GOOGLE_CLOUD_PROJECT env var not set' });
     const { audio, mimeType } = req.body || {};
     if (typeof audio !== 'string' || typeof mimeType !== 'string' || !audio || !mimeType) {

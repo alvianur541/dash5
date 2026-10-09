@@ -9,7 +9,7 @@ setGlobalDispatcher(new Agent({
 }));
 
 const orch = require('./dist/orchestrator.cjs');
-const { demoLimit, rateLimit, securityHeaders, verifyToken } = require('./server/auth');
+const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
 const { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
 const { cohereRerank, embedQuery, getAccessToken, googleRerank, vertexFetch } = require('./server/upstream');
@@ -33,7 +33,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 
 registerMetrics(app);
 
-registerTranscribe(app, { verifyToken, rateLimit, demoLimit, bigJson });
+registerTranscribe(app, { verifyToken, rateLimit, bigJson });
 
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
@@ -121,9 +121,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!userInput.trim() && images.length === 0) {
     return res.status(400).json({ error: 'userInput atau attachments wajib diisi' });
   }
-  let demoAllowed = false;
-  demoLimit(req, res, () => { demoAllowed = true; });
-  if (!demoAllowed) return;
+
   const requestId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
   res.setHeader('Content-Type', 'text/event-stream');

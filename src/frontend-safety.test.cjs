@@ -27,6 +27,12 @@ test('demo password UI is guarded and explicitly not a security boundary', () =>
   assert.match(dialog, /bukan pengamanan API/);
 });
 
+test('normal demo chat has no obsolete denial or question-cap notice', () => {
+  for (const file of ['lib/errorMessage.ts', 'components/Sidebar.tsx', 'components/ChangePasswordDialog.tsx']) {
+    assert.doesNotMatch(read(file), /DEMO_LIMIT|DEMO_UNAVAILABLE|10 pertanyaan per hari|demo publik ditunda/i);
+  }
+});
+
 test('offline sends never auto replay into another account or session', () => {
   assert.doesNotMatch(read('hooks/useChat.ts'), /setQueued|type Queued/);
   assert.doesNotMatch(read('App.tsx'), /terkirim otomatis/);
