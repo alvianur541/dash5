@@ -7,7 +7,7 @@ import { resolveQuestion } from './question';
 import { auditMeasurements } from './grounding';
 import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
-import { promoAktif, tanpaHargaDb } from './promo';
+import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
@@ -42,8 +42,8 @@ const userTag = (userName: string, history: Message[]) =>
     history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
 
 // Never let the price safety net break an answer: on any error the original text stands.
-async function lengkapiHargaAman(text: string): Promise<string> {
-  try { return await lengkapiHarga(text); } catch (err) {
+async function lengkapiHargaAman(text: string, data = ''): Promise<string> {
+  try { return await lengkapiHarga(text, promoAktif() ? hargaPromo(data) : new Map()); } catch (err) {
     console.warn('[harga-susulan] gagal: %s', (err as Error)?.message);
     return text;
   }
@@ -219,7 +219,7 @@ export async function generateResponseStream(
     contents,
     ...systemFor(model, isCasual),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical)));
+  }, onChunk, gsTechnical)), ragContent);
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
@@ -265,6 +265,7 @@ export async function generateResponse(
     .map(toInlineData);
   if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
   let sendImageToModel = true;
+  let dataFoto = '';
   // Photo + parts/price ask ("cek harga kit sealnya") is a lookup, not a diagnosis: medium thinking added ~6 s
   // before the first word (log median 8.2 s vs 2.0 s on low). Fault codes and visual diagnosis keep medium.
   let thinkFoto: ThinkingLevel = 'medium';
@@ -377,6 +378,7 @@ export async function generateResponse(
         const caveat = route.confidence !== 'high' ? MEDIUM_CAVEAT : '';
         ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
         if (!promoAktif()) ragBlock = tanpaHargaDb(ragBlock);
+        dataFoto = ragBlock;
       }
       const ask = q || 'Analisa gambar ini dan berikan diagnosis atau informasi yang relevan.';
       currentParts.push({ text: ragBlock
@@ -407,6 +409,6 @@ export async function generateResponse(
     },
   };
 
-  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)));
+  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)), dataFoto);
   return streamed || FALLBACK_RESPONSE;
 }

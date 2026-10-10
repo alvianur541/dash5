@@ -14,7 +14,7 @@ function fakeSupabase(rows, calls = []) {
 
 const CAB2 = { content: 'Section: CAB (2)\nModel: ZX200-5G\n      07 | 4651654            | GLASS  | qty:1\n      08 | YA00001496         | GLASS  | qty:1', metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' } };
 const LONGER = { content: 'Section: X\n      01 | 46516540           | BOLT   | qty:1', metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' } };
-const PROMO = { content: 'Section: PROMO Q2 FY2026 - ELECTRICAL PARTS\n  YA00002098             | UNIT;CONTROL  | Normal: Rp 34.623.106 | Disc: 20% | Promo: Rp 27.698.485', metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q2 FY2026' } };
+const PROMO = { content: 'Section: PROMO Q3 FY2026 - ELECTRICAL PARTS\n  YA00002098             | UNIT;CONTROL  | Normal: Rp 34.623.106 | Disc: 20% | Promo: Rp 27.698.485', metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q3 FY2026' } };
 const WM = { content: 'Section: CAB REMOVAL\n replace glass 4651654 | see figure |', metadata: { Model: 'ZX200-5G', Kategori: 'WORKSHOP MANUAL' } };
 const PERF = { content: 'Section: PERFORMANCE STANDARD - MAIN TABLE (Travel, Swing, Cylinder, Lever, Hydraulic)\nHydraulic Cylinder Cycle Time sec\nBoom Raise 3.4±0.3', metadata: { Model: 'ZX200-5G', Kategori: 'TROUBLESHOOTING' } };
 

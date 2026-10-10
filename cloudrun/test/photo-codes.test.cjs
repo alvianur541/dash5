@@ -8,10 +8,10 @@ function fakeSupabase(rows) {
   return { from: () => q, rpc: () => Promise.resolve({ data: [], error: null }) };
 }
 
-const LUB = { metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q2 FY2026' }, content:
+const LUB = { metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q3 FY2026' }, content:
   'Section: LUBRICANT\n  HTCDH1C                | HAP ENG OIL DH 1 CAN                        | Normal: Rp 591.600        | Disc: 15%  | Promo: Rp 502.860\n'
   + '  HTCGL490P              | HAP GEAR OIL GL4 90 PAIL                   | Normal: Rp 2.228.900      | Disc: 15%  | Promo: Rp 1.894.565' };
-const FILTER = { metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q2 FY2026' }, content:
+const FILTER = { metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q3 FY2026' }, content:
   'Section: FILTER PARTS\n  YA00058283             | ELEMENT;ENGINE OIL FILTER                  | Normal: Rp 400.000        | Disc: 20%  | Promo: Rp 320.000' };
 const PARTS = { metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' }, content:
   'Section: ENGINE OIL FILTER\n  01 | YA00058283 | ELEMENT;OIL FILTER | qty:1 | svc:S' };

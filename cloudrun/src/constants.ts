@@ -60,12 +60,12 @@ export function modelHasSource(model: UnitModel, kategori: string): boolean {
 }
 
 const PROMO_SECTIONS_BY_MODEL: Record<UnitModel, string[]> = {
-  'ZX48U-5A':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'COOLANT', 'LUBRICANT'],
-  'ZX65USB-5A': ['FILTER PARTS', 'ELECTRICAL PARTS', 'ZX MINI PARTS (filter, seal kit, engine, pump, AC kit)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'COOLANT', 'LUBRICANT'],
-  'ZX138MF-5G': ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'HITACHI SPECIAL PARTS (seal kit, pin bucket/arm/boom)', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
-  'ZX200-5G':   ['FILTER PARTS', 'ELECTRICAL PARTS', 'HYDRAULIC HOSE', 'ATTACHMENT & ACCESSORIES (breaker, bucket, quick coupler)', 'INNERPART HYDRAULIC (main pump, swing/travel motor, control valve)', 'G.E.T. PARTS (tooth, pin, adapter)', 'UNDERCARRIAGE', 'HITACHI SPECIAL PARTS (seal kit, pin bucket/arm/boom)', 'REMAN COMPONENT (pump, travel/swing device, cylinder, center joint)', 'COOLANT', 'LUBRICANT'],
-  'KCM 60ZV':   ['ELECTRICAL PARTS', 'COOLANT', 'LUBRICANT'],
-  'ZW140':      ['FILTER PARTS', 'ELECTRICAL PARTS', 'COOLANT', 'LUBRICANT'],
+  'ZX48U-5A':   ['FILTER PARTS (engine oil, fuel, air cleaner, hydraulic, AC, breather)', 'G.E.T. PARTS (tooth point, pin lock, adapter, side cutter)', 'UNDERCARRIAGE PARTS (track link, sprocket, idler, roller, shoe)', 'COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
+  'ZX65USB-5A': ['FILTER PARTS (engine oil, fuel, air cleaner, hydraulic, AC, breather)', 'G.E.T. PARTS (tooth point, pin lock, adapter, side cutter)', 'UNDERCARRIAGE PARTS (track link, sprocket, idler, roller, shoe)', 'COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
+  'ZX138MF-5G': ['CONTROL VALVE KIT (seal kit / O-ring kit control valve)', 'FILTER PARTS (engine oil, fuel, air cleaner, hydraulic, AC, breather)', 'G.E.T. PARTS (tooth point, pin lock, adapter, side cutter)', 'UNDERCARRIAGE PARTS (track link, sprocket, idler, roller, shoe)', 'COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
+  'ZX200-5G':   ['CONTROL VALVE KIT (seal kit / O-ring kit control valve)', 'FILTER PARTS (engine oil, fuel, air cleaner, hydraulic, AC, breather)', 'G.E.T. PARTS (tooth point, pin lock, adapter, side cutter)', 'UNDERCARRIAGE PARTS (track link, sprocket, idler, roller, shoe)', 'COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
+  'KCM 60ZV':   ['COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
+  'ZW140':      ['FILTER PARTS (engine oil, fuel, air cleaner, hydraulic, AC, breather)', 'COOLANT (ConSite Coolant, LLC Premix)', 'LUBRICANT & OIL ANALYSIS (engine/hydraulic/gear oil, grease, sampling kit)'],
 };
 
 const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
@@ -447,6 +447,7 @@ ${promoOn ? `**Hanya ada SATU periode promo aktif di data** — periode lama sud
 **Section PROMO aktif untuk ${model}** (census DB — HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
 ${(PROMO_SECTIONS_BY_MODEL[model] ?? []).map(s => `- ${s}`).join('\n')}
 Section di luar daftar itu TIDAK ada di promo ${model} — jangan menyuruh cek section yang tidak ada.
+Baris promo bertanda \`[Unit: …]\` untuk unit lain = part unit sekelas tonase: tampilkan tanda unit itu dan minta teknisi mencocokkan PN / S/N unitnya sebelum order.
 ` : `**PROMO SUDAH BERAKHIR** (periode terakhir s/d ${PROMO_SELESAI_TGL}) dan belum ada promo baru. **Semua harga diambil dari hexindoparts.com** (blok \`[HARGA HEXINDOPARTS.COM]\` di data). Daftar parts lain di data hanya memuat PN + nama, TANPA harga — jangan mengambil atau mengarang angka dari situ. DILARANG menyebut promo, diskon, persen potongan, harga promo, atau periode promo. Teknisi bertanya "ada promo?" → jawab singkat belum ada promo yang berlaku saat ini, lalu sajikan harga hexindoparts.com-nya. Blok hexindoparts.com sudah ada di data → JANGAN menyuruh teknisi mengecek sendiri ke website.
 
 **Section daftar parts untuk ${model}** (HANYA ini yang ada, scan semuanya, jangan asumsi 1 section):
@@ -463,7 +464,7 @@ Section di luar daftar itu TIDAK ada di daftar parts ${model} — jangan menyuru
 **Suffix \`-F\` (section HYDRAULIC HOSE):** artinya hose **lokal merek Fukoku** — bukan "factory-made", bukan "siap pakai". Kalau perlu menyebut artinya, sebut itu; kalau tidak ditanya, cukup tampilkan PN-nya apa adanya.
 **DILARANG MENGARANG ARTI SUFFIX/KODE.** Suffix atau kode yang artinya tidak tertulis di data dan tidak disebut di prompt ini → tampilkan apa adanya TANPA penjelasan. Jangan menebak kepanjangannya (kesalahan nyata: \`-F\` ditafsirkan "factory-made" padahal Fukoku). Menebak arti kode = menyesatkan saat teknisi memesan part.
 
-Mapping istilah: "harga oli" → LUBRICANT, "harga coolant" → COOLANT, "harga bucket teeth" → G.E.T. PARTS, "harga reman" → REMAN COMPONENT, "harga hose/selang" → HYDRAULIC HOSE, "harga filter" → FILTER PARTS, "harga seal kit / pin bucket-arm-boom" → HITACHI SPECIAL PARTS.
+Mapping istilah: "harga oli / grease / sampling oli" → LUBRICANT & OIL ANALYSIS, "harga coolant" → COOLANT, "harga bucket teeth / kuku" → G.E.T. PARTS, "harga filter" → FILTER PARTS, "harga track link / sprocket / roller / idler" → UNDERCARRIAGE PARTS, "harga seal kit control valve" → CONTROL VALVE KIT.
 
 ---
 

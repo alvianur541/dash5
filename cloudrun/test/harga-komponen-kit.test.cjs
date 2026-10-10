@@ -3,7 +3,7 @@ const { resolvePartsQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = 
 // Alvian 5 Okt (ZX48U-5A): "hrga kit seal arm" → 8 seal kit semua silinder, "arm aj" tetap 8. Sebab: PN pertama
 // terbaca dari daftar parts ("ZX MINI PARTS …", tanpa komponen), jadi pemilih tak tahu mana yang milik ARM.
 const PROMO = { metadata: { Model: 'ZX48U-5A', Kategori: 'PROMO' }, content:
-  'Section: PROMO Q2 FY2026 - ZX MINI PARTS (Filter, Seal Kit, Engine, Pump, AC Kit)\n      YD00005194             | KIT;SEAL      |      Rp 7.416.169\n      YD00005193             | KIT;SEAL      |      Rp 8.331.183' };
+  'Section: PROMO Q3 FY2026 - ZX MINI PARTS (Filter, Seal Kit, Engine, Pump, AC Kit)\n      YD00005194             | KIT;SEAL      |      Rp 7.416.169\n      YD00005193             | KIT;SEAL      |      Rp 8.331.183' };
 const ARM = { metadata: { Model: 'ZX48U-5A', Kategori: 'PARTS CATALOG' }, content: 'Section: CYL.;ARM\nParts List:\n         100 | YD00005193         | KIT;SEAL                            | qty:1' };
 const BUCKET = { metadata: { Model: 'ZX48U-5A', Kategori: 'PARTS CATALOG' }, content: 'Section: CYL.;BUCKET\nParts List:\n         100 | YD00005194         | KIT;SEAL                            | qty:1' };
 const WEB = { YD00005193: [{ pn: 'YD00005193', nama: 'KIT;SEAL', harga: 'Rp 8.493.254' }], YD00005194: [{ pn: 'YD00005194', nama: 'KIT;SEAL', harga: 'Rp 7.560.440' }] };

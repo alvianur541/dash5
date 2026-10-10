@@ -346,15 +346,18 @@ function buangKlaimTanpaHarga(text: string): string {
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-export async function lengkapiHarga(text: string): Promise<string> {
+export async function lengkapiHarga(text: string, promo: Map<string, Set<string>> = new Map()): Promise<string> {
   const failed = 'Gagal dicek, kirim ulang';
   const baris = text.split('\n');
+  const angka = (s: string) => s.replace(/\D/g, '');
+  const semuaPromo = new Set([...promo.values()].flatMap(s => [...s]));
+  const rpGlobal = new RegExp(RP_RE.source, 'gi');
   const rows = new Map<number, { pn: string; cells: string[]; prices: number[] }>();
   let priceCols: number[] = [];
   baris.forEach((line, i) => {
     if (!line.trim().startsWith('|')) {
       priceCols = [];
-      baris[i] = line.replace(new RegExp(RP_RE.source, 'gi'), failed);
+      baris[i] = line.replace(rpGlobal, m => (semuaPromo.has(angka(m)) ? m : failed));
       return;
     }
     const cells = line.split('|');
@@ -364,6 +367,9 @@ export async function lengkapiHarga(text: string): Promise<string> {
     const prices = [...new Set([...priceCols, ...cells.flatMap((c, n) => RP_RE.test(c) || KETIK_RE.test(c) || BELUM_RE.test(`|${c}|`) ? [n] : [])])];
     if (!prices.length) return;
     const pn = cells.filter((_, n) => !prices.includes(n)).map(c => c.replace(/[*`]/g, '').trim()).find(c => PN_SEL_RE.test(c) && /\d/.test(c));
+    const hargaPn = pn ? promo.get(pn.toUpperCase()) : undefined;
+    const rpSel = prices.map(n => cells[n] ?? '').filter(c => RP_RE.test(c));
+    if (hargaPn && rpSel.length && rpSel.every(c => [...c.matchAll(rpGlobal)].every(m => hargaPn.has(angka(m[0]))))) return;
     if (pn) rows.set(i, { pn, cells, prices });
     else {
       for (const n of prices) if (cells[n]?.trim()) cells[n] = ` ${failed} `;

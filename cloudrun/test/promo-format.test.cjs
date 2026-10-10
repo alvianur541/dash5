@@ -30,7 +30,7 @@ module.exports = async () => {
 
   {
     const rpc = args => (args.filter.Kategori === 'CPM' ? [{ ...CPM, similarity: 0.9 }]
-      : args.filter.Kategori === 'PROMO Q2 FY2026' && args.filter.Model === 'ZX200-5G'
+      : args.filter.Kategori === 'PROMO Q3 FY2026' && args.filter.Model === 'ZX200-5G'
         ? [{ ...LUB, similarity: 0.8 }, { ...FILTER, similarity: 0.7 }] : []);
     const { d } = mockDeps([[]], { supabase: fakeSupabase(rpc), embed: async () => [0.1] });
     const r = await runWithDeps(d, () => resolvePartsQuery('Pket 2000', [], 'ZX200-5G'));

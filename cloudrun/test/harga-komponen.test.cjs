@@ -2,7 +2,7 @@ const { pilihPnHarga, detectFaultCodeInQuery, BUKAN_HARGA_SAJA_RE, suite } = req
 
 // Sesi Arip 4 Okt: "cek harga kit seal swing motor" dijawab bercampur seal kit main pump. Chunk promo
 // "INNERPART HYDRAULIC (Main Pump, Swing Motor, ...)" — komponen tiap baris ada di tag [..] di ujung baris.
-const PROMO = `Section: PROMO Q2 FY2026 - INNERPART HYDRAULIC (Main Pump, Swing Motor, Travel Motor, Control Valve) (Part 1/2)
+const PROMO = `Section: PROMO Q3 FY2026 - INNERPART HYDRAULIC (Main Pump, Swing Motor, Travel Motor, Control Valve) (Part 1/2)
   4451039                | Kit; Seal                                    |      Rp 3.163.459 |   25% |      Rp 2.372.594  [Main Pump]
   4455733                | Kit; Seal                                    |        Rp 424.903 |   25% |        Rp 318.677  [Main Pump]
   YB00000330             | Kit;Seal                                     |        Rp 760.233 |   25% |        Rp 570.175  [Main Pump]

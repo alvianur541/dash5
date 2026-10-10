@@ -19,7 +19,7 @@ export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs, mmrSelect } from '../src/rag/rerank';
 export { wantsNumeric, rankAndSelect } from '../src/rag/retrieve';
 export { resolveNaturalLanguageQuery } from '../src/routes';
-export { promoAktif, tanpaHargaDb, PROMO_BERAKHIR } from '../src/promo';
+export { promoAktif, tanpaHargaDb, hargaPromo, PROMO_BERAKHIR, PROMO_KATEGORI } from '../src/promo';
 export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';
 export { BUKAN_HARGA_SAJA_RE } from '../src/harga';
 export { compressEvidence, compressionPlan } from '../src/compression';
