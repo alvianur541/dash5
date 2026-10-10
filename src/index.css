@@ -917,3 +917,9 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
   .light-theme .topbar-hamburger:hover { background: rgba(0,0,0,0.06); }
   .light-theme .topbar-center:hover { background: rgba(0,0,0,0.07); }
 }
+
+/* Mobile drawer: iOS paints the status-bar/home-indicator strips from the page colour with a soft blur edge,
+   so a dark scrim made those strips look smeared. A wash of the app colour keeps every edge the same tone. */
+.sidebar-scrim { background: color-mix(in srgb, var(--bg-app) 62%, transparent); }
+.sidebar-drawer { box-shadow: 1px 0 0 var(--border-main), 12px 0 32px rgba(0, 0, 0, 0.08); }
+.dark-theme .sidebar-drawer { box-shadow: 1px 0 0 var(--border-main), 12px 0 32px rgba(0, 0, 0, 0.45); }
