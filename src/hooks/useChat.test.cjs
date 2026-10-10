@@ -52,3 +52,15 @@ test('A to B to A navigation rejects the first stale A response', async () => {
   h.requests[1].resolve(null);
   await b;
 });
+
+test('session deleted on another device closes instead of showing a stale local copy', async () => {
+  const h = await harness();
+  const p = h.render().handleSelectSession('A');
+  h.render();
+  h.requests[0].resolve('gone');
+  await p;
+  const hook = h.render();
+  assert.equal(hook.currentSessionId, null);
+  assert.equal(hook.messages.length, 0);
+  assert.match(hook.error, /dihapus di perangkat lain/);
+});

@@ -65,7 +65,8 @@ export async function fetchUserSessionList(userId: string): Promise<import('../t
   }));
 }
 
-export async function fetchSessionData(sessionId: string, userId: string): Promise<import('../types').ChatSession | null> {
+// 'gone' = the server has no live row (deleted on another device); null = could not check (offline/error).
+export async function fetchSessionData(sessionId: string, userId: string): Promise<import('../types').ChatSession | 'gone' | null> {
   if (!supabase) return null;
 
   const { data, error } = await supabase
@@ -74,8 +75,9 @@ export async function fetchSessionData(sessionId: string, userId: string): Promi
     .eq('id', sessionId)
     .eq('user_id', userId)
     .is('deleted_at', null)
-    .single();
+    .maybeSingle();
 
+  if (!error && !data) return 'gone';
   if (error || !data) {
     console.error('Failed to fetch session data:', error?.message);
     return null;

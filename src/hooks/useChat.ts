@@ -89,11 +89,18 @@ export function useChat(user: User, isOnline: boolean) {
     if (live.length) localStorage.setItem(listKey(uid), JSON.stringify(live));
     else deleteAllSessionData(uid);
     const liveIds = new Set(live.map(s => s.id));
+    // The open chat was deleted on another device: close it instead of letting a new message revive it locally.
+    const open = sessionIdRef.current;
+    if (open && !liveIds.has(open) && sessionListRef.current.some(s => s.id === open && s.updatedAt < startedAt)) {
+      deleteSessionData(uid, open);
+      startNewSession();
+      setError('Percakapan ini sudah dihapus di perangkat lain.');
+    }
     setSessionList(prev => [
       ...prev.filter(s => s.updatedAt >= startedAt && !liveIds.has(s.id) && !tomb[s.id]),
       ...live,
     ]);
-  }, []);
+  }, [startNewSession]);
 
   // Keyed on uid, not the user object: a token refresh must not reset the open chat.
   const uid = user?.uid;
@@ -128,14 +135,19 @@ export function useChat(user: User, isOnline: boolean) {
     const remote = await fetchSessionData(id, user.uid);
     if (!mountedRef.current || selectionVersionRef.current !== selectionVersion || sessionIdRef.current !== id || userIdRef.current !== user.uid) return;
     setLoadingSession(false);
-    if (remote) {
+    if (remote === 'gone') {
+      deleteSessionData(user.uid, id);
+      setSessionList(prev => prev.filter(s => s.id !== id));
+      startNewSession();
+      setError('Percakapan ini sudah dihapus di perangkat lain.');
+    } else if (remote) {
       setMessages(remote.messages);
       setSelectedModel(remote.model);
       setError(null);
     } else if (!local) {
       setError('Gagal memuat percakapan ini. Coba lagi.');
     }
-  }, [user]);
+  }, [user, startNewSession]);
 
   const confirmDelete = useCallback(() => {
     const id = deleteConfirmId;
