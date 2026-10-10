@@ -346,7 +346,27 @@ function buangKlaimTanpaHarga(text: string): string {
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
 
-export async function lengkapiHarga(text: string, promo: Map<string, Set<string>> = new Map()): Promise<string> {
+// PN rows with a price from an earlier answer, so a follow-up "hitung totalnya" table can be checked and filled.
+function barisSebelumnya(text: string): Array<{ pn: string; qty: number; shown: string }> {
+  const out: Array<{ pn: string; qty: number; shown: string }> = [];
+  let qtyCol: number | undefined;
+  for (const line of text.split('\n')) {
+    if (!line.trim().startsWith('|')) { qtyCol = undefined; continue; }
+    const cells = line.split('|').map(c => c.replace(/[*`]/g, '').trim());
+    if (!RP_RE.test(line)) {
+      const q = cells.findIndex(c => /^(qty|jumlah|jml|quantity)$/i.test(c));
+      if (q >= 0) qtyCol = q;
+      continue;
+    }
+    const pn = cells.find(c => PN_SEL_RE.test(c) && /\d/.test(c));
+    const rp = cells.map(c => c.match(RP_RE)?.[0]).find(Boolean);
+    if (!pn || !rp) continue;
+    out.push({ pn: pn.toUpperCase(), qty: qtyCol != null ? Number(cells[qtyCol]?.replace(/\D/g, '')) || 1 : 1, shown: rp.replace(/\D/g, '') });
+  }
+  return out;
+}
+
+export async function lengkapiHarga(text: string, promo: Map<string, Set<string>> = new Map(), sebelumnya = ''): Promise<string> {
   const failed = 'Gagal dicek, kirim ulang';
   const baris = text.split('\n');
   const angka = (s: string) => s.replace(/\D/g, '');
@@ -424,8 +444,29 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     baris[r.i] = r.cells.join('|');
   }
   for (const k of jumlah.keys()) sah.add(String(jumlah.get(k)));
+  // Total rows of a follow-up answer: recompute from the previous answer's PN rows (Alvian 10 Oct, "Hitung totalny").
+  const lalu = rows.some(r => !r.pn) && sebelumnya ? barisSebelumnya(sebelumnya) : [];
+  const totalLalu = { normal: 0n, promo: 0n, shown: 0n };
+  if (lalu.length) {
+    const webLalu = await hargaWeb([...new Set(lalu.map(l => l.pn))]);
+    for (const l of lalu) {
+      const hp = [...(promo.get(l.pn) ?? [])].map(Number).sort((a, b) => a - b);
+      const w = webLalu.get(l.pn)?.find(x => x.pn.toUpperCase() === l.pn);
+      const shown = BigInt(l.shown), q = BigInt(l.qty);
+      const normal = hp.length > 1 ? BigInt(hp[hp.length - 1]) : w ? BigInt(angka(w.harga) || '0') || shown : shown;
+      const pr = hp.length ? BigInt(hp[0]) : shown;
+      totalLalu.normal += normal * q; totalLalu.promo += pr * q; totalLalu.shown += shown * q;
+    }
+    Object.values(totalLalu).forEach(v => sah.add(String(v)));
+  }
   for (const r of rows.filter(r => !r.pn)) {
-    for (const n of r.prices) if (r.cells[n]?.trim() && !rpDi(r.cells[n]).every(x => sah.has(x)) || KETIK_RE.test(r.cells[n] ?? '')) r.cells[n] = ` ${failed} `;
+    const label = r.cells.filter((_, n) => !r.prices.includes(n)).join(' ').toLowerCase();
+    const hitung = /promo|diskon|disc|hemat/.test(label) ? totalLalu.promo : /normal|hexindoparts/.test(label) ? totalLalu.normal : totalLalu.shown;
+    for (const n of r.prices) {
+      const cell = r.cells[n] ?? '';
+      if (!(cell.trim() && !rpDi(cell).every(x => sah.has(x)) || KETIK_RE.test(cell))) continue;
+      r.cells[n] = ` ${lalu.length && hitung > 0n ? rupiah(String(hitung)) : failed} `;
+    }
     baris[r.i] = r.cells.join('|');
   }
   for (const i of prosa) baris[i] = baris[i].replace(rpGlobal, m => (sah.has(angka(m)) ? m : failed));

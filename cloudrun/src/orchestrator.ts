@@ -42,8 +42,9 @@ const userTag = (userName: string, history: Message[]) =>
     history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
 
 // Never let the price safety net break an answer: on any error the original text stands.
-async function lengkapiHargaAman(text: string, data = ''): Promise<string> {
-  try { return await lengkapiHarga(text, promoAktif() ? hargaPromo(data) : new Map()); } catch (err) {
+async function lengkapiHargaAman(text: string, data = '', history: Message[] = []): Promise<string> {
+  const sebelumnya = history.filter(m => m.role === 'assistant').slice(-2).map(m => m.content).join('\n\n');
+  try { return await lengkapiHarga(text, promoAktif() ? hargaPromo(data) : new Map(), sebelumnya); } catch (err) {
     console.warn('[harga-susulan] gagal: %s', (err as Error)?.message);
     return text;
   }
@@ -219,7 +220,7 @@ export async function generateResponseStream(
     contents,
     ...systemFor(model, isCasual),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical)), ragContent);
+  }, onChunk, gsTechnical)), ragContent, history);
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
@@ -409,6 +410,6 @@ export async function generateResponse(
     },
   };
 
-  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)), dataFoto);
+  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)), dataFoto, history);
   return streamed || FALLBACK_RESPONSE;
 }
