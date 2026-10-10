@@ -907,8 +907,10 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
 
-.move-banner { position: fixed; left: 12px; right: 12px; bottom: 12px; z-index: 60; display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; background: #F0811F; color: #1A1915; font-size: 13.5px; line-height: 1.4; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
-.move-banner span { flex: 1; }
-.move-banner a, .move-banner .isi { background: #1A1915; color: #fff; border-radius: 999px; padding: 7px 14px; font-weight: 600; text-decoration: none; white-space: nowrap; }
-.move-banner button { display: flex; padding: 6px; border-radius: 999px; }
-@media (min-width: 768px) { .move-banner { left: auto; right: 20px; bottom: 20px; max-width: 460px; } }
+.demo-banner { padding: 12px 14px 4px; border: 1px solid var(--border-main); border-radius: 12px; background: var(--bg-card); font-size: 13px; line-height: 1.5; }
+.demo-banner-title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; color: var(--text-primary); }
+.demo-banner-title span, .demo-banner p { color: var(--text-secondary); }
+.demo-banner p { margin: 4px 0 0; }
+.demo-banner a { display: inline-flex; min-height: 44px; align-items: center; color: var(--text-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
+.demo-banner a:hover { color: var(--accent-main); }
+.demo-banner a:focus-visible { outline: 2px solid var(--accent-main); outline-offset: 3px; }
