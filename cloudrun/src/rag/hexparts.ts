@@ -411,6 +411,7 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
   let verified = false;
   const sah = new Set(semuaPromo);
   const jumlah = new Map<string, bigint>();
+  const kolTotal = new Set<string>();
   const tambah = (k: string, d: string) => jumlah.set(k, (jumlah.get(k) ?? 0n) + BigInt(d || '0'));
   for (const r of rows.filter(r => r.pn)) {
     const pn = r.pn!.toUpperCase();
@@ -423,7 +424,11 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     const qtyCol = head ? [...head].find(([, h]) => /^(qty|jumlah|jml|quantity)$/.test(h))?.[0] : undefined;
     const qty = qtyCol != null ? Number(angka(r.cells[qtyCol] ?? '')) || 1 : 1;
     let normalDiisi = false;
+    // Line-total columns (Subtotal, Jumlah) = unit price x qty: never re-checked against the site (Alvian 10 Oct).
+    const totalCols = r.prices.filter(n => /^(?:sub\s*-?total|total|jumlah(?:\s+harga)?|amount)\b/.test(head?.get(n) ?? ''));
+    let satuan: string | null = null;
     for (const n of r.prices) {
+      if (totalCols.includes(n)) continue;
       const cell = r.cells[n] ?? '';
       const isPromoCol = /promo|disc|diskon/.test(head?.get(n) ?? '');
       const nilai = rpDi(cell);
@@ -440,6 +445,14 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
       }
       if (!isPromoCol) normalDiisi = true;
       if (akhir) { sah.add(akhir); tambah(`${r.table}:${n}`, akhir); tambah(`${r.table}:${n}:q`, String(BigInt(akhir) * BigInt(qty))); }
+      if (akhir && (!satuan || isPromoCol)) satuan = akhir;
+    }
+    for (const n of totalCols) {
+      if (!satuan) { r.cells[n] = ` ${failed} `; continue; }
+      const sub = String(BigInt(satuan) * BigInt(qty));
+      r.cells[n] = ` ${rupiah(sub)} `;
+      sah.add(sub); tambah(`${r.table}:${n}`, sub);
+      kolTotal.add(`${r.table}:${n}`);
     }
     baris[r.i] = r.cells.join('|');
   }
@@ -464,6 +477,9 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     const hitung = /promo|diskon|disc|hemat/.test(label) ? totalLalu.promo : /normal|hexindoparts/.test(label) ? totalLalu.normal : totalLalu.shown;
     for (const n of r.prices) {
       const cell = r.cells[n] ?? '';
+      // Grand total under a Subtotal column = sum of the recomputed subtotals.
+      const kunci = `${r.table}:${n}`;
+      if (kolTotal.has(kunci) && cell.trim()) { r.cells[n] = cell.replace(/(?:Rp|IDR)\.?\s*\d[\d.,]*/i, rupiah(String(jumlah.get(kunci)))); continue; }
       if (!(cell.trim() && !rpDi(cell).every(x => sah.has(x)) || KETIK_RE.test(cell))) continue;
       r.cells[n] = ` ${lalu.length && hitung > 0n ? rupiah(String(hitung)) : failed} `;
     }
