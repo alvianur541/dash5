@@ -4,7 +4,7 @@ import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-reac
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
-import { DemoBanner } from './DemoBanner';
+
 
 
 interface LoginPageProps {
@@ -67,7 +67,6 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
         </div>
 
         <div className="w-full flex flex-col gap-3">
-          <DemoBanner />
           <m.form
             initial={{ opacity: 0, x: -16 }}
             animate={{ opacity: 1, x: 0 }}

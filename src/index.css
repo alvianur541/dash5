@@ -907,10 +907,8 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
 
-.demo-banner { padding: 12px 14px 4px; border: 1px solid var(--border-main); border-radius: 12px; background: var(--bg-card); font-size: 13px; line-height: 1.5; }
-.demo-banner-title { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: baseline; color: var(--text-primary); }
-.demo-banner-title span, .demo-banner p { color: var(--text-secondary); }
-.demo-banner p { margin: 4px 0 0; }
-.demo-banner a { display: inline-flex; min-height: 44px; align-items: center; color: var(--text-primary); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; border-radius: 4px; }
-.demo-banner a:hover { color: var(--accent-main); }
-.demo-banner a:focus-visible { outline: 2px solid var(--accent-main); outline-offset: 3px; }
+.demo-banner { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 12px; padding: 4px 14px; background: #F0811F; color: #1A1915; font-size: 13.5px; line-height: 1.4; }
+.demo-banner a { display: inline-flex; align-items: center; min-height: 36px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; }
+.demo-banner a:hover, .demo-banner button:hover { opacity: .8; }
+.demo-banner a:focus-visible, .demo-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

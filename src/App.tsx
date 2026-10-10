@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { LoginPage } from './components/LoginPage';
+import { DemoBanner } from './components/DemoBanner';
 import { PocketModal } from './components/PocketModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { ModelSheet } from './components/ModelSheet';
@@ -61,7 +62,12 @@ export default function App() {
     );
   }
 
-  if (!user) return <LoginPage theme={theme} onThemeToggle={toggleTheme} />;
+  if (!user) return (
+    <div className="flex h-full flex-col bg-[var(--bg-app)]">
+      <DemoBanner />
+      <div className="min-h-0 flex-1"><LoginPage theme={theme} onThemeToggle={toggleTheme} /></div>
+    </div>
+  );
 
   const userName = (user.displayName || 'Operator').split(' ')[0];
 
