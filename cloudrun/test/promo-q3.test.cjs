@@ -49,13 +49,41 @@ module.exports = async () => {
   resetHargaWebCache();
   webCalls = [];
   const salah = await runWithDeps(d, () => lengkapiHarga('| Part Number | Nama | Harga Promo |\n|---|---|---|\n| 4658521 | Filter | Rp 400.000 |', map));
-  t(salah.includes('Rp 700.000') && !salah.includes('400.000'), 'harga promo yang tidak sesuai data → diverifikasi web');
+  t(salah.includes('Rp 516.474') && !salah.includes('400.000') && !salah.includes('Rp 700.000'), `kolom promo yang tidak sesuai data → harga promo dari data, bukan harga web (${salah.split('\\n')[2]})`);
   const tanpaMap = await runWithDeps(d, () => lengkapiHarga('Harga Rp 516.474.'));
   t(!tanpaMap.includes('516.474'), 'tanpa data promo (promo berakhir) perilaku lama tetap');
 
   const off = tanpaHargaDb(CHUNK);
   t(!/Rp\s?\d/.test(off) && !/promo|Ketentuan|Pemesanan|Keterangan unit/i.test(off), `setelah berakhir format Q3 bersih (${(off.match(/.*(promo|Ketentuan|Pemesanan|Keterangan).*/gi) || []).join(' / ')})`);
   t(/4719920\s+\| Filter;Fuel\s+\[Unit: ZX250-5G\]/.test(off), 'tanda unit sekelas tetap ada tanpa harga');
+
+  // Regresi 10 Okt (sesi 61d14c6c): paket service 1000 — blok "--- HARGA PROMO" tanpa Section, dua kolom harga.
+  {
+    const blok = ['--- HARGA PROMO (khusus PN di atas) ---', 'Periode Promo  : 8 Oktober 2026 - 31 Desember 2026',
+      '4616545                | Fuel Filter                              |       Rp 342.747 |  20% |       Rp 274.198',
+      'HTCDH1P                | HTC ENG OIL DH1 PAIL                     |     Rp 2.337.200 |  15% |     Rp 1.986.620'].join('\n');
+    const m = hargaPromo(blok);
+    t(m.get('4616545')?.has('274198') && m.get('HTCDH1P')?.has('1986620'), 'baris promo di blok paket terbaca');
+    resetHargaWebCache();
+    const webP = { '4616545': 'Rp 342.747', 'HTCDH1P': 'Rp 2.337.200', 'YA00058283': 'Rp 759.296' };
+    const { d: d2 } = mockDeps([[]], { webPrice: async pn => [{ pn, nama: 'X', harga: webP[pn] }] });
+    const paket = [
+      '| Part Number | Nama Part | Qty | Harga Normal | Harga Promo |',
+      '| :--- | :--- | :---: | :--- | :--- |',
+      '| `YA00058283` | Engine Oil Filter | 1 | Rp 759.296 | Rp 607.437 |',
+      '| `4616545` | Primary Fuel Filter | 1 | Rp 342.747 | Rp 274.198 |',
+      '| `HTCDH1P` | HTC ENG OIL DH1 PAIL | 2 | Rp 2.337.200 | Rp 1.986.620 |',
+      '| **Total** | | | **Rp 5.776.443** | **Rp 4.247.438** |',
+      '',
+      'Total promo Rp 4.247.438, hemat Rp 999.',
+    ].join('\n');
+    const o = await runWithDeps(d2, () => lengkapiHarga(paket, m));
+    t(!/Gagal dicek/.test(o.split('\n').slice(2, 5).join('\n')), `kolom promo tidak jadi "Gagal dicek" (${o.split('\n')[3]})`);
+    t(o.includes('| Rp 342.747 | Rp 274.198 |') && o.includes('| Rp 2.337.200 | Rp 1.986.620 |'), 'harga normal web + promo data dipertahankan');
+    t(/`YA00058283` \| Engine Oil Filter \| 1 \| Rp 759.296 \| - \|/.test(o), `PN tanpa promo: kolom promo "-", bukan angka karangan (${o.split('\n')[2]})`);
+    t(o.includes('**Rp 5.776.443**') && o.includes('**Rp 4.247.438**') && o.includes('Total promo Rp 4.247.438'), 'total yang cocok jumlah kolom (x qty) dipertahankan');
+    t(!o.includes('Rp 999'), 'angka prosa karangan tetap dibuang');
+  }
 
   // End-to-end: promo aktif → jawaban model dengan harga promo dari data tidak dirusak safety net.
   const { generateResponseStream } = require('./helpers.cjs');

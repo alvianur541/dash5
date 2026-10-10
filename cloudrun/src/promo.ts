@@ -46,9 +46,11 @@ export function hargaPromo(data: string): Map<string, Set<string>> {
   const out = new Map<string, Set<string>>();
   let diPromo = false;
   for (const line of data.split('\n')) {
-    if (/^Section:/.test(line)) diPromo = /^Section:\s*PROMO Q\d FY\d{4}\b/i.test(line);
-    if (!diPromo || !line.includes('|')) continue;
-    const pn = line.split('|')[0].trim().toUpperCase();
+    if (/^Section:|^---/.test(line.trim())) diPromo = /^Section:\s*PROMO Q\d FY\d{4}\b|^--- HARGA PROMO/i.test(line.trim());
+    // Promo rows also travel without their Section header (service-package block): Normal | Disc % | Promo.
+    const bentukPromo = /\|\s*\d{1,2}\s*%\s*\|/.test(line) && (line.match(/Rp\s?[\d.]+/g) ?? []).length >= 2;
+    if (!(diPromo || bentukPromo) || !line.includes('|')) continue;
+    const pn = line.split('|')[0].replace(/[*`]/g, '').trim().toUpperCase();
     const harga = [...line.matchAll(/Rp\s?([\d.]+)/g)].map(m => angkaRp(m[1]));
     if (!pn || !harga.length) continue;
     const set = out.get(pn) ?? new Set<string>();

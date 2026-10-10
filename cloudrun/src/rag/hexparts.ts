@@ -350,43 +350,85 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
   const failed = 'Gagal dicek, kirim ulang';
   const baris = text.split('\n');
   const angka = (s: string) => s.replace(/\D/g, '');
+  const rupiah = (d: string) => `Rp ${Number(d).toLocaleString('id-ID')}`;
   const semuaPromo = new Set([...promo.values()].flatMap(s => [...s]));
   const rpGlobal = new RegExp(RP_RE.source, 'gi');
-  const rows = new Map<number, { pn: string; cells: string[]; prices: number[] }>();
+  const rpDi = (c: string) => [...c.matchAll(rpGlobal)].map(m => angka(m[0]));
+  type Row = { i: number; pn?: string; cells: string[]; prices: number[]; table: number };
+  const rows: Row[] = [];
+  const prosa: number[] = [];
+  const heads = new Map<number, Map<number, string>>();
   let priceCols: number[] = [];
+  let table = -1;
+  let diTabel = false;
   baris.forEach((line, i) => {
     if (!line.trim().startsWith('|')) {
-      priceCols = [];
-      baris[i] = line.replace(rpGlobal, m => (semuaPromo.has(angka(m)) ? m : failed));
+      priceCols = []; diTabel = false;
+      if (RP_RE.test(line)) prosa.push(i);
       return;
     }
+    if (!diTabel) { diTabel = true; table++; }
     const cells = line.split('|');
-    const headers = cells.flatMap((c, n) => PRICE_HEADER_RE.test(c.replace(/[*`]/g, '').trim()) ? [n] : []);
-    if (headers.length) { priceCols = headers; return; }
+    // A "| **Total** | … | Rp … |" row is not a header: only a line without amounts can be one.
+    const headers = RP_RE.test(line) ? [] : cells.flatMap((c, n) => PRICE_HEADER_RE.test(c.replace(/[*`]/g, '').trim()) ? [n] : []);
+    if (headers.length) {
+      priceCols = headers;
+      heads.set(table, new Map(cells.map((c, n) => [n, c.replace(/[*`]/g, '').trim().toLowerCase()])));
+      return;
+    }
     if (cells.every(c => !c.trim() || /^:?-+:?$/.test(c.trim()))) return;
     const prices = [...new Set([...priceCols, ...cells.flatMap((c, n) => RP_RE.test(c) || KETIK_RE.test(c) || BELUM_RE.test(`|${c}|`) ? [n] : [])])];
     if (!prices.length) return;
     const pn = cells.filter((_, n) => !prices.includes(n)).map(c => c.replace(/[*`]/g, '').trim()).find(c => PN_SEL_RE.test(c) && /\d/.test(c));
-    const hargaPn = pn ? promo.get(pn.toUpperCase()) : undefined;
-    const rpSel = prices.map(n => cells[n] ?? '').filter(c => RP_RE.test(c));
-    if (hargaPn && rpSel.length && rpSel.every(c => [...c.matchAll(rpGlobal)].every(m => hargaPn.has(angka(m[0]))))) return;
-    if (pn) rows.set(i, { pn, cells, prices });
-    else {
-      for (const n of prices) if (cells[n]?.trim()) cells[n] = ` ${failed} `;
-      baris[i] = cells.join('|');
-    }
+    rows.push({ i, pn, cells, prices, table });
   });
-  if (!rows.size) return baris.join('\n');
-  const web = await hargaWeb([...new Set([...rows.values()].map(r => r.pn))]);
+  if (!rows.length && !prosa.length) return text;
+  const perluWeb = [...new Set(rows.filter(r => r.pn && !r.prices.every(n => {
+    const v = rpDi(r.cells[n] ?? '');
+    return !r.cells[n]?.trim() || (v.length > 0 && v.every(x => promo.get(r.pn!.toUpperCase())?.has(x)));
+  })).map(r => r.pn!))];
+  const web = perluWeb.length ? await hargaWeb(perluWeb) : new Map();
   let verified = false;
-  for (const [i, { pn, cells, prices }] of rows) {
-    const v = web.get(pn.toUpperCase());
-    const pas = v?.find(w => w.pn.toUpperCase() === pn.toUpperCase());
-    const value = v == null ? failed : pas ? pas.harga : 'Belum tersedia';
-    for (const [index, n] of prices.entries()) cells[n] = ` ${index === 0 ? value : failed} `;
-    baris[i] = cells.join('|');
+  const sah = new Set(semuaPromo);
+  const jumlah = new Map<string, bigint>();
+  const tambah = (k: string, d: string) => jumlah.set(k, (jumlah.get(k) ?? 0n) + BigInt(d || '0'));
+  for (const r of rows.filter(r => r.pn)) {
+    const pn = r.pn!.toUpperCase();
+    const hp = promo.get(pn) ?? new Set<string>();
+    const v = web.get(pn);
+    const pas = v?.find((w: { pn: string }) => w.pn.toUpperCase() === pn);
+    const webD = pas ? angka(pas.harga) : '';
     if (pas) verified = true;
+    const head = heads.get(r.table);
+    const qtyCol = head ? [...head].find(([, h]) => /^(qty|jumlah|jml|quantity)$/.test(h))?.[0] : undefined;
+    const qty = qtyCol != null ? Number(angka(r.cells[qtyCol] ?? '')) || 1 : 1;
+    let normalDiisi = false;
+    for (const n of r.prices) {
+      const cell = r.cells[n] ?? '';
+      const isPromoCol = /promo|disc|diskon/.test(head?.get(n) ?? '');
+      const nilai = rpDi(cell);
+      let akhir: string | null = null;
+      if (nilai.length && nilai.every(x => hp.has(x) || (!isPromoCol && x === webD))) akhir = nilai[0];
+      else if (isPromoCol) {
+        if (!cell.trim() && !KETIK_RE.test(cell)) continue;
+        const p = [...hp].sort((a, b) => Number(a) - Number(b))[0];
+        if (p && hp.size > 1) { r.cells[n] = ` ${rupiah(p)} `; akhir = p; } else r.cells[n] = ' - ';
+      } else if (!cell.trim() && normalDiisi) continue;
+      else {
+        r.cells[n] = ` ${v == null ? failed : pas ? pas.harga : 'Belum tersedia'} `;
+        akhir = webD || null;
+      }
+      if (!isPromoCol) normalDiisi = true;
+      if (akhir) { sah.add(akhir); tambah(`${r.table}:${n}`, akhir); tambah(`${r.table}:${n}:q`, String(BigInt(akhir) * BigInt(qty))); }
+    }
+    baris[r.i] = r.cells.join('|');
   }
+  for (const k of jumlah.keys()) sah.add(String(jumlah.get(k)));
+  for (const r of rows.filter(r => !r.pn)) {
+    for (const n of r.prices) if (r.cells[n]?.trim() && !rpDi(r.cells[n]).every(x => sah.has(x)) || KETIK_RE.test(r.cells[n] ?? '')) r.cells[n] = ` ${failed} `;
+    baris[r.i] = r.cells.join('|');
+  }
+  for (const i of prosa) baris[i] = baris[i].replace(rpGlobal, m => (sah.has(angka(m)) ? m : failed));
   let out = baris.join('\n');
   if (verified) out = buangKlaimTanpaHarga(out);
   if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
