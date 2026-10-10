@@ -443,7 +443,7 @@ img {
 .topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
 .topbar-hamburger:active { background: rgba(255,255,255,0.13); transform: scale(0.94); }
 .topbar-center {
-  position: absolute; left: 50%; transform: translateX(-50%);
+  position: absolute; left: 0; right: 0; margin-inline: auto; width: max-content;
   min-height: 36px; color: inherit; font: inherit;
   display: flex; align-items: center; gap: 5px;
   cursor: pointer; padding: 5px 12px; border-radius: 999px;
@@ -452,7 +452,7 @@ img {
   transition: background 0.15s;
 }
 .topbar-center:hover { background: rgba(255,255,255,0.07); }
-.topbar-center:active { transform: translateX(-50%) scale(0.97); }
+.topbar-center:active { transform: scale(0.97); }
 .topbar-model-name {
   font-family: var(--font-heading);
   font-size: 15px; font-weight: 700; letter-spacing: -0.035em; color: var(--text-primary);
