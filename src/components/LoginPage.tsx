@@ -4,6 +4,7 @@ import { AlertCircle, LogIn, Loader2, Sun, Moon, Eye, EyeOff } from 'lucide-reac
 import { m, AnimatePresence } from 'motion/react';
 import { cn } from '../lib/utils';
 import { useAuth } from './AuthProvider';
+import { DemoBanner } from './DemoBanner';
 
 
 
@@ -138,6 +139,7 @@ export function LoginPage({ theme, onThemeToggle }: LoginPageProps) {
                 : <><span>Masuk</span><LogIn className="w-4 h-4" /></>
               }
             </button>
+            <DemoBanner />
           </m.form>
         </div>
       </m.div>

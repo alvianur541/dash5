@@ -907,8 +907,9 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
 
-.demo-banner { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 12px; height: 44px; padding: 0 14px; background: #F0811F; color: #1A1915; font-size: 15px; line-height: 1.4; }
-.demo-banner a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 999px; }
+/* Demo request pill under the login button (not at the top edge: iOS tints/blurs content under the status bar) */
+.demo-banner { display: flex; align-items: center; justify-content: center; gap: 4px; width: fit-content; margin: 10px auto 0 !important; padding: 0 4px 0 16px; min-height: 40px; border-radius: 999px; background: rgba(240,129,31,.12); border: 1px solid rgba(240,129,31,.35); color: var(--accent-main); font-size: 14px; line-height: 1.4; }
+.demo-banner a { display: inline-flex; align-items: center; min-height: 40px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; color: inherit; }
 .demo-banner a:hover, .demo-banner button:hover { opacity: .8; }
 .demo-banner a:focus-visible, .demo-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }

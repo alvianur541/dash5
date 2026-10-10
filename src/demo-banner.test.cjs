@@ -41,12 +41,14 @@ function renderApp(hostname, user = null, dismissed = false, loading = false) {
   return renderToStaticMarkup(React.createElement(load(path.join(__dirname, 'App.tsx')).default));
 }
 
-test('app login has one compact request strip before the login page', () => {
+test('app login shows the request pill under the login button, not at the top edge', () => {
   const html = renderApp('app.dash5.id');
   assert.equal((html.match(/Request demo access/g) || []).length, 1);
   assert.match(html, /class="demo-banner" role="status"/);
   assert.match(html, /type="button" aria-label="Tutup"/);
-  assert.ok(html.indexOf('demo-banner') < html.indexOf('login-theme-btn'));
+  assert.ok(html.indexOf('demo-banner') > html.indexOf('type="submit"'));
+  assert.ok(html.indexOf('demo-banner') < html.indexOf('</form>'));
+  assert.doesNotMatch(html, /min-h-0 flex-1/);
   assert.doesNotMatch(html, /Demo access|For portfolio review|Contact us/);
   assert.match(html, /href="mailto:alvianur@dash5.id"/);
   assert.doesNotMatch(html, /h000|dash5\.internal|Demo Account/i);
