@@ -307,12 +307,12 @@ export function SupportModal({ open, onClose }: SupportModalProps) {
             <div className="px-4 sm:px-5 py-3.5 border-t border-[var(--border-main)] bg-[var(--bg-app)]">
               <p className="text-[11.5px] text-[var(--text-muted)] mb-2">Hubungi kami untuk saran dan support lainnya:</p>
               <a
-                href="mailto:admin@dash5.my.id"
+                href="mailto:alvianur@dash5.id"
                 className="flex items-center justify-between w-full px-4 py-2.5 rounded-xl bg-[var(--accent-main)]/8 border border-[var(--accent-main)]/20 hover:bg-[var(--accent-main)]/14 active:scale-[0.98] transition-all group"
               >
                 <div className="flex items-center gap-3">
                   <Mail size={14} className="text-[var(--accent-main)]" />
-                  <span className="text-[12.5px] font-medium text-[var(--accent-main)]">admin@dash5.my.id</span>
+                  <span className="text-[12.5px] font-medium text-[var(--accent-main)]">alvianur@dash5.id</span>
                 </div>
                 <ExternalLink size={12} className="text-[var(--accent-main)]/60 group-hover:text-[var(--accent-main)] transition-colors" />
               </a>
