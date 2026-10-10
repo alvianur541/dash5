@@ -2,6 +2,9 @@
 export const PROMO_KATEGORI = 'PROMO Q3 FY2026';
 export const PROMO_BERAKHIR = '2026-12-31';
 
+// Expired periods stay searchable as PN lists only: prices are stripped, price comes from hexindoparts.com.
+export const PROMO_KATEGORI_LAMA: readonly string[] = ['PROMO Q2 FY2026'];
+
 const tanggalJakarta = (now: Date): string =>
   new Date(now.getTime() + 7 * 3600_000).toISOString().slice(0, 10);
 
@@ -37,6 +40,11 @@ export function tanpaHargaDb(text: string): string {
       .replace(/--- HARGA PROMO \(khusus PN di atas\) ---/g, '--- PARTS TERDAFTAR (khusus PN di atas) ---')
       .replace(/PARTS CATALOG & PROMO/g, 'PARTS CATALOG')];
   }).join('\n');
+}
+
+// Retrieved rows of an expired promo period: keep PN + description, drop every price/period/terms line.
+export function bersihkanPromoLama<T extends { content: string; metadata?: any }>(rows: T[]): T[] {
+  return rows.map(r => PROMO_KATEGORI_LAMA.includes(r.metadata?.Kategori) ? { ...r, content: tanpaHargaDb(r.content) } : r);
 }
 
 const angkaRp = (s: string): string => s.replace(/\D/g, '');

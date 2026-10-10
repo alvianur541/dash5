@@ -4,7 +4,7 @@ import { capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './re
 import { HybridResult, RAGResult, SearchResult, hybrid, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
 import type { UnitModel } from '../types';
-import { PROMO_KATEGORI } from '../promo';
+import { PROMO_KATEGORI, PROMO_KATEGORI_LAMA, bersihkanPromoLama } from '../promo';
 import type { RerankSource } from '../deps';
 import { stage } from '../telemetry';
 
@@ -48,7 +48,7 @@ export async function searchServiceIntervalParts(
 // Hybrid RPC only exact-matches "Part Number:" chunks; section and promo chunks need this literal lookup.
 export async function exactPartRows(pn: string, model: string): Promise<HybridResult[]> {
   if (!sb()) return [];
-  const kategori = new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', PROMO_KATEGORI]);
+  const kategori = new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', PROMO_KATEGORI, ...PROMO_KATEGORI_LAMA]);
   const cell = new RegExp(`(?:^|\\|)\\s*${pn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\|`, 'im');
   try {
     const { data } = await sb().from('documents').select('id, content, metadata')
@@ -56,11 +56,14 @@ export async function exactPartRows(pn: string, model: string): Promise<HybridRe
       .ilike('content', `%${escapeLike(pn)}%`)
       .limit(12);
     registerEvidence(data ?? []);
-    return (data ?? [])
+    // Active promo / catalog first so the 4 slots do not fill with expired-period copies of the same PN.
+    const urut = (d: { metadata?: any }) => PROMO_KATEGORI_LAMA.includes(d.metadata?.Kategori) ? 1 : 0;
+    return bersihkanPromoLama((data ?? [])
       .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === model
         && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
+      .sort((a: any, b: any) => urut(a) - urut(b))
       .slice(0, 4)
-      .map((d: { content: string; metadata?: any }) => ({ ...d, similarity: 1, match_type: 'exact_part_no' }));
+      .map((d: { content: string; metadata?: any }) => ({ ...d, similarity: 1, match_type: 'exact_part_no' })));
   } catch {
     return [];
   }
@@ -163,12 +166,13 @@ export async function searchPartsCatalog(
   const PARTS_IDX = 0;
   const CPM_IDX   = 1;
   const PROMO_IDX = 2;
-  const ENGINE_IDX = hasEngineCatalog ? 3 : -1;
+  const ENGINE_IDX = hasEngineCatalog ? 3 + PROMO_KATEGORI_LAMA.length : -1;
 
   const queries = [
     hybrid(queryText, embedding, bodyCount, { Model: model, Kategori: 'PARTS CATALOG' }, 0.28),
     hybrid(queryText, embedding, cpmCount, { Model: model, Kategori: 'CPM' }, 0.30),
     hybrid(queryText, embedding, promoCount, { Model: model, Kategori: PROMO_KATEGORI }, 0.25),
+    ...PROMO_KATEGORI_LAMA.map(k => hybrid(queryText, embedding, 3, { Model: model, Kategori: k }, 0.25)),
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
     // Service bulletins carry PN tables the catalog lacks or that supersede it (per-S/N harness PNs,
     // Technical News 06/2023 ZX48U-5A): without them a parts question never sees the newest data (Reyhan 5 Oct).
@@ -190,7 +194,12 @@ export async function searchPartsCatalog(
 
   const bodyData: HybridResult[]   = getData(PARTS_IDX);
   const cpmData: HybridResult[]    = getData(CPM_IDX);
-  const promoData: HybridResult[]  = getData(PROMO_IDX);
+  const promoData: HybridResult[]  = [
+    ...getData(PROMO_IDX),
+    // Expired periods: PN/description only (prices stripped), tagged by query so it never depends on RPC metadata.
+    ...bersihkanPromoLama(PROMO_KATEGORI_LAMA.flatMap((k, i) =>
+      getData(PROMO_IDX + 1 + i).map(d => ({ ...d, metadata: { ...d.metadata, Kategori: k } })))),
+  ];
   const engineData: HybridResult[] = ENGINE_IDX >= 0 ? getData(ENGINE_IDX) : [];
   const newsData: HybridResult[]   = getData(NEWS_IDX);
   if (newsData.length) console.info('[parts] technical news: %d chunk ikut', newsData.length);

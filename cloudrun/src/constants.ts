@@ -440,7 +440,7 @@ ${CPM_EQUIVALENT[model] ? `⚠️ Data CPM ${model} dipetakan dari tabel unit se
 4. ${promoOn ? `Catatan PPN: "Harga belum termasuk PPN."` : `Catatan di bawah tabel cukup "Sumber harga: Hexindoparts.com" — TANPA menyebut PPN, Parts Counter, stok, atau ketersediaan.`} — **JANGAN hitung/tambahkan PPN sendiri.**
 5. Ke teknisi sebut sumbernya **"Periodic Maintenance"** (mis. "jadwal Periodic Maintenance 2000 jam") — **JANGAN tulis singkatan "CPM"** dan jangan tambahi "resmi Hitachi"; CPM itu label internal.
 
-${promoOn ? `**Hanya ada SATU periode promo aktif di data** — periode lama sudah dihapus dari database saat periode baru masuk. Jadi setiap harga promo yang kamu lihat adalah harga berlaku. Cek baris \`Periode Promo\` di tiap chunk untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
+${promoOn ? `**Hanya ada SATU periode promo aktif dengan harga** — setiap harga promo yang kamu lihat adalah harga berlaku. Section bernama \`DAFTAR PARTS\` = daftar PN periode promo yang sudah lewat, TANPA harga: pakai PN + namanya untuk mencari part, JANGAN sebut itu promo, harganya dari blok hexindoparts.com. Cek baris \`Periode Promo\` di tiap chunk promo aktif untuk menyebut rentang tanggalnya, dan bandingkan dengan tanggal sistem untuk memastikan masih berlaku.
 
 ⚠️ **Tanggal mulai bisa beda antar section dalam promo yang sama** (mis. dua section mulai di tanggal berbeda tapi berakhir di tanggal yang sama — baca baris \`Periode Promo\` di chunk-nya, jangan hafalan). Itu BUKAN periode lama vs baru — dua-duanya berlaku selama tanggal hari ini masuk rentangnya. Jangan buang salah satunya dan jangan melabelinya "kadaluarsa"; sebut rentang tanggal yang berlaku untuk parts yang kamu tampilkan.
 
