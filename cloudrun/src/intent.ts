@@ -1,5 +1,6 @@
 import { Message } from './types';
 import { callProxy, getText, INTENT_MODEL } from './vertex';
+import { stage } from './telemetry';
 
 interface IntentAnalysis {
   shouldSearch: boolean;
@@ -179,7 +180,7 @@ Single-line JSON only. Exactly 3 fields. No extra fields, no arrays, no nested o
 {"shouldSearch":<bool>,"searchType":"technical"|"parts"|"general"|"off_topic","optimizedQuery":"<2-10 words>"}
 shouldSearch=false → searchType="general" or "off_topic", optimizedQuery=""`;
 
-  const prompt = `${ctx ? `Conversation context:\n${ctx}\n\n` : ''}Technician query: "${userInput}"
+  const prompt = `${ctx ? `Conversation context (AI turns describe conversation only, never evidence for numbers, wiring or applicability):\n${ctx}\n\n` : ''}Technician query: "${userInput}"
 
 Output ONLY this JSON shape (single line, no other text):
 {"shouldSearch":<bool>,"searchType":"technical"|"parts"|"general"|"off_topic","optimizedQuery":"<2-10 word English phrase>"}
@@ -188,11 +189,11 @@ shouldSearch=true: technical/parts queries → optimizedQuery filled.
 shouldSearch=false: "general" (greetings/acknowledgment kerja) atau "off_topic" (di luar alat berat) → optimizedQuery="".`;
 
   try {
-    const res = await callProxy({
+    const res = await stage('intent', () => callProxy({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       systemInstruction: { parts: [{ text: systemPrompt }] },
       generationConfig: { maxOutputTokens: 200, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
-    }, false, INTENT_MODEL);
+    }, false, INTENT_MODEL));
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
     const jsonStart = raw.indexOf('{');
     const jsonEnd   = raw.lastIndexOf('}');
@@ -327,11 +328,11 @@ Single information-need → return ONE item:
   const userMsg = ctx ? `Conversation so far:\n${ctx}\n\nDecompose this latest query: "${query}"` : `Decompose: "${query}"`;
   let subs: string[] = [];
   try {
-    const res = await callProxy({
+    const res = await stage('intent', () => callProxy({
       contents: [{ role: 'user', parts: [{ text: userMsg }] }],
       systemInstruction: { parts: [{ text: SYS }] },
       generationConfig: { maxOutputTokens: 150, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
-    }, false, INTENT_MODEL);
+    }, false, INTENT_MODEL));
     const raw = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
     const start = raw.indexOf('['), end = raw.lastIndexOf(']');
     const arr = start >= 0 && end > start ? JSON.parse(raw.slice(start, end + 1)) : [];

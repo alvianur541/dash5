@@ -1,4 +1,6 @@
-import { deps } from '../deps';
+import { deps, type RerankSource } from '../deps';
+import { stage } from '../telemetry';
+import { evidenceFor, registerEvidence, type EvidenceDocument } from '../evidence';
 import { getEmbedding } from './embed';
 import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
 import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, SYMPTOM_RE, batangKata, escapeLike, stripModelFromQuery } from './terms';
@@ -6,6 +8,7 @@ import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, SYMPTOM_RE, batangKata, esca
 export const sb = () => deps().supabase as any;
 
 export interface SearchResult {
+  id?: number | string;
   content: string;
   metadata: any;
   similarity: number;
@@ -21,6 +24,8 @@ export interface RAGResult {
   ragError?: string;
   confidence?: 'high' | 'medium' | 'low';
   topScore?: number;
+  evidence?: EvidenceDocument[];
+  rerankSource?: RerankSource;
 }
 
 interface Candidates {
@@ -59,7 +64,7 @@ export async function gatherCandidates(
   );
 
   const ilikeAny = (filter: Record<string, string>, limit: number): Promise<{ data: Array<{ content?: string }> | null }> =>
-    sb().from('documents').select('content')
+    sb().from('documents').select('id, content, metadata')
       .or(normalizedQueries.map(sq => `content.ilike.%${escapeLike(sq)}%`).join(','))
       .contains('metadata', filter)
       .limit(limit);
@@ -81,12 +86,12 @@ export async function gatherCandidates(
     const frasaPenuh = primaryQuery.toLowerCase().trim().split(/\s+/).map(batangKata).join(' ');
     const terms = [...new Set([frasaPenuh, ...bigrams, ...stems])].slice(0, 7);
 
-    const { data, error } = await sb().rpc('match_documents_keyword_ranked', {
+    const { data, error } = await stage('db_search', async () => sb().rpc('match_documents_keyword_ranked', {
       p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumericAnswer, p_match_count: 10,
-    });
+    }));
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
-      .map((d: { content?: string }) => d?.content)
+      .map((d: { content?: string }) => { registerEvidence([d]); return d?.content; })
       .filter((c): c is string => typeof c === 'string');
   })().catch(async err => {
     console.warn('[rank] RPC gagal, fallback keyword lama:', (err as Error)?.message);
@@ -95,7 +100,7 @@ export async function gatherCandidates(
     if (!specWord) return [];
     const comps = words.filter(w => w !== specWord && !STOP_WORDS.has(w)).slice(0, 3);
     const res = await Promise.allSettled(comps.map(comp =>
-      sb().from('documents').select('content')
+      sb().from('documents').select('id, content, metadata')
         .ilike('content', `%${escapeLike(comp)}%`)
         .ilike('content', `%${escapeLike(specWord)}%`)
         .contains('metadata', strictFilter)
@@ -113,9 +118,9 @@ export async function gatherCandidates(
   const vectorPromise: Promise<SearchResult[]> = faultCode
     ? Promise.resolve([])
     : getEmbedding(embeddingQuery).then(async emb => {
-    const { data: vecData } = await sb().rpc('match_documents', {
+    const { data: vecData } = await stage('db_search', async () => sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
-    });
+    }));
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
     console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
@@ -142,11 +147,11 @@ export async function gatherCandidates(
   }
 
   if (kwSettled.status === 'fulfilled') {
-    for (const d of kwSettled.value.data ?? []) if (d?.content) kwDocs.push(d.content);
+    for (const d of kwSettled.value.data ?? []) if (d?.content) { registerEvidence([d]); kwDocs.push(d.content); }
   }
 
   if (vectorSettled.status === 'fulfilled') {
-    for (const d of vectorSettled.value) if (d.content) vecDocs.push(d.content);
+    for (const d of vectorSettled.value) if (d.content) { registerEvidence([d]); vecDocs.push(d.content); }
   }
 
   const seen  = new Set<string>();
@@ -199,7 +204,7 @@ export async function rankAndSelect(
   const tRerank = Date.now();
   const { docs: reranked, error: rerankErr, source: rerankSource } = await rerankDocs(primaryQuery, rerankInput, rerankPool);
   const msRerank = Date.now() - tRerank;
-  let top = mmrSelect(reranked, topN, 0.7);
+  let top = await stage('selection', async () => mmrSelect(reranked, topN, 0.7), { document_count: reranked.length });
 
   const KW_DIJAMIN = 2;
   if (wantsNumericAnswer && top.length > 0) {
@@ -207,7 +212,7 @@ export async function rankAndSelect(
       .slice(0, KW_DIJAMIN)
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
-      top = [top[0], ...kandidat.map(c => ({ content: c, score: top[0].score })), ...top.slice(1)]
+      top = [top[0], ...kandidat.map(c => ({ content: c, score: reranked.find(r => r.content === c)?.score ?? 0 })), ...top.slice(1)]
         .slice(0, topN);
       console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
     }
@@ -231,8 +236,18 @@ export async function rankAndSelect(
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
   ).join('  ||  '));
+  const missingIds = top.map(t => evidenceFor(t.content)).filter(d => d.document_id === null);
+  if (missingIds.length && sb()) {
+    try {
+      const model = missingIds[0].model;
+      let lookup = sb().from('documents').select('id, content, metadata').in('content', missingIds.map(d => d.content));
+      if (model) lookup = lookup.contains('metadata', { Model: model });
+      const { data } = await stage('db_search', () => lookup) as { data: Array<{ id?: number; content?: string; metadata?: any }> | null };
+      registerEvidence((data ?? []).filter(d => missingIds.some(m => m.content === d.content)));
+    } catch { /* unknown id stays unknown */ }
+  }
   const content = top.map(t => t.content).join('\n\n---\n\n');
-  return { content, hasResults: true, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
+  return { content, hasResults: top.length > 0, evidence: top.map(t => ({ ...evidenceFor(t.content, wantsNumericAnswer && rankedDocs.slice(0, 2).includes(t.content) ? 'numeric' : 'retrieved'), score: t.score, score_source: reranked.some(r => r.content === t.content) ? rerankSource : undefined })), rerankSource, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };
 }
 
 export type HybridResult = { content: string; similarity?: number; match_type?: string; metadata?: any };
@@ -241,8 +256,8 @@ export function hybrid(
   queryText: string, embedding: number[], matchCount: number,
   filter: Record<string, string>, threshold: number,
 ): Promise<{ data: HybridResult[] | null }> {
-  return sb().rpc('match_documents_hybrid', {
+  return stage('db_search', () => sb().rpc('match_documents_hybrid', {
     query_text: queryText, query_embedding: embedding, match_count: matchCount,
     filter, similarity_threshold: threshold,
-  }) as unknown as Promise<{ data: HybridResult[] | null }>;
+  }).then((r: { data: HybridResult[] | null }) => { registerEvidence(r.data ?? []); return r; })) as unknown as Promise<{ data: HybridResult[] | null }>;
 }

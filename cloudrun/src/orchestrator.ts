@@ -3,6 +3,10 @@ import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
 import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE, KATA_HARGA_RE, lengkapiHarga } from './rag';
 import { deps } from './deps';
+import { resolveQuestion } from './question';
+import { auditMeasurements } from './grounding';
+import { evidenceBlocks } from './evidence';
+import { stage } from './telemetry';
 import { promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
@@ -62,23 +66,7 @@ export { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE } from './stream';
 export { SERVICE_INTERVAL_RE, extractCpmPartsForInterval, detectFaultCodeInQuery } from './routes';
 export { classifyAspect, fallbackDecompose, extractLastOffer, resolveAffirmative } from './intent';
 
-const GROUNDING_SPEC_RE = /(\d+(?:[.,]\d+)?)\s*(N·?m|Nm|MPa|kPa|bar|psi|kgf?|mm|cm|rpm|°C|kW|HP|L\b|Ω|μm)\b/gi;
-function normalizeNum(s: string): string {
-  return s.replace(/,/g, '.').replace(/^0+(\d)/, '$1');
-}
-function verifyGrounding(answer: string, context: string): void {
-  if (!context || !answer) return;
-  const ctxNums = new Set((context.match(/\d+(?:[.,]\d+)?/g) ?? []).map(normalizeNum));
-  const ungrounded: string[] = [];
-  let total = 0;
-  for (const m of answer.matchAll(GROUNDING_SPEC_RE)) {
-    total++;
-    if (!ctxNums.has(normalizeNum(m[1]))) ungrounded.push(m[0].trim());
-  }
-  if (total > 0 && ungrounded.length > 0) {
-    console.warn('[grounding] %d/%d angka spec TIDAK ditemukan di data:', ungrounded.length, total, ungrounded.slice(0, 10));
-  }
-}
+
 
 const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*|paket|package|overhaul\w*|reseal\w*|oh)\b/i;
 // Short but asking for a mechanism/procedure — brevity here removes the answer's substance.
@@ -159,8 +147,9 @@ export async function generateResponseStream(
   emit({ type: 'thinking', message: 'Menganalisa query…' });
 
   const offer = resolveAffirmative(trimmed, history);
-  const q = offer ?? trimmed;
-  if (offer) console.info('[offer] "%s" → tawaran diterima: "%s"', trimmed, offer);
+  const resolved = await stage('resolve', async () => resolveQuestion(trimmed, history, model, offer));
+  deps().resolvedQuestion = resolved;
+  const q = resolved.text;
 
   const lang = sessionLang(q, history);
 
@@ -213,7 +202,7 @@ export async function generateResponseStream(
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
     ? RERANK_DEGRADED_NOTE
-    : ragConfidence === 'medium'
+    : ragConfidence !== 'high'
       ? MEDIUM_CAVEAT
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
@@ -241,7 +230,12 @@ export async function generateResponseStream(
     console.warn('[cache] jawaban tidak di-cache (%d huruf, tampak tidak utuh)', fullText.trim().length);
   }
 
-  if (ragContent && fullText) verifyGrounding(fullText, ragContent);
+  if (ragContent && fullText && routeResult.type === 'rag_found') {
+    const audit = auditMeasurements(fullText, routeResult.evidence ?? evidenceBlocks(ragContent), model);
+    deps().meta.groundingUnknown = audit.unknown;
+    if (audit.unknown) deps().meta.cacheable = false;
+    console.info('[grounding] checked=%d supported=%d unknown=%d', audit.checked, audit.supported, audit.unknown);
+  }
 
   return fullText || FALLBACK_RESPONSE;
 }
@@ -258,6 +252,7 @@ export async function generateResponse(
   resetUsage();
   const emit: AgentEventEmit = onAgentEvent ?? (() => {});
   const userInput = sanitize(rawInput);
+  deps().resolvedQuestion = resolveQuestion(userInput, history, model);
   const system = systemFor(model, false);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
@@ -276,8 +271,8 @@ export async function generateResponse(
 
   try {
     emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });
-    const imageScan = extractImageFacts(imageParts).catch(() => ({ pns: [] as string[], component: '' }));
-    const faultCodes = await extractFaultCodes(imageParts);
+    const imageScan = stage('ocr', () => extractImageFacts(imageParts), { lane: 'image_facts' }).catch(() => ({ pns: [] as string[], component: '' }));
+    const faultCodes = await stage('ocr', () => extractFaultCodes(imageParts), { lane: 'fault_codes' });
 
     if (faultCodes.length > 0) {
       emit({
@@ -379,7 +374,7 @@ export async function generateResponse(
       if (route?.type === 'rag_found' && partsAsk && (route.dataLabel === RAG_LABEL.parts || listMode)) thinkFoto = 'low';
       if (route?.type === 'rag_found') {
         deps().meta.confidence = route.confidence;
-        const caveat = route.confidence === 'medium' ? MEDIUM_CAVEAT : '';
+        const caveat = route.confidence !== 'high' ? MEDIUM_CAVEAT : '';
         ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
         if (!promoAktif()) ragBlock = tanpaHargaDb(ragBlock);
       }

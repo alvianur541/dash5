@@ -3,6 +3,7 @@ import { callProxy, getText, INTENT_MODEL } from '../vertex';
 import { computeConfidence } from './rerank';
 import { sb } from './retrieve';
 import { SYMPTOM_RE } from './terms';
+import { registerEvidence } from '../evidence';
 
 // Sections that start with a symptom: "E-10 - When traveling…", "MALFUNCTION OF HST WARNING INDICATOR", "Engine Ngedrop".
 const SYMPTOM_SECTION_RE = '^Section: (TROUBLESHOOT|ENGINE TROUBLESHOOT|TURBOCHARGER - TROUBLESHOOT|AIR CONDITIONER - (TROUBLESHOOT|OTHER SYMPTOM)|SECTION 5 TROUBLESHOOT|MAINTENANCE - TROUBLESHOOT)';
@@ -28,11 +29,12 @@ function bodyOf(c: string): string {
 }
 
 async function loadIndex(model: string): Promise<Entry[]> {
-  const { data, error } = await sb().from('documents').select('content')
+  const { data, error } = await sb().from('documents').select('id, content, metadata')
     .contains('metadata', { Model: model })
     .filter('content', 'imatch', SYMPTOM_SECTION_RE)
     .limit(400);
   if (error) throw new Error(error.message);
+  registerEvidence(data ?? []);
   const entries = (data ?? [])
     .map((d: { content?: string }) => d?.content)
     .filter((c: unknown): c is string => typeof c === 'string' && !SKIP_TITLE_RE.test(titleOf(c)))
@@ -57,6 +59,18 @@ function indexFor(model: string): Promise<Entry[]> {
 }
 
 export const isSymptomQuery = (text: string): boolean => SYMPTOM_RE.test(text);
+
+export function symptomSnippet(content: string, queries: string[]): string {
+  const body = bodyOf(content);
+  const words = [...new Set(queries.join(' ').toLowerCase().match(/[a-z]{4,}/g) ?? [])].filter(w => !/^(?:manual|technical|section|model|troubleshooting)$/.test(w));
+  let best = 0, at = 0;
+  for (let i = 0; i < body.length; i += 500) {
+    const window = body.slice(i, i + SNIPPET_CHARS).toLowerCase();
+    const score = words.filter(w => window.includes(w)).length;
+    if (score > best) { best = score; at = i; }
+  }
+  return `${titleOf(content).slice(0, 200)}\n${body.slice(at, at + SNIPPET_CHARS)}`;
+}
 
 const VERIFY_SYS = `You match a heavy-equipment technician's complaint to troubleshooting sections of one service manual.
 Output ONLY a JSON array of candidate numbers, best match first, at most ${MAX_PICK}. No prose.
@@ -83,18 +97,25 @@ async function verify(complaint: string, cands: Entry[]): Promise<Entry[]> {
 export async function findSymptomSections(model: string, rankQueries: string[], complaint: string, triggerText: string): Promise<string[]> {
   if (!sb() || !isSymptomQuery(triggerText)) return [];
   try {
-    const entries = await indexFor(model);
-    if (!entries.length) return [];
+    const indexed = await indexFor(model);
+    if (!indexed.length) return [];
     const queries = [...new Set(rankQueries.map(q => q.trim()).filter(Boolean))];
+    const entries = indexed.map(entry => {
+      const snippet = symptomSnippet(entry.content, queries);
+      return { ...entry, snippet, summary: snippet.replace(/^Section:\s*/, '') };
+    });
     const runs = await Promise.all(queries.map(q => deps().rerank(q, entries.map(e => e.snippet), PER_QUERY)));
     const failed = runs.find(r => r.error);
     if (failed) throw new Error(failed.error);
-    const source = runs[0]?.source ?? 'cohere';
-    const best = new Map<number, number>();
-    for (const r of runs) for (const { index, score } of r.results) {
-      if (entries[index]) best.set(index, Math.max(best.get(index) ?? 0, score));
-    }
-    const ranked = [...best].sort((a, b) => b[1] - a[1]).map(([i, score]) => ({ entry: entries[i], score }));
+    const best = new Map<number, { rank: number; high: boolean; score: number; source: string | undefined }>();
+    for (const r of runs) r.results.forEach(({ index, score }, rank) => {
+      if (!Number.isInteger(index) || !entries[index] || !Number.isFinite(score)) return;
+      const high = !!r.source && computeConfidence([{ content: '', score }], r.source).confidence === 'high';
+      const old = best.get(index);
+      best.set(index, { rank: (old?.rank ?? 0) + 1 / (60 + rank + 1), high: high || old?.high === true,
+        score: old?.score ?? score, source: old?.source ?? r.source });
+    });
+    const ranked = [...best].sort((a, b) => b[1].rank - a[1].rank).map(([i, score]) => ({ entry: entries[i], ...score }));
     if (!ranked.length) return [];
     const label = (e: Entry) => titleOf(e.content).slice(9, 70);
 
@@ -104,7 +125,7 @@ export async function findSymptomSections(model: string, rankQueries: string[], 
     } catch (err) {
       // Without the judge, only a confident ranker score is safe to inject.
       console.warn('[simtom] verifikasi gagal (%s) — pakai ambang skor', (err as Error)?.message);
-      picked = ranked.filter(r => computeConfidence([{ content: '', score: r.score }], source).confidence === 'high').slice(0, MAX_PICK).map(r => r.entry);
+      picked = ranked.filter(r => r.high).slice(0, MAX_PICK).map(r => r.entry);
     }
     console.info('[simtom] kandidat: %s || dipilih: %s',
       ranked.map(r => `${r.score.toFixed(2)} ${label(r.entry)}`).join(' | '),

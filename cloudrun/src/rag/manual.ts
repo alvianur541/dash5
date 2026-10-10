@@ -1,3 +1,4 @@
+import { registerEvidence } from '../evidence';
 import { capRerankPayload, computeConfidence, rerankDocs } from './rerank';
 import { RAGResult, filterByFaultCode, gatherCandidates, rankAndSelect, sb, wantsNumeric } from './retrieve';
 import { escapeLike, isFaultCode, manualTerms } from './terms';
@@ -62,7 +63,7 @@ export async function searchEngineManual(
 
   const kwSettled = await Promise.allSettled(
     pCodes.map(pCode =>
-      sb().from('documents').select('content')
+      sb().from('documents').select('id, content, metadata')
         .ilike('content', `%${escapeLike(pCode)}%`)
         .contains('metadata', filter)
         .limit(4),
@@ -74,6 +75,7 @@ export async function searchEngineManual(
     for (const d of r.value.data ?? []) {
       if (!d?.content || seen.has(d.content)) continue;
       seen.add(d.content);
+      registerEvidence([d]);
       allDocs.push(d.content);
     }
   }
@@ -106,11 +108,12 @@ export async function findPerformanceStandard(model: string, topicText: string, 
   const topic = PERF_TOPICS.find(t => t.re.test(topicText));
   if (!topic || !sb()) return null;
   try {
-    const { data } = await sb().from('documents').select('content')
+    const { data } = await sb().from('documents').select('id, content, metadata')
       .contains('metadata', { Model: model })
       .ilike('content', 'Section: PERFORMANCE STANDARD%')
       .ilike('content', `%${escapeLike(topic.term)}%`)
       .limit(2);
+    registerEvidence(data ?? []);
     const fresh = (data ?? []).filter((d: { content?: string }) => d?.content && !have.includes(d.content.split('\n')[0]));
     if (!fresh.length) return null;
     console.info('[perf] %d tabel PERFORMANCE STANDARD (%s) ditambahkan', fresh.length, topic.term);
@@ -182,7 +185,7 @@ export async function findSpecLines(model: string, query: string, have: string):
   if (!comp.length) return null;
   const valueRe = new RegExp(`(?:${attr.line})[^\\n]{0,80}?\\d[\\d.,±~\\-–]*\\s*${SPEC_UNIT}(?![a-z])`, 'gi');
   try {
-    let q = sb().from('documents').select('content').contains('metadata', { Model: model });
+    let q = sb().from('documents').select('id, content, metadata').contains('metadata', { Model: model });
     for (const w of comp) q = q.ilike('content', `%${escapeLike(w)}%`);
     // Postgres caps regex repetition at 255, so the database only checks "attribute … number unit"; nearness is checked here.
     const { data } = await q.filter('content', 'imatch', `(${attr.line})[^\\n]{0,80}?\\d[\\d.,±~–-]*\\s*${SPEC_UNIT}`).limit(60);
@@ -192,6 +195,7 @@ export async function findSpecLines(model: string, query: string, have: string):
       return comp.some(w => before.includes(w) || m[0].toLowerCase().includes(w));
     });
     const title = (c: string) => c.split('\n')[0];
+    registerEvidence(data ?? []);
     const cands = (data ?? []).map((d: { content?: string }) => d?.content)
       .filter((c: unknown): c is string => typeof c === 'string' && !have.includes(title(c)) && near(c));
     if (!cands.length) return null;
@@ -214,10 +218,11 @@ export async function findComponentWeight(model: string, text: string, have: str
   const words = comp.split(' ');
   const lineRe = new RegExp(`\\b${words.map(escapeRe).join('\\s+')}\\w*(?:\\s*\\([^)]{1,8}\\))?(?:\\s+assembly)?\\s+weight\\b`, 'i');
   try {
-    const { data } = await sb().from('documents').select('content')
+    const { data } = await sb().from('documents').select('id, content, metadata')
       .contains('metadata', { Model: model })
       .ilike('content', `%${words.map(escapeLike).join('%')}%weight%`)
       .limit(20);
+    registerEvidence(data ?? []);
     const title = (c: string) => c.split('\n')[0].toLowerCase();
     const hits = (data ?? [])
       .filter((d: { content?: string }) => d?.content && lineRe.test(d.content.replace(/\s+/g, ' ')) && !have.includes(d.content.split('\n')[0]))

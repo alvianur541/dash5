@@ -1,11 +1,14 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './vertex';
+import type { ResolvedQuestion } from './question';
+import type { StageEvent } from './telemetry';
 
 export type RerankSource = 'google' | 'cohere';
 
 export interface RerankOut { results: { index: number; score: number }[]; error?: string; source?: RerankSource }
 
 export interface Deps {
+  requestId?: string;
   supabase: any;
   embed(text: string): Promise<number[]>;
   rerank(query: string, docs: string[], topN: number): Promise<RerankOut>;
@@ -15,9 +18,11 @@ export interface Deps {
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
   usage: Usage;
   meta: {
+    stages?: StageEvent[];
     modelUsed?: string; cacheable?: boolean; route?: string; confidence?: string; degraded?: boolean;
-    msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
+    groundingUnknown?: number; msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
   };
+  resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
 }
 

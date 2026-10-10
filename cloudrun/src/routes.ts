@@ -1,5 +1,6 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
 import { OH_RE } from './rag/parts';
+import type { RAGResult } from './rag/retrieve';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, KATA_HARGA_RE, adaHarga } from './rag';
 import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
@@ -9,7 +10,10 @@ import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, off
 import type { Lang } from './templates';
 import { jawabanHargaCepat, BUKAN_HARGA_SAJA_RE } from './harga';
 import { promoAktif } from './promo';
-import { deps } from './deps';
+import { deps, type RerankSource } from './deps';
+import { evidenceBlocks, assembleEvidence, type EvidenceDocument, type Confidence, weakestConfidence } from './evidence';
+import { compressEvidence } from './compression';
+import { questionFor } from './question';
 
 export type AgentEventEmit = (event: AgentEvent) => void;
 
@@ -107,38 +111,7 @@ COMPONENT: <nama komponen/area yang tampak, bahasa Inggris istilah parts catalog
   return { pns: [...new Set(pns)].slice(0, 15), component };
 }
 
-async function compressChunks(chunks: string[], userQuery: string): Promise<string[]> {
-  const SYS = 'Ekstraktor presisi dokumen teknis Hitachi. Aturan:\n- Quote VERBATIM (tidak paraphrase).\n- JANGAN ubah, bulatkan, atau format-ulang angka/PN/unit — salin karakter PERSIS (245 tetap 245, 24.5 MPa tetap 24.5 MPa, YB60000068 utuh). Mengubah 1 digit = data rusak.\n- Chunk berisi PROSEDUR/langkah troubleshooting/tabel troubleshooting → salin SEMUA langkah & SEMUA baris penyebab UTUH, jangan diringkas/di-skip/digabung — langkah yang hilang di sini tidak bisa dipulihkan lagi.\n- Ambil baris yg jawab QUERY + 1-2 baris context terkait (mis. section name, service code note, related component) supaya jawaban kontekstual bukan raw data dump.\n- Pertahankan format: backtick PN/spec, tabel row utuh.\n- Drop: image caption, page reference, doc footer.\n- Tidak ada relevan → return string kosong.';
 
-  const MAX_CHUNK_FOR_COMPRESS = 8000;
-
-  const buildPrompt = (chunk: string) => {
-    const safeChunk = chunk.length > MAX_CHUNK_FOR_COMPRESS
-      ? chunk.slice(0, MAX_CHUNK_FOR_COMPRESS) + '\n[...truncated]'
-      : chunk;
-    return `QUERY: "${userQuery}"\n\nCHUNK:\n${safeChunk}\n\nOUTPUT (verbatim excerpts + minimal context, no preamble; prosedur/troubleshooting: SEMUA langkah utuh, selain itu max 250 kata):`;
-  };
-
-  const compressOne = async (chunk: string): Promise<string> => {
-    if (chunk.length < 500) return chunk;
-    try {
-      const res = await callProxy({
-        contents: [{ role: 'user', parts: [{ text: buildPrompt(chunk) }] }],
-        systemInstruction: { parts: [{ text: SYS }] },
-        generationConfig: { maxOutputTokens: 600, temperature: 0, thinkingConfig: { thinkingLevel: 'minimal' } },
-      }, false, INTENT_MODEL);
-      const compressed = getText(res.candidates?.[0]?.content?.parts ?? []).trim();
-      if (compressed.length < 30) return chunk;
-      return compressed;
-    } catch (err) {
-      console.warn('[compressChunks] failed for one chunk, fallback to original:', (err as Error)?.message);
-      return chunk;
-    }
-  };
-
-  const results = await Promise.allSettled(chunks.map(compressOne));
-  return results.map((r, i) => r.status === 'fulfilled' ? r.value : chunks[i]);
-}
 
 export function extractRelatedPCodes(content: string, searchTerms: string[]): string[] {
   const lines = content.split('\n');
@@ -173,7 +146,7 @@ export function detectForeignModel(query: string, activeModel: string): string |
 }
 
 export type RagRouteResult =
-  | { type: 'rag_found';  content: string; dataLabel: string; confidence?: 'high' | 'medium' | 'low'; rerankDegraded?: boolean }
+  | { type: 'rag_found';  content: string; dataLabel: string; confidence?: Confidence; aspectConfidence?: Array<{ aspect: string; status: 'found' | 'missing'; confidence: Confidence; sources: Array<RerankSource | undefined> }>; rerankDegraded?: boolean; evidence?: EvidenceDocument[]; rerankSource?: RerankSource }
   | { type: 'rag_canned'; text: string }
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
@@ -425,7 +398,7 @@ export async function resolvePartsQuery(
   }
   if (webLiteral && !intervalHours) finalContent = `${webLiteral}\n\n${finalContent}`;
 
-  return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts };
+  return { type: 'rag_found', content: finalContent, dataLabel: RAG_LABEL.parts, confidence: ragResult.confidence, rerankDegraded: isRerankError(ragResult.ragError), rerankSource: ragResult.rerankSource, evidence: ragResult.evidence ?? evidenceBlocks(ragResult.content) };
 }
 
 const CASUAL_EXACT = new Set([
@@ -483,7 +456,8 @@ export async function resolveNaturalLanguageQuery(
     return { type: 'google_search', mode: 'casual' };
   }
 
-  const intent = await analyzeIntent(trimmed, history);
+  const resolved = questionFor(trimmed, history, model);
+  const intent = await analyzeIntent(resolved.text, history);
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
@@ -496,7 +470,7 @@ export async function resolveNaturalLanguageQuery(
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
   // A short reply ("iya di gigi 2", "listrik dulu") only makes sense together with the complaint before it.
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
-  const complaint = prevUser ? `${prevUser} — lanjutan: ${trimmed}` : trimmed;
+  const complaint = resolved.text;
   const symptomPromise = findSymptomSections(model, [query, complaint], complaint, `${trimmed} ${query} ${prevUser}`);
   const doc = docKategoriFor(trimmed, model);
   let ragResult = doc?.available ? await searchTechnicalManualMulti([query], model, 4, doc.kategori) : null;
@@ -519,13 +493,15 @@ export async function resolveNaturalLanguageQuery(
   const simtomNote = simtom.length
     ? `[SIMTOM MANUAL PALING MIRIP: ${simtom.map(c => `"${c.split('\n')[0].replace(/^Section:\s*/, '').replace(/\r/g, '').trim()}"`).join(', ')} — pakai prosedurnya HANYA kalau gejalanya cocok dengan keluhan teknisi. Kalau tidak persis sama, sebut sebagai "simtom terdekat di manual" dan jelaskan bedanya; jangan bilang prosedurnya belum ketemu.]\n\n`
     : '';
-  const extra = [perf, berat, nilai, ...simtomFresh].filter(Boolean).join('\n\n---\n\n');
+  const extraParts = [perf, berat, nilai, ...simtomFresh].filter((c): c is string => !!c);
+  const extra = extraParts.join('\n\n---\n\n');
   if (extra) {
     ragResult = {
       ...ragResult,
       content: [extra, ragResult.content].filter(Boolean).join('\n\n---\n\n'),
       hasResults: true,
-      confidence: ragResult.hasResults && ragResult.confidence !== 'low' ? ragResult.confidence : 'high',
+      evidence: [...extraParts.flatMap(c => evidenceBlocks(c)), ...(ragResult.evidence ?? evidenceBlocks(ragResult.content))],
+      confidence: ragResult.confidence,
       ragError: isRerankError(ragResult.ragError) ? ragResult.ragError : undefined,
     };
   }
@@ -538,38 +514,13 @@ export async function resolveNaturalLanguageQuery(
   }
 
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
-  if (ragResult.confidence === 'low') return { type: 'google_search', mode: 'technical' };
-
-  const totalBefore = ragResult.content.length;
-  const skipCompress = ragResult.confidence === 'high' || totalBefore < 9000;
-
-  if (skipCompress) {
-    console.info('[compress] skip (confidence=%s totalChars=%d)', ragResult.confidence, totalBefore);
-    return {
-      type: 'rag_found',
-      content: notes + ragResult.content,
-      dataLabel: RAG_LABEL.manual,
-      confidence: ragResult.confidence,
-      rerankDegraded: isRerankError(ragResult.ragError),
-    };
-  }
-
-  const chunks = ragResult.content.split('\n\n---\n\n');
-  // The compressor's 600-token cap would cut a matched troubleshooting procedure mid-step.
-  const compressed = await compressChunks(chunks.filter(c => !simtomFresh.includes(c)), trimmed);
-  let k = 0;
-  const finalContent = chunks.map(c => simtomFresh.includes(c) ? c : compressed[k++]).filter(c => c.trim()).join('\n\n---\n\n');
-
-  const reduction = totalBefore > 0 ? Math.round((1 - finalContent.length / totalBefore) * 100) : 0;
-  console.info('[compress] chunks=%d %d→%d chars (%d%% reduction)',
-    chunks.length, totalBefore, finalContent.length, reduction);
-
+  if (ragResult.confidence === 'low' && !extra) return { type: 'google_search', mode: 'technical' };
+  const evidence = ragResult.evidence ?? evidenceBlocks(ragResult.content);
+  const compressed = await compressEvidence(evidence, complaint);
   return {
-    type: 'rag_found',
-    content: notes + (finalContent || ragResult.content),
-    dataLabel: RAG_LABEL.manual,
-    confidence: ragResult.confidence,
-    rerankDegraded: isRerankError(ragResult.ragError),
+    type: 'rag_found', content: notes + assembleEvidence(compressed), evidence: compressed,
+    dataLabel: RAG_LABEL.manual, confidence: ragResult.confidence,
+    rerankDegraded: isRerankError(ragResult.ragError), rerankSource: ragResult.rerankSource,
   };
 }
 
@@ -583,12 +534,13 @@ export async function resolveMultiAspectQuery(
   emit: AgentEventEmit = () => {},
 ): Promise<RagRouteResult> {
   emit({ type: 'thinking', message: 'Memecah query jadi beberapa aspek…' });
-  const subs = await decomposeAspects(trimmed, history);
+  const resolved = questionFor(trimmed, history, model);
+  const subs = await decomposeAspects(resolved.text, history);
   if (subs.length < 2) return resolveNaturalLanguageQuery(trimmed, history, model, emit);
 
   emit({ type: 'thinking', message: `Mencari ${subs.length} aspek paralel…` });
 
-  const empty = { content: '', hasResults: false } as const;
+  const empty: RAGResult = { content: '', hasResults: false };
   const perAspect = await Promise.all(subs.map(async sub => {
     const kind  = classifyAspect(sub);
     const clean = stripModelFromQuery(sub);
@@ -626,16 +578,21 @@ export async function resolveMultiAspectQuery(
   const seen = new Set<string>();
   const blocks: string[] = [];
   const missing: string[] = [];
+  const evidence: EvidenceDocument[] = [];
+  const aspectConfidence: Array<{ aspect: string; status: 'found' | 'missing'; confidence: Confidence; sources: Array<RerankSource | undefined> }> = [];
   perAspect.forEach((a, idx) => {
-    const parts: string[] = [];
-    for (const r of [a.tm, a.parts]) {
-      if (!r.hasResults || !r.content) continue;
-      const fresh = r.content.split('\n\n---\n\n').filter(c => c.trim() && !seen.has(c));
-      fresh.forEach(c => seen.add(c));
-      if (fresh.length) parts.push(fresh.join('\n\n---\n\n'));
+    const hits = [a.tm, a.parts].filter(r => r.hasResults && r.content);
+    aspectConfidence.push({ aspect: a.sub, status: hits.length ? 'found' : 'missing',
+      confidence: weakestConfidence(hits.map(r => r.confidence)), sources: hits.map(r => r.rerankSource) });
+    if (!hits.length) { missing.push(a.sub); return; }
+    const fresh: EvidenceDocument[] = [];
+    for (const r of hits) for (const d of r.evidence ?? evidenceBlocks(r.content)) {
+      const prior = evidence.find(e => e.content === d.content);
+      if (prior) { prior.aspects = [...(prior.aspects ?? []), a.sub]; continue; }
+      const tagged = { ...d, aspects: [a.sub] };
+      evidence.push(tagged); fresh.push(tagged); seen.add(d.content);
     }
-    if (parts.length === 0) { missing.push(a.sub); return; }
-    blocks.push(`[ASPEK ${idx + 1}/${subs.length}: ${a.sub}]\n${parts.join('\n\n---\n\n')}`);
+    blocks.push(`[ASPEK ${idx + 1}/${subs.length}: ${a.sub}]\n${fresh.length ? assembleEvidence(fresh) : 'Gunakan sumber yang sama pada aspek sebelumnya; bukti ini juga relevan untuk aspek ini.'}`);
   });
 
   console.info('[multi-aspect] %d aspek (%s) → %d blok, %d chunk unik, %d tanpa data',
@@ -649,5 +606,5 @@ export async function resolveMultiAspectQuery(
     `Data tiap aspek ada di blok [ASPEK n/${subs.length}]. Aspek yang datanya ada tapi kamu lewati = jawaban tidak lengkap.` +
     (missing.length ? ` Aspek berikut belum ketemu di pencarian ini: ${missing.join('; ')} — katakan singkat belum ketemu (jangan simpulkan manual ${model} tidak memuatnya) dan sarankan satu istilah lain untuk ditanyakan ulang; jangan dikarang.` : '');
 
-  return { type: 'rag_found', content: `${directive}\n\n${blokHarga ? `${blokHarga}\n\n=====\n\n` : ''}${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual };
+  return { type: 'rag_found', content: `${directive}\n\n${blokHarga ? `${blokHarga}\n\n=====\n\n` : ''}${blocks.join('\n\n=====\n\n')}`, dataLabel: RAG_LABEL.manual, evidence, aspectConfidence, confidence: weakestConfidence(aspectConfidence.map(a => a.confidence)), rerankDegraded: perAspect.some(a => isRerankError(a.tm.ragError) || isRerankError(a.parts.ragError)) };
 }

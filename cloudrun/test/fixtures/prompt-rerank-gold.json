@@ -1,0 +1,1132 @@
+{
+  "version": 1,
+  "scope": "60 derived claim/case records, not 60 independent historical questions; no model-generated labels",
+  "label_author": "agent source adjudication from current SELECT plus existing 11 manual checks; not new human gold approval",
+  "cases": [
+    {
+      "id": "G001",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 1: PN dan qty BRG;Roll?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "1  YB00001703    BRG;Roll               2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G002",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 2: PN dan qty BRG;Roll?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "2  4337483       BRG;Roll               2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G003",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 3: PN dan qty Rotor?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "3  2052956       Rotor                  2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G004",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 4: PN dan qty Valve?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "4  2052073       Valve                  1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G005",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 5: PN dan qty Valve?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "5  2052067       Valve                  1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G006",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 6: PN dan qty Kit;Seal reg 1?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "6  4455719       Kit;Seal reg 1         1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G007",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 7: PN dan qty Kit;Seal reg 2?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "7  YB00000330    Kit;Seal reg 2         1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G008",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 8: PN dan qty Kit;Seal gear pump?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "8  4487340       Kit;Seal gear pump     1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G009",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 9: PN dan qty Kit;Seal trans?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "9  4451036       Kit;Seal trans         1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G010",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 10: PN dan qty BRG;Ball?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "10  6008X         BRG;Ball               2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G011",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 11: PN dan qty Kit;Seal pump unit?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "11  4451039       Kit;Seal pump unit     1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G012",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 12: PN dan qty Head?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "12  1032517       Head                   1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G013",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 13: PN dan qty O-ring?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "13  A811085       O-ring                 1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G014",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 14: PN dan qty O-ring?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "14  4187308       O-ring                 2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G015",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 15: PN dan qty O-ring?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "15  966993        O-ring                 2"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G016",
+      "family": "oh_main_pump",
+      "query": "Paket OH main pump ZX200-5G item 16: PN dan qty O-ring?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [
+        {
+          "document_id": 10588,
+          "section": "Section: OH PACKAGE - Main Pump ZX200-5G",
+          "quote": "16  4306888       O-ring                 1"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G017",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Main Pump max oil flow?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Max oil flow : 120 L/min"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G018",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Pilot Pump max oil flow?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Max oil flow : 12.0 L/min"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G019",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Implement circuit relief?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Implement circuit : 24.5 MPa (250 kgf/cm²)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G020",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Swing circuit relief?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Swing circuit     : 18.3 MPa (187 kgf/cm²)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G021",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Travel circuit relief?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Implement circuit : 24.5 MPa (250 kgf/cm²)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G022",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Pilot circuit relief?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Pilot circuit     : 5.9 MPa (60.2 kgf/cm²)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G023",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Fuel tank refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Fuel tank              : 70.0 L"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G024",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Engine coolant refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Engine coolant         : 4.7 L"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G025",
+      "family": "oil_capacity",
+      "query": "ZX48U-5A Engine oil refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Engine oil             : 8.6 L"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G026",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Travel device each refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Travel device (each)   : 0.9 L"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G027",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Hydraulic system total refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Hydraulic system total : 66.0 L"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G028",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Hydraulic oil tank refill?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Hydraulic oil tank     : 42.0 L"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G029",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Boom cylinder bore?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Boom        |  1  | 90 mm   | 55 mm    | 699 mm"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G030",
+      "family": "hydraulic_specs",
+      "query": "ZX48U-5A Arm cylinder bore?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7687
+      ],
+      "evidence": [
+        {
+          "document_id": 7687,
+          "section": "Section: HYDRAULIC SYSTEM SPECIFICATIONS",
+          "quote": "Arm         |  1  | 80 mm   | 50 mm    | 698 mm"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G031",
+      "family": "travel_weight",
+      "query": "Berat travel device ZX200?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7605
+      ],
+      "evidence": [
+        {
+          "document_id": 7605,
+          "section": "Section: TRAVEL DEVICE - REMOVAL & INSTALLATION",
+          "quote": "CAUTION: Travel Device (5) weight: 310 kg (685"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G032",
+      "family": "oil_capacity",
+      "query": "Oli engine ZX48U periodic change?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        6069
+      ],
+      "evidence": [
+        {
+          "document_id": 6069,
+          "section": "Chapter: MAINTENANCE",
+          "quote": "ZX48U-5A, 55U-5A\n7.4 L"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G033",
+      "family": "undercarriage",
+      "query": "Panjang undercarriage ZX48U grouser?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        6168
+      ],
+      "evidence": [
+        {
+          "document_id": 6168,
+          "section": "Chapter: SPECIFICATIONS",
+          "quote": "Undercarriage\nLength\n(mm)\n2500\n2490\n2540\n2540"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G034",
+      "family": "compressor",
+      "query": "PN compressor ZX48U item72 opsi pertama?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        6441
+      ],
+      "evidence": [
+        {
+          "document_id": 6441,
+          "section": "Section: AIR CONDITIONER (1)",
+          "quote": "4615804"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G035",
+      "family": "compressor",
+      "query": "PN compressor ZX48U item72 opsi kedua?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        6441
+      ],
+      "evidence": [
+        {
+          "document_id": 6441,
+          "section": "Section: AIR CONDITIONER (1)",
+          "quote": "YD00007143"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G036",
+      "family": "harness_serial",
+      "query": "PN floor harness ZX48U S/N035220-up?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10584
+      ],
+      "evidence": [
+        {
+          "document_id": 10584,
+          "section": "Section: Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda",
+          "quote": "Floor Harness (main connector)  : YD00010892   Qty 1"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G037",
+      "family": "harness_serial",
+      "query": "PN main harness ZX48U S/N035220-up?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        10584
+      ],
+      "evidence": [
+        {
+          "document_id": 10584,
+          "section": "Section: Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda",
+          "quote": "Main Harness (main connector)   : YD00011077   Qty 1"
+        }
+      ],
+      "limitation": null,
+      "split": "holdout"
+    },
+    {
+      "id": "G038",
+      "family": "fuse_followup",
+      "query": "Fuse terminal a terhubung ke apa?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        2045
+      ],
+      "evidence": [
+        {
+          "document_id": 2045,
+          "section": "Section: SECTION 5 TROUBLESHOOTING - Group 1 Diagnosing Procedure",
+          "quote": "<b>a</b> - Terminals connected to the power source"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G039",
+      "family": "fuse_followup",
+      "query": "Fuse terminal b terhubung ke apa?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        2045
+      ],
+      "evidence": [
+        {
+          "document_id": 2045,
+          "section": "Section: SECTION 5 TROUBLESHOOTING - Group 1 Diagnosing Procedure",
+          "quote": "<b>b</b> - Terminals connected to loads (accessories)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G040",
+      "family": "pilot_resistance",
+      "query": "Pilot shut-off solenoid ZX138 resistansi?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        2136
+      ],
+      "evidence": [
+        {
+          "document_id": 2136,
+          "section": "Section: SECTION 5 TROUBLESHOOTING - Group 6 Troubleshooting B",
+          "quote": "49"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G041",
+      "family": "regenerative",
+      "query": "Normal resistansi solenoid 11402 ZX200?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        7100
+      ],
+      "evidence": [
+        {
+          "document_id": 7100,
+          "section": "Section: FAULT CODE DETAIL - 11402",
+          "quote": "(Normal value: 22"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G042",
+      "family": "bucket",
+      "query": "PN cylinder bucket ZW140 assy?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        9838
+      ],
+      "evidence": [
+        {
+          "document_id": 9838,
+          "section": "Section: REPLACEABLE PART (87)",
+          "quote": "263C8-52001"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G043",
+      "family": "service_legend",
+      "query": "Arti svc:D di CYLINDER LIFT ARM ZW140?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        9590
+      ],
+      "evidence": [
+        {
+          "document_id": 9590,
+          "section": "Section: CYLINDER LIFT ARM",
+          "quote": "svc:D (Not replaceable singly, replace as assembly)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G044",
+      "family": "fuse_followup",
+      "query": "Fuse No4 ZX138 kapasitas?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "supported",
+      "document_ids": [
+        2045
+      ],
+      "evidence": [
+        {
+          "document_id": 2045,
+          "section": "Section: SECTION 5 TROUBLESHOOTING - Group 1 Diagnosing Procedure",
+          "quote": "<td>4</td>\n<td>10 A</td>"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    },
+    {
+      "id": "G045",
+      "family": "oil_capacity",
+      "query": "Apakah perbedaan 7.4L dan 8.6L pasti akibat dry overhaul?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        6069,
+        7687
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "holdout"
+    },
+    {
+      "id": "G046",
+      "family": "compressor",
+      "query": "Dua kompresor item72 pasti dibedakan S/N?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        6441
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "holdout"
+    },
+    {
+      "id": "G047",
+      "family": "fuse_followup",
+      "query": "Semua terminal-a fuse box pasti busbar bersama?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        2045
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "regression"
+    },
+    {
+      "id": "G048",
+      "family": "bucket",
+      "query": "Apakah seluruh katalog pabrikan tidak memiliki kit bucket?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        9838
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "regression"
+    },
+    {
+      "id": "G049",
+      "family": "literal_miss",
+      "query": "263E857101 bisa diganti steering kit mirip?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "holdout"
+    },
+    {
+      "id": "G050",
+      "family": "oh_main_pump",
+      "query": "Sheet paket OH ini pasti resmi pabrikan?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        10588
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "regression"
+    },
+    {
+      "id": "G051",
+      "family": "regenerative",
+      "query": "Semua penjelasan stuck-open/closed sudah dibuktikan?",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "unknown",
+      "document_ids": [
+        7100,
+        7135,
+        7136,
+        7137
+      ],
+      "evidence": [],
+      "limitation": "Not established by inspected source; do not infer whole-manual absence or applicability.",
+      "split": "regression"
+    },
+    {
+      "id": "G052",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 1: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G053",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 2: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G054",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 3: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G055",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 4: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G056",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 5: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G057",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 6: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G058",
+      "family": "photo_unavailable",
+      "query": "Foto kasus screening 7: PN/kode/aplikabilitas terbaca?",
+      "input_kind": "photo_missing_input",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "missing_input: authorized raw private photo unavailable; no OCR/visual accuracy label.",
+      "split": "holdout"
+    },
+    {
+      "id": "G059",
+      "family": "literal_miss",
+      "query": "Cari PN literal 263E857101 ZW140",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "missing",
+      "document_ids": [],
+      "evidence": [],
+      "limitation": "Full-corpus literal SELECT negative in manual-checks; not a compatible replacement finding.",
+      "split": "holdout"
+    },
+    {
+      "id": "G060",
+      "family": "service_legend",
+      "query": "svc:D berarti dealer stock pada dokumen9590",
+      "input_kind": "text",
+      "origin": "manual-check-derived; not an historical request replay",
+      "label": "contradicted",
+      "document_ids": [
+        9590
+      ],
+      "evidence": [
+        {
+          "document_id": 9590,
+          "section": "Section: CYLINDER LIFT ARM",
+          "quote": "svc:D (Not replaceable singly, replace as assembly)"
+        }
+      ],
+      "limitation": null,
+      "split": "regression"
+    }
+  ],
+  "families": 14,
+  "labels": {
+    "supported": 44,
+    "contradicted": 1,
+    "missing": 8,
+    "unknown": 7
+  },
+  "source_sha256": {
+    "1891": "548b3da1e17ae56dd4a7ce676a1a5cf14cf2e1b79e63ded8b9b91d8d51de83cc",
+    "2044": "b1bef66768a9653295ea53595b2f9490267d995cbbd5d936dda5a730bd619e73",
+    "2045": "d3a5e9d46d86479f7aa012148ffcc2c35e8156f09db494a001e939a66bef3db0",
+    "2136": "e723e408fb90e40bcd7ab07c49170774239b8b8e0c9f21cd77370621a927c643",
+    "6069": "d6c88e84fb8f6d4c99c4b89226791586ba4c3afd996f5160f91704da77d879f1",
+    "6083": "6f1f5fcee70b49b03bc4d916952bf33511d97842d2e1b0746a48608d6e742fc5",
+    "6168": "7544409f000d0bd0eb1477c59afe2baba81f1763c87d24d28a263d1d93280f37",
+    "6441": "db080ec8f1ce6f9f359be5a3e360c9a6dc88f828494a1d58258bf643582b03e9",
+    "7100": "40011f43711d6e2d570632cf973f4a82705dd182a149173b5ee5d65f0747031e",
+    "7135": "93b8a4e62b51a031070747e1a401bf24de1a58c07addcefe11d33dde2df28e7d",
+    "7136": "936b252f89a3a64ab745c711f2405b9070f6cfb1ecc2fd3a48b17cdb919e2ec2",
+    "7137": "40a5b4460fb84aeb2864f70b6b8bb64bf15a697bce739c272f4b405b8df90f8e",
+    "7605": "e5afd48fa0d835e513e48c9cca9cbafb09a3741bf198693f3148c9058b7564cb",
+    "7606": "919f8ed5031c0f384e1e1ba2a56f1f244157433aaea720808ed2feb7ae8a54e4",
+    "7687": "d301f02cebeccd2657fe023e05733fbd4728cfb4a1eb254c3ad33f0c7c1bbd64",
+    "9590": "6b8ed110ed3df8279065e8473ecf8db8e002f87f51cd2b09ff8d3484c7ce05fd",
+    "9838": "84ae4e1eacb74bab767257b85e8bd1b32cf7854a5f81de4865a7a95ead75106c",
+    "10581": "b4d78e4c089d513a21a0671b9637e16feec74ee9d67409a1d0f972d79aeef971",
+    "10584": "de5759fe36195f85f67098d9763a15296e1ab2388dc5e2584a447e5ba388a627",
+    "10588": "3373f531c2632c44f5dcd2d5c496781eccb97c79e3da74b340e3dbaa351be574"
+  }
+}

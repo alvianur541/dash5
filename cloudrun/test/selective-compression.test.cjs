@@ -1,0 +1,20 @@
+const b = require('./helpers.cjs');
+module.exports = async () => {
+  const { t, done } = b.suite('Selective compression (offline generation fixture)');
+  t(typeof b.compressEvidence === 'function', 'bounded per-document compressor exists');
+  if (!b.compressEvidence) return done();
+  let calls = 0;
+  const { d } = b.mockDeps([], { generate: async () => { calls++; return { candidates: [{ content: { parts: [{ text: 'invented pressure 999 MPa' }] } }] }; } });
+  const mk = (content, role = 'retrieved') => ({ document_id: 1, source: 'MANUAL', section: 'Test', document: null, model: 'ZX138MF-5G', content, evidence_role: role });
+  const short = [mk('source a\n\n---\n\nload b'.repeat(500))];
+  const a = await b.runWithDeps(d, () => b.compressEvidence(short, 'terminal b'));
+  t(calls === 0 && a[0].content === short[0].content, 'complete modest evidence skips generation');
+  t(d.meta.stages?.at(-1)?.stage === 'compression' && d.meta.stages.at(-1).calls === 0, 'skipped compression logs zero calls and real bytes');
+  const procedure = mk(('Procedure Inspection Method Condition Evaluation Cause\ncheck wiring\n').repeat(400));
+  const c = await b.runWithDeps(d, () => b.compressEvidence([procedure], 'terminal b'));
+  t(calls === 0 && c[0].content === procedure.content, 'long procedure keeps every condition and cause');
+  const long = Array.from({ length: 6 }, (_, i) => ({ ...mk(('unrelated text '+i+'\n').repeat(700)), document_id: i }));
+  const out = await b.runWithDeps(d, () => b.compressEvidence(long, 'terminal b'));
+  t(calls <= 2 && out.every((r,i) => r.content === long[i].content), 'at most two extracts; fabricated excerpt falls back without cutting');
+  return done();
+};

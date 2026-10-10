@@ -1,4 +1,5 @@
 export { runWithDeps, newUsage } from './deps';
+export { stage, instrumentDeps } from './telemetry';
 export type { Deps, StreamChunk, StreamOpts, RerankOut, Usage } from './deps';
 export {
   generateResponse,

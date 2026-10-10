@@ -36,7 +36,9 @@ export async function rerankDocs(query: string, docs: string[], topN: number): P
   const scoringDocs = docs.map(d => d.length > RERANK_DOC_CAP ? d.slice(0, RERANK_DOC_CAP) : d);
 
   try {
-    const out = await deps().rerank(query, scoringDocs, topN);
+    const request = deps().resolvedQuestion;
+    const scoringQuery = request ? `${query}\n\nKonteks teknisi: ${request.text}` : query;
+    const out = await deps().rerank(scoringQuery, scoringDocs, topN);
     if (out.error) throw new Error(out.error);
     const ranked = out.results
       .map(r => ({ content: docs[r.index], score: r.score }))

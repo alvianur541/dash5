@@ -1,10 +1,12 @@
 import { getEmbedding } from './embed';
+import { evidenceDocument, registerEvidence } from '../evidence';
 import { capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
 import { HybridResult, RAGResult, SearchResult, hybrid, sb } from './retrieve';
 import { escapeLike, expandQuery, extractPartNumber, stripModelFromQuery } from './terms';
 import type { UnitModel } from '../types';
 import { PROMO_KATEGORI } from '../promo';
 import type { RerankSource } from '../deps';
+import { stage } from '../telemetry';
 
 
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
@@ -49,15 +51,16 @@ export async function exactPartRows(pn: string, model: string): Promise<HybridRe
   const kategori = new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', PROMO_KATEGORI]);
   const cell = new RegExp(`(?:^|\\|)\\s*${pn.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\s*\\|`, 'im');
   try {
-    const { data } = await sb().from('documents').select('content, metadata')
+    const { data } = await sb().from('documents').select('id, content, metadata')
       .contains('metadata', { Model: model })
       .ilike('content', `%${escapeLike(pn)}%`)
       .limit(12);
+    registerEvidence(data ?? []);
     return (data ?? [])
       .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === model
         && kategori.has(d.metadata?.Kategori) && cell.test(d.content))
       .slice(0, 4)
-      .map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'exact_part_no' }));
+      .map((d: { content: string; metadata?: any }) => ({ ...d, similarity: 1, match_type: 'exact_part_no' }));
   } catch {
     return [];
   }
@@ -89,10 +92,11 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
   const title = (d: { content: string }) => d.content.split('\n')[0].toUpperCase();
   const perKey = await Promise.all(keys.map(async key => {
     try {
-      const { data } = await sb().from('documents').select('content, metadata')
+      const { data } = await sb().from('documents').select('id, content, metadata')
         .contains('metadata', { Model: model, Kategori: 'ENGINE PARTS CATALOG' })
         .filter('content', 'imatch', `^Section:[^\\n]*${key}`)
         .limit(10);
+      registerEvidence(data ?? []);
       const rows = ((data ?? []) as HybridResult[]).filter(d => d?.content && title(d).includes(key));
       const best = Math.min(...rows.map(d => title(d).indexOf(key)));
       return rows.filter(d => title(d).indexOf(key) === best)
@@ -106,7 +110,7 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
   const out = perKey.flat()
     .filter(d => !seen.has(d.content) && !!seen.add(d.content))
     .slice(0, 5)
-    .map(d => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'section_title' }));
+    .map(d => ({ ...d, similarity: 1, match_type: 'section_title' }));
   if (out.length) console.info('[parts] section engine %s: %d section dipasang', keys.join('+'), out.length);
   return out;
 }
@@ -115,10 +119,11 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
 export const OH_RE = /\b(?:overhaul\w*|over\s*haul|o\/h|oh|reseal\w*|re-?seal|turun\s*mesin|rekondisi|bom)\b|\bpaket\s+(?:oh|overhaul|reseal|perbaikan|repair)\b/i;
 
 async function ohIndeks(model: string): Promise<HybridResult[]> {
-  const { data } = await sb().from('documents').select('content, metadata')
+  const { data } = await sb().from('documents').select('id, content, metadata')
     .contains('metadata', { Model: model, Kategori: 'OH PACKAGE' })
     .ilike('content', 'Section: OH PACKAGE - Indeks%').limit(1);
-  return (data ?? []).map((d: { content: string; metadata?: any }) => ({ content: d.content, metadata: d.metadata, similarity: 1, match_type: 'section_title' }));
+  registerEvidence(data ?? []);
+  return (data ?? []).map((d: { content: string; metadata?: any }) => ({ ...d, similarity: 1, match_type: 'section_title' }));
 }
 
 export async function searchPartsCatalog(
@@ -217,10 +222,12 @@ export async function searchPartsCatalog(
       .sort((a, b) => b.similarity - a.similarity)
       .slice(0, 5);
     if (allFallback.length === 0) return { content: '', hasResults: false };
+    registerEvidence(allFallback);
     return {
       content: allFallback.map(d => d.content).join('\n\n---\n\n'),
       hasResults: true,
       confidence: 'medium',
+      evidence: allFallback.map(d => evidenceDocument(d)),
     };
   }
 
@@ -236,6 +243,7 @@ export async function searchPartsCatalog(
   let rerankTopScore = 0;
   let rerankSource: RerankSource | undefined;
   let rerankDipakai  = false;
+  let rerankError: string | undefined;
   if (!partNum && nonCpm.length > 3) {
     const exact = nonCpm.filter(d => d.match_type === 'exact_part_no');
     const rest  = nonCpm.filter(d => d.match_type !== 'exact_part_no');
@@ -247,11 +255,12 @@ export async function searchPartsCatalog(
         rerankInput,
         Math.min(rerankRest.length, 12),
       );
+      rerankError = error;
       if (!error && reranked.length > 0) {
         rerankTopScore = reranked[0].score;
         rerankSource = source;
         rerankDipakai  = true;
-        const diverse = mmrSelect(reranked, Math.min(reranked.length, 10), 0.7);
+        const diverse = await stage('selection', async () => mmrSelect(reranked, Math.min(reranked.length, 10), 0.7), { document_count: reranked.length });
         const byContent = new Map(rest.map(d => [d.content, d]));
         orderedNonCpm = [
           ...exact,
@@ -300,7 +309,9 @@ export async function searchPartsCatalog(
   return {
     content: top.map(d => d.content).join('\n\n---\n\n'),
     hasResults: true,
-    confidence: partsConfidence,
+    confidence: partsConfidence, rerankSource,
+    evidence: top.map(d => evidenceDocument(d, exact.some(e => e.content === d.content) ? 'literal_pn' : ohData.some(e => e.content === d.content) ? 'oh_package' : newsData.some(e => e.content === d.content) ? 'serial_bulletin' : 'retrieved')),
+    ...(rerankError ? { ragError: rerankError } : {}),
     ...(rerankDipakai ? { topScore: rerankTopScore } : {}),
   };
 }

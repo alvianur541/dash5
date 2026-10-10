@@ -18,6 +18,7 @@ const registerTranscribe = require('./server/transcribe');
 const ASK_MODELS = new Set(orch.UNIT_MODELS);
 
 const app = express();
+let requestCount = 0;
 
 const BIG_BODY_PATHS = new Set(['/v1/transcribe', '/v1/ask']);
 
@@ -42,7 +43,7 @@ function sseWrite(res, event, payload) {
   res.write(`data: ${JSON.stringify({ ev: event, ...payload })}\n\n`);
 }
 
-async function vertexStreamParsed(model, body, onChunk, signal) {
+async function vertexStreamParsed(model, body, onChunk, signal, requestId) {
   const t0 = Date.now();
   let tHeader = 0, tChunk1 = 0;
   const upstream = await vertexFetch(model, body, { stream: true, signal, label: '/v1/ask' });
@@ -64,7 +65,7 @@ async function vertexStreamParsed(model, body, onChunk, signal) {
       if (done) break;
       if (!tChunk1) {
         tChunk1 = Date.now() - t0;
-        console.info('[vertex-stream] header=%dms chunk1=%dms', tHeader, tChunk1);
+        console.info('[vertex-stream] rid=%s model=%s header=%dms chunk1=%dms', requestId, model, tHeader, tChunk1);
       }
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
@@ -141,6 +142,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   });
 
   const deps = {
+    requestId,
     supabase,
     thinkOverride: think,
     usage: orch.newUsage(),
@@ -151,13 +153,13 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     rerank: async (query, documents, topN) => {
       if (RERANKER === 'google') {
         try {
-          return { results: await googleRerank(query, documents, topN), source: 'google' };
+          return { results: await orch.stage('rerank', () => googleRerank(query, documents, topN), { provider: 'google' }), source: 'google' };
         } catch (err) {
           console.warn('[rerank] Google gagal (%s) — cadangan Cohere', err.message);
         }
       }
       try {
-        const data = await cohereRerank(query, documents, topN);
+        const data = await orch.stage('rerank', () => cohereRerank(query, documents, topN), { provider: 'cohere', recovery: RERANKER === 'google' });
         return { results: (data.results || []).map(r => ({ index: r.index, score: r.relevance_score })), source: 'cohere' };
       } catch (err) {
         return { results: [], error: err.message || 'Rerank gagal' };
@@ -182,25 +184,27 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       const payload = { ...body };
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
-      await vertexStreamParsed(model, payload, onChunk, signal);
+      await vertexStreamParsed(model, payload, onChunk, signal, requestId);
     },
   };
 
   const tMulai = Date.now();
+  orch.instrumentDeps(deps);
+  const processFirstRequest = requestCount++ === 0;
   let ttft = 0;
   const onChunk = (text) => {
-    if (!ttft) ttft = Date.now() - tMulai;
+    if (!ttft) { ttft = Date.now() - tMulai; void orch.stage('first_text', async () => {}); }
     sseWrite(res, 'text', { text });
   };
   const onEvent = (event) => sseWrite(res, 'agent_event', { event });
 
   try {
-    const answer = await orch.runWithDeps(deps, async () => {
+    const answer = await orch.runWithDeps(deps, () => orch.stage('request', async () => {
       if (images.length > 0) {
         return orch.generateResponse(unit, userName, history, userInput, images, onChunk, onEvent);
       }
       return orch.generateResponseStream(unit, userName, history, userInput, onChunk, onEvent);
-    });
+    }, { process_first_request: processFirstRequest }));
     const totalMs = Date.now() - tMulai;
     const m = deps.meta;
     // usage.output already includes thinking; cost is summed per call at each model's list price (vertex.ts HARGA_MODEL).

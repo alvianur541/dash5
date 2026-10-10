@@ -16,8 +16,16 @@ export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, p
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';
 export { extractCatalogCode } from '../src/rag';
-export { computeConfidence, rerankDocs } from '../src/rag/rerank';
-export { wantsNumeric } from '../src/rag/retrieve';
+export { computeConfidence, rerankDocs, mmrSelect } from '../src/rag/rerank';
+export { wantsNumeric, rankAndSelect } from '../src/rag/retrieve';
+export { resolveNaturalLanguageQuery } from '../src/routes';
 export { promoAktif, tanpaHargaDb, PROMO_BERAKHIR } from '../src/promo';
 export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';
 export { BUKAN_HARGA_SAJA_RE } from '../src/harga';
+export { compressEvidence, compressionPlan } from '../src/compression';
+export { resolveQuestion } from '../src/question';
+export { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL } from '../src/constants';
+export { groundClaim, auditMeasurements } from '../src/grounding';
+export { stage, instrumentDeps } from '../src/telemetry';
+export { symptomSnippet } from '../src/rag/symptom';
+export { registerEvidence, evidenceFor, evidenceBlocks } from '../src/evidence';
