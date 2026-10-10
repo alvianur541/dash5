@@ -197,7 +197,7 @@ img {
 
 .markdown-body code {
   font-family: var(--font-mono);
-  font-size: 0.88em;
+  font-size: 15px;
   font-weight: 500;
   color: var(--text-primary);
   background: rgba(255, 255, 255, 0.07);
@@ -293,7 +293,7 @@ img {
 .markdown-body table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 14px;
+  font-size: 15px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -307,7 +307,7 @@ img {
   padding: 0.5rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-main);
   white-space: nowrap;
@@ -797,13 +797,13 @@ table.sticky-col-3 th:nth-child(3), table.sticky-col-3 td:nth-child(3) {
 table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body table .code-copy { border-bottom: none; }
 .markdown-body td.md-num { white-space: nowrap; }
-.markdown-body td.md-price { font-variant-numeric: tabular-nums; }
+.markdown-body td.md-price { font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
 /* Rows run long instead of squeezing (Alvian): cells stay on one line and the table scrolls sideways with the
    PN column sticky; only very long notes (md-long, >44 chars) wrap, at a comfortable width. */
 .markdown-body table { width: max-content; min-width: 100%; }
 .markdown-body tbody td, .markdown-body td.md-text { white-space: nowrap; }
 .markdown-body td.md-long { white-space: normal; min-width: 16em; max-width: 22em; }
-.markdown-body table code.code-copy { font-size: 12.5px; }
+.markdown-body table code.code-copy { font-size: 15px; }
 .markdown-body tbody td:has(> code.code-copy:only-child) { white-space: nowrap; }
 
 .toast-layer {

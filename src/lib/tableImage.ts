@@ -47,7 +47,8 @@ function rightAligned(g: Grid): boolean[] {
     return cells.length > 0 && cells.every(isNumeric);
   });
 }
-const isCode = (s: string) => CODE_RE.test(s) && /\d/.test(s);
+// Prices are mono too, so digits line up like in the chat table.
+const isCode = (s: string) => (CODE_RE.test(s) && /\d/.test(s)) || (/\d{1,3}(?:\.\d{3})+/.test(s) && NUM_RE.test(s));
 
 const font = (weight: number, size: number, mono = false) =>
   weight + ' ' + size + 'px ' + (mono ? MONO : SANS);
