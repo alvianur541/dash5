@@ -23,6 +23,22 @@ test('neutral dark surfaces preserve readable primary, secondary and muted copy'
   assert.equal(dark['--border-main'], '#28282C');
 });
 
+test('user bubbles have dedicated neutral surfaces and AA body text in both themes', () => {
+  for (const [theme, fill, border] of [[dark, '#2A2A2E', '#3B3B40'], [light, '#E5E1D8', '#D3CEC3']]) {
+    assert.equal(theme['--bg-user-bubble'], fill);
+    assert.equal(theme['--border-user-bubble'], border);
+    const values = [luminance(theme['--text-primary']), luminance(fill)].sort((a, b) => b - a);
+    assert.ok((values[0] + 0.05) / (values[1] + 0.05) >= 4.5);
+    assert.notEqual(fill, theme['--bg-card-hover']);
+  }
+  const bubble = css.match(/\.user-bubble \{([^}]+)\}/)[1];
+  assert.match(bubble, /background: var\(--bg-user-bubble\)/);
+  assert.match(bubble, /box-shadow: inset 0 0 0 1px var\(--border-user-bubble\)/);
+  assert.match(bubble, /padding: 9px 14px/);
+  assert.match(bubble, /font-size: 15px; font-weight: 400; line-height: 1\.65/);
+  assert.match(bubble, /color: var\(--text-primary\)/);
+});
+
 test('light palette and Hexindo accent remain unchanged', () => {
   assert.deepEqual(Object.fromEntries(['--bg-app', '--bg-sidebar', '--bg-card', '--bg-card-hover', '--text-primary', '--text-secondary', '--text-muted', '--border-main'].map(k => [k, light[k]])), {
     '--bg-app': '#FAF9F5', '--bg-sidebar': '#F5F4EF', '--bg-card': '#FFFFFF', '--bg-card-hover': '#F1EFE9', '--text-primary': '#1A1915', '--text-secondary': '#46443E', '--text-muted': '#6F6C63', '--border-main': 'rgba(0, 0, 0, 0.06)',
