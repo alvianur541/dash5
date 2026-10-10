@@ -20,7 +20,7 @@ const MONO = 'ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace';
 const CODE_RE = /^[A-Z0-9][A-Z0-9./-]{4,}$/i;
 const NUM_RE = /^(?:rp\.?\s*)?[\d.,%\s-]*\d[\d.,%\s-]*$/i;
 
-const LOGO_H = 20;
+const LOGO_H = 26;
 
 // Official Hexindo emblem + wordmark (same file as the light login logo); text fallback if it fails to load.
 function loadLogo(): Promise<HTMLImageElement | null> {
@@ -137,7 +137,7 @@ export async function renderTablePng(table: HTMLTableElement, opts: TableImageOp
   probe.font = font(400, 13);
   const noteLines = (opts.notes ?? []).filter(Boolean).flatMap(n => wrap(probe, n, tableW));
 
-  const headerH = 100;
+  const headerH = 80;
   const tableH = rowH.reduce((a, b) => a + b, 0);
   const footerH = noteLines.length ? 14 + noteLines.length * 19 : 0;
   const cardH = headerH + tableH + footerH + PAD;
@@ -154,15 +154,16 @@ export async function renderTablePng(table: HTMLTableElement, opts: TableImageOp
   ctx.fillRect(0, 0, cardW, cardH);
 
   const stamp = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
+  // Logo left; date and unit stacked on the right at the same 13px as the price-source note.
+  const logo = await loadLogo();
   ctx.fillStyle = INK;
-  ctx.font = font(700, 21);
-  ctx.fillText(opts.unit, PAD, PAD);
+  if (logo) ctx.drawImage(logo, PAD, PAD + 4, LOGO_H * logo.naturalWidth / logo.naturalHeight, LOGO_H);
+  else { ctx.font = font(700, 15); ctx.fillText('HEXINDO', PAD, PAD + 8); }
+  ctx.font = font(600, 13);
+  ctx.fillText(opts.unit, cardW - PAD - ctx.measureText(opts.unit).width, PAD + 19);
   ctx.fillStyle = MUTED;
   ctx.font = font(400, 13);
-  ctx.fillText(stamp, cardW - PAD - ctx.measureText(stamp).width, PAD + 6);
-  const logo = await loadLogo();
-  if (logo) ctx.drawImage(logo, PAD, PAD + 29, LOGO_H * logo.naturalWidth / logo.naturalHeight, LOGO_H);
-  else { ctx.font = font(500, 11.5); ctx.fillText('HEXINDO', PAD, PAD + 30); }
+  ctx.fillText(stamp, cardW - PAD - ctx.measureText(stamp).width, PAD);
   ctx.fillStyle = ACCENT;
   ctx.fillRect(PAD, headerH - 14, tableW, 2);
 
