@@ -7,7 +7,7 @@ const { transformSync } = require('esbuild');
 const React = require('react');
 const { renderToStaticMarkup } = require('react-dom/server');
 
-function renderApp(hostname, user = null, dismissed = false) {
+function renderApp(hostname, user = null, dismissed = false, loading = false) {
   const cache = new Map();
   const hooks = {
     useNetwork: () => ({ isOnline: true }),
@@ -21,7 +21,7 @@ function renderApp(hostname, user = null, dismissed = false) {
     if (cache.has(file)) return cache.get(file);
     const module = { exports: {} };
     const localRequire = id => {
-      if (id.endsWith('/AuthProvider')) return { useAuth: () => ({ user, loading: false, login() {}, authError: null }) };
+      if (id.endsWith('/AuthProvider')) return { useAuth: () => ({ user, loading, login() {}, authError: null }) };
       if (id.includes('/hooks/')) return hooks;
       if (id === 'motion/react') return { m: { div: 'div', form: 'form' }, AnimatePresence: React.Fragment };
       if (id.startsWith('.')) {
@@ -34,7 +34,7 @@ function renderApp(hostname, user = null, dismissed = false) {
       return require(id);
     };
     vm.runInNewContext(transformSync(readFileSync(file, 'utf8'), { loader: file.endsWith('tsx') ? 'tsx' : 'ts', format: 'cjs', jsx: 'automatic' }).code,
-      { module, exports: module.exports, require: localRequire, window: { location: { hostname } }, sessionStorage: { getItem: key => key === 'demo-banner' && dismissed ? '1' : null } });
+      { module, exports: module.exports, require: localRequire, window: { location: { hostname } }, sessionStorage: { getItem() { throw Error('must not read legacy storage'); }, setItem() { throw Error('must not persist'); } } });
     cache.set(file, module.exports);
     return module.exports;
   }
@@ -56,7 +56,7 @@ test('app login has one compact request strip before the login page', () => {
 
 test('legacy session dismissal is ignored after reload', () => {
   for (const user of [null, { uid: 'fixture', displayName: 'Reviewer' }]) {
-    assert.equal((renderApp('app.dash5.id', user, true).match(/Request demo access/g) || []).length, 1);
+    assert.equal((renderApp('app.dash5.id', user, true).match(/Request demo access/g) || []).length, user ? 0 : 1);
   }
 });
 
@@ -67,9 +67,10 @@ test('old and unrelated hostnames have neither portfolio nor migration banners',
   }
 });
 
-test('authenticated app has exactly one request strip only on the app domain', () => {
+test('authenticated app never has a request strip or extra banner wrapper', () => {
   const user = { uid: 'fixture', displayName: 'Reviewer' };
-  assert.equal((renderApp('app.dash5.id', user).match(/Request demo access/g) || []).length, 1);
+  const html = renderApp('app.dash5.id', user);
+  assert.doesNotMatch(html, /Request demo access|demo-banner|min-h-0 flex-1/);
   for (const host of ['dash5.my.id', 'localhost', 'dash5.id', 'app.dash5.id.example.com']) {
     assert.doesNotMatch(renderApp(host, user), /Request demo access|demo-banner|move-banner/);
   }
@@ -95,4 +96,8 @@ test('close lasts only for the mounted banner and remount restores it', () => {
   assert.equal(render(), null);
   closed = undefined;
   assert.ok(render());
+});
+
+test('auth loading has no request strip', () => {
+  assert.doesNotMatch(renderApp('app.dash5.id', null, true, true), /Request demo access|demo-banner/);
 });

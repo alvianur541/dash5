@@ -22,15 +22,6 @@ import { useChat } from './hooks/useChat';
 import { useModelSwitch } from './hooks/useModelSwitch';
 
 export default function App() {
-  return (
-    <div className="flex h-full flex-col bg-[var(--bg-app)]">
-      <DemoBanner />
-      <div className="relative min-h-0 flex-1"><AppContent /></div>
-    </div>
-  );
-}
-
-function AppContent() {
   const { user, loading: authLoading } = useAuth();
   const { isOnline, showOffline, showBackOnline } = useNetwork();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -73,6 +64,7 @@ function AppContent() {
 
   if (!user) return (
     <div className="flex h-full flex-col bg-[var(--bg-app)]">
+      <DemoBanner />
       <div className="min-h-0 flex-1"><LoginPage theme={theme} onThemeToggle={toggleTheme} /></div>
     </div>
   );
