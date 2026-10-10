@@ -427,7 +427,7 @@ img {
 /* Keep the mobile topbar inside the available app shell height. */
 @media (max-width: 767px) {
   :root { --topbar-h: 57px; }
-  .topbar-native { position: absolute; top: 0; left: 0; right: 0; z-index: 30; }
+  .topbar-native { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
   .topbar-spacer { height: var(--topbar-h); flex-shrink: 0; }
 }
 @media all and (display-mode: standalone) and (max-width: 767px) {
@@ -440,7 +440,6 @@ img {
   display: flex; align-items: center; justify-content: center;
   cursor: pointer; flex-shrink: 0; transition: background 0.15s, transform 0.12s var(--ease-standard, ease);
 }
-.topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
 .topbar-hamburger:active { background: rgba(255,255,255,0.13); transform: scale(0.94); }
 .topbar-center {
   position: absolute; left: 0; right: 0; margin-inline: auto; width: max-content;
@@ -451,7 +450,6 @@ img {
   border: 0.5px solid var(--border-main);
   transition: background 0.15s;
 }
-.topbar-center:hover { background: rgba(255,255,255,0.07); }
 .topbar-center:active { transform: scale(0.97); }
 .topbar-model-name {
   font-family: var(--font-heading);
@@ -466,7 +464,6 @@ img {
   transition: opacity 0.15s, transform 0.15s;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
-.topbar-newchat:hover { filter: brightness(1.08); }
 .topbar-newchat:active { transform: scale(0.92); opacity: 0.85; }
 
 .chat-messages-list {
@@ -590,10 +587,8 @@ img {
 }
 
 .light-theme .topbar-hamburger { background: transparent; }
-.light-theme .topbar-hamburger:hover { background: rgba(0,0,0,0.06); }
 .light-theme .topbar-hamburger:active { background: rgba(0,0,0,0.10); }
 .light-theme .action-btn:active { background: rgba(0,0,0,0.08); }
-.light-theme .topbar-center:hover { background: rgba(0,0,0,0.07); }
 .light-theme .action-btn:hover { background: rgba(0,0,0,0.05); }
 
 .light-theme .hover\:bg-white\/5:hover,
@@ -913,3 +908,12 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; color: inherit; }
 .demo-banner a:hover, .demo-banner button:hover { opacity: .8; }
 .demo-banner a:focus-visible, .demo-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+/* Hover only for real pointers: iOS keeps :hover after a tap (stuck grey square, filter layer blurs the button). */
+@media (hover: hover) and (pointer: fine) {
+  .topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
+  .topbar-center:hover { background: rgba(255,255,255,0.07); }
+  .topbar-newchat:hover { filter: brightness(1.08); }
+  .light-theme .topbar-hamburger:hover { background: rgba(0,0,0,0.06); }
+  .light-theme .topbar-center:hover { background: rgba(0,0,0,0.07); }
+}
