@@ -54,8 +54,10 @@ test('app login has one compact request strip before the login page', () => {
   assert.match(html, /value=""/);
 });
 
-test('session dismissal hides the request strip', () => {
-  assert.doesNotMatch(renderApp('app.dash5.id', null, true), /demo-banner|Request demo access/);
+test('legacy session dismissal is ignored after reload', () => {
+  for (const user of [null, { uid: 'fixture', displayName: 'Reviewer' }]) {
+    assert.equal((renderApp('app.dash5.id', user, true).match(/Request demo access/g) || []).length, 1);
+  }
 });
 
 test('old and unrelated hostnames have neither portfolio nor migration banners', () => {
@@ -65,9 +67,32 @@ test('old and unrelated hostnames have neither portfolio nor migration banners',
   }
 });
 
-test('authenticated app never interrupts chat with demo access', () => {
-  for (const host of ['app.dash5.id', 'dash5.my.id']) {
-    const html = renderApp(host, { uid: 'fixture', displayName: 'Reviewer' });
-    assert.doesNotMatch(html, /Request demo access|demo-banner|Demo access|Aplikasi pindah|move-banner/);
+test('authenticated app has exactly one request strip only on the app domain', () => {
+  const user = { uid: 'fixture', displayName: 'Reviewer' };
+  assert.equal((renderApp('app.dash5.id', user).match(/Request demo access/g) || []).length, 1);
+  for (const host of ['dash5.my.id', 'localhost', 'dash5.id', 'app.dash5.id.example.com']) {
+    assert.doesNotMatch(renderApp(host, user), /Request demo access|demo-banner|move-banner/);
   }
+});
+
+test('close lasts only for the mounted banner and remount restores it', () => {
+  let closed;
+  const module = { exports: {} };
+  const stateReact = { ...React, useState: initial => {
+    if (closed === undefined) closed = initial;
+    return [closed, value => { closed = value; }];
+  } };
+  vm.runInNewContext(transformSync(readFileSync(path.join(__dirname, 'components/DemoBanner.tsx'), 'utf8'),
+    { loader: 'tsx', format: 'cjs', jsx: 'automatic' }).code, {
+    module, exports: module.exports,
+    require: id => id === 'react' ? stateReact : require(id),
+    window: { location: { hostname: 'app.dash5.id' } },
+    sessionStorage: { getItem() { throw Error('must not read persistence'); }, setItem() { throw Error('must not persist dismissal'); } },
+  });
+  const render = module.exports.DemoBanner;
+  assert.ok(render());
+  render().props.children[1].props.onClick();
+  assert.equal(render(), null);
+  closed = undefined;
+  assert.ok(render());
 });

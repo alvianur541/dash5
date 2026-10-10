@@ -114,7 +114,7 @@ export function Sidebar({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.2 }}
-            className="vv-fill bg-black/50 z-10 md:hidden"
+            className="absolute inset-0 bg-black/50 z-10 md:hidden"
             onClick={onToggle}
           />
         )}
@@ -130,7 +130,7 @@ export function Sidebar({
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className={cn(
           "bg-[var(--bg-sidebar)] flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
-          isMobile ? "vv-side shadow-2xl rounded-r-2xl" : "relative shrink-0 h-full"
+          isMobile ? "absolute top-0 left-0 h-full shadow-2xl rounded-r-2xl" : "relative shrink-0 h-full"
         )}
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
@@ -447,14 +447,14 @@ export function Sidebar({
                     <button
                       onClick={() => { setShowUserMenu(false); setShowChangePw(true); }}
                       disabled={user?.isDemoAccount}
-                      title={user?.isDemoAccount ? 'Dinonaktifkan untuk akun demo — pembatasan tampilan, bukan pengamanan API.' : undefined}
+                      title={user?.isDemoAccount ? 'Akun demo tidak bisa ubah password.' : undefined}
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-[13px] text-[var(--text-primary)] hover:bg-white/5 transition-colors border-b border-[var(--border-main)]"
                     >
                       <KeyRound size={14} className="text-[var(--text-muted)]" />
                       <span>Ganti Password</span>
                     </button>
                     {user?.isDemoAccount && (
-                      <p className="px-4 py-2 text-[12px] text-[var(--text-muted)]">Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>
+                      <p className="px-4 py-2 text-[12px] text-[var(--text-muted)]">Akun demo tidak bisa ubah password.</p>
                     )}
                     <button
                       onClick={() => { setShowUserMenu(false); setShowSupport(true); }}

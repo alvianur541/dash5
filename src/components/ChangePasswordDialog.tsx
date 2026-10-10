@@ -75,7 +75,7 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
             <p className="text-[var(--text-primary)] font-heading font-semibold text-[17px] mb-4">Ganti Password</p>
             {isDemo ? (
               <div className="space-y-3 text-[13px] text-[var(--text-secondary)]">
-                <p>Akun demo dipakai bersama. Ganti password dinonaktifkan di tampilan agar pengguna lain tetap bisa masuk; ini bukan pengamanan API.</p>
+                <p>Akun demo tidak bisa ubah password.</p>
                 <button type="button" onClick={close}>Tutup</button>
               </div>
             ) : success ? (

@@ -20,11 +20,13 @@ test('login does not publish shared demo credentials or autofill', () => {
   assert.doesNotMatch(read('components/LoginPage.tsx'), /H000|Demo Account|setDemoTutup/);
 });
 
-test('demo password UI is guarded and explicitly not a security boundary', () => {
+test('demo password UI guard retains concise copy (not an API security boundary)', () => {
   const dialog = read('components/ChangePasswordDialog.tsx');
   assert.match(dialog, /isDemoAccount/);
   assert.match(dialog, /if \(isDemo\) return/);
-  assert.match(dialog, /bukan pengamanan API/);
+  assert.match(dialog, /Akun demo tidak bisa ubah password\./);
+  assert.match(read('components/Sidebar.tsx'), /Akun demo tidak bisa ubah password\./);
+  assert.doesNotMatch(dialog + read('components/Sidebar.tsx'), /dipakai bersama|bukan pengamanan API/);
 });
 
 test('normal demo chat has no obsolete denial or question-cap notice', () => {

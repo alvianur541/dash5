@@ -22,6 +22,15 @@ import { useChat } from './hooks/useChat';
 import { useModelSwitch } from './hooks/useModelSwitch';
 
 export default function App() {
+  return (
+    <div className="flex h-full flex-col bg-[var(--bg-app)]">
+      <DemoBanner />
+      <div className="relative min-h-0 flex-1"><AppContent /></div>
+    </div>
+  );
+}
+
+function AppContent() {
   const { user, loading: authLoading } = useAuth();
   const { isOnline, showOffline, showBackOnline } = useNetwork();
   const { theme, toggle: toggleTheme } = useTheme();
@@ -56,7 +65,7 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="vv-fill flex items-center justify-center bg-[var(--bg-app)]">
+      <div className="relative h-full flex items-center justify-center bg-[var(--bg-app)]">
         <Loader2 className="w-10 h-10 text-[var(--accent-main)] animate-spin" />
       </div>
     );
@@ -64,7 +73,6 @@ export default function App() {
 
   if (!user) return (
     <div className="flex h-full flex-col bg-[var(--bg-app)]">
-      <DemoBanner />
       <div className="min-h-0 flex-1"><LoginPage theme={theme} onThemeToggle={toggleTheme} /></div>
     </div>
   );

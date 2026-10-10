@@ -424,10 +424,10 @@ img {
   position: relative; flex-shrink: 0;
 }
 
-/* Mobile topbar is fixed; --topbar-h keeps the spacer and the progress bar aligned with it. */
+/* Keep the mobile topbar inside the available app shell height. */
 @media (max-width: 767px) {
   :root { --topbar-h: 57px; }
-  .topbar-native { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
+  .topbar-native { position: absolute; top: 0; left: 0; right: 0; z-index: 30; }
   .topbar-spacer { height: var(--topbar-h); flex-shrink: 0; }
 }
 @media all and (display-mode: standalone) and (max-width: 767px) {
@@ -907,8 +907,8 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
 
-.demo-banner { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 12px; padding: 4px 14px; background: #F0811F; color: #1A1915; font-size: 13.5px; line-height: 1.4; }
-.demo-banner a { display: inline-flex; align-items: center; min-height: 36px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
-.demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; }
+.demo-banner { display: flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 12px; height: 44px; padding: 0 14px; background: #F0811F; color: #1A1915; font-size: 15px; line-height: 1.4; }
+.demo-banner a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; }
+.demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 44px; height: 44px; border-radius: 999px; }
 .demo-banner a:hover, .demo-banner button:hover { opacity: .8; }
 .demo-banner a:focus-visible, .demo-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
