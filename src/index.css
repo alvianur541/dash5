@@ -411,7 +411,7 @@ img {
   }
 }
 
-.sidebar-header { padding-top: 20px; }
+.sidebar-header { padding-top: 20px; background: var(--bg-sidebar); }
 
 @media all and (display-mode: standalone) and (max-width: 767px) {
   .sidebar-footer-safe { padding-bottom: 18px; }
@@ -866,13 +866,15 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
   background: rgba(245,158,11,0.12); color: var(--banner-warn);
 }
 
-/* Wordmark is single-color #373435; invert keeps it legible on the dark theme. */
+/* Official high-resolution wordmark crop, with the existing monochrome colours. */
 .sidebar-wordmark {
   display: block;
   height: 16px;
   width: auto;
 }
-.dark-theme .sidebar-wordmark { filter: invert(1); }
+.sidebar-wordmark-dark { display: none; }
+.dark-theme .sidebar-wordmark-light { display: none; }
+.dark-theme .sidebar-wordmark-dark { display: block; }
 
 /* Dark theme uses Hexindo's own dark-background artwork (hexindoparts.com header logo: white wordmark, emblem
    with white outline), recomposed on the light logo's exact layout at 4x (1440x320: emblem full height from x=0,

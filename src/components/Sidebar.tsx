@@ -136,7 +136,8 @@ export function Sidebar({
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
           <div className="sidebar-header flex items-center justify-between pl-6 pr-4 pb-3 shrink-0">
-            <img src="/hexindo-wordmark.png" alt="Hexindo" className="sidebar-wordmark" />
+            <img src="/hexindo-wordmark-v2.png" alt="Hexindo" className="sidebar-wordmark sidebar-wordmark-light" />
+            <img src="/hexindo-wordmark-dark-v2.png" alt="Hexindo" className="sidebar-wordmark sidebar-wordmark-dark" />
             <div className="flex items-center gap-1">
               {!isMobile && onThemeToggle && (
                 <button
