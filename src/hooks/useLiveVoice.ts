@@ -3,6 +3,7 @@ import { getAuthToken } from '../services/supabase';
 import { authHeaders, PROXY_URL } from '../services/ai';
 import { pcm16, createMonoResampler, createEchoGate, liveSocketUrl } from '../lib/liveAudio';
 import { createLiveTranscript } from '../lib/liveTranscript';
+import { boundLiveHistory } from '../../cloudrun/src/liveContext';
 import type { Message } from '../types';
 
 type LiveContent = {
@@ -13,7 +14,7 @@ type LiveContent = {
 export type LivePhase = 'idle' | 'connecting' | 'listening' | 'searching' | 'speaking';
 
 // Live session: mic -> server relay -> audio playback; transcripts surface as chat messages.
-export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void) {
+export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void, getHistory: () => Message[]) {
   const [phase, setPhase] = useState<LivePhase>('idle');
   const [allowed, setAllowed] = useState<{ uid?: string; ok: boolean }>({ ok: false });
   useEffect(() => {
@@ -29,14 +30,15 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
   const stopRef = useRef<() => void>(() => {});
   const interruptRef = useRef<() => void>(() => {});
   const busyRef = useRef(false);
-  const cb = useRef({ onMessage, onTurnEnd, onEnd });
-  useEffect(() => { cb.current = { onMessage, onTurnEnd, onEnd }; });
+  const cb = useRef({ onMessage, onTurnEnd, onEnd, getHistory });
+  useEffect(() => { cb.current = { onMessage, onTurnEnd, onEnd, getHistory }; });
   useEffect(() => () => stopRef.current(), [unit]);
 
   const start = useCallback(async () => {
     if (busyRef.current) return;
     busyRef.current = true;
     setPhase('connecting');
+    const history = boundLiveHistory(cb.current.getHistory());
     const transcript = createLiveTranscript();
     const gate = createEchoGate(400);
     let skipTurn = false;
@@ -62,7 +64,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
       if (!token || !navigator.mediaDevices?.getUserMedia) throw new Error('Login atau mikrofon tidak tersedia.');
       ws = new WebSocket(liveSocketUrl(location.href, import.meta.env.VITE_LIVE_BACKEND_URL));
       const timeout = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.'), 35000);
-      ws.onopen = () => { if (!stopped) ws?.send(JSON.stringify({ type: 'auth', token, unit })); };
+      ws.onopen = () => { if (!stopped) ws?.send(JSON.stringify({ type: 'auth', token, unit, history })); };
       ws.onerror = () => { clearTimeout(timeout); stop('Koneksi Live gagal. Gunakan chat teks.'); };
       ws.onclose = () => { clearTimeout(timeout); if (!stopped) stop('Live terputus. Gunakan chat teks.'); };
       ws.onmessage = async event => {

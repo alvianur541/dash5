@@ -55,7 +55,10 @@ test('spoken numbers and unit names in transcripts become digits like the text c
     ['Satu kalimat saja, dua langkah.', 'Satu kalimat saja, dua langkah.'],
     ['Unit Zaxis dua ratus dash lima G siap.', 'Unit ZX200-5G siap.'],
     ['Zaxis 200-5G dan zaxis seratus tiga puluh delapan MF dash lima G.', 'ZX200-5G dan ZX138MF-5G.'],
-    ['Seri Zaxis memang bandel.', 'Seri ZX memang bandel.'],
+    ['Seri Zaxis memang bandel.', 'Seri Zaxis memang bandel.'],
+    ['Zaxis Wheel Loader seratus empat puluh siap.', 'ZW140 siap.'],
+    ['Kawasaki Loader enam puluh Z V siap.', 'KCM60ZV siap.'],
+    ['Zaxis Wheel Loader dan Kawasaki Loader.', 'Zaxis Wheel Loader dan Kawasaki Loader.'],
   ];
   for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
 });

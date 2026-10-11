@@ -7,6 +7,7 @@ export {
   MODEL,
   INTENT_MODEL,
 } from './orchestrator';
+export { boundLiveHistory } from './liveContext';
 export { UNIT_MODELS } from './types';
 export { fetchHexParts } from './rag';
 export { SYSTEM_PROMPT } from './constants';

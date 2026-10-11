@@ -40,7 +40,7 @@ export default function App() {
   } = useChat(user, isOnline);
 
   const onLiveEnd = useCallback((err?: string) => { livePersist(); if (err) setError(err); }, [livePersist, setError]);
-  const { phase: livePhase, active: liveActive, allowed: liveAllowed, start: liveStart, stop: liveStop, interrupt: liveInterrupt } = useLiveVoice(user?.uid, selectedModel, liveUpsert, livePersist, onLiveEnd);
+  const { phase: livePhase, active: liveActive, allowed: liveAllowed, start: liveStart, stop: liveStop, interrupt: liveInterrupt } = useLiveVoice(user?.uid, selectedModel, liveUpsert, livePersist, onLiveEnd, () => messagesRef.current);
   const startLive = useCallback(() => { setError(null); void liveStart(); }, [liveStart, setError]);
   const newChat = useCallback(() => { liveStop(); startNewSession(); }, [liveStop, startNewSession]);
   const selectSession = useCallback((id: string) => { liveStop(); return handleSelectSession(id); }, [liveStop, handleSelectSession]);

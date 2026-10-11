@@ -38,7 +38,7 @@ function spokenValue(words: string[]): number {
 export function tidyTranscript(text: string): string {
   const digits = (s: string) => s.toLowerCase().split(/\s+/).map(w => DIGIT[w]).join('');
   return text
-    .replace(/\bzaxis\b/gi, 'ZX')
+    .replace(new RegExp(`\\bzaxis\\s+(?=\\d|${W}\\b)`, 'gi'), 'ZX ')
     .replace(/\b(Z[XW])(?=[a-z])/g, '$1 ')
     .replace(new RegExp(`\\b(${D})\\s+koma\\s+((?:${D})(?:\\s+(?:${D}))*)\\b`, 'gi'), (_, a, b) => `${digits(a)},${digits(b)}`)
     .replace(new RegExp(`\\b(dash|strip)\\s+(${D})\\b`, 'gi'), (_, d, n) => `${d} ${digits(n)}`)
@@ -47,6 +47,8 @@ export function tidyTranscript(text: string): string {
       if (words.some(w => MULT.includes(w))) return dots(spokenValue(words));
       return words.length >= 2 ? digits(run) : run;
     })
+    .replace(/\bzaxis\s+wheel\s+loader\s+140\b/gi, 'ZW140')
+    .replace(/\bkawasaki\s+loader\s+60\s*Z\s*V\b/gi, 'KCM60ZV')
     .replace(/\b(Z[XW])\s*(\d+)\s*([A-Z]{0,3})\s*(?:dash|strip|-)\s*(\d)\s*([A-Z])\b/g, '$1$2$3-$4$5')
     .replace(/\b(Z[XW])\s+(\d+)\b/g, '$1$2')
     .replace(/(\d{4,})\s+((?:[A-Z]-)+[A-Z])\b/g, (_, n, l) => n + l.replace(/-/g, ''));

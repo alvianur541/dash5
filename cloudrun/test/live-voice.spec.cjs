@@ -21,6 +21,10 @@ test('voice prompt: natural tone, mirrors language, filler before tool, self-con
   assert.doesNotMatch(p, /Kamu teknisi senior/);
   assert.doesNotMatch(p, /ucapkan satu kalimat pendek seperti "Sebentar, saya cek dulu ya\."/);
 });
+test('spoken loader names preserve canonical tool codes and contextual photo reference', () => {
+ const p = makeSetup('p', 'us-central1', 'ZW140').setup.systemInstruction.parts[0].text;
+ for (const re of [/Zaxis Wheel Loader/, /Kawasaki Loader/, /11208|kode.*parts/, /analisis sebelumnya/, /belum diverifikasi/]) assert.match(p, re);
+});
 test('rejects arbitrary provider frames and oversized or odd PCM', () => {
   for (const m of [{ setup: {} }, { type: 'audio', data: Buffer.alloc(641).toString('base64') }, { type: 'audio', data: Buffer.alloc(3202).toString('base64') }]) assert.throws(() => inputFrame(m));
   assert.equal(inputFrame({ type: 'audio', data: Buffer.alloc(1280).toString('base64') }).realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
