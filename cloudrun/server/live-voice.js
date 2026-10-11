@@ -37,7 +37,7 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
 // Empty allowlist = nobody: Live is billable, access is opt-in per Supabase user id.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && allowed.has(userId); }
-function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, idleMs = 30000, maxMs = 300000, ask }) {
+function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -46,45 +46,50 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
   });
   wss.on('connection', (ws, req) => {
     let upstream, user, authorized = false, authenticating = false, ready = false, stopped = false, audioBytes = 0, frameCount = 0, windowStart = Date.now(), consecutive = 0, totalTools = 0;
+    const t0 = Date.now(); let stage = 'wait-auth', upClose = '';
     const calls = new Map();
     let idle;
     const send = data => { if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(data)); else stop(); };
-    const stop = (message) => {
+    const stop = (message, reason = message ? 'server' : 'closed') => {
       if (stopped) return; stopped = true;
+      console.info('[live] end user=%s ms=%d stage=%s reason=%s msg=%s upstream=%s tools=%d audioKB=%d', (user || '-').slice(0, 8), Date.now() - t0, stage, reason, message || '-', upClose || '-', totalTools, Math.round(audioBytes / 1024));
       if (message) send({ type: 'error', message });
-      clearTimeout(auth); clearTimeout(idle); clearTimeout(max);
+      clearTimeout(auth); clearTimeout(verify); clearTimeout(idle); clearTimeout(max);
       for (const c of calls.values()) c.abort(); calls.clear();
       if (user) users.delete(user);
       if (upstream) { upstream.on('error', () => {}); upstream.terminate(); }
       ws.close();
     };
-    const touch = () => { clearTimeout(idle); idle = setTimeout(() => stop('Sesi suara tidak aktif. Gunakan chat teks.'), idleMs); };
-    const auth = setTimeout(() => stop('Login suara habis waktu.'), authMs);
-    const max = setTimeout(() => stop('Batas sesi suara tercapai.'), maxMs);
-    ws.on('error', () => stop()); ws.on('close', () => stop());
+    const touch = () => { clearTimeout(idle); idle = setTimeout(() => stop('Sesi suara tidak aktif. Gunakan chat teks.', 'idle'), idleMs); };
+    const auth = setTimeout(() => stop('Login suara habis waktu.', 'auth-frame-timeout'), authMs);
+    let verify;
+    const max = setTimeout(() => stop('Batas sesi suara tercapai.', 'max-duration'), maxMs);
+    ws.on('error', () => stop(undefined, 'client-error')); ws.on('close', code => stop(undefined, `client-close-${code}`));
     ws.on('message', async (data, binary) => {
       try {
         if (binary) throw new Error('invalid');
         const m = JSON.parse(data.toString());
-        if (m.type === 'stop') return stop();
+        if (m.type === 'stop') return stop(undefined, 'user-stop');
         if (!authorized) {
           if (authenticating || m.type !== 'auth' || typeof m.token !== 'string' || m.token.length > 4000 || !units.has(m.unit)) throw new Error('auth');
-          authenticating = true;
+          authenticating = true; stage = 'verify'; clearTimeout(auth);
+          verify = setTimeout(() => stop('Login suara habis waktu.', 'verify-timeout'), verifyMs);
           req.headers.authorization = `Bearer ${m.token}`;
           const ok = await new Promise(resolve => verifyToken(req, { status: () => ({ json: () => resolve(false) }) }, () => resolve(true)));
           if (stopped) return;
-          if (ok && !liveAllowed(req.authUser.id, allowed)) return stop('Live belum dibuka untuk akun ini.');
+          clearTimeout(verify);
+          if (ok && !liveAllowed(req.authUser.id, allowed)) return stop('Live belum dibuka untuk akun ini.', 'not-allowed');
           if (!ok || users.has(req.authUser.id) || users.size >= 20) throw new Error('auth');
-          user = req.authUser.id; users.add(user); authorized = true; clearTimeout(auth); touch();
+          user = req.authUser.id; users.add(user); authorized = true; touch(); stage = 'provider';
           upstream = await connect(m.unit);
           if (stopped) return upstream.terminate();
-          const setupTimer = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.'), 10000);
-          upstream.on('close', () => { clearTimeout(setupTimer); stop('Live terputus. Gunakan chat teks.'); });
-          upstream.on('error', () => { clearTimeout(setupTimer); stop('Live belum tersedia. Gunakan chat teks.'); });
+          const setupTimer = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.', 'setup-timeout'), setupMs);
+          upstream.on('close', (code, why) => { clearTimeout(setupTimer); upClose = `${code}:${String(why).slice(0, 120)}`; stop('Live terputus. Gunakan chat teks.', 'upstream-close'); });
+          upstream.on('error', err => { clearTimeout(setupTimer); upClose = `error:${String(err?.message).slice(0, 120)}`; stop('Live belum tersedia. Gunakan chat teks.', 'upstream-error'); });
           upstream.on('message', async raw => {
             try {
               const r = JSON.parse(raw.toString());
-              if (r.setupComplete) { ready = true; clearTimeout(setupTimer); send({ type: 'ready' }); }
+              if (r.setupComplete) { ready = true; stage = 'live'; clearTimeout(setupTimer); console.info('[live] ready user=%s ms=%d', user.slice(0, 8), Date.now() - t0); send({ type: 'ready' }); }
               if (r.serverContent) { if (r.serverContent.turnComplete) consecutive = 0; send({ type: 'content', content: r.serverContent }); }
               for (const id of r.toolCallCancellation?.ids || []) { calls.get(id)?.abort(); calls.delete(id); }
               for (const call of r.toolCall?.functionCalls || []) {
@@ -100,7 +105,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
                 if (!ctrl.signal.aborted && !stopped && upstream.readyState === WebSocket.OPEN) upstream.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response }] } }));
                 calls.delete(call.id);
               }
-            } catch { stop('Live mengirim respons tidak valid.'); }
+            } catch { stop('Live mengirim respons tidak valid.', 'bad-upstream-frame'); }
           });
           return;
         }
@@ -111,7 +116,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
         audioBytes += m.type === 'audio' ? Buffer.from(m.data, 'base64').length : 0;
         if (audioBytes > 9600000) throw new Error('limit');
         touch(); upstream.send(JSON.stringify(frame));
-      } catch { stop('Sesi suara ditolak. Gunakan chat teks.'); }
+      } catch (err) { stop('Sesi suara ditolak. Gunakan chat teks.', `rejected:${String(err?.message).slice(0, 40)}`); }
     });
   });
   return wss;
