@@ -61,7 +61,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
       const token = await getAuthToken(); if (stopped) return;
       if (!token || !navigator.mediaDevices?.getUserMedia) throw new Error('Login atau mikrofon tidak tersedia.');
       ws = new WebSocket(liveSocketUrl(location.href, import.meta.env.VITE_LIVE_BACKEND_URL));
-      const timeout = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.'), 20000);
+      const timeout = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.'), 35000);
       ws.onopen = () => { if (!stopped) ws?.send(JSON.stringify({ type: 'auth', token, unit })); };
       ws.onerror = () => { clearTimeout(timeout); stop('Koneksi Live gagal. Gunakan chat teks.'); };
       ws.onclose = () => { clearTimeout(timeout); if (!stopped) stop('Live terputus. Gunakan chat teks.'); };
