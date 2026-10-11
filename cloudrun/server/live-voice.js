@@ -39,9 +39,9 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
   ws.on('open', () => ws.send(JSON.stringify(makeSetup(project, location, unit))));
   return ws;
 }
-// Empty allowlist = nobody: Live is billable, access is opt-in per Supabase user id.
+// Empty allowlist denies all; '*' admits any verified account, never anonymous users.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
-function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && allowed.has(userId); }
+function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && (allowed.has('*') || allowed.has(userId)); }
 function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });

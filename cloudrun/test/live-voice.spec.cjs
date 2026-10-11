@@ -31,6 +31,9 @@ test('allowlist rejects other accounts before any provider session', async () =>
   assert.equal(liveAllowed('a', new Set(['a'])), true);
   assert.equal(liveAllowed('b', new Set(['a'])), false);
   assert.equal(liveAllowed('b', new Set()), false);
+  assert.equal(liveAllowed('any-verified-user', new Set(['*'])), true);
+  assert.equal(liveAllowed('', new Set(['*'])), false);
+  assert.equal(liveAllowed(undefined, new Set(['*'])), false);
   const server = http.createServer(); let connects = 0;
   const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['owner']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, _res, next) => { req.authUser = { id: 'other' }; req.authToken = 'x'; next(); }, connect: async () => { connects++; } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
@@ -45,7 +48,7 @@ test('slow login verification is not killed by the first-frame timer', async () 
   const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');
   const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0; provider.send = () => {}; provider.terminate = () => {};
   const server = http.createServer();
-  const wss = registerLiveVoice(server, { enabled: true, authMs: 30, allowed: new Set(['u']), units: new Set(['ZX200-5G']), origins: ['http://localhost'],
+  const wss = registerLiveVoice(server, { enabled: true, authMs: 30, allowed: new Set(['*']), units: new Set(['ZX200-5G']), origins: ['http://localhost'],
     verifyToken: (req, _res, next) => setTimeout(() => { req.authUser = { id: 'u' }; req.authToken = 't'; next(); }, 120),
     connect: async () => { setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
