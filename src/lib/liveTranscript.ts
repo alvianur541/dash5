@@ -38,6 +38,7 @@ function spokenValue(words: string[]): number {
 export function tidyTranscript(text: string): string {
   const digits = (s: string) => s.toLowerCase().split(/\s+/).map(w => DIGIT[w]).join('');
   return text
+    .replace(/\bzaxis\b/gi, 'ZX')
     .replace(/\b(Z[XW])(?=[a-z])/g, '$1 ')
     .replace(new RegExp(`\\b(${D})\\s+koma\\s+((?:${D})(?:\\s+(?:${D}))*)\\b`, 'gi'), (_, a, b) => `${digits(a)},${digits(b)}`)
     .replace(new RegExp(`\\b(dash|strip)\\s+(${D})\\b`, 'gi'), (_, d, n) => `${d} ${digits(n)}`)

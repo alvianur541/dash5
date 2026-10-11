@@ -53,6 +53,9 @@ test('spoken numbers and unit names in transcripts become digits like the text c
     ['ZX seratus tiga puluh delapan MF dash lima G, ZX enam puluh lima USB dash lima A.', 'ZX138MF-5G, ZX65USB-5A.'],
     ['Panjang totalnya sembilan ribu enam ratus enam puluh milimeter, sebelas liter, dua belas baut.', 'Panjang totalnya 9.660 milimeter, 11 liter, 12 baut.'],
     ['Satu kalimat saja, dua langkah.', 'Satu kalimat saja, dua langkah.'],
+    ['Unit Zaxis dua ratus dash lima G siap.', 'Unit ZX200-5G siap.'],
+    ['Zaxis 200-5G dan zaxis seratus tiga puluh delapan MF dash lima G.', 'ZX200-5G dan ZX138MF-5G.'],
+    ['Seri Zaxis memang bandel.', 'Seri ZX memang bandel.'],
   ];
   for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
 });

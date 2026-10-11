@@ -14,6 +14,7 @@ test('voice prompt: natural tone, mirrors language, filler before tool, self-con
   assert.equal(makeSetup('p', 'us-central1', 'ZX200-5G').setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Achird');
   assert.doesNotMatch(p, /lalu bilang "rincian lengkapnya ada di layar"/);
   for (const re of [/sudah aku tampilkan/, /kalau ada yang kurang jelas/i, /penutup/i, /tidak harus selalu/i]) assert.match(p, re);
+  for (const re of [/"Zaxis"/, /tetap tulis ZX/i]) assert.match(p, re);
   for (const re of [/HANYA tiga bahasa/, /Indonesia/, /Inggris/, /Jepang/, /bahasa lain/i]) assert.match(p, re);
   assert.doesNotMatch(p, /Jawab dalam bahasa yang sama dengan pengguna \(Inggris dibalas Inggris\)/);
   for (const re of [/artikulasi jelas/i, /intonasi/i, /tempo sedang/i]) assert.match(p, re);
