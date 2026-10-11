@@ -31,6 +31,16 @@ test('echo gate blocks mic while AI audio plays and for a short tail after', () 
   g.speakingUntil(5000); g.cut(3000);
   assert.equal(g.open(3401), true);
 });
+test('rms measures loudness and the smoother opens fast and closes gently', () => {
+ const { rms, createLevelSmoother } = mod.exports;
+ assert.equal(rms(new Float32Array(64)), 0);
+ assert.ok(Math.abs(rms(new Float32Array(64).fill(0.5)) - 0.5) < 1e-6);
+ const s = createLevelSmoother(0.6, 0.15, 4);
+ assert.equal(s(0), 0);
+ const up = s(0.2); assert.ok(up > 0.4 && up <= 1, `fast attack ${up}`);
+ let v = 0; for (let i = 0; i < 30; i++) v = s(5); assert.ok(v > 0.999 && v <= 1, `clamped ${v}`);
+ const down = s(0); assert.ok(down > 0.8, `gentle release ${down}`);
+});
 test('resamples stereo 48k to mono 16k and clamps little-endian PCM', () => {
  const a = new Float32Array(1920).fill(1); const b = new Float32Array(1920).fill(-1);
  assert.equal(resampleMono([a, b], 48000).length, 640);

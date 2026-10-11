@@ -793,7 +793,7 @@ img {
   border: 1px solid color-mix(in srgb, var(--accent-main) 35%, transparent);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent-main) 8%, transparent);
 }
-.live-title { font-size: 15px; font-weight: 650; color: var(--text-primary); line-height: 20px; }
+.live-title { font-size: 15px; font-weight: 650; color: var(--text-primary); line-height: 20px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-unit { font-weight: 500; color: var(--text-muted); font-size: 13px; }
 .live-status { font-size: 12.5px; color: var(--text-secondary, var(--text-muted)); line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .live-eq { display: flex; align-items: center; gap: 3px; height: 24px; flex-shrink: 0; }
@@ -821,6 +821,23 @@ img {
   color: var(--text-primary); background: var(--bg-card-hover); border: 1px solid var(--border-main);
 }
 .live-cut:active { transform: scale(0.95); }
+
+.live-avatar { position: relative; width: 84px; height: 84px; margin: 0 auto 10px; animation: la-in 0.35s cubic-bezier(.2,.9,.3,1.2) both; }
+.live-avatar-ring { position: absolute; inset: 6px; border-radius: 50%; border: 2px solid var(--accent-main); opacity: 0.25; transition: none; }
+.live-avatar-face { position: relative; width: 100%; height: 100%; }
+.la-head { fill: var(--bg-card); stroke: var(--border-main); stroke-width: 2; }
+.la-hat { fill: var(--accent-main); }
+.la-hat-ridge { fill: color-mix(in srgb, var(--accent-main) 70%, #000); }
+.la-ink { fill: var(--text-primary); }
+.la-eyes { transform-origin: 50px 55px; animation: la-blink 4.6s infinite; }
+.live-avatar[data-phase="speaking"] .live-avatar-face { animation: la-bob 1.6s ease-in-out infinite; }
+.live-avatar[data-phase="searching"] .la-eyes { animation: la-look 1.4s ease-in-out infinite; }
+.live-avatar[data-phase="connecting"] .live-avatar-face { animation: la-wait 1.2s ease-in-out infinite; }
+@keyframes la-in { from { opacity: 0; transform: translateY(12px) scale(0.85); } to { opacity: 1; transform: none; } }
+@keyframes la-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(0.1); } }
+@keyframes la-look { 0%, 100% { transform: translateX(-4px); } 50% { transform: translateX(4px); } }
+@keyframes la-bob { 0%, 100% { transform: translateY(0) rotate(0); } 50% { transform: translateY(-2px) rotate(-2deg); } }
+@keyframes la-wait { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
 
 .model-sheet {
   width: 100%; max-width: 480px;

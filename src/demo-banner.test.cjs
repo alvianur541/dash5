@@ -16,7 +16,7 @@ function renderApp(hostname, user = null, dismissed = false, loading = false) {
     useModelSwitch: () => ({}), usePocket: () => ({}),
     useSwipeSidebar: () => ({}), useAppRefresh: () => ({}),
     useInputBarHeight() {},
-    useLiveVoice: () => ({ phase: 'idle', active: false, allowed: false, start() {}, stop() {}, interrupt() {} }),
+    useLiveVoice: () => ({ phase: 'idle', active: false, allowed: false, start() {}, stop() {}, interrupt() {}, outLevel: { current: () => 0 }, micLevel: { current: 0 } }),
   };
   function load(file) {
     if (cache.has(file)) return cache.get(file);

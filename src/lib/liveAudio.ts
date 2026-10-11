@@ -1,3 +1,17 @@
+export function rms(samples: Float32Array): number {
+  let sum = 0;
+  for (let i = 0; i < samples.length; i++) sum += samples[i] * samples[i];
+  return samples.length ? Math.sqrt(sum / samples.length) : 0;
+}
+// Avatar mouth/ring level: gain-scaled, clamped 0..1, fast attack and slow release.
+export function createLevelSmoother(attack = 0.6, release = 0.15, gain = 4) {
+  let v = 0;
+  return (level: number) => {
+    const target = Math.min(1, Math.max(0, level * gain));
+    v += (target - v) * (target > v ? attack : release);
+    return v;
+  };
+}
 // Half-duplex guard: speaker echo must not reach the mic upload (iOS AEC is unreliable with WebAudio).
 export function createEchoGate(tailMs: number) {
   let until = 0;

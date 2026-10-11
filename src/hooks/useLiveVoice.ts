@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../services/supabase';
 import { authHeaders, PROXY_URL } from '../services/ai';
-import { pcm16, createMonoResampler, createEchoGate, liveSocketUrl } from '../lib/liveAudio';
+import { pcm16, createMonoResampler, createEchoGate, liveSocketUrl, rms } from '../lib/liveAudio';
 import { createLiveTranscript } from '../lib/liveTranscript';
 import type { Message } from '../types';
 
@@ -28,6 +28,8 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
   }, [uid]);
   const stopRef = useRef<() => void>(() => {});
   const interruptRef = useRef<() => void>(() => {});
+  const outLevel = useRef<() => number>(() => 0);
+  const micLevel = useRef(0);
   const busyRef = useRef(false);
   const cb = useRef({ onMessage, onTurnEnd, onEnd });
   useEffect(() => { cb.current = { onMessage, onTurnEnd, onEnd }; });
@@ -42,6 +44,9 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
     let skipTurn = false;
     let stopped = false, stream: MediaStream | undefined, ws: WebSocket | undefined, processor: ScriptProcessorNode | undefined;
     const audio = new AudioContext();
+    const analyser = audio.createAnalyser(); analyser.fftSize = 512; analyser.connect(audio.destination);
+    const scope = new Float32Array(analyser.fftSize);
+    outLevel.current = () => { if (stopped || !playing.size) return 0; analyser.getFloatTimeDomainData(scope); return rms(scope); };
     const playing = new Set<AudioBufferSourceNode>(); let next = 0;
     const clear = () => { for (const source of playing) { try { source.stop(); } catch { /* already ended */ } } playing.clear(); next = audio.currentTime; };
     const hidden = () => { if (document.hidden) stop(); };
@@ -51,6 +56,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
       clear(); if (processor) { processor.onaudioprocess = null; processor.disconnect(); }
       stream?.getTracks().forEach(track => track.stop());
       if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
+      outLevel.current = () => 0; micLevel.current = 0;
       ws?.close(); void audio.close(); setPhase('idle'); cb.current.onEnd(error);
     };
     stopRef.current = () => stop();
@@ -80,8 +86,9 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
             const pending: number[] = []; const resample = createMonoResampler(audio.sampleRate);
             processor.onaudioprocess = e => {
               if (stopped || ws?.readyState !== WebSocket.OPEN) return;
-              if (!gate.open(Date.now())) { pending.length = 0; return; }
+              if (!gate.open(Date.now())) { pending.length = 0; micLevel.current = 0; return; }
               const channels = Array.from({ length: e.inputBuffer.numberOfChannels }, (_, i) => e.inputBuffer.getChannelData(i));
+              micLevel.current = rms(channels[0]);
               pending.push(...resample(channels));
               while (pending.length >= 640) {
                 if (ws.bufferedAmount > 65536) { stop('Jaringan lambat. Gunakan chat teks.'); return; }
@@ -106,7 +113,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
             const raw = atob(part.inlineData.data); const bytes = Uint8Array.from(raw, x => x.charCodeAt(0)); const view = new DataView(bytes.buffer);
             const buffer = audio.createBuffer(1, bytes.length / 2, 24000); const samples = buffer.getChannelData(0);
             for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 32768;
-            const source = audio.createBufferSource(); source.buffer = buffer; source.connect(audio.destination); playing.add(source);
+            const source = audio.createBufferSource(); source.buffer = buffer; source.connect(analyser); playing.add(source);
             source.onended = () => { playing.delete(source); if (!playing.size && !stopped) setPhase('listening'); };
             next = Math.max(next, audio.currentTime); source.start(next); next += buffer.duration;
             gate.speakingUntil(Date.now() + (next - audio.currentTime) * 1000);
@@ -119,6 +126,6 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
 
   const stop = useCallback(() => stopRef.current(), []);
   const interrupt = useCallback(() => interruptRef.current(), []);
-  return { phase, active: phase !== 'idle', allowed: !!uid && allowed.uid === uid && allowed.ok, start, stop, interrupt };
+  return { phase, active: phase !== 'idle', allowed: !!uid && allowed.uid === uid && allowed.ok, start, stop, interrupt, outLevel, micLevel };
 }
 
