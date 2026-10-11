@@ -1,0 +1,100 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getAuthToken } from '../services/supabase';
+import { pcm16, createMonoResampler, liveSocketUrl } from '../lib/liveAudio';
+import { createLiveTranscript } from '../lib/liveTranscript';
+import type { Message } from '../types';
+
+type LiveContent = {
+  interrupted?: boolean; turnComplete?: boolean;
+  inputTranscription?: { text?: string }; outputTranscription?: { text?: string };
+  modelTurn?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] };
+};
+export type LivePhase = 'idle' | 'connecting' | 'listening' | 'speaking';
+
+// Live session: mic -> server relay -> audio playback; transcripts surface as chat messages.
+export function useLiveVoice(unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void) {
+  const [phase, setPhase] = useState<LivePhase>('idle');
+  const stopRef = useRef<() => void>(() => {});
+  const busyRef = useRef(false);
+  const cb = useRef({ onMessage, onTurnEnd, onEnd });
+  useEffect(() => { cb.current = { onMessage, onTurnEnd, onEnd }; });
+  useEffect(() => () => stopRef.current(), [unit]);
+
+  const start = useCallback(async () => {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setPhase('connecting');
+    const transcript = createLiveTranscript();
+    let stopped = false, stream: MediaStream | undefined, ws: WebSocket | undefined, processor: ScriptProcessorNode | undefined;
+    const audio = new AudioContext();
+    const playing = new Set<AudioBufferSourceNode>(); let next = 0;
+    const clear = () => { for (const source of playing) { try { source.stop(); } catch { /* already ended */ } } playing.clear(); next = audio.currentTime; };
+    const hidden = () => { if (document.hidden) stop(); };
+    const stop = (error?: string) => {
+      if (stopped) return; stopped = true; busyRef.current = false;
+      document.removeEventListener('visibilitychange', hidden);
+      clear(); if (processor) { processor.onaudioprocess = null; processor.disconnect(); }
+      stream?.getTracks().forEach(track => track.stop());
+      if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'stop' }));
+      ws?.close(); void audio.close(); setPhase('idle'); cb.current.onEnd(error);
+    };
+    stopRef.current = () => stop();
+    document.addEventListener('visibilitychange', hidden);
+    try {
+      await audio.resume();
+      const token = await getAuthToken(); if (stopped) return;
+      if (!token || !navigator.mediaDevices?.getUserMedia) throw new Error('Login atau mikrofon tidak tersedia.');
+      ws = new WebSocket(liveSocketUrl(location.href, import.meta.env.VITE_LIVE_BACKEND_URL));
+      const timeout = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.'), 20000);
+      ws.onopen = () => { if (!stopped) ws?.send(JSON.stringify({ type: 'auth', token, unit })); };
+      ws.onerror = () => { clearTimeout(timeout); stop('Koneksi Live gagal. Gunakan chat teks.'); };
+      ws.onclose = () => { clearTimeout(timeout); if (!stopped) stop('Live terputus. Gunakan chat teks.'); };
+      ws.onmessage = async event => {
+        try {
+          const m = JSON.parse(event.data);
+          if (m.type === 'error') { stop(m.message); return; }
+          if (m.type === 'ready') {
+            clearTimeout(timeout);
+            stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
+            if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
+            const input = audio.createMediaStreamSource(stream);
+            processor = audio.createScriptProcessor(2048, 1, 1);
+            const pending: number[] = []; const resample = createMonoResampler(audio.sampleRate);
+            processor.onaudioprocess = e => {
+              if (stopped || ws?.readyState !== WebSocket.OPEN) return;
+              const channels = Array.from({ length: e.inputBuffer.numberOfChannels }, (_, i) => e.inputBuffer.getChannelData(i));
+              pending.push(...resample(channels));
+              while (pending.length >= 640) {
+                if (ws.bufferedAmount > 65536) { stop('Jaringan lambat. Gunakan chat teks.'); return; }
+                const bytes = pcm16(new Float32Array(pending.splice(0, 640)));
+                ws.send(JSON.stringify({ type: 'audio', data: btoa(String.fromCharCode(...bytes)) }));
+              }
+            };
+            input.connect(processor); const mute = audio.createGain(); mute.gain.value = 0; processor.connect(mute); mute.connect(audio.destination);
+            setPhase('listening');
+          }
+          const c: LiveContent | undefined = m.content;
+          if (!c || stopped) return;
+          if (c.interrupted) { clear(); setPhase('listening'); }
+          for (const msg of transcript.apply(c)) cb.current.onMessage(msg);
+          if (c.turnComplete || c.interrupted) cb.current.onTurnEnd();
+          for (const part of c.modelTurn?.parts || []) {
+            if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue;
+            if (next - audio.currentTime > 10) throw new Error('Audio queue full');
+            const raw = atob(part.inlineData.data); const bytes = Uint8Array.from(raw, x => x.charCodeAt(0)); const view = new DataView(bytes.buffer);
+            const buffer = audio.createBuffer(1, bytes.length / 2, 24000); const samples = buffer.getChannelData(0);
+            for (let i = 0; i < samples.length; i++) samples[i] = view.getInt16(i * 2, true) / 32768;
+            const source = audio.createBufferSource(); source.buffer = buffer; source.connect(audio.destination); playing.add(source);
+            source.onended = () => { playing.delete(source); if (!playing.size && !stopped) setPhase('listening'); };
+            next = Math.max(next, audio.currentTime); source.start(next); next += buffer.duration;
+            setPhase('speaking');
+          }
+        } catch { stop('Suara tidak tersedia atau izin mikrofon ditolak. Gunakan chat teks.'); }
+      };
+    } catch { stop('Mikrofon tidak tersedia atau izin ditolak. Gunakan chat teks.'); }
+  }, [unit]);
+
+  const stop = useCallback(() => stopRef.current(), []);
+  return { phase, active: phase !== 'idle', start, stop };
+}
+

@@ -292,6 +292,30 @@ export function useChat(user: User, isOnline: boolean) {
     if (last) handleSendMessage(last.content, last.attachments);
   }, [handleSendMessage]);
 
+  // Live voice: transcript chunks become chat bubbles in the open session.
+  const liveUpsert = useCallback((msg: Message) => {
+    if (!sessionIdRef.current) {
+      const id = crypto.randomUUID();
+      setCurrentSessionId(id);
+      sessionIdRef.current = id;
+    }
+    const prev = messagesRef.current;
+    const next = prev.some(m => m.id === msg.id) ? prev.map(m => m.id === msg.id ? { ...m, content: msg.content } : m) : [...prev, msg];
+    messagesRef.current = next;
+    setMessages(next);
+  }, []);
+
+  const livePersist = useCallback(() => {
+    const sid = sessionIdRef.current;
+    const msgs = messagesRef.current.filter(m => m.content.trim());
+    if (!user || !sid || !msgs.length || loadSessionTombstones(user.uid)[sid]) return;
+    const rawTitle = msgs.find(m => m.role === 'user')?.content.trim() || 'Percakapan Live';
+    const title = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
+    saveSession(user.uid, sid, selectedModel, msgs, rawTitle);
+    setSessionList(prev => [{ id: sid, title, model: selectedModel, updatedAt: Date.now() }, ...prev.filter(s => s.id !== sid)]);
+    saveOrUpdateChatSession(sid, user.uid, user.displayName || 'Operator', selectedModel, title, msgs);
+  }, [user, selectedModel]);
+
   return {
     selectedModel, setSelectedModel,
     messages, isTyping, isStreaming, error, setError, agentEvents,
@@ -300,5 +324,6 @@ export function useChat(user: User, isOnline: boolean) {
     mountedRef, messagesRef, lastSentRef,
     stopStreaming, startNewSession, handleSelectSession,
     confirmDelete, confirmDeleteAll, handleSendMessage, retryLast,
+    liveUpsert, livePersist,
   };
 }

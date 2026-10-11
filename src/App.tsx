@@ -1,8 +1,8 @@
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
-import { LiveVoice } from './components/LiveVoice';
+import { LiveBar } from './components/LiveVoice';
 import { LoginPage } from './components/LoginPage';
 import { PocketModal } from './components/PocketModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -20,6 +20,9 @@ import { useSwipeSidebar } from './hooks/useSwipeSidebar';
 import { useAppRefresh } from './hooks/useAppRefresh';
 import { useChat } from './hooks/useChat';
 import { useModelSwitch } from './hooks/useModelSwitch';
+import { useLiveVoice } from './hooks/useLiveVoice';
+
+const LIVE_ENABLED = import.meta.env?.VITE_LIVE_VOICE_ENABLED === 'true';
 
 export default function App() {
   const { user, loading: authLoading } = useAuth();
@@ -33,12 +36,21 @@ export default function App() {
     mountedRef, messagesRef, lastSentRef,
     stopStreaming, startNewSession, handleSelectSession,
     confirmDelete, confirmDeleteAll, handleSendMessage, retryLast,
+    liveUpsert, livePersist,
   } = useChat(user, isOnline);
 
+  const onLiveEnd = useCallback((err?: string) => { livePersist(); if (err) setError(err); }, [livePersist, setError]);
+  const { phase: livePhase, active: liveActive, start: liveStart, stop: liveStop } = useLiveVoice(selectedModel, liveUpsert, livePersist, onLiveEnd);
+  const startLive = useCallback(() => { setError(null); void liveStart(); }, [liveStart, setError]);
+  const newChat = useCallback(() => { liveStop(); startNewSession(); }, [liveStop, startNewSession]);
+  const selectSession = useCallback((id: string) => { liveStop(); return handleSelectSession(id); }, [liveStop, handleSelectSession]);
+  useEffect(() => () => liveStop(), [user?.uid, liveStop]);
+
   const onSwitchUnit = useCallback((model: UnitModel) => {
+    liveStop();
     setSelectedModel(model);
     startNewSession();
-  }, [setSelectedModel, startNewSession]);
+  }, [liveStop, setSelectedModel, startNewSession]);
 
   const { modelSheet, setModelSheet, switchConfirm, setSwitchConfirm, handleSelectModel, confirmSwitch } =
     useModelSwitch({ selected: selectedModel, hasMessages: messages.length > 0, onSwitch: onSwitchUnit });
@@ -72,10 +84,10 @@ export default function App() {
       <Sidebar
         selectedModel={selectedModel}
         onSelectModel={handleSelectModel}
-        onNewChat={startNewSession}
+        onNewChat={newChat}
         sessions={sessionList}
         currentSessionId={currentSessionId}
-        onSelectSession={handleSelectSession}
+        onSelectSession={selectSession}
         onDeleteSession={setDeleteConfirmId}
         onDeleteAllSessions={() => setDeleteAllConfirm(true)}
         isCollapsed={isSidebarCollapsed}
@@ -116,7 +128,7 @@ export default function App() {
                 <button onClick={toggleTheme} className="topbar-hamburger" aria-label={theme === 'dark' ? 'Tema terang' : 'Tema gelap'}>
                   {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
                 </button>
-                <button onClick={startNewSession} className="topbar-newchat" aria-label="Chat baru">
+                <button onClick={newChat} className="topbar-newchat" aria-label="Chat baru">
                   <SquarePen size={16} />
                 </button>
               </div>
@@ -143,7 +155,6 @@ export default function App() {
           {error}
         </StatusBanner>
 
-        {import.meta.env?.VITE_LIVE_VOICE_ENABLED === 'true' && <LiveVoice key={`${user.uid}:${selectedModel}`} unit={selectedModel} />}
         <ChatWindow
           key={`${user.uid}:${currentSessionId ?? "new"}`}
           sessionId={currentSessionId}
@@ -160,15 +171,20 @@ export default function App() {
         />
 
         <div ref={inputBarRef} className="input-bar-float">
-          <MessageInput
-            key={user.uid}
-            onSendMessage={handleSendMessage}
-            disabled={isTyping}
-            selectedModel={selectedModel}
-            isOffline={!isOnline}
-            isStreaming={isTyping || isStreaming}
-            onStop={stopStreaming}
-          />
+          {liveActive ? (
+            <LiveBar phase={livePhase} unit={selectedModel} onStop={liveStop} />
+          ) : (
+            <MessageInput
+              key={user.uid}
+              onSendMessage={handleSendMessage}
+              disabled={isTyping}
+              selectedModel={selectedModel}
+              isOffline={!isOnline}
+              isStreaming={isTyping || isStreaming}
+              onStop={stopStreaming}
+              onLive={LIVE_ENABLED ? startLive : undefined}
+            />
+          )}
         </div>
       </main>
 

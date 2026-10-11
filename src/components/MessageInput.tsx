@@ -1,6 +1,6 @@
 
 import { useState, useRef, useLayoutEffect, useEffect } from 'react';
-import { ArrowUp, Camera, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
+import { ArrowUp, AudioLines, Camera, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
 import { UnitModel } from '../types';
@@ -13,6 +13,7 @@ interface MessageInputProps {
   isOffline?: boolean;
   isStreaming?: boolean;
   onStop?: () => void;
+  onLive?: () => void;
 }
 
 type RecordingState = 'idle' | 'recording' | 'transcribing';
@@ -87,7 +88,7 @@ async function compressImage(file: File): Promise<CompressResult> {
 }
 
 export function MessageInput({
-  onSendMessage, disabled, selectedModel, isOffline = false, isStreaming = false, onStop,
+  onSendMessage, disabled, selectedModel, isOffline = false, isStreaming = false, onStop, onLive,
 }: MessageInputProps) {
   const [input, setInput] = useState('');
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -356,6 +357,18 @@ export function MessageInput({
             )}
 
             <div className="flex-1" />
+
+            {onLive && !isOffline && !isStreaming && !input.trim() && !pendingImage && (
+              <button
+                onClick={onLive}
+                disabled={disabled || isRecording || isTranscribing}
+                className="live-start"
+                title="Mulai percakapan Live"
+                aria-label="Mulai percakapan Live"
+              >
+                <AudioLines size={16} /><span>Live</span>
+              </button>
+            )}
 
             {isStreaming && onStop ? (
               <button
