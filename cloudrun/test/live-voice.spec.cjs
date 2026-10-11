@@ -10,7 +10,8 @@ test('voice-only setup fixes model and exposes server tool, not native RAG', () 
 });
 test('voice prompt: natural tone, mirrors language, filler before tool, self-contained question, no table reading', () => {
   const p = makeSetup('p', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text;
-  for (const re of [/Hexindo Technical Assistant/, /asisten/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /bervariasi/i, /jangan pakai kalimat yang sama/i, /sesuai topik/i, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
+  for (const re of [/Hexindo Technical Assistant/, /asisten/i, /laki-laki/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /bervariasi/i, /jangan pakai kalimat yang sama/i, /sesuai topik/i, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
+  assert.equal(makeSetup('p', 'us-central1', 'ZX200-5G').setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Puck');
   assert.doesNotMatch(p, /Kamu teknisi senior/);
   assert.doesNotMatch(p, /ucapkan satu kalimat pendek seperti "Sebentar, saya cek dulu ya\."/);
 });
