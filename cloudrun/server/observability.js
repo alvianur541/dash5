@@ -1,5 +1,6 @@
 // Rp per USD as used by the Cloud Billing account (derived from the 2026-10-03 SKU report).
 const KURS_IDR = 17977;
+const { usageIdentity } = require('./usage-identity');
 const { GOOGLE_RANK_MODEL, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
 
 const _stat = { mulai: Date.now(), req: [], err: [] };
@@ -89,8 +90,9 @@ function ringkasTanya(teks, jumlahGambar) {
 let kolomBaruGagal = 0;
 const COBA_LAGI_MS = 10 * 60_000;
 
-function barisPemakaian(req, d, pakaiKolomBaru) {
+function barisPemakaian(req, d, pakaiKolomBaru, pakaiIdentitas = true) {
   const dasar = {
+    ...(pakaiIdentitas ? usageIdentity(req.authUser) : {}),
     user_name: d.userName,
     user_nik: (req.authUser && req.authUser.email || '').split('@')[0] || null,
     session_id: d.sessionId,
@@ -117,7 +119,7 @@ function barisPemakaian(req, d, pakaiKolomBaru) {
   };
 }
 
-async function kirimPemakaian(req, d, pakaiKolomBaru) {
+async function kirimPemakaian(req, d, pakaiKolomBaru, pakaiIdentitas = true) {
   return fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/usage_logs`, {
     method: 'POST',
     headers: {
@@ -126,7 +128,7 @@ async function kirimPemakaian(req, d, pakaiKolomBaru) {
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },
-    body: JSON.stringify(barisPemakaian(req, d, pakaiKolomBaru)),
+    body: JSON.stringify(barisPemakaian(req, d, pakaiKolomBaru, pakaiIdentitas)),
     signal: AbortSignal.timeout(5_000),
   });
 }
@@ -134,19 +136,23 @@ async function kirimPemakaian(req, d, pakaiKolomBaru) {
 async function catatPemakaian(req, d) {
   if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken) return;
   try {
-    // Deployed before the migration: PostgREST rejects unknown columns with 400 — fall back, never drop the row.
-    const kolomBaru = Date.now() - kolomBaruGagal > COBA_LAGI_MS;
-    let r = await kirimPemakaian(req, d, kolomBaru);
-    if (!r.ok && r.status === 400 && kolomBaru) {
-      const teks = await r.text().catch(() => '');
-      if (/column|PGRST204/i.test(teks)) {
+    // Rollout order must not drop usage rows or remove unrelated supported columns.
+    let kolomBaru = Date.now() - kolomBaruGagal > COBA_LAGI_MS;
+    let identitas = true;
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await kirimPemakaian(req, d, kolomBaru, identitas);
+      if (r.ok || r.status !== 400) break;
+      const teks = await r.clone().text().catch(() => '');
+      if (!/column|PGRST204/i.test(teks)) break;
+      if (identitas && /user_id|is_internal/i.test(teks)) {
+        identitas = false;
+        console.warn('[usage-log] identity schema not ready; retry without identity fields');
+      } else if (kolomBaru) {
+        kolomBaru = false;
         kolomBaruGagal = Date.now();
-        console.warn('[usage-log] kolom latensi belum ada di DB — jalankan migration 20260918; pakai kolom lama, coba lagi 10 mnt');
-        r = await kirimPemakaian(req, d, false);
-      } else {
-        console.warn('[usage-log] tolak rid=%s HTTP 400: %s', d.requestId, teks.slice(0, 200));
-        return;
-      }
+        console.warn('[usage-log] latency schema not ready; retry without latency fields');
+      } else break;
     }
     if (!r.ok) {
       const teks = await r.text().catch(() => '');
@@ -157,4 +163,4 @@ async function catatPemakaian(req, d) {
   }
 }
 
-module.exports = { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya };
+module.exports = { _stat, barisPemakaian, catatPemakaian, catatStat, registerMetrics, ringkasTanya };
