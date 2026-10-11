@@ -20,9 +20,12 @@ export function LiveBar({ phase, unit, onStop, onInterrupt }: { phase: LivePhase
               <Hand size={15} /><span>Sela</span>
             </button>
           )}
-          <button type="button" onClick={onStop} className="live-end" aria-label="Akhiri Live">
-            <PhoneOff size={16} /><span>Akhiri</span>
+          <button type="button" onClick={onStop} className="live-end" aria-label="Akhiri Live" title="Akhiri Live">
+            <PhoneOff size={18} />
           </button>
+        </div>
+        <div className="hidden md:flex items-center justify-center mt-2 text-[12px] text-[var(--text-muted)] opacity-70">
+          <span>Hexindo Technical Assistant dapat keliru — verifikasi info penting.</span>
         </div>
       </div>
       <div className="safe-area-spacer" />
