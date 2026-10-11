@@ -814,6 +814,12 @@ img {
   color: #fff; background: var(--status-danger, #dc2626); transition: transform 0.12s, opacity 0.12s;
 }
 .live-end:active { transform: scale(0.95); }
+.live-cut {
+  height: 42px; padding: 0 14px; border-radius: 999px; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 600;
+  color: var(--text-primary); background: var(--bg-card-hover); border: 1px solid var(--border-main);
+}
+.live-cut:active { transform: scale(0.95); }
 
 .model-sheet {
   width: 100%; max-width: 480px;

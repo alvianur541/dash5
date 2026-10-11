@@ -1,3 +1,12 @@
+// Half-duplex guard: speaker echo must not reach the mic upload (iOS AEC is unreliable with WebAudio).
+export function createEchoGate(tailMs: number) {
+  let until = 0;
+  return {
+    speakingUntil(t: number) { until = Math.max(until, t); },
+    cut(t: number) { until = t; },
+    open: (t: number) => t > until + tailMs,
+  };
+}
 export function liveSocketUrl(page: string, backend?: string): string {
   const url = new URL(backend ? '/v1/live' : '/api/v1/live', backend || page);
   if (backend) {

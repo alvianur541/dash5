@@ -21,6 +21,16 @@ test('direct live socket uses only configured HTTPS backend path without URL cre
  assert.throws(() => mod.exports.liveSocketUrl('https://app.dash5.id/', 'http://backend.run.app'));
  assert.throws(() => mod.exports.liveSocketUrl('https://app.dash5.id/', 'https://backend.run.app/?token=bad'));
 });
+test('echo gate blocks mic while AI audio plays and for a short tail after', () => {
+  const g = mod.exports.createEchoGate(400);
+  assert.equal(g.open(1000), true);
+  g.speakingUntil(2000);
+  assert.equal(g.open(1500), false);
+  assert.equal(g.open(2300), false);
+  assert.equal(g.open(2401), true);
+  g.speakingUntil(5000); g.cut(3000);
+  assert.equal(g.open(3401), true);
+});
 test('resamples stereo 48k to mono 16k and clamps little-endian PCM', () => {
  const a = new Float32Array(1920).fill(1); const b = new Float32Array(1920).fill(-1);
  assert.equal(resampleMono([a, b], 48000).length, 640);

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../services/supabase';
 import { authHeaders, PROXY_URL } from '../services/ai';
-import { pcm16, createMonoResampler, liveSocketUrl } from '../lib/liveAudio';
+import { pcm16, createMonoResampler, createEchoGate, liveSocketUrl } from '../lib/liveAudio';
 import { createLiveTranscript } from '../lib/liveTranscript';
 import type { Message } from '../types';
 
@@ -27,6 +27,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
     return () => { live = false; };
   }, [uid]);
   const stopRef = useRef<() => void>(() => {});
+  const interruptRef = useRef<() => void>(() => {});
   const busyRef = useRef(false);
   const cb = useRef({ onMessage, onTurnEnd, onEnd });
   useEffect(() => { cb.current = { onMessage, onTurnEnd, onEnd }; });
@@ -37,6 +38,8 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
     busyRef.current = true;
     setPhase('connecting');
     const transcript = createLiveTranscript();
+    const gate = createEchoGate(400);
+    let skipTurn = false;
     let stopped = false, stream: MediaStream | undefined, ws: WebSocket | undefined, processor: ScriptProcessorNode | undefined;
     const audio = new AudioContext();
     const playing = new Set<AudioBufferSourceNode>(); let next = 0;
@@ -51,6 +54,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
       ws?.close(); void audio.close(); setPhase('idle'); cb.current.onEnd(error);
     };
     stopRef.current = () => stop();
+    interruptRef.current = () => { if (stopped) return; skipTurn = true; clear(); gate.cut(Date.now()); setPhase('listening'); };
     document.addEventListener('visibilitychange', hidden);
     try {
       await audio.resume();
@@ -65,6 +69,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
         try {
           const m = JSON.parse(event.data);
           if (m.type === 'error') { stop(m.message); return; }
+          if (m.type === 'answer' && typeof m.text === 'string') { for (const msg of transcript.answer(m.text)) cb.current.onMessage(msg); return; }
           if (m.type === 'ready') {
             clearTimeout(timeout);
             stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
@@ -74,6 +79,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
             const pending: number[] = []; const resample = createMonoResampler(audio.sampleRate);
             processor.onaudioprocess = e => {
               if (stopped || ws?.readyState !== WebSocket.OPEN) return;
+              if (!gate.open(Date.now())) { pending.length = 0; return; }
               const channels = Array.from({ length: e.inputBuffer.numberOfChannels }, (_, i) => e.inputBuffer.getChannelData(i));
               pending.push(...resample(channels));
               while (pending.length >= 640) {
@@ -90,6 +96,9 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
           if (c.interrupted) { clear(); setPhase('listening'); }
           for (const msg of transcript.apply(c)) cb.current.onMessage(msg);
           if (c.turnComplete || c.interrupted) cb.current.onTurnEnd();
+          const skip = skipTurn;
+          if (c.turnComplete || c.interrupted) skipTurn = false;
+          if (skip) return;
           for (const part of c.modelTurn?.parts || []) {
             if (!part.inlineData?.data || !part.inlineData.mimeType?.startsWith('audio/pcm')) continue;
             if (next - audio.currentTime > 10) throw new Error('Audio queue full');
@@ -99,6 +108,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
             const source = audio.createBufferSource(); source.buffer = buffer; source.connect(audio.destination); playing.add(source);
             source.onended = () => { playing.delete(source); if (!playing.size && !stopped) setPhase('listening'); };
             next = Math.max(next, audio.currentTime); source.start(next); next += buffer.duration;
+            gate.speakingUntil(Date.now() + (next - audio.currentTime) * 1000);
             setPhase('speaking');
           }
         } catch { stop('Suara tidak tersedia atau izin mikrofon ditolak. Gunakan chat teks.'); }
@@ -107,6 +117,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
   }, [unit]);
 
   const stop = useCallback(() => stopRef.current(), []);
-  return { phase, active: phase !== 'idle', allowed: !!uid && allowed.uid === uid && allowed.ok, start, stop };
+  const interrupt = useCallback(() => interruptRef.current(), []);
+  return { phase, active: phase !== 'idle', allowed: !!uid && allowed.uid === uid && allowed.ok, start, stop, interrupt };
 }
 

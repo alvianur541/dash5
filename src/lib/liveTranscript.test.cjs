@@ -26,6 +26,22 @@ test('interruption closes the assistant bubble; next answer starts a new one', (
   assert.equal(t.apply({ outputTranscription: { text: 'Baru' } })[0].id, 'id2');
 });
 
+test('tool answer replaces spoken transcript with exact digits and locks the turn', () => {
+  let n = 0;
+  const t = createLiveTranscript(() => `id${++n}`, () => 1);
+  t.apply({ inputTranscription: { text: 'Harga track link?' } });
+  t.apply({ outputTranscription: { text: 'Sebentar, saya cek dulu.' } });
+  assert.deepEqual(t.answer('Harga `9248706HPB` Rp 22.447.800').map(m => [m.id, m.content]), [['id2', 'Harga `9248706HPB` Rp 22.447.800']]);
+  assert.deepEqual(t.apply({ outputTranscription: { text: 'sembilan dua empat' } }), []);
+  t.apply({ turnComplete: true });
+  assert.equal(t.apply({ outputTranscription: { text: 'Ada lagi?' } })[0].id, 'id3');
+});
+
+test('tool answer without spoken text still creates an assistant bubble', () => {
+  const t = createLiveTranscript(() => 'a1', () => 1);
+  assert.deepEqual(t.answer('Rp 1').map(m => [m.role, m.content]), [['assistant', 'Rp 1']]);
+});
+
 test('empty or missing transcription is ignored', () => {
   const t = createLiveTranscript(() => 'x', () => 1);
   assert.deepEqual(t.apply({}), []);
