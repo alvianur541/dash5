@@ -10,7 +10,8 @@ test('voice-only setup fixes model and exposes server tool, not native RAG', () 
 });
 test('voice prompt: natural tone, mirrors language, filler before tool, self-contained question, no table reading', () => {
   const p = makeSetup('p', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text;
-  for (const re of [/teknisi senior/i, /bahasa yang sama/i, /Sebentar, saya cek dulu/, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
+  for (const re of [/Hexindo Technical Assistant/, /asisten/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /Sebentar, saya cek dulu/, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
+  assert.doesNotMatch(p, /Kamu teknisi senior/);
 });
 test('rejects arbitrary provider frames and oversized or odd PCM', () => {
   for (const m of [{ setup: {} }, { type: 'audio', data: Buffer.alloc(641).toString('base64') }, { type: 'audio', data: Buffer.alloc(3202).toString('base64') }]) assert.throws(() => inputFrame(m));
