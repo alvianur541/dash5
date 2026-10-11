@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="referrer" content="no-referrer"><title>Dash5 — Uji diagram</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f5f6f7;color:#17212b;font:15px/1.5 Arial,sans-serif}header{background:#17212b;color:#fff;padding:22px 28px}h1{font-size:24px;margin:0 0 6px}header p{margin:0;color:#d8e0e7;max-width:75ch}main{padding:22px 28px;display:grid;grid-template-columns:minmax(280px,360px) minmax(0,1fr);gap:24px}section{min-width:0}h2{font-size:18px;margin:0 0 12px}p{max-width:75ch}.warning{font-size:13px;color:#5b3c0b;background:#fff0dc;padding:12px;margin:0 0 18px}.controls{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px}button{border:1px solid #b8c0c7;background:white;color:#17212b;border-radius:6px;padding:10px 13px;cursor:pointer;min-height:44px;font:inherit}button.primary{background:#b84712;color:white;border-color:#b84712}button:hover{background:#edf0f3}button.primary:hover{background:#8e340d}button:disabled{opacity:.5;cursor:not-allowed}button:focus-visible,textarea:focus-visible{outline:3px solid #b84712;outline-offset:3px}textarea{display:block;width:100%;height:490px;border:1px solid #b8c0c7;border-radius:6px;padding:12px;background:#fff;color:#17212b;font:13px/1.6 monospace;caret-color:#b84712;resize:vertical}label{display:block;margin-bottom:8px;font-weight:bold}small{display:block;color:#465563;margin:10px 0}#status{padding:10px 0;min-height:45px}#status.error{color:#a22a17}#viewport{height:660px;overflow:auto;background:white;border:1px solid #b8c0c7;border-radius:8px;touch-action:pan-x pan-y;cursor:grab}#canvas{width:max-content;padding:12px}svg{display:block}::selection{background:#fbd5c0;color:#17212b}footer{padding:0 28px 24px;font-size:13px;color:#465563}#viewport::-webkit-scrollbar{height:10px;width:10px}#viewport::-webkit-scrollbar-thumb{background:#9ba9b4;border-radius:8px}@media(max-width:760px){header{padding:20px}main{padding:20px;grid-template-columns:1fr;gap:20px}textarea{height:260px}#viewport{height:560px}footer{padding:0 20px 20px}}
+</style></head><body><header><h1>Dash5 · Uji diagram troubleshooting</h1><p>JSON terstruktur → validasi → tata letak deterministik → SVG. Prototipe lokal, terpisah dari aplikasi produksi.</p></header><main><section><h2>Data diagram</h2><p class="warning">Ilustrasi alur, bukan skema listrik/hidraulik resmi. Contoh dihasilkan Gemini dari teks uji generik; tidak mengambil manual dan tidak memiliki sumber dokumen.</p><label for="json">JSON yang dapat diedit</label><textarea id="json" spellcheck="false"></textarea><small>Maksimal 40 node, 80 panah. sources wajib kosong pada demo ini. Edit label, cabang, atau tambahkan siklus, lalu Render.</small><div class="controls"><button class="primary" id="render">Render JSON</button><button id="reset">Contoh Gemini</button></div><div id="status" role="status" aria-live="polite"></div><details><summary>Input yang benar-benar dikirim ke Gemini</summary><p id="input"></p></details></section><section><h2>Hasil diagram</h2><div class="controls"><button id="out">Perkecil</button><button id="in">Perbesar</button><button id="fit">Pas lebar</button><button id="svg">Ekspor SVG</button><button id="export-json">Ekspor JSON</button></div><small>Geser kanvas untuk melihat diagram. Ekspor tetap memakai ukuran penuh.</small><div id="viewport" tabindex="0" aria-label="Kanvas diagram, gulir untuk menggeser"><div id="canvas"></div></div></section></main><footer id="provenance"></footer>
+<script>(function(root) {
+  const fail = message => { throw new Error(message); };
+  const text = (v, max) => typeof v === 'string' && v.length <= max && !/[\u0000-\u001f]/.test(v);
+  function validate(g, retrievedIds = []) {
+    if (!g || JSON.stringify(g).length > 40000) fail('Diagram exceeds 40 KB');
+    if (!text(g.title,120) || !Array.isArray(g.nodes) || !g.nodes.length || g.nodes.length > 40 || !Array.isArray(g.edges) || g.edges.length > 80 || !Array.isArray(g.sources)) fail('Invalid diagram structure or limits');
+    const ids = new Set();
+    for (const n of g.nodes) {
+      if (!n || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(n.id) || ids.has(n.id) || !text(n.label,160) || !n.label.trim() || !['start','process','decision','end'].includes(n.type)) fail('Invalid or duplicate node');
+      ids.add(n.id);
+    }
+    for (const e of g.edges) if (!e || !ids.has(e.from) || !ids.has(e.to) || !text(e.label,40)) fail('Invalid edge endpoint or label');
+    if (g.sources.length > 20 || g.sources.some(id => typeof id !== 'string' || !retrievedIds.includes(id))) fail('Source not in retrieved document IDs');
+    return {title:g.title,nodes:g.nodes.map(({id,label,type})=>({id,label,type})),edges:g.edges.map(({from,to,label})=>({from,to,label})),sources:[...new Set(g.sources)]};
+  }
+  function layout(input, retrievedIds = []) {
+    const g=validate(input,retrievedIds), seen=new Set(), ordered=[];
+    const queue=g.nodes.filter(n=>n.type==='start').map(n=>n.id);
+    for(const seed of [...queue,...g.nodes.map(n=>n.id)]) {
+      const pending=[seed];
+      while(pending.length) {
+        const id=pending.shift(); if(seen.has(id))continue; seen.add(id);
+        ordered.push(g.nodes.find(n=>n.id===id));
+        pending.push(...g.edges.filter(e=>e.from===id).map(e=>e.to));
+      }
+    }
+    const nodes=ordered.map((n,i)=>({...n,x:40,y:80+i*150})), positions=new Map(nodes.map(n=>[n.id,n]));
+    let lanes=0;
+    const edges=g.edges.map(e=>{
+      const a=positions.get(e.from),b=positions.get(e.to);
+      if(b.y===a.y+150 && g.edges.filter(v=>v.from===e.from).length===1) return {...e,points:[[170,a.y+100],[170,b.y]],labelX:180,labelY:a.y+125};
+      const lane=370+lanes++*100;
+      return {...e,points:[[300,a.y+50],[lane,a.y+50],[lane,b.y+110],[170,b.y+110],[170,b.y+100]],labelX:lane+5,labelY:a.y+40};
+    });
+    return {...g,nodes,edges,width:Math.max(360,370+lanes*100),height:110+nodes.length*150};
+  }
+  const escape = value => String(value).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+  function render(input, retrievedIds = []) {
+    const g=layout(input,retrievedIds);
+    const edges=g.edges.map(e=>`<polyline points="${e.points.map(p=>p.join(',')).join(' ')}" fill="none" stroke="#526170" stroke-width="2" marker-end="url(#arrow)"/><text x="${e.labelX}" y="${e.labelY}" font-size="12" fill="#273340">${escape(e.label)}</text>`).join('');
+    const nodes=g.nodes.map(n=>{
+      const shape=n.type==='decision'?`<polygon points="${n.x+130},${n.y} ${n.x+260},${n.y+50} ${n.x+130},${n.y+100} ${n.x},${n.y+50}"/>`:`<rect x="${n.x}" y="${n.y}" width="260" height="100" rx="${['start','end'].includes(n.type)?45:8}"/>`;
+      const lines=n.label.match(/.{1,26}(?:\s|$)|.{1,26}/g)||[''];
+      return `<g fill="${n.type==='decision'?'#fff0dc':'#f3f6f8'}" stroke="#293440" stroke-width="2">${shape}</g><text text-anchor="middle" font-size="13" fill="#17212b">${lines.map((line,i)=>`<tspan x="170" y="${n.y+50-(lines.length-1)*8+i*16}">${escape(line.trim())}</tspan>`).join('')}</text>`;
+    }).join('');
+    return `<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="${escape(g.title)}" viewBox="0 0 ${g.width} ${g.height}" width="${g.width}" height="${g.height}" font-family="Arial,sans-serif"><title>${escape(g.title)}</title><rect width="100%" height="100%" fill="white"/><defs><marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0,0 L8,4 L0,8" fill="#526170"/></marker></defs><text x="40" y="35" font-size="18" fill="#17212b">${escape(g.title)}</text>${edges}${nodes}<text x="40" y="${g.height-15}" font-size="12" fill="#526170">Illustrative troubleshooting flow — not an official schematic</text></svg>`;
+  }
+  const api = {validate,layout,render};
+  if (typeof module !== 'undefined') module.exports = api; else root.Diagram = api;
+})(globalThis);
+</script><script>
+const fixture={"diagram":{"title":"Pemecahan Masalah Lampu Meja Tidak Menyala","nodes":[{"id":"A1","label":"Mulai dengan mematikan saklar","type":"start"},{"id":"B1","label":"Periksa apakah steker terpasang?","type":"decision"},{"id":"C1","label":"Pasang steker","type":"process"},{"id":"D1","label":"Periksa apakah bohlam terlihat rusak?","type":"decision"},{"id":"E1","label":"Minta petugas mengganti bohlam saat daya terputus","type":"process"},{"id":"F1","label":"Hentikan pemeriksaan dan hubungi petugas","type":"process"},{"id":"G1","label":"Uji lampu: Apakah lampu menyala?","type":"decision"},{"id":"H1","label":"Selesai","type":"end"}],"edges":[{"from":"A1","to":"B1","label":""},{"from":"B1","to":"C1","label":"Tidak"},{"from":"B1","to":"D1","label":"Ya"},{"from":"C1","to":"G1","label":""},{"from":"D1","to":"E1","label":"Ya"},{"from":"D1","to":"F1","label":"Tidak"},{"from":"E1","to":"G1","label":""},{"from":"G1","to":"H1","label":"Ya"},{"from":"G1","to":"F1","label":"Tidak"}],"sources":[]},"provenance":{"kind":"genuine-gemini-generation","model":"gemini-3.7-flash","generatedAt":"2026-10-11T08:05:42.065Z","retrieval":"none; authored generic test input, not official manual","usage":{"promptTokenCount":542,"candidatesTokenCount":626,"totalTokenCount":1168,"trafficType":"ON_DEMAND","promptTokensDetails":[{"modality":"TEXT","tokenCount":542}],"candidatesTokensDetails":[{"modality":"TEXT","tokenCount":626}]}}};
+const input="Contoh uji generik buatan sendiri, bukan manual unit. Lampu meja tidak menyala. Mulai dengan mematikan saklar. Periksa apakah steker terpasang. Jika tidak, pasang steker lalu uji lampu. Jika sudah terpasang, periksa apakah bohlam terlihat rusak. Jika rusak, minta petugas mengganti bohlam saat daya terputus lalu uji lampu. Jika tidak rusak, hentikan pemeriksaan dan hubungi petugas. Saat diuji, jika lampu menyala, selesai. Jika tidak menyala, kembali ke langkah hubungi petugas. Jangan menambahkan pengukuran atau pembongkaran.\n";
+const el=id=>document.getElementById(id);
+let current=null,scale=1,svgText='';
+function resize(){const svg=el('canvas').querySelector('svg');if(!svg)return;const box=svg.viewBox.baseVal;svg.style.width=box.width*scale+'px';svg.style.height=box.height*scale+'px';}
+function fit(){const svg=el('canvas').querySelector('svg');if(!svg)return;scale=Math.min(1,(el('viewport').clientWidth-26)/svg.viewBox.baseVal.width);resize();el('viewport').scrollLeft=0;el('viewport').scrollTop=0;}
+function draw(){try{if(el('json').value.length>40000)throw Error('JSON melebihi 40 KB');current=Diagram.validate(JSON.parse(el('json').value));svgText=Diagram.render(current);el('canvas').innerHTML=svgText;el('status').className='';el('status').textContent=current.nodes.length+' node valid · '+current.edges.length+' panah · sumber dokumen belum terhubung';el('svg').disabled=false;fit();}catch(error){current=null;svgText='';el('canvas').replaceChildren();el('svg').disabled=true;el('status').className='error';el('status').textContent='Tidak dirender: '+error.message;}}
+function reset(){el('json').value=JSON.stringify(fixture.diagram,null,2);draw();}
+function download(content,type,name){const url=URL.createObjectURL(new Blob([content],{type}));const a=document.createElement('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);}
+el('render').onclick=draw;el('reset').onclick=reset;el('fit').onclick=fit;
+el('in').onclick=()=>{scale=Math.min(3,scale*1.3);resize();};el('out').onclick=()=>{scale=Math.max(.1,scale/1.3);resize();};
+el('svg').onclick=()=>{if(current)download(svgText,'image/svg+xml','dash5-diagram.svg');};
+el('export-json').onclick=()=>{if(current)download(JSON.stringify(current,null,2),'application/json','dash5-diagram.json');};
+el('input').textContent=input;el('provenance').textContent='Hasil generasi nyata: '+fixture.provenance.model+' · '+fixture.provenance.generatedAt+'. Editor berjalan offline; tombol Render tidak memanggil model. Generasi baru tersedia melalui CLI berautentikasi di branch prototipe.';
+let drag=null;el('viewport').onpointerdown=e=>{if(e.pointerType==='mouse'){drag=[e.clientX,e.clientY,el('viewport').scrollLeft,el('viewport').scrollTop];el('viewport').setPointerCapture(e.pointerId);}};
+el('viewport').onpointermove=e=>{if(drag){el('viewport').scrollLeft=drag[2]+drag[0]-e.clientX;el('viewport').scrollTop=drag[3]+drag[1]-e.clientY;}};el('viewport').onpointerup=()=>{drag=null;};el('viewport').onpointercancel=()=>{drag=null;};window.addEventListener('resize',fit);reset();
+</script></body></html>
