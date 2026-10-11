@@ -1,13 +1,30 @@
-export function resampleMono(channels: Float32Array[], rate: number): Float32Array {
-  const length = Math.floor(channels[0].length * 16000 / rate);
-  const out = new Float32Array(length);
-  for (let i = 0; i < length; i++) {
-    const start = Math.floor(i * rate / 16000), end = Math.max(start + 1, Math.floor((i + 1) * rate / 16000));
-    let value = 0;
-    for (const channel of channels) for (let j = start; j < end; j++) value += channel[j] || 0;
-    out[i] = value / ((end - start) * channels.length);
+export function liveSocketUrl(page: string, backend?: string): string {
+  const url = new URL(backend ? '/v1/live' : '/api/v1/live', backend || page);
+  if (backend) {
+    const base = new URL(backend);
+    if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw new Error('Invalid live backend');
   }
-  return out;
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.href;
+}
+export function createMonoResampler(rate: number) {
+  const pending: number[] = []; let offset = 0, produced = 0;
+  return (channels: Float32Array[]): Float32Array => {
+    for (let i = 0; i < channels[0].length; i++) pending.push(channels.reduce((n, c) => n + c[i], 0) / channels.length);
+    const target = Math.floor((offset + pending.length) * 16000 / rate);
+    const out = new Float32Array(target - produced); let start = 0;
+    for (let i = 0; i < out.length; i++) {
+      const end = Math.floor((++produced) * rate / 16000) - offset;
+      let value = 0;
+      for (let j = start; j < end; j++) value += pending[j];
+      out[i] = value / (end - start); start = end;
+    }
+    pending.splice(0, start); offset += start;
+    return out;
+  };
+}
+export function resampleMono(channels: Float32Array[], rate: number): Float32Array {
+  return createMonoResampler(rate)(channels);
 }
 export function pcm16(samples: Float32Array): Uint8Array {
   const bytes = new Uint8Array(samples.length * 2); const view = new DataView(bytes.buffer);

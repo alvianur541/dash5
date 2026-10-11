@@ -4,8 +4,8 @@ import path from 'path';
 import { defineConfig, loadEnv } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
 
-export default defineConfig(() => {
-  const baseEnv = loadEnv('', '.', '');
+export default defineConfig(({ mode }) => {
+  const baseEnv = loadEnv(mode, '.', '');
   return {
     plugins: [
       react(),
@@ -64,7 +64,10 @@ export default defineConfig(() => {
       }),
     ],
 
-    define: {},
+    define: {
+      'import.meta.env.VITE_LIVE_VOICE_ENABLED': JSON.stringify(baseEnv.VITE_LIVE_VOICE_ENABLED ?? (mode === 'production' ? 'true' : 'false')),
+      'import.meta.env.VITE_LIVE_BACKEND_URL': JSON.stringify(baseEnv.VITE_LIVE_BACKEND_URL ?? (mode === 'production' ? 'https://dash5-vertexai-proxy-esv2f6y7ya-as.a.run.app' : '')),
+    },
 
     resolve: {
       alias: {

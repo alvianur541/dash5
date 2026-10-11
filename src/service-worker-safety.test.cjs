@@ -9,7 +9,7 @@ function workbox() {
   let options;
   const context = { module: { exports: {} }, __dirname: path.resolve(__dirname, '..'), require(name) {
     if (name === 'path') return path;
-    if (name === 'vite') return { defineConfig: fn => fn(), loadEnv: () => ({}) };
+    if (name === 'vite') return { defineConfig: fn => fn({ mode: 'production', command: 'build' }), loadEnv: () => ({}) };
     if (name === 'vite-plugin-pwa') return { VitePWA: value => { options = value; } };
     return () => ({});
   } };

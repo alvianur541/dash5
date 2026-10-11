@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../services/supabase';
-import { pcm16, resampleMono } from '../lib/liveAudio';
+import { pcm16, createMonoResampler, liveSocketUrl } from '../lib/liveAudio';
 
 export function LiveVoice({ unit }: { unit: string }) {
   const [active, setActive] = useState(false);
@@ -30,7 +30,7 @@ export function LiveVoice({ unit }: { unit: string }) {
       await audio.resume();
       const token = await getAuthToken(); if (stopped) return;
       if (!token || !navigator.mediaDevices?.getUserMedia) throw new Error('Login atau mikrofon tidak tersedia.');
-      const url = new URL('/api/v1/live', location.href); url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const url = liveSocketUrl(location.href, import.meta.env.VITE_LIVE_BACKEND_URL);
       ws = new WebSocket(url);
       const timeout = setTimeout(() => { setStatus('Live belum tersedia. Gunakan chat teks.'); stop(); }, 20000);
       ws.onopen = () => { if (!stopped) ws?.send(JSON.stringify({ type: 'auth', token, unit })); };
@@ -46,11 +46,11 @@ export function LiveVoice({ unit }: { unit: string }) {
             if (stopped) { stream.getTracks().forEach(t => t.stop()); return; }
             const input = audio.createMediaStreamSource(stream);
             processor = audio.createScriptProcessor(2048, 1, 1);
-            const pending: number[] = [];
+            const pending: number[] = []; const resample = createMonoResampler(audio.sampleRate);
             processor.onaudioprocess = e => {
               if (stopped || ws?.readyState !== WebSocket.OPEN) return;
               const channels = Array.from({ length: e.inputBuffer.numberOfChannels }, (_, i) => e.inputBuffer.getChannelData(i));
-              pending.push(...resampleMono(channels, audio.sampleRate));
+              pending.push(...resample(channels));
               while (pending.length >= 640) {
                 if (ws.bufferedAmount > 65536) { setStatus('Jaringan lambat. Gunakan chat teks.'); stop(); return; }
                 const bytes = pcm16(new Float32Array(pending.splice(0, 640)));
