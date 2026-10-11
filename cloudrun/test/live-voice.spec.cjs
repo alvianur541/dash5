@@ -77,8 +77,8 @@ test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency
   const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');
   const server = http.createServer(); const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
   const sent = []; provider.send = x => sent.push(JSON.parse(x)); provider.terminate = () => { provider.readyState = 3; };
-  let bound; let lookup;
-  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['user1']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
+  let bound; let lookup; const usageLogs = [];
+  const wss = registerLiveVoice(server, { usageLog: row => usageLogs.push(row), enabled: true, allowed: new Set(['user1']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
   try {
@@ -89,6 +89,21 @@ test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency
     await new Promise(r => setTimeout(r, 10)); assert.equal(sent[0].realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
     provider.emit('message', Buffer.from(JSON.stringify({ toolCall: { functionCalls: [{ id: 'call-1', name: 'ask_technical', args: { question: 'check', unit: 'foreign' } }] } })));
     await new Promise(r => setTimeout(r, 10)); assert.deepEqual(lookup.slice(0, 3), ['fixture', 'ZX200-5G', 'check']); assert.ok(clientMsgs.some(x => x.type === 'searching')); assert.ok(clientMsgs.some(x => x.type === 'answer' && x.text === 'Authorized fixture answer with source')); assert.equal(sent[1].toolResponse.functionResponses[0].id, 'call-1');
+    const usageMetadata = { promptTokenCount: 600, responseTokenCount: 300, totalTokenCount: 900, thoughtsTokenCount: 20,
+      promptTokensDetails: [{ modality: 'TEXT', tokenCount: 100 }, { modality: 'AUDIO', tokenCount: 200 }, { modality: 'VIDEO', tokenCount: 300 }],
+      responseTokensDetails: [{ modality: 'TEXT', tokenCount: 50 }, { modality: 'AUDIO', tokenCount: 200 }, { modality: 'IMAGE', tokenCount: 50 }] };
+    provider.emit('message', Buffer.from(JSON.stringify({ usageMetadata })));
+    provider.emit('message', Buffer.from(JSON.stringify({ usageMetadata, serverContent: { turnComplete: true } })));
+    provider.emit('message', Buffer.from(JSON.stringify({ usageMetadata, serverContent: { turnComplete: true } })));
     const closed = once(ws, 'close'); ws.send('{"type":"stop"}'); await closed; assert.equal(provider.readyState, 3);
+    assert.equal(usageLogs.length, 1);
+    const row = usageLogs[0];
+    assert.match(row.session_id, /^[0-9a-f-]{36}$/);
+    assert.equal(row.user_prefix, 'user1'); assert.equal(row.unit, 'ZX200-5G');
+    assert.equal(row.ready, true); assert.equal(row.tools, 1); assert.equal(row.reason, 'user-stop');
+    assert.equal(row.usage_available, true); assert.equal(row.cost_complete, true);
+    assert.equal(row.cost_idr, 65.61605); assert.equal(row.total_tokens, 900);
+    assert.equal(row.rag_cost_included, false); assert.ok(row.duration_ms > 0);
+    assert.doesNotMatch(JSON.stringify(row), /fixture|Authorized fixture answer|Bearer/);
   } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
 });

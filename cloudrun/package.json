@@ -7,7 +7,7 @@
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/orchestrator.cjs --log-level=warning",
     "typecheck": "tsc -p tsconfig.json",
     "pretest": "npm run build",
-    "test": "esbuild test/entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=test/.build/entry.cjs --log-level=warning && node test/run.cjs && node --test test/live-voice.spec.cjs test/live-http.spec.cjs",
+    "test": "esbuild test/entry.ts --bundle --platform=node --target=node20 --format=cjs --outfile=test/.build/entry.cjs --log-level=warning && node test/run.cjs && node --test test/live-voice.spec.cjs test/live-http.spec.cjs test/live-usage.spec.cjs",
     "start": "node server.js"
   },
   "dependencies": {

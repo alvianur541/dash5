@@ -1,6 +1,8 @@
 const { WebSocket, WebSocketServer } = require('ws');
 const { getAccessToken } = require('./upstream');
 const { ALLOWED_ORIGINS, PROJECT_ID } = require('./config');
+const { randomUUID } = require('node:crypto');
+const { createLiveUsage } = require('./live-usage');
 
 const VOICE_PROMPT = unit => [
   `Kamu Hexindo Technical Assistant, asisten teknis laki-laki yang menemani teknisi lapangan lewat suara. Unit terkunci: ${unit}. Kalau ditanya siapa kamu, jawab singkat bahwa kamu asisten teknis Hexindo yang siap bantu cek data unit.`,
@@ -40,7 +42,7 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
 // Empty allowlist = nobody: Live is billable, access is opt-in per Supabase user id.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && allowed.has(userId); }
-function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask }) {
+function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -50,12 +52,14 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
   wss.on('connection', (ws, req) => {
     let upstream, user, authorized = false, authenticating = false, ready = false, stopped = false, audioBytes = 0, frameCount = 0, windowStart = Date.now(), consecutive = 0, totalTools = 0;
     const t0 = Date.now(); let stage = 'wait-auth', upClose = '';
+    const usage = createLiveUsage(), sessionId = randomUUID(); let selectedUnit = null;
     const calls = new Map();
     let idle;
     const send = data => { if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(data)); else stop(); };
     const stop = (message, reason = message ? 'server' : 'closed') => {
       if (stopped) return; stopped = true;
       console.info('[live] end user=%s ms=%d stage=%s reason=%s msg=%s upstream=%s tools=%d audioKB=%d', (user || '-').slice(0, 8), Date.now() - t0, stage, reason, message || '-', upClose || '-', totalTools, Math.round(audioBytes / 1024));
+      usageLog({ session_id: sessionId, user_prefix: user ? user.slice(0, 8) : null, model: 'gemini-3.8-live', unit: selectedUnit, duration_ms: Date.now() - t0, ready, tools: totalTools, reason, stage, ...usage.summary() });
       if (message) send({ type: 'error', message });
       clearTimeout(auth); clearTimeout(verify); clearTimeout(idle); clearTimeout(max);
       for (const c of calls.values()) c.abort(); calls.clear();
@@ -84,6 +88,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
           if (ok && !liveAllowed(req.authUser.id, allowed)) return stop('Live belum dibuka untuk akun ini.', 'not-allowed');
           if (!ok || users.has(req.authUser.id) || users.size >= 20) throw new Error('auth');
           user = req.authUser.id; users.add(user); authorized = true; touch(); stage = 'provider';
+          selectedUnit = m.unit;
           upstream = await connect(m.unit);
           if (stopped) return upstream.terminate();
           const setupTimer = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.', 'setup-timeout'), setupMs);
@@ -92,6 +97,8 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
           upstream.on('message', async raw => {
             try {
               const r = JSON.parse(raw.toString());
+              if (stopped) return;
+              usage.observe(r);
               if (r.setupComplete) { ready = true; stage = 'live'; clearTimeout(setupTimer); console.info('[live] ready user=%s ms=%d', user.slice(0, 8), Date.now() - t0); send({ type: 'ready' }); }
               if (r.serverContent) { touch(); if (r.serverContent.turnComplete) consecutive = 0; send({ type: 'content', content: r.serverContent }); }
               for (const id of r.toolCallCancellation?.ids || []) { calls.get(id)?.abort(); calls.delete(id); }
@@ -106,7 +113,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
                   }
                   catch { response = { status: 'unavailable', retryable: false, message: 'Jawaban teknis belum tersedia. Gunakan chat teks; jangan menebak.' }; }
                 }
-                if (!ctrl.signal.aborted && !stopped && upstream.readyState === WebSocket.OPEN) upstream.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response }] } }));
+                if (!ctrl.signal.aborted && !stopped && upstream.readyState === WebSocket.OPEN) { usage.markActivity(); upstream.send(JSON.stringify({ toolResponse: { functionResponses: [{ id: call.id, name: call.name, response }] } })); }
                 calls.delete(call.id);
               }
             } catch { stop('Live mengirim respons tidak valid.', 'bad-upstream-frame'); }
@@ -119,7 +126,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
         const frame = inputFrame(m);
         audioBytes += m.type === 'audio' ? Buffer.from(m.data, 'base64').length : 0;
         if (audioBytes > 9600000) throw new Error('limit');
-        touch(); upstream.send(JSON.stringify(frame));
+        usage.markActivity(); touch(); upstream.send(JSON.stringify(frame));
       } catch (err) { stop('Sesi suara ditolak. Gunakan chat teks.', `rejected:${String(err?.message).slice(0, 40)}`); }
     });
   });
