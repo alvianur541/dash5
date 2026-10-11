@@ -31,6 +31,9 @@ app.use((req, res, next) => (BIG_BODY_PATHS.has(req.path) ? next() : smallJson(r
 securityHeaders(app);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+app.get('/v1/live/access', verifyToken, (req, res) => res.json({
+  allowed: process.env.LIVE_VOICE_ENABLED === 'true' && require('./server/live-voice').liveAllowed(req.authUser.id),
+}));
 
 registerMetrics(app);
 

@@ -27,7 +27,10 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
   ws.on('open', () => ws.send(JSON.stringify(makeSetup(project, location, unit))));
   return ws;
 }
-function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, idleMs = 30000, maxMs = 300000, ask }) {
+// Empty allowlist = nobody: Live is billable, access is opt-in per Supabase user id.
+const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
+function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && allowed.has(userId); }
+function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, idleMs = 30000, maxMs = 300000, ask }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 8192, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -63,6 +66,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
           req.headers.authorization = `Bearer ${m.token}`;
           const ok = await new Promise(resolve => verifyToken(req, { status: () => ({ json: () => resolve(false) }) }, () => resolve(true)));
           if (stopped) return;
+          if (ok && !liveAllowed(req.authUser.id, allowed)) return stop('Live belum dibuka untuk akun ini.');
           if (!ok || users.has(req.authUser.id) || users.size >= 20) throw new Error('auth');
           user = req.authUser.id; users.add(user); authorized = true; clearTimeout(auth); touch();
           upstream = await connect(m.unit);
@@ -102,4 +106,4 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
   });
   return wss;
 }
-module.exports = { makeSetup, inputFrame, openProvider, registerLiveVoice };
+module.exports = { makeSetup, inputFrame, openProvider, registerLiveVoice, liveAllowed, LIVE_ALLOWED_USERS };

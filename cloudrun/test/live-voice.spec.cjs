@@ -12,13 +12,28 @@ test('rejects arbitrary provider frames and oversized or odd PCM', () => {
   for (const m of [{ setup: {} }, { type: 'audio', data: Buffer.alloc(641).toString('base64') }, { type: 'audio', data: Buffer.alloc(3202).toString('base64') }]) assert.throws(() => inputFrame(m));
   assert.equal(inputFrame({ type: 'audio', data: Buffer.alloc(1280).toString('base64') }).realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
 });
+test('allowlist rejects other accounts before any provider session', async () => {
+  const http = require('node:http'); const { once } = require('node:events');
+  const { WebSocket } = require('ws'); const { registerLiveVoice, liveAllowed } = require('../server/live-voice');
+  assert.equal(liveAllowed('a', new Set(['a'])), true);
+  assert.equal(liveAllowed('b', new Set(['a'])), false);
+  assert.equal(liveAllowed('b', new Set()), false);
+  const server = http.createServer(); let connects = 0;
+  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['owner']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, _res, next) => { req.authUser = { id: 'other' }; req.authToken = 'x'; next(); }, connect: async () => { connects++; } });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
+  try {
+    await once(ws, 'open'); const msg = once(ws, 'message'); ws.send(JSON.stringify({ type: 'auth', token: 'x', unit: 'ZX200-5G' }));
+    assert.equal(JSON.parse((await msg)[0]).type, 'error'); assert.equal(connects, 0);
+  } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
+});
 test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency on stop', async () => {
   const http = require('node:http'); const { EventEmitter, once } = require('node:events');
   const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');
   const server = http.createServer(); const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
   const sent = []; provider.send = x => sent.push(JSON.parse(x)); provider.terminate = () => { provider.readyState = 3; };
   let bound; let lookup;
-  const wss = registerLiveVoice(server, { enabled: true, units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
+  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['user1']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
   try {

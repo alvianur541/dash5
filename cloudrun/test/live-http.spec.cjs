@@ -38,7 +38,7 @@ test('offline signed JWT relay exercises actual HTTP technical bridge and caller
     server.listen = (_port, cb) => listen(0, '127.0.0.1', cb); return server;
    } };
    if (name === './server/live-voice') return { registerLiveVoice: (s, deps) => {
-    wss = real(name).registerLiveVoice(s, { ...deps, enabled: true, origins: ['http://fixture.local'], connect: async () => {
+    wss = real(name).registerLiveVoice(s, { ...deps, enabled: true, allowed: new Set(['fixture-user']), origins: ['http://fixture.local'], connect: async () => {
      setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider;
     } });
    } };

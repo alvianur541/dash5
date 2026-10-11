@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAuthToken } from '../services/supabase';
+import { authHeaders, PROXY_URL } from '../services/ai';
 import { pcm16, createMonoResampler, liveSocketUrl } from '../lib/liveAudio';
 import { createLiveTranscript } from '../lib/liveTranscript';
 import type { Message } from '../types';
@@ -12,8 +13,19 @@ type LiveContent = {
 export type LivePhase = 'idle' | 'connecting' | 'listening' | 'speaking';
 
 // Live session: mic -> server relay -> audio playback; transcripts surface as chat messages.
-export function useLiveVoice(unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void) {
+export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void) {
   const [phase, setPhase] = useState<LivePhase>('idle');
+  const [allowed, setAllowed] = useState<{ uid?: string; ok: boolean }>({ ok: false });
+  useEffect(() => {
+    if (!uid) return;
+    let live = true;
+    authHeaders()
+      .then(headers => fetch(`${PROXY_URL}/v1/live/access`, { headers }))
+      .then(r => r.ok ? r.json() : { allowed: false })
+      .then(d => { if (live) setAllowed({ uid, ok: d.allowed === true }); })
+      .catch(() => { if (live) setAllowed({ uid, ok: false }); });
+    return () => { live = false; };
+  }, [uid]);
   const stopRef = useRef<() => void>(() => {});
   const busyRef = useRef(false);
   const cb = useRef({ onMessage, onTurnEnd, onEnd });
@@ -95,6 +107,6 @@ export function useLiveVoice(unit: string, onMessage: (m: Message) => void, onTu
   }, [unit]);
 
   const stop = useCallback(() => stopRef.current(), []);
-  return { phase, active: phase !== 'idle', start, stop };
+  return { phase, active: phase !== 'idle', allowed: !!uid && allowed.uid === uid && allowed.ok, start, stop };
 }
 
