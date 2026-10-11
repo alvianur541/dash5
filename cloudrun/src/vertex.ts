@@ -1,9 +1,9 @@
 import { InlineImage } from './types';
 import { deps } from './deps';
 
-export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.6-flash';
+export const MODEL        = process.env.VERTEX_MODEL || 'gemini-3.8-flash';
 export const INTENT_MODEL = process.env.INTENT_MODEL || 'gemini-3.5-flash-lite';
-export const FALLBACK_MODELS: readonly string[] = (process.env.FALLBACK_MODELS ?? 'gemini-3.6-flash')
+export const FALLBACK_MODELS: readonly string[] = (process.env.FALLBACK_MODELS ?? 'gemini-3.7-flash')
   .split(',').map(s => s.trim()).filter(s => s && s !== MODEL);
 export const MODEL_CHAIN: readonly string[] = [MODEL, ...FALLBACK_MODELS];
 

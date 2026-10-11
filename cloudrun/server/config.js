@@ -62,7 +62,7 @@ const RERANKER = process.env.RERANKER === 'cohere' ? 'cohere' : 'google';
 const GOOGLE_RANK_MODEL = process.env.GOOGLE_RANK_MODEL || 'semantic-ranker-fast-004';
 
 const ALLOWED_MODELS = new Set(
-  (process.env.ALLOWED_MODELS || 'gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
+  (process.env.ALLOWED_MODELS || 'gemini-3.8-flash,gemini-3.7-flash,gemini-3.6-flash,gemini-3.5-flash,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-3.1-flash-lite-preview,gemini-2.5-flash')
     .split(',').map(s => s.trim()).filter(Boolean)
 );
 

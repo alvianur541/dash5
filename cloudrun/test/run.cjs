@@ -1,8 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 
-// Tests assert 3.7 behavior; set here (not in package.json) so Windows cmd can run them too.
-process.env.VERTEX_MODEL ||= 'gemini-3.7-flash';
+process.env.VERTEX_MODEL ||= 'gemini-3.8-flash';
 process.env.GOOGLE_CLOUD_PROJECT ||= 'test-project';
 // Most suites assert the no-promo price path; promo suites pass explicit dates or set PROMO_UJI themselves.
 process.env.PROMO_UJI ||= 'off';
