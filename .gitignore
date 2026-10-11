@@ -15,6 +15,17 @@ CLAUDE-HISTORY.md
 secrets/*
 !secrets/.gitkeep
 
+# Credential exports (all levels); examples must contain placeholders only.
+credentials/
+*.pem
+*.key
+*.p12
+*.pfx
+*service-account*.json
+*service_account*.json
+credentials*.json
+__pycache__/
+
 # Dealer price lists and their backups: this repo is public.
 promo-backup-*.json
 supabase/data/
