@@ -12,6 +12,8 @@ test('voice prompt: natural tone, mirrors language, filler before tool, self-con
   const p = makeSetup('p', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text;
   for (const re of [/Hexindo Technical Assistant/, /asisten/i, /laki-laki/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /bervariasi/i, /jangan pakai kalimat yang sama/i, /sesuai topik/i, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
   assert.equal(makeSetup('p', 'us-central1', 'ZX200-5G').setup.generationConfig.speechConfig.voiceConfig.prebuiltVoiceConfig.voiceName, 'Achird');
+  assert.doesNotMatch(p, /lalu bilang "rincian lengkapnya ada di layar"/);
+  for (const re of [/sudah aku tampilkan/, /kalau ada yang kurang jelas/i, /penutup/i, /tidak harus selalu/i]) assert.match(p, re);
   for (const re of [/HANYA tiga bahasa/, /Indonesia/, /Inggris/, /Jepang/, /bahasa lain/i]) assert.match(p, re);
   assert.doesNotMatch(p, /Jawab dalam bahasa yang sama dengan pengguna \(Inggris dibalas Inggris\)/);
   for (const re of [/artikulasi jelas/i, /intonasi/i, /tempo sedang/i]) assert.match(p, re);
