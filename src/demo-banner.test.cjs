@@ -104,3 +104,9 @@ test('close lasts only for the mounted banner and remount restores it', () => {
 test('auth loading has no request strip', () => {
   assert.doesNotMatch(renderApp('app.dash5.id', null, true, true), /Request demo access|demo-banner/);
 });
+
+test('request demo pill is a solid yellow banner without underline', () => {
+  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'index.css'), 'utf8');
+  assert.match(css, /\.demo-banner \{[^}]*background: #F5C542;[^}]*color: #1C1606;/);
+  assert.match(css, /\.demo-banner a \{[^}]*text-decoration: none;/);
+});
