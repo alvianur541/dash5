@@ -11,6 +11,7 @@ import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../types';
 import { tidyStreamingTail } from '../lib/streamPacer';
+import { shouldOfferIllustration } from '../lib/illustrationEligibility';
 
 const Markdown = lazy(() => import('./Markdown'));
 const ImageIllustration = lazy(() => import('./ImageIllustration').then(m => ({ default: m.ImageIllustration })));
@@ -610,7 +611,7 @@ export function ChatWindow({
               <MessageItem
                 key={message.id}
                 message={message}
-                illustrationSessionId={IMAGE_GENERATION_ENABLED && user && sessionId ? sessionId : undefined}
+                illustrationSessionId={IMAGE_GENERATION_ENABLED && user && sessionId && shouldOfferIllustration(messages, idx) ? sessionId : undefined}
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
                 isStreaming={showCursor}
