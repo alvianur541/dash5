@@ -254,7 +254,39 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
+const server = require('node:http').createServer(app);
+require('./server/live-voice').registerLiveVoice(server, {
+  verifyToken, units: ASK_MODELS,
+  ask: async (token, unit, question, signal) => {
+    const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/ask`, {
+      method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: unit, userInput: question, history: [] }),
+      signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
+    });
+    if (!response.ok) throw new Error('Technical agent unavailable');
+    const reader = response.body.getReader();
+    let buffer = '', answer = '', bytes = 0;
+    const decoder = new TextDecoder();
+    try {
+      while (true) {
+        const { done, value } = await reader.read(); if (done) break;
+        bytes += value.length; if (bytes > 256000) throw new Error('Answer too large');
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n'); buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const event = JSON.parse(line.slice(6));
+          if (event.ev === 'error') throw new Error('Technical agent failed');
+          if (event.ev === 'text') answer += event.text || '';
+          if (event.ev === 'meta' && typeof event.full === 'string') answer = event.full;
+        }
+      }
+    } finally { await reader.cancel().catch(() => {}); }
+    if (!answer.trim() || answer.length > 24000) throw new Error('No bounded answer');
+    return answer;
+  },
+});
+server.listen(PORT, () => {
   console.info('[boot] Dash5 proxy siap di port %d', PORT);
   getAccessToken()
     .then(() => console.info('[boot] kredensial GCP siap'))

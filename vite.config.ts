@@ -77,6 +77,7 @@ export default defineConfig(() => {
         '/api': {
           target: baseEnv.DEV_API_TARGET,
           changeOrigin: true,
+          ws: true,
           rewrite: p => p.replace(/^\/api/, ''),
         },
       },

@@ -2,6 +2,7 @@ import { useCallback, useRef } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
+import { LiveVoice } from './components/LiveVoice';
 import { LoginPage } from './components/LoginPage';
 import { PocketModal } from './components/PocketModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -142,6 +143,7 @@ export default function App() {
           {error}
         </StatusBanner>
 
+        {import.meta.env?.VITE_LIVE_VOICE_ENABLED === 'true' && <LiveVoice key={`${user.uid}:${selectedModel}`} unit={selectedModel} />}
         <ChatWindow
           key={`${user.uid}:${currentSessionId ?? "new"}`}
           sessionId={currentSessionId}
