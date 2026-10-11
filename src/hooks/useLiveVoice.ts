@@ -10,7 +10,7 @@ type LiveContent = {
   inputTranscription?: { text?: string }; outputTranscription?: { text?: string };
   modelTurn?: { parts?: { inlineData?: { data?: string; mimeType?: string } }[] };
 };
-export type LivePhase = 'idle' | 'connecting' | 'listening' | 'speaking';
+export type LivePhase = 'idle' | 'connecting' | 'listening' | 'searching' | 'speaking';
 
 // Live session: mic -> server relay -> audio playback; transcripts surface as chat messages.
 export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void) {
@@ -69,7 +69,8 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
         try {
           const m = JSON.parse(event.data);
           if (m.type === 'error') { stop(m.message); return; }
-          if (m.type === 'answer' && typeof m.text === 'string') { for (const msg of transcript.answer(m.text)) cb.current.onMessage(msg); return; }
+          if (m.type === 'searching') { setPhase('searching'); return; }
+          if (m.type === 'answer' && typeof m.text === 'string') { for (const msg of transcript.answer(m.text)) cb.current.onMessage(msg); setPhase(playing.size ? 'speaking' : 'listening'); return; }
           if (m.type === 'ready') {
             clearTimeout(timeout);
             stream = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });

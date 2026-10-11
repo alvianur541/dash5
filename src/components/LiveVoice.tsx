@@ -2,7 +2,7 @@ import { Hand, PhoneOff } from 'lucide-react';
 import type { LivePhase } from '../hooks/useLiveVoice';
 
 const LABEL: Record<LivePhase, string> = {
-  idle: '', connecting: 'Menghubungkan…', listening: 'Silakan bicara…', speaking: 'Menjawab…',
+  idle: '', connecting: 'Menghubungkan…', listening: 'Silakan bicara…', searching: 'Mencari data…', speaking: 'Menjawab…',
 };
 
 export function LiveBar({ phase, unit, onStop, onInterrupt }: { phase: LivePhase; unit: string; onStop: () => void; onInterrupt: () => void }) {

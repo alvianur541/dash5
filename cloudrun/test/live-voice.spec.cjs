@@ -10,8 +10,9 @@ test('voice-only setup fixes model and exposes server tool, not native RAG', () 
 });
 test('voice prompt: natural tone, mirrors language, filler before tool, self-contained question, no table reading', () => {
   const p = makeSetup('p', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text;
-  for (const re of [/Hexindo Technical Assistant/, /asisten/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /Sebentar, saya cek dulu/, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
+  for (const re of [/Hexindo Technical Assistant/, /asisten/i, /ramah/i, /manusiawi/i, /bahasa yang sama/i, /bervariasi/i, /jangan pakai kalimat yang sama/i, /sesuai topik/i, /berdiri sendiri/i, /jangan membacakan tabel/i, /tampil di layar/i, /ulangi angka/i, /track link/i]) assert.match(p, re);
   assert.doesNotMatch(p, /Kamu teknisi senior/);
+  assert.doesNotMatch(p, /ucapkan satu kalimat pendek seperti "Sebentar, saya cek dulu ya\."/);
 });
 test('rejects arbitrary provider frames and oversized or odd PCM', () => {
   for (const m of [{ setup: {} }, { type: 'audio', data: Buffer.alloc(641).toString('base64') }, { type: 'audio', data: Buffer.alloc(3202).toString('base64') }]) assert.throws(() => inputFrame(m));
@@ -63,7 +64,7 @@ test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency
     ws.send(JSON.stringify({ type: 'audio', data: Buffer.alloc(1280).toString('base64') }));
     await new Promise(r => setTimeout(r, 10)); assert.equal(sent[0].realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');
     provider.emit('message', Buffer.from(JSON.stringify({ toolCall: { functionCalls: [{ id: 'call-1', name: 'ask_technical', args: { question: 'check', unit: 'foreign' } }] } })));
-    await new Promise(r => setTimeout(r, 10)); assert.deepEqual(lookup.slice(0, 3), ['fixture', 'ZX200-5G', 'check']); assert.ok(clientMsgs.some(x => x.type === 'answer' && x.text === 'Authorized fixture answer with source')); assert.equal(sent[1].toolResponse.functionResponses[0].id, 'call-1');
+    await new Promise(r => setTimeout(r, 10)); assert.deepEqual(lookup.slice(0, 3), ['fixture', 'ZX200-5G', 'check']); assert.ok(clientMsgs.some(x => x.type === 'searching')); assert.ok(clientMsgs.some(x => x.type === 'answer' && x.text === 'Authorized fixture answer with source')); assert.equal(sent[1].toolResponse.functionResponses[0].id, 'call-1');
     const closed = once(ws, 'close'); ws.send('{"type":"stop"}'); await closed; assert.equal(provider.readyState, 3);
   } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
 });
