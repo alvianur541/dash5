@@ -204,7 +204,7 @@ export function useChat(user: User, isOnline: boolean) {
 
     const persist = (fullText: string) => {
       if (loadSessionTombstones(user.uid)[sessionId]) return;
-      const assistantMessage: Message = { id: crypto.randomUUID(), role: 'assistant', content: fullText, timestamp: Date.now() };
+      const assistantMessage: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs };
       const messagesForStorage = [...currentMessages, userMessage, assistantMessage];
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };

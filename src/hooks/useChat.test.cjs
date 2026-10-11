@@ -7,32 +7,45 @@ const path = require('node:path');
 // Offline hook harness: real useChat, fixture React scheduler and network promises.
 async function harness() {
   let slot = 0;
-  const slots = [], effects = [], requests = [];
+  const slots = [], effects = [], requests = [], saved = [];
   const fixture = {
     useRef(value) { const i = slot++; return slots[i] ??= { current: value }; },
     useState(value) { const i = slot++; if (!(i in slots)) slots[i] = value; return [slots[i], v => { slots[i] = typeof v === 'function' ? v(slots[i]) : v; }]; },
     useCallback(fn, deps) { const i = slot++; if (!slots[i] || deps.some((d, n) => d !== slots[i].deps[n])) slots[i] = { fn, deps }; return slots[i].fn; },
     useEffect(fn, deps) { const i = slot++; if (!slots[i] || deps.some((d, n) => d !== slots[i][n])) { slots[i] = deps; effects.push(fn); } },
     fetchSessionData(id) { return new Promise(resolve => requests.push({ id, resolve })); },
+    saveSession(_userId, _sessionId, _model, messages) { saved.push(messages); return []; },
   };
   const stubs = {
     react: 'export const {useRef,useState,useCallback,useEffect}=globalThis.fixture;',
     '../services/supabase': 'export const fetchSessionData=globalThis.fixture.fetchSessionData; export const fetchUserSessionList=async()=>null; export const saveOrUpdateChatSession=()=>{}; export const deleteChatSession=()=>{}; export const deleteAllChatSessions=async()=>true;',
     '../services/ai': 'export const warmupProxy=()=>{}; export const generateResponse=async()=>"fixture"; export const generateResponseStream=async()=>"fixture";',
-    '../services/storage': 'export const loadSessionData=()=>null; export const loadSessionList=()=>[]; export const loadSessionTombstones=()=>({}); export const pendingClearAt=()=>0; export const saveSession=()=>[]; export const deleteSessionData=()=>{}; export const deleteAllSessionData=()=>{}; export const listKey=()=>"fixture"; export const addSessionTombstones=()=>{}; export const setPendingClear=()=>{}; export const clearPendingClear=()=>{};',
+    '../services/storage': 'export const loadSessionData=()=>null; export const loadSessionList=()=>[]; export const loadSessionTombstones=()=>({}); export const pendingClearAt=()=>0; export const saveSession=globalThis.fixture.saveSession; export const deleteSessionData=()=>{}; export const deleteAllSessionData=()=>{}; export const listKey=()=>"fixture"; export const addSessionTombstones=()=>{}; export const setPendingClear=()=>{}; export const clearPendingClear=()=>{};',
     '../lib/onForeground': 'export const onForeground=()=>()=>{};',
   };
   const compiled = await build({ entryPoints: [path.join(__dirname, 'useChat.ts')], bundle: true, write: false, platform: 'node', format: 'cjs', plugins: [{ name: 'fixtures', setup(b) {
     b.onResolve({ filter: /.*/ }, args => args.path in stubs ? { path: args.path, namespace: 'fixture' } : undefined);
     b.onLoad({ filter: /.*/, namespace: 'fixture' }, args => ({ contents: stubs[args.path] }));
   } }] });
-  const ctx = { module: { exports: {} }, fixture, console, AbortController, setTimeout, clearTimeout, navigator: { onLine: true }, localStorage: { setItem() {} } };
+  const ctx = { module: { exports: {} }, fixture, console, AbortController, setTimeout, clearTimeout, crypto: require('node:crypto'), performance, document: { hidden: true }, navigator: { onLine: true }, localStorage: { setItem() {} } };
   vm.runInNewContext(compiled.outputFiles[0].text, ctx);
   const user = { uid: 'fixture-user' };
   const render = () => { slot = 0; const hook = ctx.module.exports.useChat(user, true); while (effects.length) effects.shift()(); return hook; };
   render();
-  return { render, requests };
+  return { render, requests, saved };
 }
+
+test('visible completed answer preserves the same persisted message ID for illustration lookup', async () => {
+  const h = await harness();
+  assert.equal(h.render().handleSendMessage('Jelaskan konsep belajar'), true);
+  for (let i = 0; i < 100 && !h.saved.length; i++) await new Promise(r => setTimeout(r, 5));
+  await new Promise(r => setTimeout(r, 5));
+  const visible = h.render().messages.find(m => m.role === 'assistant');
+  const persisted = h.saved[0]?.find(m => m.role === 'assistant');
+  assert.ok(visible); assert.ok(persisted);
+  assert.equal(visible.id, persisted.id);
+  assert.equal(visible.content, persisted.content);
+});
 
 test('A to B to A navigation rejects the first stale A response', async () => {
   const h = await harness();

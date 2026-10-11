@@ -13,6 +13,8 @@ import type { AgentEvent } from '../types';
 import { tidyStreamingTail } from '../lib/streamPacer';
 
 const Markdown = lazy(() => import('./Markdown'));
+const ImageIllustration = lazy(() => import('./ImageIllustration').then(m => ({ default: m.ImageIllustration })));
+const IMAGE_GENERATION_ENABLED = import.meta.env.VITE_IMAGE_GENERATION_ENABLED !== 'false';
 
 export function stripLatex(text: string): string {
   const clean = (s: string) =>
@@ -246,6 +248,7 @@ interface ChatWindowProps {
   onTogglePocket?: (messageId: string) => void;
   onResend?: (text: string) => void;
   loadingSession?: boolean;
+  sessionId?: string | null;
 }
 
 const TOOL_LABELS: Record<string, string> = {
@@ -340,7 +343,7 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
 });
 
 const MessageItem = memo(function MessageItem({
-  message, feedback, onFeedback, isStreaming = false, onSaveTable, inPocket = false, onTogglePocket, resendText, onResend,
+  message, feedback, onFeedback, isStreaming = false, onSaveTable, inPocket = false, onTogglePocket, resendText, onResend, illustrationSessionId,
 }: {
   message: Message;
   feedback: 'up' | 'down' | null;
@@ -351,6 +354,7 @@ const MessageItem = memo(function MessageItem({
   onTogglePocket?: (messageId: string) => void;
   resendText?: string;
   onResend?: (text: string) => void;
+  illustrationSessionId?: string;
 }) {
   const isCut = message.role === 'assistant' && CUT_NOTE_RE.test(message.content);
   const contentRef = useRef(message.content);
@@ -406,6 +410,12 @@ const MessageItem = memo(function MessageItem({
             </button>
           )}
 
+          {illustrationSessionId && !isStreaming && !isCut && (
+            <Suspense fallback={null}>
+              <ImageIllustration key={`${illustrationSessionId}:${message.id}`} sessionId={illustrationSessionId} messageId={message.id} />
+            </Suspense>
+          )}
+
           <div className="ai-actions">
             <button className="action-btn" title="Respons bagus" aria-label="Respons bagus" aria-pressed={feedback === 'up'}
               onClick={() => onFeedback(message.id, 'up')}>
@@ -434,7 +444,7 @@ const MessageItem = memo(function MessageItem({
 });
 
 export function ChatWindow({
-  messages, isTyping, isStreaming, selectedModel, userName, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false,
+  messages, isTyping, isStreaming, selectedModel, userName, agentEvents = [], pocketIds, onTogglePocket, onResend, loadingSession = false, sessionId,
 }: ChatWindowProps) {
   const { user } = useAuth();
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -600,6 +610,7 @@ export function ChatWindow({
               <MessageItem
                 key={message.id}
                 message={message}
+                illustrationSessionId={IMAGE_GENERATION_ENABLED && user && sessionId ? sessionId : undefined}
                 feedback={feedback[message.id] ?? null}
                 onFeedback={handleFeedback}
                 isStreaming={showCursor}

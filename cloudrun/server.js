@@ -35,6 +35,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 registerMetrics(app);
 
 registerTranscribe(app, { verifyToken, rateLimit, bigJson });
+require('./server/image-generation').registerImageGeneration(app, { verifyToken: [verifyToken, rateLimit] });
 
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
