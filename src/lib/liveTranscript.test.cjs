@@ -42,6 +42,27 @@ test('tool answer without spoken text still creates an assistant bubble', () => 
   assert.deepEqual(t.answer('Rp 1').map(m => [m.role, m.content]), [['assistant', 'Rp 1']]);
 });
 
+test('spoken numbers and unit names in transcripts become digits like the text chat', () => {
+  const { tidyTranscript } = mod.exports;
+  const cases = [
+    ['Siap, kita bahas data untuk unit ZXdua ratus dash lima G saat servis dua ribu jam ya.', 'Siap, kita bahas data untuk unit ZX200-5G saat servis 2.000 jam ya.'],
+    ['Bisa cek spesifikasi untuk unit ZX dua ratus dash lima G.', 'Bisa cek spesifikasi untuk unit ZX200-5G.'],
+    ['part number sembilan dua empat delapan tujuh nol enam H-P-B harganya dua puluh dua juta empat ratus empat puluh tujuh ribu delapan ratus rupiah.', 'part number 9248706HPB harganya 22.447.800 rupiah.'],
+    ['Tekanannya tiga koma sembilan MPa.', 'Tekanannya 3,9 MPa.'],
+    ['Unit ZW seratus empat puluh dan ZX empat puluh delapan U dash lima A.', 'Unit ZW140 dan ZX48U-5A.'],
+    ['ZX seratus tiga puluh delapan MF dash lima G, ZX enam puluh lima USB dash lima A.', 'ZX138MF-5G, ZX65USB-5A.'],
+    ['Panjang totalnya sembilan ribu enam ratus enam puluh milimeter, sebelas liter, dua belas baut.', 'Panjang totalnya 9.660 milimeter, 11 liter, 12 baut.'],
+    ['Satu kalimat saja, dua langkah.', 'Satu kalimat saja, dua langkah.'],
+  ];
+  for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
+});
+
+test('assistant bubble shows tidied numbers while streaming', () => {
+  const t = createLiveTranscript(() => 'a', () => 1);
+  t.apply({ outputTranscription: { text: 'Unit ZX dua ratus dash ' } });
+  assert.equal(t.apply({ outputTranscription: { text: 'lima G siap.' } })[0].content, 'Unit ZX200-5G siap.');
+});
+
 test('empty or missing transcription is ignored', () => {
   const t = createLiveTranscript(() => 'x', () => 1);
   assert.deepEqual(t.apply({}), []);
