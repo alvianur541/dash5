@@ -90,7 +90,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
             try {
               const r = JSON.parse(raw.toString());
               if (r.setupComplete) { ready = true; stage = 'live'; clearTimeout(setupTimer); console.info('[live] ready user=%s ms=%d', user.slice(0, 8), Date.now() - t0); send({ type: 'ready' }); }
-              if (r.serverContent) { if (r.serverContent.turnComplete) consecutive = 0; send({ type: 'content', content: r.serverContent }); }
+              if (r.serverContent) { touch(); if (r.serverContent.turnComplete) consecutive = 0; send({ type: 'content', content: r.serverContent }); }
               for (const id of r.toolCallCancellation?.ids || []) { calls.get(id)?.abort(); calls.delete(id); }
               for (const call of r.toolCall?.functionCalls || []) {
                 const ctrl = new AbortController(); calls.set(call.id, ctrl);
