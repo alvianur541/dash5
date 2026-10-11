@@ -1,0 +1,119 @@
+{
+  "diagram": {
+    "title": "Pemecahan Masalah Lampu Meja Tidak Menyala",
+    "nodes": [
+      {
+        "id": "A1",
+        "label": "Mulai dengan mematikan saklar",
+        "type": "start"
+      },
+      {
+        "id": "B1",
+        "label": "Periksa apakah steker terpasang?",
+        "type": "decision"
+      },
+      {
+        "id": "C1",
+        "label": "Pasang steker",
+        "type": "process"
+      },
+      {
+        "id": "D1",
+        "label": "Periksa apakah bohlam terlihat rusak?",
+        "type": "decision"
+      },
+      {
+        "id": "E1",
+        "label": "Minta petugas mengganti bohlam saat daya terputus",
+        "type": "process"
+      },
+      {
+        "id": "F1",
+        "label": "Hentikan pemeriksaan dan hubungi petugas",
+        "type": "process"
+      },
+      {
+        "id": "G1",
+        "label": "Uji lampu: Apakah lampu menyala?",
+        "type": "decision"
+      },
+      {
+        "id": "H1",
+        "label": "Selesai",
+        "type": "end"
+      }
+    ],
+    "edges": [
+      {
+        "from": "A1",
+        "to": "B1",
+        "label": ""
+      },
+      {
+        "from": "B1",
+        "to": "C1",
+        "label": "Tidak"
+      },
+      {
+        "from": "B1",
+        "to": "D1",
+        "label": "Ya"
+      },
+      {
+        "from": "C1",
+        "to": "G1",
+        "label": ""
+      },
+      {
+        "from": "D1",
+        "to": "E1",
+        "label": "Ya"
+      },
+      {
+        "from": "D1",
+        "to": "F1",
+        "label": "Tidak"
+      },
+      {
+        "from": "E1",
+        "to": "G1",
+        "label": ""
+      },
+      {
+        "from": "G1",
+        "to": "H1",
+        "label": "Ya"
+      },
+      {
+        "from": "G1",
+        "to": "F1",
+        "label": "Tidak"
+      }
+    ],
+    "sources": []
+  },
+  "provenance": {
+    "kind": "genuine-gemini-generation",
+    "model": "gemini-3.7-flash",
+    "generatedAt": "2026-10-11T08:05:42.065Z",
+    "retrieval": "none; authored generic test input, not official manual",
+    "usage": {
+      "promptTokenCount": 542,
+      "candidatesTokenCount": 626,
+      "totalTokenCount": 1168,
+      "trafficType": "ON_DEMAND",
+      "promptTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 542
+        }
+      ],
+      "candidatesTokensDetails": [
+        {
+          "modality": "TEXT",
+          "tokenCount": 626
+        }
+      ]
+    }
+  }
+}
