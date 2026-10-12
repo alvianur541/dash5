@@ -44,7 +44,7 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
 // Empty allowlist denies all; '*' admits any verified account, never anonymous users.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && (allowed.has('*') || allowed.has(userId)); }
-function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
+function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask, store, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -62,7 +62,9 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
     const stop = (message, reason = message ? 'server' : 'closed') => {
       if (stopped) return; stopped = true;
       console.info('[live] end user=%s ms=%d stage=%s reason=%s msg=%s upstream=%s tools=%d audioKB=%d', (user || '-').slice(0, 8), Date.now() - t0, stage, reason, message || '-', upClose || '-', totalTools, Math.round(audioBytes / 1024));
-      usageLog({ session_id: sessionId, user_prefix: user ? user.slice(0, 8) : null, model: 'gemini-3.8-live', unit: selectedUnit, duration_ms: Date.now() - t0, ready, tools: totalTools, reason, stage, ...usage.summary() });
+      const row = { session_id: sessionId, user_prefix: user ? user.slice(0, 8) : null, model: 'gemini-3.8-live', unit: selectedUnit, duration_ms: Date.now() - t0, ready, tools: totalTools, reason, stage, ...usage.summary() };
+      usageLog(row);
+      if (ready && store) Promise.resolve().then(() => store(req, row)).catch(() => {});
       if (message) send({ type: 'error', message });
       clearTimeout(auth); clearTimeout(verify); clearTimeout(idle); clearTimeout(max);
       for (const c of calls.values()) c.abort(); calls.clear();

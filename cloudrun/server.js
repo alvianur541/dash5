@@ -11,7 +11,7 @@ setGlobalDispatcher(new Agent({
 const orch = require('./dist/orchestrator.cjs');
 const { rateLimit, securityHeaders, verifyToken } = require('./server/auth');
 const { ALLOWED_MODELS, BASE64_RE, HISTORY_MAX_CHARS, HISTORY_MAX_MSG, IMAGE_MAX_BYTES, IMAGE_MIME_ALLOWED, REQUEST_DEADLINE_MS, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, UPSTREAM_TIMEOUT_MS, imageMagicMatches } = require('./server/config');
-const { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
+const { _stat, catatLive, catatPemakaian, catatStat, registerMetrics, ringkasTanya } = require('./server/observability');
 const { cohereRerank, embedQuery, getAccessToken, googleRerank, vertexFetch } = require('./server/upstream');
 const registerTranscribe = require('./server/transcribe');
 
@@ -225,7 +225,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       m.fallbackTo ? ` fallback=${m.fallbackTo}${m.fallbackSebab ? `(${m.fallbackSebab})` : ''}` : '');
     catatPemakaian(req, {
       requestId, userName, unit, usage: deps.usage, meta: m,
-      ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId : null,
+      ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId : null, source: b.source === 'live' ? 'live' : undefined,
     });
     catatStat(_stat.req, {
       t: Date.now(), ttft, total: totalMs, unit, route: m.route || '-',
@@ -259,11 +259,11 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
 const PORT = process.env.PORT || 8080;
 const server = require('node:http').createServer(app);
 require('./server/live-voice').registerLiveVoice(server, {
-  verifyToken, units: ASK_MODELS,
+  verifyToken, units: ASK_MODELS, store: catatLive,
   ask: async (token, unit, question, signal, history) => {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/ask`, {
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: unit, userInput: question, history }),
+      body: JSON.stringify({ model: unit, userInput: question, history, source: 'live' }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
     });
     if (!response.ok) throw new Error('Technical agent unavailable');

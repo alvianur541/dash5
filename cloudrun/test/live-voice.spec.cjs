@@ -47,7 +47,7 @@ test('allowlist rejects other accounts before any provider session', async () =>
   assert.equal(liveAllowed('', new Set(['*'])), false);
   assert.equal(liveAllowed(undefined, new Set(['*'])), false);
   const server = http.createServer(); let connects = 0;
-  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['owner']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, _res, next) => { req.authUser = { id: 'other' }; req.authToken = 'x'; next(); }, connect: async () => { connects++; } });
+  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['owner']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, _res, next) => { req.authUser = { id: 'other' }; req.authToken = 'x'; next(); }, connect: async () => { connects++; }, store: () => { throw new Error('unready sessions must not be stored'); } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
   try {
@@ -92,8 +92,8 @@ test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency
   const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');
   const server = http.createServer(); const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
   const sent = []; provider.send = x => sent.push(JSON.parse(x)); provider.terminate = () => { provider.readyState = 3; };
-  let bound; let lookup; const usageLogs = [];
-  const wss = registerLiveVoice(server, { usageLog: row => usageLogs.push(row), enabled: true, allowed: new Set(['user1']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
+  let bound; let lookup; const usageLogs = []; const stored = [];
+  const wss = registerLiveVoice(server, { usageLog: row => usageLogs.push(row), store: (rq, row) => stored.push([rq.authToken, row.session_id]), enabled: true, allowed: new Set(['user1']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], verifyToken: (req, res, next) => { if (req.headers.authorization !== 'Bearer fixture') return res.status(401).json({}); req.authUser = { id: 'user1' }; req.authToken = 'fixture'; next(); }, connect: async unit => { bound = unit; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; }, ask: async (...args) => { lookup = args; return 'Authorized fixture answer with source'; } });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
   const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
   try {
@@ -113,7 +113,7 @@ test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency
     provider.emit('message', Buffer.from(JSON.stringify({ usageMetadata, serverContent: { turnComplete: true } })));
     provider.emit('message', Buffer.from(JSON.stringify({ usageMetadata, serverContent: { turnComplete: true } })));
     const closed = once(ws, 'close'); ws.send('{"type":"stop"}'); await closed; assert.equal(provider.readyState, 3);
-    assert.equal(usageLogs.length, 1);
+    assert.equal(usageLogs.length, 1); assert.deepEqual(stored, [['fixture', usageLogs[0].session_id]]);
     const row = usageLogs[0];
     assert.match(row.session_id, /^[0-9a-f-]{36}$/);
     assert.equal(row.user_prefix, 'user1'); assert.equal(row.unit, 'ZX200-5G');

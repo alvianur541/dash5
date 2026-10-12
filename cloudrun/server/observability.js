@@ -98,7 +98,7 @@ function barisPemakaian(req, d, pakaiKolomBaru) {
     input_tokens: d.usage.input,
     output_tokens: d.usage.output,
     llm_calls: d.usage.calls,
-    tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed].filter(Boolean),
+    tools_used: [d.meta.route, d.meta.confidence, d.meta.modelUsed, d.source === 'live' && 'live_tool'].filter(Boolean),
     cost_usd: Number(d.biaya.toFixed(6)),
     cost_idr: Math.round(d.biaya * KURS_IDR),
   };
@@ -157,4 +157,21 @@ async function catatPemakaian(req, d) {
   }
 }
 
-module.exports = { _stat, catatPemakaian, catatStat, registerMetrics, ringkasTanya };
+const LIVE_COLS = ['session_id', 'model', 'unit', 'duration_ms', 'ready', 'tools', 'reason', 'billed_turns', 'prompt_tokens', 'response_tokens', 'thoughts_tokens', 'input_tokens', 'output_tokens', 'cost_idr', 'cost_complete'];
+// One row per closed Live session, written with the caller's JWT (RLS: own NIK only).
+async function catatLive(req, u) {
+  const nik = (req.authUser && req.authUser.email || '').split('@')[0];
+  if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken || !nik) return;
+  const row = { session_id: u.session_id, user_nik: nik };
+  for (const k of LIVE_COLS.slice(1)) row[k] = u[k] ?? null;
+  try {
+    const r = await fetch(`${SUPABASE_URL.replace(/\/+$/, '')}/rest/v1/live_sessions`, {
+      method: 'POST',
+      headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${req.authToken}`, 'Content-Type': 'application/json', Prefer: 'return=minimal' },
+      body: JSON.stringify(row), signal: AbortSignal.timeout(5_000),
+    });
+    if (!r.ok) console.warn('[live-store] tolak HTTP %d: %s', r.status, (await r.text().catch(() => '')).slice(0, 200));
+  } catch (err) { console.warn('[live-store] gagal simpan: %s', err && err.message); }
+}
+
+module.exports = { _stat, catatLive, catatPemakaian, catatStat, registerMetrics, ringkasTanya };

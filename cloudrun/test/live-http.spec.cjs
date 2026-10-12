@@ -27,7 +27,7 @@ test('offline Aziz photo-analysis history seeds provider before ready and reache
  });
  const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
  const sent = []; provider.send = x => sent.push(JSON.parse(x)); provider.terminate = () => { provider.readyState = 3; };
- let server, wss, headers, selected, question, history;
+ let server, wss, headers, selected, question, history; const sources = [];
  const prior = [{ role: 'assistant', content: 'Analisis foto: kode 11208-04. ' + 'rincian '.repeat(1800) + 'Periksa konektor sesuai analisis sebelumnya.' }];
  vm.runInNewContext(fs.readFileSync(path.resolve(__dirname, '../server.js'), 'utf8'), {
   console, process, fetch, AbortController, AbortSignal, TextDecoder, setTimeout, clearTimeout,
@@ -48,7 +48,7 @@ test('offline Aziz photo-analysis history seeds provider before ready and reache
    } };
    if (name === '@supabase/postgrest-js') return { PostgrestClient: class { constructor(_url, opts) { headers = opts.headers; } } };
    if (name === './server/upstream') return { ...real(name), getAccessToken: async () => 'offline' };
-   if (name === './server/observability') return { ...real(name), catatPemakaian() {} };
+   if (name === './server/observability') return { ...real(name), catatPemakaian(_r, d) { sources.push(d.source); }, catatLive() {} };
    return real(name);
   },
  });
@@ -83,6 +83,7 @@ test('offline Aziz photo-analysis history seeds provider before ready and reache
   assert.equal(history.at(-1).role,'assistant');
   assert.equal(history.at(-1).content,'Offline grounded answer (Fixture Manual — Test).');
   assert.equal(history.at(-2).content,'yang di atas itu');
+  assert.deepEqual(sources, ['live', 'live']);
   const interrupted = once(ws, 'message'); provider.emit('message', Buffer.from('{"serverContent":{"interrupted":true}}'));
   assert.equal(JSON.parse((await interrupted)[0]).content.interrupted, true);
   const closed = once(ws, 'close'); ws.send('{"type":"stop"}'); await closed; assert.equal(provider.readyState, 3);
