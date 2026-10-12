@@ -62,6 +62,8 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
   const add = (role: Message['role'], text?: string): Message[] => {
     if (!text) return [];
     if (role === 'assistant' && locked) return [];
+    // The read-out of an exact answer stays hidden until the technician speaks again.
+    if (role === 'user') locked = false;
     if (!open || open.role !== role) { open = { id: newId(), role, content: '', timestamp: now() }; raw = ''; }
     raw += text;
     open = { ...open, content: tidyTranscript(raw) };
@@ -70,7 +72,7 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
   return {
     apply(c: LiveContent): Message[] {
       const changed = [...add('user', c.inputTranscription?.text), ...add('assistant', c.outputTranscription?.text)];
-      if (c.turnComplete || c.interrupted) { open = null; raw = ''; locked = false; }
+      if (c.turnComplete || c.interrupted) { open = null; raw = ''; }
       return changed;
     },
     // Exact tool text (digits, PN, tables) replaces the spoken transcript for this turn.

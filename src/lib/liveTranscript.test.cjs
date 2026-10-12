@@ -34,7 +34,24 @@ test('tool answer replaces spoken transcript with exact digits and locks the tur
   assert.deepEqual(t.answer('Harga `9248706HPB` Rp 22.447.800').map(m => [m.id, m.content]), [['id2', 'Harga `9248706HPB` Rp 22.447.800']]);
   assert.deepEqual(t.apply({ outputTranscription: { text: 'sembilan dua empat' } }), []);
   t.apply({ turnComplete: true });
-  assert.equal(t.apply({ outputTranscription: { text: 'Ada lagi?' } })[0].id, 'id3');
+  assert.deepEqual(t.apply({ outputTranscription: { text: 'Ada lagi?' } }), []);
+  t.apply({ inputTranscription: { text: 'Lalu?' } });
+  assert.equal(t.apply({ outputTranscription: { text: 'Cek' } })[0].role, 'assistant');
+});
+
+test('flywheel 12 Oct: spoken read-out after an exact answer adds no second bubble, even across turn ends', () => {
+  let n = 0;
+  const t = createLiveTranscript(() => `id${++n}`, () => 1);
+  t.apply({ inputTranscription: { text: 'Cek torsi untuk baut flywheel engine.' } });
+  t.apply({ outputTranscription: { text: 'Oke, aku carikan dulu ya.' } });
+  t.answer('Flywheel Bolt Torque: `197–240 N·m`');
+  t.apply({ turnComplete: true });
+  assert.deepEqual(t.apply({ outputTranscription: { text: 'kencangkan menyilang pakai pola bintang.' } }), []);
+  t.apply({ turnComplete: true });
+  assert.deepEqual(t.apply({ outputTranscription: { text: 'Detailnya sudah di layar.' } }), []);
+  const next = t.apply({ inputTranscription: { text: 'Kalau crankshaft?' } });
+  assert.equal(next[0].role, 'user');
+  assert.equal(t.apply({ outputTranscription: { text: 'Oke' } }).length, 1);
 });
 
 test('tool answer without spoken text still creates an assistant bubble', () => {
