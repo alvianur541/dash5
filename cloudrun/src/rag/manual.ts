@@ -158,7 +158,7 @@ const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
   { re: /\bcharg(?:e|ing)\b/i, line: 'charg(?:e|ing)[^\\n]{0,30}?pressure|low[- ]pressure relief', word: 'pressure' },
   { re: /\bpressure\b/i, line: 'pressure', word: 'pressure' },
   { re: /\bflow\b/i, line: 'flow rate|flow', word: 'flow' },
-  { re: /\bcapacit(?:y|ies)\b/i, line: 'capacity', word: 'capacit' },
+  { re: /\b(?:ampere|amper|amps?|ah|capacit(?:y|ies))\b/i, line: 'capacity', word: 'capacit' },
   { re: /\btorque\b/i, line: 'torque|tightening', word: 'torque' },
   { re: /\b(?:speed|rpm)\b/i, line: 'speed|rpm', word: 'speed' },
   { re: /\bvoltage\b/i, line: 'voltage', word: 'voltage' },
@@ -168,12 +168,15 @@ const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
   { re: /\bclearance\b/i, line: 'clearance', word: 'clearance' },
   { re: /\bdisplacement\b/i, line: 'displacement', word: 'displacement' },
 ];
-const SPEC_UNIT = '(?:MPa|kPa|bar|psi|kgf/cm|L/min|N·m|Nm|kgf·m|mm|cm3|cm³|mL|L|kg|rpm|min-1|min⁻¹|km/h|V|Ω|ohm|mA|A|°C|kW)';
+const SPEC_UNIT = '(?:MPa|kPa|bar|psi|kgf/cm|L/min|N·m|Nm|kgf·m|mm|cm3|cm³|mL|L|kg|rpm|min-1|min⁻¹|km/h|V|Ω|ohm|mA|Ah|A|°C|kW)';
+// Workshop words technicians use for a component that the manuals name in English.
+const SPEC_ID_EN: Record<string, string> = { aki: 'battery', baterai: 'battery', accu: 'battery' };
 const SPEC_NOT_COMPONENT = new Set([
   'pressure', 'relief', 'charge', 'charging', 'flow', 'rate', 'capacity', 'torque', 'speed', 'rpm', 'voltage', 'resistance',
   'current', 'temperature', 'clearance', 'displacement', 'value', 'values', 'standard', 'specification', 'spec', 'set',
   'setting', 'check', 'measure', 'measurement', 'normal', 'maximum', 'minimum', 'max', 'min', 'nominal', 'rated', 'mpa',
   'kpa', 'bar', 'psi', 'what', 'how', 'much', 'the', 'and', 'for', 'of', 'unit', 'machine', 'test', 'delivery', 'valve',
+  'ampere', 'amper', 'amp', 'amps', 'rating', 'berapa', 'brp', 'yang', 'cek',
 ]);
 
 // A spec value is one "Relief Valve Set Pressure ....44.6 MPa" line in a chunk titled for something else (ZW140 HST specs sit under "BATTERY").
@@ -181,6 +184,7 @@ export async function findSpecLines(model: string, query: string, have: string):
   const attr = SPEC_ATTRS.find(a => a.re.test(query));
   if (!attr || !sb() || !wantsNumeric(query)) return null;
   const comp = query.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
+    .map(w => w.replace(/(?<=..)(?:nya|ny)$/, '')).map(w => SPEC_ID_EN[w] ?? w)
     .filter(w => w.length >= 3 && !/^\d/.test(w) && !SPEC_NOT_COMPONENT.has(w)).slice(0, 3);
   if (!comp.length) return null;
   const valueRe = new RegExp(`(?:${attr.line})[^\\n]{0,80}?\\d[\\d.,±~\\-–]*\\s*${SPEC_UNIT}(?![a-z])`, 'gi');

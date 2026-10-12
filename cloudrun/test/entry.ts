@@ -18,7 +18,7 @@ export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/r
 export { extractCatalogCode } from '../src/rag';
 export { computeConfidence, rerankDocs, mmrSelect } from '../src/rag/rerank';
 export { wantsNumeric, rankAndSelect } from '../src/rag/retrieve';
-export { resolveNaturalLanguageQuery } from '../src/routes';
+export { resolveNaturalLanguageQuery, unitFeatureIntent } from '../src/routes';
 export { promoAktif, tanpaHargaDb, hargaPromo, bersihkanPromoLama, PROMO_BERAKHIR, PROMO_KATEGORI, PROMO_KATEGORI_LAMA } from '../src/promo';
 export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';
 export { BUKAN_HARGA_SAJA_RE } from '../src/harga';

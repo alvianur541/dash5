@@ -54,5 +54,17 @@ module.exports = async function () {
     t(r === null, 'skor reranker rendah (LOW) → tidak disisipkan');
   }
 
+  {
+    // Real chunks 7704 (ZX48U-5A) / 8264 (ZX200-5G): "akinya berapa ampere" went to the web on 12 Oct.
+    const AKI = 'Section: SPECIFICATIONS - ELECTRICAL\nModel: ZX48U-5A\nBATTERY Type 115D31L-MF\nVoltage 12 V\nCapacity 72 Ah or more (5-Hour Rate)';
+    for (const q of ['battery ampere capacity', 'akinya berapa ampere', 'battery Ah rating']) {
+      const calls = [];
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.5) });
+      const r = await runWithDeps(d, () => findSpecLines('ZX48U-5A', q, ''));
+      t(r === AKI, `aki/battery Ah ketemu dari manual: "${q}"`);
+      t(calls.some(c => c[0] === 'ilike' && c[1] === '%battery%') && !calls.some(c => c[0] === 'ilike' && /ampere|akinya|%ah%|rating/.test(c[1])), `komponen = battery, bukan kata satuan (${q})`);
+    }
+  }
+
   return done();
 };

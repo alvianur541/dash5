@@ -171,13 +171,14 @@ export const SPEC_TERMS = new Set([
   'displacement', 'capacity', 'kapasitas', 'rpm', 'voltage', 'tegangan',
   'resistance', 'flow', 'dimension', 'dimensi', 'gap', 'speed',
   'diameter', 'dia', 'length', 'panjang', 'width', 'lebar', 'height', 'tinggi',
-  'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore',
+  'thickness', 'tebal', 'size', 'ukuran', 'stroke', 'depth', 'bore', 'ampere', 'amper', 'ah',
 ]);
 
 export function expandQuery(query: string): string {
   const seen = new Set<string>();
   const extras: string[] = [];
-  for (const w of query.toLowerCase().split(/\s+/)) {
+  for (const raw of query.toLowerCase().split(/\s+/)) {
+    const w = EXPAND[raw] ? raw : raw.replace(/(?<=...)(?:nya|ny)$/, '');
     const exp = EXPAND[w];
     if (!exp) continue;
     for (const tok of exp.split(/\s+/)) {

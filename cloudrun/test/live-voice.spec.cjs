@@ -33,6 +33,10 @@ test('Live answers immediately while the search runs in parallel, with friendly 
  assert.doesNotMatch(p, /"(siap|waduh)/i);
  assert.match(p, /jangan.*(waduh|siap)/i); assert.match(p, /HASIL ALAT/); assert.match(p, /tanpa bicara dulu/i);
 });
+test('misheard workshop terms are confirmed or searched again, never answered "no data" twice', () => {
+ const p = makeSetup('p', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text;
+ assert.match(p, /flywheel/); assert.match(p, /salah dengar/i); assert.match(p, /cari lagi[^.]*WAJIB panggil ask_technical/i);
+});
 test('rejects arbitrary provider frames and oversized or odd PCM', () => {
   for (const m of [{ setup: {} }, { type: 'audio', data: Buffer.alloc(641).toString('base64') }, { type: 'audio', data: Buffer.alloc(3202).toString('base64') }]) assert.throws(() => inputFrame(m));
   assert.equal(inputFrame({ type: 'audio', data: Buffer.alloc(1280).toString('base64') }).realtimeInput.audio.mimeType, 'audio/pcm;rate=16000');

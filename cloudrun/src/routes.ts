@@ -444,6 +444,13 @@ export function docKategoriFor(text: string, model: UnitModel): { kategori: stri
   return { kategori, available: modelHasSource(model, kategori) };
 }
 
+const UNIT_FEATURE_RE = /\b(?:kelebihan\w*|keunggulan\w*|unggulan|advantages?|strengths?|selling\s+points?)\b/i;
+// "Kelebihan unit ini" is a brochure question; the intent model sometimes calls it chat and asks the user to resend (12 Oct).
+export function unitFeatureIntent<T extends { searchType: string; shouldSearch: boolean; optimizedQuery: string }>(text: string, intent: T): T {
+  if (intent.shouldSearch || intent.searchType === 'off_topic' || !UNIT_FEATURE_RE.test(text)) return intent;
+  return { ...intent, searchType: 'technical', shouldSearch: true, optimizedQuery: 'machine features advantages performance' };
+}
+
 export async function resolveNaturalLanguageQuery(
   trimmed: string,
   history: Message[],
@@ -457,7 +464,7 @@ export async function resolveNaturalLanguageQuery(
   }
 
   const resolved = questionFor(trimmed, history, model);
-  const intent = await analyzeIntent(resolved.text, history);
+  const intent = unitFeatureIntent(resolved.text, await analyzeIntent(resolved.text, history));
   if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
