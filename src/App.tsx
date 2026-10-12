@@ -80,7 +80,7 @@ export default function App() {
 
   return (
     <>
-    <div className="flex h-full overflow-hidden transition-colors duration-400 bg-[var(--bg-app)] text-[var(--text-primary)]">
+    <div className="relative flex h-full overflow-hidden transition-colors duration-400 bg-[var(--bg-app)] text-[var(--text-primary)]">
       <Sidebar
         selectedModel={selectedModel}
         onSelectModel={handleSelectModel}

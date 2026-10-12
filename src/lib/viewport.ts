@@ -8,6 +8,8 @@ export function trackVisualViewport(): void {
     root.style.setProperty('--app-h', `${Math.round(vv.height)}px`);
     if (vv.offsetTop > 0 || window.scrollY > 0) window.scrollTo(0, 0);
   };
+  // iOS ignores user-scalable=no in Safari; block pinch gestures directly.
+  document.addEventListener('gesturestart', e => e.preventDefault(), { passive: false });
   vv.addEventListener('resize', sync);
   vv.addEventListener('scroll', sync);
   sync();

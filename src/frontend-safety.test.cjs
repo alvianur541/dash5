@@ -45,9 +45,15 @@ test('failed partial answer is removed before a later successful turn can persis
   assert.match(read('hooks/useChat.ts'), /filter\(m => m\.id !== assistantId\)/);
 });
 
-test('viewport permits zoom and editable inputs use 16px', () => {
-  assert.doesNotMatch(read('../index.html'), /maximum-scale|user-scalable/);
+test('PWA and mobile view are locked against pinch zoom and pull; editable inputs stay 16px', () => {
+  assert.match(read('../index.html'), /maximum-scale=1(\.0)?, user-scalable=no/);
+  assert.match(read('index.css'), /html \{[^}]*touch-action: pan-x pan-y;/);
+  assert.match(read('lib/viewport.ts'), /gesturestart/);
   for (const file of ['LoginPage', 'ChangePasswordDialog', 'MessageInput']) {
     assert.match(read(`components/${file}.tsx`), /text-\[16px\]/);
   }
+});
+
+test('mobile sidebar drawer is sized by the app container, not the iOS initial containing block', () => {
+  assert.match(read('App.tsx'), /<div className="relative flex h-full overflow-hidden/);
 });

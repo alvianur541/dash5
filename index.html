@@ -8,8 +8,8 @@
     <!-- interactive-widget=resizes-content: Android Chrome 108+ default-nya resizes-visual →
          input bar bisa KETUTUP keyboard. resizes-content = layout viewport menyusut saat
          keyboard muncul → input bar selalu naik di atas keyboard. iOS mengabaikan flag ini. -->
-    <!-- Editable controls use 16px text so focus does not require disabling pinch zoom. -->
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
+    <!-- Zoom locked (Alvian 12 Oct); editable controls stay 16px so iOS never auto-zooms on focus. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, interactive-widget=resizes-content" />
 
     <!-- PWA -->
     <meta name="theme-color" content="#0B0B0D" />

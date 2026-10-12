@@ -66,6 +66,7 @@ h1, h2, h3, .font-heading { font-family: var(--font-heading); }
 html {
   height: 100%;
   overflow: hidden;  overscroll-behavior: none;
+  touch-action: pan-x pan-y;
   background-color: var(--bg-app);
 }
 
