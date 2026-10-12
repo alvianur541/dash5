@@ -19,9 +19,9 @@ function modalities(details, expected) {
   return { tokens, valid: valid && sum(tokens) === expected && !tokens.UNKNOWN };
 }
 function normalize(metadata) {
-  const prompt = field(metadata, 'promptTokenCount'), response = field(metadata, 'responseTokenCount'), total = field(metadata, 'totalTokenCount');
+  const prompt = field(metadata, 'promptTokenCount'), response = field(metadata, 'responseTokenCount') ?? field(metadata, 'candidatesTokenCount'), total = field(metadata, 'totalTokenCount');
   const thoughts = field(metadata, 'thoughtsTokenCount') ?? 0, tools = field(metadata, 'toolUsePromptTokenCount') ?? 0, cached = field(metadata, 'cachedContentTokenCount') ?? 0;
-  const input = modalities(field(metadata, 'promptTokensDetails'), prompt), output = modalities(field(metadata, 'responseTokensDetails'), response);
+  const input = modalities(field(metadata, 'promptTokensDetails'), prompt), output = modalities(field(metadata, 'responseTokensDetails') ?? field(metadata, 'candidatesTokensDetails'), response);
   let valid = input.valid && output.valid && [total, thoughts, tools, cached].every(integer) && cached === 0;
   const extra = total - prompt - response;
   if (extra === thoughts && thoughts > 0 && tools === 0) output.tokens.TEXT += thoughts;

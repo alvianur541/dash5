@@ -112,3 +112,15 @@ test('separate turns may have decreasing context/output counts and must both be 
   assert.equal(usage.summary().cost_complete, true);
 });
 module.exports = { snapshot };
+
+test('Vertex Live candidatesTokenCount frame (captured 12 Oct 2026) is priced, not left unknown', () => {
+  const { createLiveUsage } = require('../server/live-usage');
+  const u = createLiveUsage();
+  u.observe({ serverContent: { modelTurn: { parts: [] } } });
+  u.observe({ usageMetadata: { promptTokenCount: 1267, candidatesTokenCount: 128, totalTokenCount: 1474, promptTokensDetails: [{ modality: 'TEXT', tokenCount: 1267 }], candidatesTokensDetails: [{ modality: 'AUDIO', tokenCount: 111 }, { modality: 'TEXT', tokenCount: 17 }], thoughtsTokenCount: 79 }, serverContent: { turnComplete: true } });
+  const s = u.summary();
+  assert.equal(s.response_tokens, 128);
+  assert.deepEqual(s.output_tokens, { TEXT: 96, AUDIO: 111, VIDEO: 0, IMAGE: 0 });
+  assert.ok(Math.abs(s.cost_usd - (1267 * 0.75 + 111 * 12 + 96 * 4.5) / 1e6) < 1e-12);
+  assert.equal(s.cost_complete, true);
+});
