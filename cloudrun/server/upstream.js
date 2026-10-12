@@ -239,6 +239,15 @@ async function cohereRerank(query, documents, topN) {
 
 const GOOGLE_RANK_TIMEOUT_MS = 4_000;
 
+// One retry for transient timeouts/5xx; 4xx and a second failure fall through to the backup.
+async function retryRank(fn) {
+  try { return await fn(); } catch (err) {
+    if (!(err.name === 'TimeoutError' || /timeout/i.test(err.message) || err.status >= 500)) throw err;
+    console.warn('[rerank] Google %s — coba sekali lagi', err.status || 'timeout');
+    return fn();
+  }
+}
+
 async function googleRerank(query, documents, topN) {
   if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
   const token = await getAccessToken();
@@ -246,6 +255,7 @@ async function googleRerank(query, documents, topN) {
     const title = (content.match(/^Section:[^\n]*/m) || [''])[0].slice(0, 200);
     return title ? { id: String(i), title, content } : { id: String(i), content };
   });
+  return retryRank(async () => {
   const upstream = await fetch(
     `https://discoveryengine.googleapis.com/v1/projects/${PROJECT_ID}/locations/global/rankingConfigs/default_ranking_config:rank`, {
       method: 'POST',
@@ -260,6 +270,7 @@ async function googleRerank(query, documents, topN) {
     throw e;
   }
   return (data.records || []).map(r => ({ index: Number(r.id), score: r.score ?? 0 }));
+  });
 }
 
-module.exports = { STALL_MAX, cohereRerank, embedQuery, fetchAntiMacet, getAccessToken, googleRerank, resolveUpstream, vertexFetch };
+module.exports = { STALL_MAX, cohereRerank, retryRank, embedQuery, fetchAntiMacet, getAccessToken, googleRerank, resolveUpstream, vertexFetch };

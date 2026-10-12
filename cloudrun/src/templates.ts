@@ -63,8 +63,9 @@ export const RERANK_DEGRADED_NOTE =
   '\n\n[PERINGATAN SISTEM — WAJIB DISAMPAIKAN] Mesin pemeringkat (reranker) sedang tidak bisa dihubungi, '
   + 'kemungkinan kena batas pemakaian. Data manual di bawah TETAP ASLI dan boleh dipakai, tapi URUTANNYA '
   + 'belum tersaring — chunk paling relevan bisa saja tidak di urutan pertama. '
-  + 'BUKA jawabanmu dengan satu kalimat singkat yang memberi tahu hal ini, lalu jawab seperti biasa. '
-  + 'Ingatkan sekali agar angka/PN penting diverifikasi ke manual. JANGAN mengarang untuk menutupi kekurangan urutan.';
+  + 'BUKA jawabanmu dengan satu kalimat singkat berbahasa awam, mis. "Pencarian manual sedang kurang optimal, jadi cek ulang angka penting ke manual ya", lalu jawab seperti biasa. '
+  + 'Jangan sebut istilah teknis sistem (reranker, mesin pemeringkat, chunk, server). '
+  + 'JANGAN mengarang untuk menutupi kekurangan urutan.';
 
 export function faultCodeNotFoundTemplate(faultQuery: string, model: string, lang: Lang = 'id'): string {
   if (lang === 'en') {
