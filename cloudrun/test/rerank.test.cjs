@@ -1,4 +1,4 @@
-const { computeConfidence, rerankDocs, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
+const { computeConfidence, rerankDocs, mmrSelect, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
 module.exports = async function () {
   const { t, done } = suite('rerank: Google utama, ambang keyakinan per sumber');
@@ -37,6 +37,16 @@ module.exports = async function () {
     const { d } = mockDeps([], { rerank: async () => ({ results: [], error: 'dua-duanya gagal' }) });
     const out = await runWithDeps(d, () => rerankDocs('q', ['a', 'b', 'c'], 2));
     t(!!out.error && out.docs.length === 2, 'semua reranker gagal → urutan asli dipakai + ditandai error');
+  }
+
+  {
+    const docs = [
+      { content: 'pump pressure relevant procedure one', score: 0.10 },
+      { content: 'pump pressure relevant procedure two', score: 0.09 },
+      { content: 'unrelated cabin radio', score: 0 },
+    ];
+    const out = mmrSelect(docs, 2, 0.7);
+    t(out[1].content.includes('pump pressure'), 'MMR tidak memilih dokumen skor nol hanya demi variasi');
   }
 
   {

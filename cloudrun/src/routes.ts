@@ -447,8 +447,8 @@ export function docKategoriFor(text: string, model: UnitModel): { kategori: stri
 const UNIT_FEATURE_RE = /\b(?:kelebihan\w*|keunggulan\w*|unggulan|advantages?|strengths?|selling\s+points?)\b/i;
 // "Kelebihan unit ini" is a brochure question; the intent model sometimes calls it chat and asks the user to resend (12 Oct).
 export function unitFeatureIntent<T extends { searchType: string; shouldSearch: boolean; optimizedQuery: string }>(text: string, intent: T): T {
-  if (intent.shouldSearch || intent.searchType === 'off_topic' || !UNIT_FEATURE_RE.test(text)) return intent;
-  return { ...intent, searchType: 'technical', shouldSearch: true, optimizedQuery: 'machine features advantages performance' };
+  if (intent.shouldSearch || !UNIT_FEATURE_RE.test(text)) return intent;
+  return { ...intent, searchType: 'technical', shouldSearch: true, optimizedQuery: 'machine features advantages performance brochure' };
 }
 
 export async function resolveNaturalLanguageQuery(
@@ -479,7 +479,10 @@ export async function resolveNaturalLanguageQuery(
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
   const complaint = resolved.text;
   const symptomPromise = findSymptomSections(model, [query, complaint], complaint, `${trimmed} ${query} ${prevUser}`);
-  const doc = docKategoriFor(trimmed, model);
+  const featureQuery = UNIT_FEATURE_RE.test(trimmed);
+  const doc = featureQuery
+    ? { kategori: 'BROSUR MANUAL', available: modelHasSource(model, 'BROSUR MANUAL') }
+    : docKategoriFor(trimmed, model);
   let ragResult = doc?.available ? await searchTechnicalManualMulti([query], model, 4, doc.kategori) : null;
   let docNote = '';
   if (doc && (!ragResult || !ragResult.hasResults || ragResult.confidence === 'low')) {
@@ -491,8 +494,8 @@ export async function resolveNaturalLanguageQuery(
   if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
   const [perf, berat, nilai, simtom] = await Promise.all([
     findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content),
-    findComponentWeight(model, trimmed, ragResult.content),
-    findSpecLines(model, query, ragResult.content),
+    findComponentWeight(model, resolved.text, ragResult.content),
+    findSpecLines(model, `${trimmed} ${query}`, ''),
     symptomPromise,
   ]);
   const have = ragResult.content;
@@ -500,7 +503,7 @@ export async function resolveNaturalLanguageQuery(
   const simtomNote = simtom.length
     ? `[SIMTOM MANUAL PALING MIRIP: ${simtom.map(c => `"${c.split('\n')[0].replace(/^Section:\s*/, '').replace(/\r/g, '').trim()}"`).join(', ')} — pakai prosedurnya HANYA kalau gejalanya cocok dengan keluhan teknisi. Kalau tidak persis sama, sebut sebagai "simtom terdekat di manual" dan jelaskan bedanya; jangan bilang prosedurnya belum ketemu.]\n\n`
     : '';
-  const extraParts = [perf, berat, nilai, ...simtomFresh].filter((c): c is string => !!c);
+  const extraParts = [perf, berat, nilai, ...simtomFresh].filter((c): c is string => !!c && !have.includes(c));
   const extra = extraParts.join('\n\n---\n\n');
   if (extra) {
     ragResult = {
@@ -521,7 +524,7 @@ export async function resolveNaturalLanguageQuery(
   }
 
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
-  if (ragResult.confidence === 'low' && !extra) return { type: 'google_search', mode: 'technical' };
+  if (ragResult.confidence === 'low' && !extra && !nilai) return { type: 'google_search', mode: 'technical' };
   const evidence = ragResult.evidence ?? evidenceBlocks(ragResult.content);
   const compressed = await compressEvidence(evidence, complaint);
   return {
@@ -557,8 +560,13 @@ export async function resolveMultiAspectQuery(
       wantTm ? (async () => {
         emit({ type: 'tool_call', tool: 'search_technical_manual' });
         const r = await searchTechnicalManualMulti([clean], model, MULTI_ASPECT_TM_TOP).catch(() => empty);
-        emit({ type: 'tool_result', tool: 'search_technical_manual', found: r.hasResults });
-        return r;
+        const literalSpec = await findSpecLines(model, clean, r.content).catch(() => null);
+        const merged = literalSpec && !r.content.includes(literalSpec)
+          ? { ...r, content: [literalSpec, r.content].filter(Boolean).join('\n\n---\n\n'), hasResults: true,
+              evidence: [...evidenceBlocks(literalSpec), ...(r.evidence ?? evidenceBlocks(r.content))], confidence: r.confidence ?? 'medium' as Confidence }
+          : r;
+        emit({ type: 'tool_result', tool: 'search_technical_manual', found: merged.hasResults });
+        return merged;
       })() : Promise.resolve(empty),
       wantParts ? (async () => {
         emit({ type: 'tool_call', tool: 'search_parts_catalog' });

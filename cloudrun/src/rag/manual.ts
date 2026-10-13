@@ -176,7 +176,8 @@ const SPEC_NOT_COMPONENT = new Set([
   'current', 'temperature', 'clearance', 'displacement', 'value', 'values', 'standard', 'specification', 'spec', 'set',
   'setting', 'check', 'measure', 'measurement', 'normal', 'maximum', 'minimum', 'max', 'min', 'nominal', 'rated', 'mpa',
   'kpa', 'bar', 'psi', 'what', 'how', 'much', 'the', 'and', 'for', 'of', 'unit', 'machine', 'test', 'delivery', 'valve',
-  'ampere', 'amper', 'amp', 'amps', 'rating', 'berapa', 'brp', 'yang', 'cek',
+  'ampere', 'amper', 'amp', 'amps', 'rating', 'berapa', 'brp', 'yang', 'cek', 'kalau', 'kalo', 'jika', 'ini', 'itu',
+  'pakai', 'pake', 'memakai', 'gunakan', 'using', 'use', 'untuk', 'buat', 'tolong', 'please', 'saja', 'aja', 'jadi',
 ]);
 
 // A spec value is one "Relief Valve Set Pressure ....44.6 MPa" line in a chunk titled for something else (ZW140 HST specs sit under "BATTERY").
@@ -194,18 +195,29 @@ export async function findSpecLines(model: string, query: string, have: string):
     // Postgres caps regex repetition at 255, so the database only checks "attribute … number unit"; nearness is checked here.
     const { data } = await q.filter('content', 'imatch', `(${attr.line})[^\\n]{0,80}?\\d[\\d.,±~–-]*\\s*${SPEC_UNIT}`).limit(60);
     // The value must sit near the component's own name, not anywhere in a long chunk.
-    const near = (c: string) => [...c.matchAll(valueRe)].some(m => {
-      const before = c.slice(Math.max(0, (m.index ?? 0) - 800), m.index).toLowerCase();
+    const near = (c: string, span = 800) => [...c.matchAll(valueRe)].some(m => {
+      const before = c.slice(Math.max(0, (m.index ?? 0) - span), m.index).toLowerCase();
       return comp.some(w => before.includes(w) || m[0].toLowerCase().includes(w));
     });
     const title = (c: string) => c.split('\n')[0];
+    const literalBatteryCapacity = (c: string) => {
+      if (attr.word !== 'capacit' || !comp.includes('battery')) return false;
+      const lines = c.split(/\r?\n/);
+      return lines.some((line, i) => /\bbattery\b/i.test(line)
+        && /\bcapacity\b[^\n]{0,80}\d[\d.,]*\s*Ah\b/i.test(lines.slice(i, i + 4).join(' ')));
+    };
     registerEvidence(data ?? []);
     const cands = (data ?? []).map((d: { content?: string }) => d?.content)
       .filter((c: unknown): c is string => typeof c === 'string' && !have.includes(title(c)) && near(c));
     if (!cands.length) return null;
     const { docs, error, source } = await rerankDocs(query, capRerankPayload(cands), 2);
-    if (error) return null;
-    const keep = docs.filter(d => computeConfidence([d], source).confidence !== 'low');
+    const literal = cands.filter(literalBatteryCapacity);
+    const ranked = error ? [] : docs.filter((d: { content: string; score: number }) => computeConfidence([d], source).confidence !== 'low');
+    const seenKeep = new Set<string>();
+    const keep: Array<{ content: string; score: number }> = [
+      ...literal.map((content: string) => ({ content, score: docs.find(d => d.content === content)?.score ?? 0 })),
+      ...ranked,
+    ].filter(d => !seenKeep.has(d.content) && !!seenKeep.add(d.content)).slice(0, 2);
     if (!keep.length) return null;
     console.info('[spec] %d chunk nilai "%s" (%s) ditambahkan: %s', keep.length, comp.join(' '), attr.word,
       keep.map(d => `${d.score.toFixed(2)} ${title(d.content).slice(9, 60)}`).join(' | '));

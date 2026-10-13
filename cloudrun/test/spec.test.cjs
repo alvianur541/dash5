@@ -57,6 +57,31 @@ module.exports = async function () {
   {
     // Real chunks 7704 (ZX48U-5A) / 8264 (ZX200-5G): "akinya berapa ampere" went to the web on 12 Oct.
     const AKI = 'Section: SPECIFICATIONS - ELECTRICAL\nModel: ZX48U-5A\nBATTERY Type 115D31L-MF\nVoltage 12 V\nCapacity 72 Ah or more (5-Hour Rate)';
+    {
+      // Live Google score for chunk 8264 was 0.057: a minority line in a long ENGINE spec chunk.
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI]), rerank: ranker(0.057) });
+      t(await runWithDeps(d, () => findSpecLines('ZX48U-5A', 'battery capacity ampere', '')) === AKI, 'nilai persis di baris komponen tetap dipakai walau skor 0,057');
+    }
+    {
+      const calls = [];
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.057) });
+      t(await runWithDeps(d, () => findSpecLines('ZX200-5G', 'battery capacity ampere Kalau akinya ini pakai yang berapa ampere?', '')) === AKI, 'kalimat teknisi lengkap tetap menemukan kapasitas aki');
+      t(!calls.some(c => c[0] === 'ilike' && /kalau|pakai|%ini%/.test(c[1])), 'kata percakapan bukan filter komponen wajib');
+    }
+    {
+      const DECOY = n => `Section: DECOY ${n}\nBATTERY inspection\na\nb\nc\nd\nCapacity ${n} Ah`;
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([DECOY(1), DECOY(2), AKI]), rerank: async () => ({ results:[{index:0,score:.01},{index:1,score:.01}], source:'google' }) });
+      t(await runWithDeps(d, () => findSpecLines('ZX48U-5A', 'battery capacity ampere', '')) === AKI, 'blok literal aman tetap dipakai meski tidak masuk top-2 Google');
+    }
+    {
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI]), rerank: async () => ({ results: [], error: 'Google timeout' }) });
+      t(await runWithDeps(d, () => findSpecLines('ZX48U-5A', 'battery capacity ampere', '')) === AKI, 'blok battery-capacity-Ah literal tetap dipakai saat reranker gagal');
+    }
+    {
+      const SALAH = 'Section: MIXED\nBATTERY inspection\nPilot Relief Valve Set Pressure 3.7 MPa';
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([SALAH]), rerank: ranker(0.057) });
+      t(await runWithDeps(d, () => findSpecLines('ZW140', 'battery pressure', '')) === null, 'nama komponen dekat angka milik komponen lain tidak lolos bypass skor rendah');
+    }
     for (const q of ['battery ampere capacity', 'akinya berapa ampere', 'battery Ah rating']) {
       const calls = [];
       const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.5) });

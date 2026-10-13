@@ -118,9 +118,10 @@ export async function gatherCandidates(
   const vectorPromise: Promise<SearchResult[]> = faultCode
     ? Promise.resolve([])
     : getEmbedding(embeddingQuery).then(async emb => {
-    const { data: vecData } = await stage('db_search', async () => sb().rpc('match_documents', {
+    const { data: vecData, error: vecError } = await stage('db_search', async () => sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
     }));
+    if (vecError) throw new Error(vecError.message);
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
     console.info('[vektor] %d hasil, sim %s..%s | atas: %s',
@@ -207,11 +208,13 @@ export async function rankAndSelect(
   let top = await stage('selection', async () => mmrSelect(reranked, topN, 0.7), { document_count: reranked.length });
 
   const KW_DIJAMIN = 2;
+  let hasUnscoredNumericPin = false;
   if (wantsNumericAnswer && top.length > 0) {
     const kandidat = rankedDocs
       .slice(0, KW_DIJAMIN)
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
+      hasUnscoredNumericPin = kandidat.some(c => !reranked.some(r => r.content === c));
       top = [top[0], ...kandidat.map(c => ({ content: c, score: reranked.find(r => r.content === c)?.score ?? 0 })), ...top.slice(1)]
         .slice(0, topN);
       console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
@@ -220,11 +223,14 @@ export async function rankAndSelect(
 
   const { confidence, topScore } = computeConfidence(top, rerankSource);
 
-  const effectiveConfidence = (usedLooseFallback || rerankErr) && confidence === 'high'
+  const effectiveConfidence = (usedLooseFallback || rerankErr || hasUnscoredNumericPin) && confidence === 'high'
     ? 'medium'
     : confidence;
 
-  const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)' : usedLooseFallback ? ' (loose filter)' : '';
+  const alasanTurun = rerankErr ? ' (rerank GAGAL — skor semu)'
+    : usedLooseFallback ? ' (loose filter)'
+      : hasUnscoredNumericPin ? ' (keyword pin tanpa skor)'
+        : '';
   console.info('[confidence] tm tier=%s%s topScore=%s pool=%d→%d (MMR) | cari=%dms rerank=%dms (%s)',
     effectiveConfidence, alasanTurun, topScore.toFixed(2), reranked.length, top.length, msCari, msRerank, rerankSource ?? '-');
   try {

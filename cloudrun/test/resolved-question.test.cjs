@@ -12,5 +12,11 @@ module.exports = async () => {
   t(fresh.userContext.length === 0 && !fresh.text.includes('Fuse'), 'new explicit component does not inherit old question');
   const newTopic = b.resolveQuestion('berapa berat travel device yang itu', h, 'ZX200-5G');
   t(!newTopic.text.includes('Fuse'), 'explicit new component does not inherit old fault even with colloquial pointer');
+  const faultHistory = [{ role:'user', content:'kode 11006-2 artinya apa' }, { role:'assistant', content:'...' }];
+  const battery = b.resolveQuestion('Kalau akinya ini pakai yang berapa ampere?', faultHistory, 'ZX200-5G');
+  t(!battery.text.includes('11006-2') && /aki/i.test(battery.component ?? ''), 'explicit battery question does not inherit old fault code');
+  const weightHistory = [{ role:'user', content:'travel device' }, { role:'assistant', content:'Bagian mana yang ingin dicek?' }];
+  const weight = b.resolveQuestion('berapa beratnya', weightHistory, 'ZX200-5G');
+  t(/travel device/i.test(weight.text) && /travel device/i.test(weight.component ?? ''), 'suffix -nya follow-up inherits prior component');
   return done();
 };

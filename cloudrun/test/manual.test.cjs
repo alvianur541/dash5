@@ -15,6 +15,11 @@ module.exports = async function () {
     const r = await runWithDeps(d, () => searchTechnicalManualMulti(['swing motor weight'], 'ZX200-5G'));
     t(!r.hasResults && /embed down/.test(r.ragError ?? ''), 'embedding failed and nothing found → ragError, not a silent miss'); }
 
+  { const broken = emptySupabase(); broken.rpc = name => Promise.resolve(name === 'match_documents' ? { data:null, error:{message:'database unavailable'} } : {data:[],error:null});
+    const { d } = mockDeps([[]], { supabase: broken, embed: async () => [0.1, 0.2] });
+    const r = await runWithDeps(d, () => searchTechnicalManualMulti(['boom cylinder weight'], 'ZX200-5G'));
+    t(!r.hasResults && /database unavailable/.test(r.ragError ?? ''), 'vector RPC error is surfaced as retrieval degradation'); }
+
   { const { d } = mockDeps([[]], { supabase: emptySupabase(), embed: async () => [0.1, 0.2] });
     const r = await runWithDeps(d, () => searchTechnicalManualMulti(['boom cylinder weight'], 'ZX200-5G'));
     t(!r.hasResults && !r.ragError, 'healthy search with no hits → plain miss'); }

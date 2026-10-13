@@ -79,7 +79,9 @@ function mmrJaccard(a: Set<string>, b: Set<string>): number {
 
 export function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): RerankedDoc[] {
   if (docs.length <= finalN) return docs;
-  const pool = docs.map(d => ({ d, tok: mmrTokens(d.content) }));
+  const positive = docs.filter(d => d.score > 0);
+  const candidates = positive.length >= finalN ? positive : docs;
+  const pool = candidates.map(d => ({ d, tok: mmrTokens(d.content) }));
   pool.sort((a, b) => b.d.score - a.d.score);
   const selected = [pool.shift()!];
   while (selected.length < finalN && pool.length > 0) {

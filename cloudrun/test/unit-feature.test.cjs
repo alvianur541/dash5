@@ -10,5 +10,8 @@ module.exports = async function () {
   for (const q of ['halo', 'kamu bisa apa aja', 'oke makasih']) t(unitFeatureIntent(q, general) === general, `obrolan tetap obrolan: "${q}"`);
   const tech = { searchType: 'technical', shouldSearch: true, optimizedQuery: 'swing motor weight' };
   t(unitFeatureIntent('kelebihan swing motor', tech) === tech, 'intent teknis yang sudah mencari tidak diubah');
+  const off = { searchType: 'off_topic', shouldSearch: false, optimizedQuery: '' };
+  const rescued = unitFeatureIntent('kelebihan unit ini apa saja', off);
+  t(rescued.shouldSearch === true && rescued.searchType === 'technical', 'fitur unit tidak boleh tetap off-topic');
   return done();
 };
