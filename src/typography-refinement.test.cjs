@@ -16,6 +16,13 @@ test('conversation prose and user messages are exactly 15px with uniform 24.75px
   assert.equal(property('body', 'font-size'), '14px');
 });
 
+test('AI answers read in a local serif; tables and source tags stay sans', () => {
+  assert.equal(property('.markdown-body', 'font-family'), 'var(--font-serif)');
+  assert.match(css, /font-family: 'Source Serif 4'[^}]*url\('\/fonts\/source-serif-4-v1\.woff2'\)/);
+  assert.ok(readFileSync(path.join(__dirname, '../public/fonts/source-serif-4-v1.woff2')).subarray(0, 4).equals(Buffer.from('wOF2')));
+  assert.equal(property('.markdown-body table', 'font-family'), 'var(--font-sans)');
+});
+
 test('heading size, weight and spacing establish a relative hierarchy', () => {
   const sizes = ['h1', 'h2', 'h3'].map(tag => parseFloat(property(`.markdown-body ${tag}`, 'font-size')));
   assert.deepEqual(sizes, [18, 17, 16]);
@@ -30,9 +37,11 @@ test('composer keeps the 16px iOS floor and 24px leading', () => {
 
 test('surrounding navigation and modal roles stay subordinate to conversation prose', () => {
   const sidebar = read('components/Sidebar.tsx');
-  assert.match(sidebar, /font-heading text-\[13\.5px\] tracking-\[-0\.01em\] truncate/);
-  assert.doesNotMatch(sidebar, /text-\[11\.5px\]/);
-  assert.match(sidebar, /text-\[11px\] font-semibold uppercase/);
+  assert.match(sidebar, /className="sb-unit truncate"/);
+  assert.doesNotMatch(sidebar, /text-\[11\.5px\]|font-semibold uppercase tracking/);
+  assert.equal(property('.sb-unit', 'font-size'), '13.5px');
+  assert.equal(property('.sb-row', 'font-size'), '14px');
+  assert.equal(property('.sb-label', 'font-size'), '12px');
   assert.match(read('components/ConfirmDialog.tsx'), /font-heading font-semibold text-\[17px\]/);
   assert.match(read('components/ModelSheet.tsx'), /text-\[17px\] font-heading/);
   assert.match(read('components/ChangePasswordDialog.tsx'), /font-heading font-semibold text-\[17px\]/);

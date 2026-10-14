@@ -63,7 +63,7 @@ test('landing font roles use versioned self-hosted woff2 files', () => {
 });
 
 test('15px conversation has a distinct heading hierarchy and dense PN tables', () => {
-  assert.match(css, /\.markdown-body \{\s*font-family: var\(--font-sans\);\s*font-size: 15px/);
+  assert.match(css, /\.markdown-body \{\s*font-family: var\(--font-serif\);\s*font-size: 15px/);
   assert.match(css, /\.markdown-body h2 \{ font-size: 17px; \}/);
   assert.match(css, /\.markdown-body code \{\s*font-family: var\(--font-mono\)/);
   assert.match(css, /\.markdown-body table \{ width: max-content; min-width: 100%; \}/);
