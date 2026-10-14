@@ -416,6 +416,19 @@ img {
 
 .sidebar-header { padding-top: 20px; background: var(--bg-sidebar); }
 
+/* Claude.ai-style bordered "new chat" affordance. */
+.sidebar-newchat {
+  width: 100%; display: flex; align-items: center; gap: 9px;
+  padding: 9px 11px; border-radius: 11px;
+  font-family: var(--font-sans); font-size: 13.5px; font-weight: 500; letter-spacing: -0.005em;
+  color: var(--text-primary); background: var(--bg-card);
+  border: 1px solid var(--border-main); cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.sidebar-newchat:hover { background: var(--bg-card-hover); border-color: color-mix(in srgb, var(--accent-main) 30%, var(--border-main)); }
+.sidebar-newchat:active { transform: scale(0.99); }
+.sidebar-newchat svg { color: var(--accent-main); }
+
 @media all and (display-mode: standalone) and (max-width: 767px) {
   .sidebar-footer-safe { padding-bottom: 18px; }
 }

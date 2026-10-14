@@ -30,9 +30,9 @@ test('composer keeps the 16px iOS floor and 24px leading', () => {
 
 test('surrounding navigation and modal roles stay subordinate to conversation prose', () => {
   const sidebar = read('components/Sidebar.tsx');
-  assert.match(sidebar, /font-heading text-\[14px\] truncate/);
+  assert.match(sidebar, /font-heading text-\[13\.5px\] tracking-\[-0\.01em\] truncate/);
   assert.doesNotMatch(sidebar, /text-\[11\.5px\]/);
-  assert.match(sidebar, /text-\[12px\] font-semibold uppercase/);
+  assert.match(sidebar, /text-\[11px\] font-semibold uppercase/);
   assert.match(read('components/ConfirmDialog.tsx'), /font-heading font-semibold text-\[17px\]/);
   assert.match(read('components/ModelSheet.tsx'), /text-\[17px\] font-heading/);
   assert.match(read('components/ChangePasswordDialog.tsx'), /font-heading font-semibold text-\[17px\]/);

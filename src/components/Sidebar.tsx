@@ -158,19 +158,19 @@ export function Sidebar({
             </div>
           </div>
 
-          <div className="px-3 pb-1 shrink-0">
+          <div className="px-3 pt-1 pb-1 shrink-0">
             <button
               onClick={() => { onNewChat(); if (isMobile) onToggle(); }}
-              className="w-full flex items-center gap-1.5 px-3 pt-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--accent-main)] hover:text-[var(--accent-active)] transition-colors"
+              className="sidebar-newchat"
             >
-              <Plus size={12} className="shrink-0" />
-              <span>New Chat</span>
+              <Plus size={16} className="shrink-0" />
+              <span>New chat</span>
             </button>
           </div>
 
           <div className="shrink-0 px-3 pb-1">
-            <p className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] px-3 pt-4 pb-2">
-              <Tractor size={12} /> Model Unit
+            <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--text-muted)] px-3 pt-4 pb-2">
+              <Tractor size={11} /> Model Unit
             </p>
             {MODEL_GROUPS.map(({ type, models }) => {
               const isOpen = expandedType === type;
@@ -221,7 +221,7 @@ export function Sidebar({
                                 isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
                               )} />
                               <span className={cn(
-                                "font-heading text-[14px] truncate",
+                                "font-heading text-[13.5px] tracking-[-0.01em] truncate",
                                 isActive ? "text-[var(--text-primary)] font-medium" : "text-[var(--text-primary)] font-normal"
                               )}>
                                 {model}
@@ -246,7 +246,7 @@ export function Sidebar({
                 aria-expanded={showBookmarks}
                 className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
               >
-                <span className="flex items-center gap-1.5 pt-3 pb-2 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/bm:text-[var(--text-primary)] transition-colors">
+                <span className="flex items-center gap-1.5 pt-3 pb-2 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--text-muted)] group-hover/bm:text-[var(--text-primary)] transition-colors">
                   <Bookmark size={11} /> Bookmark
                   {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
                 </span>
@@ -306,8 +306,8 @@ export function Sidebar({
               aria-expanded={showHistory}
               className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
             >
-              <span className="flex items-center gap-1.5 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-secondary)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
-                <HistoryIcon size={12} /> History
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.045em] text-[var(--text-muted)] group-hover/hist:text-[var(--text-primary)] transition-colors pt-3 pb-2">
+                <HistoryIcon size={11} /> History
               </span>
               <ChevronRight
                 size={11}
