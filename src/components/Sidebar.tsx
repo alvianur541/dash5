@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, History as HistoryIcon, HardHat, Search, WifiOff } from 'lucide-react';
 import { ExcavatorIcon, WheelLoaderIcon } from './UnitIcons';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
@@ -136,7 +136,7 @@ export function Sidebar({
       >
         <div style={{ width: SIDEBAR_W }} className="flex flex-col h-full">
 
-          <div className="sidebar-header flex items-center justify-between pl-6 pr-4 pb-3 shrink-0">
+          <div className="sidebar-header flex items-center justify-between pl-[18px] pr-3 pb-3 shrink-0">
             <img src="/hexindo-wordmark-v2.png" alt="Hexindo" className="sidebar-wordmark sidebar-wordmark-light" />
             <img src="/hexindo-wordmark-dark-v2.png" alt="Hexindo" className="sidebar-wordmark sidebar-wordmark-dark" />
             <div className="flex items-center gap-1">
@@ -167,8 +167,8 @@ export function Sidebar({
           </div>
 
           <div className="shrink-0 px-2 pb-1">
-            <p className="sb-section px-4 pt-4 pb-2">
-              <ExcavatorIcon size={12} /> Model Unit
+            <p className="sb-head mt-3">
+              <HardHat size={17} /> Model unit
             </p>
             <div className="flex flex-col gap-px">
               {MODEL_GROUPS.map(({ type, models }) => {
@@ -217,25 +217,18 @@ export function Sidebar({
           </div>
 
           {pocketItems.length > 0 && (
-            <div className="shrink-0 px-3">
-              <div className="border-t border-[var(--border-main)] mt-3" />
+            <div className="shrink-0 px-2">
+              <div className="border-t border-[var(--border-main)] mx-2 mt-3 mb-1" />
               <button
                 type="button"
                 onClick={() => setShowBookmarks(v => !v)}
                 aria-expanded={showBookmarks}
-                className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
+                className="sb-head is-button"
               >
-                <span className="sb-section pt-3 pb-2 group-hover/bm:text-[var(--text-primary)]">
-                  <Bookmark size={12} /> Bookmark
-                  {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
-                </span>
-                <ChevronRight
-                  size={12}
-                  className={cn(
-                    "text-[var(--text-muted)] group-hover/bm:text-[var(--text-secondary)] transition-all duration-200 mt-0.5",
-                    showBookmarks ? "rotate-90" : ""
-                  )}
-                />
+                <Bookmark size={17} />
+                <span>Bookmark</span>
+                {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
+                <ChevronRight size={14} className={cn("sb-chevron ml-auto transition-transform duration-200", showBookmarks && "rotate-90")} />
               </button>
               <AnimatePresence initial={false}>
                 {showBookmarks && (
@@ -251,7 +244,7 @@ export function Sidebar({
                         <div key={item.id} className="relative group/pocket">
                           <button
                             onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
-                            className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-10 hover:bg-white/5 active:bg-white/8 group/pbtn"
+                            className="w-full text-left pl-[37px] py-2 rounded-[9px] transition-colors duration-100 pr-10 hover:bg-white/5 active:bg-white/8 group/pbtn"
                           >
                             <span className="block truncate text-[13.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
                               {pocketPreview(item.answer) || '(kosong)'}
@@ -277,28 +270,21 @@ export function Sidebar({
             </div>
           )}
 
-          <div className="shrink-0 px-3">
-            <div className="border-t border-[var(--border-main)] mt-3" />
+          <div className="shrink-0 px-2">
+            <div className="border-t border-[var(--border-main)] mx-2 mt-3 mb-1" />
             <button
               type="button"
               onClick={() => setShowHistory(v => !v)}
               aria-expanded={showHistory}
-              className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
+              className="sb-head is-button"
             >
-              <span className="sb-section pt-3 pb-2 group-hover/hist:text-[var(--text-primary)]">
-                <HistoryIcon size={12} /> History
-              </span>
-              <ChevronRight
-                size={12}
-                className={cn(
-                  "text-[var(--text-muted)] group-hover/hist:text-[var(--text-secondary)] transition-all duration-200 mt-0.5",
-                  showHistory ? "rotate-90" : ""
-                )}
-              />
+              <HistoryIcon size={17} />
+              <span>History</span>
+              <ChevronRight size={14} className={cn("sb-chevron ml-auto transition-transform duration-200", showHistory && "rotate-90")} />
             </button>
           </div>
 
-          <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-2">
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-2 pb-2">
             <AnimatePresence initial={false}>
               {showHistory && (
                 <m.div
@@ -345,16 +331,15 @@ export function Sidebar({
                             <button
                               onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
                               className={cn(
-                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[13.5px] transition-colors duration-100 pr-10 active:bg-white/8",
+                                "w-full flex items-start gap-[10px] text-left pl-[10px] py-2 rounded-[9px] text-[13.5px] transition-colors duration-100 pr-10 active:bg-white/8",
                                 isActive
                                   ? "bg-[var(--accent-active)]/20 text-[var(--text-primary)] font-medium"
                                   : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
                               )}
                             >
-                              <span className={cn(
-                                "w-1.5 h-1.5 rounded-full shrink-0 self-start mt-[7px]",
-                                isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
-                              )} />
+                              <span className="w-[17px] h-[20px] shrink-0 flex items-center justify-center">
+                                <span className={cn("sb-dot", isActive && "is-on")} />
+                              </span>
                               <span className="flex flex-col min-w-0 gap-[3px]">
                                 <span className="block truncate">{session.title}</span>
                                 <span className="history-meta">
@@ -401,7 +386,7 @@ export function Sidebar({
                 aria-haspopup="menu"
                 className="sb-row sb-user"
               >
-                <div className="w-7 h-7 rounded-full bg-[var(--accent-main)] flex items-center justify-center text-[12px] font-semibold text-white uppercase shrink-0">
+                <div className="sb-avatar">
                   {(user?.displayName || 'U')[0]}
                 </div>
                 <span className="flex-1 min-w-0 truncate text-left">

@@ -41,7 +41,8 @@ test('surrounding navigation and modal roles stay subordinate to conversation pr
   assert.doesNotMatch(sidebar, /text-\[11\.5px\]|font-semibold uppercase tracking/);
   assert.equal(property('.sb-unit', 'font-size'), '13.5px');
   assert.equal(property('.sb-row', 'font-size'), '14px');
-  assert.equal(property('.sb-section', 'font-size'), '11px');
+  assert.equal(property('.sb-head', 'font-size'), '14px');
+  assert.doesNotMatch(css, /text-transform: uppercase; letter-spacing: 0.07em/);
   assert.equal(property('.sidebar-font', 'font-family'), 'var(--font-ui)');
   assert.match(css, /font-family: 'Plus Jakarta Sans'[^}]*plus-jakarta-sans-v1.woff2/);
   assert.match(sidebar, /sidebar-font/);
