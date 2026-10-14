@@ -15,7 +15,11 @@ test('voice prompt: natural tone, mirrors language, filler before tool, self-con
   assert.doesNotMatch(p, /lalu bilang "rincian lengkapnya ada di layar"/);
   for (const re of [/sudah aku tampilkan/, /kalau ada yang kurang jelas/i, /penutup/i, /tidak harus selalu/i]) assert.match(p, re);
   for (const re of [/"Zaxis"/, /tetap tulis ZX/i]) assert.match(p, re);
-  for (const re of [/HANYA tiga bahasa/, /Indonesia/, /Inggris/, /Jepang/, /bahasa lain/i]) assert.match(p, re);
+  for (const re of [/Indonesia/, /Inggris/, /Jepang/, /bahasa lain/i, /JANGAN pernah menyebut[^.]*bahasa apa saja/]) assert.match(p, re);
+  // Alvian 14 Oct: no "I speak Indonesian, English and Japanese" statement, and a plain self-introduction.
+  assert.doesNotMatch(p, /HANYA tiga bahasa|sampaikan singkat bahwa Live hanya mendukung/);
+  assert.match(p, /"Saya asisten yang siap bantu cek data unit ini\."/);
+  assert.doesNotMatch(p, /asisten teknis Hexindo yang siap bantu/);
   assert.doesNotMatch(p, /Jawab dalam bahasa yang sama dengan pengguna \(Inggris dibalas Inggris\)/);
   for (const re of [/artikulasi jelas/i, /intonasi/i, /tempo sedang/i]) assert.match(p, re);
   assert.doesNotMatch(p, /Kamu teknisi senior/);
