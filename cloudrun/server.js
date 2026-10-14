@@ -259,10 +259,10 @@ const PORT = process.env.PORT || 8080;
 const server = require('node:http').createServer(app);
 require('./server/live-voice').registerLiveVoice(server, {
   verifyToken, units: ASK_MODELS, store: catatLive,
-  ask: async (token, unit, question, signal, history) => {
+  ask: async (token, unit, question, signal, history, userName) => {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/v1/ask`, {
       method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: unit, userInput: question, history, source: 'live', think: 'low' }),
+      body: JSON.stringify({ model: unit, userInput: question, history, userName, source: 'live', think: 'low' }),
       signal: AbortSignal.any([signal, AbortSignal.timeout(90000)]),
     });
     if (!response.ok) throw new Error('Technical agent unavailable');

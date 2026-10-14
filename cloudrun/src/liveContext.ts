@@ -21,3 +21,38 @@ export function boundLiveHistory(input: unknown): LiveHistory {
   }
   return out;
 }
+
+const WARNING_RE = /⚠|peringatan|bahaya|hati-hati|caution|warning|danger|jangan/i;
+const plain = (s: string) => s.replace(/^#{1,6}\s*/, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
+
+// The full answer is already on screen; the voice model only needs the gist, and every word it is given is billed again on each later turn.
+export function ringkasUntukSuara(text: string, max = 2400): string {
+  const out: string[] = [];
+  let header: string[] | null = null, shown = 0, hidden = 0;
+  const closeTable = () => { if (header && hidden) out.push(`(+${hidden} baris lain di layar)`); header = null; shown = 0; hidden = 0; };
+  for (const raw of text.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (/^\|?\s*:?-{2,}/.test(line)) continue;
+    if (line.startsWith('|')) {
+      const cells = line.split('|').map(plain).filter(Boolean);
+      if (!header) { header = cells; out.push(`Kolom: ${cells.join(' — ')}`); continue; }
+      if (shown < 8) { out.push(cells.join(' — ')); shown++; } else hidden++;
+      continue;
+    }
+    closeTable();
+    const s = plain(line);
+    if (s && !/^[-=*_]{3,}$/.test(s)) out.push(s);
+  }
+  closeTable();
+  const full = out.join('\n');
+  if (full.length <= max) return full;
+  const tail = '(rincian lengkap ada di layar)';
+  const warnings = out.filter(l => WARNING_RE.test(l)).join('\n').slice(0, Math.floor(max / 3));
+  let head = '';
+  for (const l of out) {
+    if (head.length + l.length + 1 > max - warnings.length - tail.length - 2) break;
+    head += (head ? '\n' : '') + l;
+  }
+  const missing = warnings.split('\n').filter(w => w && !head.includes(w)).join('\n');
+  return [head, missing, tail].filter(Boolean).join('\n');
+}
