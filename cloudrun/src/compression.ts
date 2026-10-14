@@ -2,9 +2,9 @@ import type { EvidenceDocument } from './evidence';
 import { callProxy, getText, INTENT_MODEL } from './vertex';
 import { stage } from './telemetry';
 
-export const COMPLETE_CONTEXT_CHARS = 18_000;
+const COMPLETE_CONTEXT_CHARS = 18_000;
 const PRESERVE_RE = /procedure|troubleshoot|inspection method|evaluation|preparation|disassembly|installation|removal|<table|^\s*\|/im;
-export function compressionPlan(docs: readonly EvidenceDocument[]): number[] {
+function compressionPlan(docs: readonly EvidenceDocument[]): number[] {
   if (docs.reduce((n, d) => n + d.content.length, 0) <= COMPLETE_CONTEXT_CHARS) return [];
   return docs.map((d, i) => ({ d, i })).filter(({ d }) => d.content.length > 8000
     && d.evidence_role === 'retrieved' && !PRESERVE_RE.test(d.content)).slice(0, 2).map(({ i }) => i);

@@ -10,7 +10,7 @@ import type { Lang } from './templates';
 
 export const BUKAN_HARGA_SAJA_RE = /\b(?:cara|prosedur|langkah|pasang|bongkar|lepas|ganti(?!\s*rugi)|torque|torsi|spec|spesifikasi|kenapa|mengapa|rusak|error|fault|bocor|lambat|ukur|tekanan|pressure|berat|weight|fungsi|letak|posisi|lokasi|dimana|di\s*mana|interval|jadwal|kapasitas|beda|perbedaan|bandingkan|compare|why|install|remove|yang\s*mana|yg\s*mana|mana\s*yang|mana\s*yg|yg\s*mna|yang\s*mna|mna\s*y\w*|betul|benar|cocok|sesuai|serial|s\/?n)\b/i;
 
-export const PEMILIH_MS = 3500;
+const PEMILIH_MS = 3500;
 
 // Catalog section → the component name technicians use, so the picker sees "Main Pump" on every pump row.
 const KOMPONEN: Array<[RegExp, string]> = [

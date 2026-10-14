@@ -1,4 +1,4 @@
-export type LiveHistory = { role: 'user' | 'assistant'; content: string }[];
+type LiveHistory = { role: 'user' | 'assistant'; content: string }[];
 
 export function boundLiveHistory(input: unknown): LiveHistory {
   if (!Array.isArray(input)) return [];

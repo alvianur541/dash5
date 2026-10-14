@@ -1,7 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { deps, type Deps } from './deps';
-export type StageName = 'intent' | 'resolve' | 'embed' | 'db_search' | 'rerank' | 'selection' | 'compression' | 'web_price' | 'ocr' | 'generate' | 'stream' | 'first_text' | 'request';
-export interface StageFields { lane?: 'image_facts' | 'fault_codes'; provider?: 'google' | 'cohere'; recovery?: boolean; model?: string; thinking?: string; calls?: number; input_bytes?: number; output_bytes?: number; document_count?: number; process_first_request?: boolean }
+type StageName = 'intent' | 'resolve' | 'embed' | 'db_search' | 'rerank' | 'selection' | 'compression' | 'web_price' | 'ocr' | 'generate' | 'stream' | 'first_text' | 'request';
+interface StageFields { lane?: 'image_facts' | 'fault_codes'; provider?: 'google' | 'cohere'; recovery?: boolean; model?: string; thinking?: string; calls?: number; input_bytes?: number; output_bytes?: number; document_count?: number; process_first_request?: boolean }
 export interface StageEvent extends StageFields { rid: string; stage: StageName; start_ms: number; wall_ms: number; outcome: 'ok' | 'error' | 'cancel' }
 const origins = new WeakMap<object, number>();
 export async function stage<T>(name: StageName, fn: () => Promise<T>, fields: StageFields = {}): Promise<T> {

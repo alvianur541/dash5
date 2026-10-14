@@ -1,7 +1,7 @@
 import { deps, type RerankSource } from './deps';
 
 export type Confidence = 'high' | 'medium' | 'low' | 'unknown';
-export type EvidenceRole = 'retrieved' | 'literal_pn' | 'serial_bulletin' | 'oh_package' | 'procedure' | 'numeric' | 'symptom';
+type EvidenceRole = 'retrieved' | 'literal_pn' | 'serial_bulletin' | 'oh_package' | 'procedure' | 'numeric' | 'symptom';
 export interface EvidenceDocument {
   document_id: number | string | null;
   source: string | null;

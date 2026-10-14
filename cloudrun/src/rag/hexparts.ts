@@ -1,6 +1,6 @@
 import { deps } from '../deps';
 
-export interface WebPart { pn: string; nama: string; harga: string }
+interface WebPart { pn: string; nama: string; harga: string }
 
 const URL_CARI = 'https://hexindoparts.com/products?query=';
 const BATAS_MS = 3_000;
@@ -27,7 +27,7 @@ const cocok = (pn: string, nama: string): boolean => {
 // Non-JSON or non-2xx throws so a site hiccup is retried and never cached as "not listed".
 // KCM catalogs write PNs with a dash ("49327-90920"); hexindoparts.com lists them without ("4932790920")
 // and returns nothing for the dashed form (Reyhan 4 Oct, KCM 60ZV seal kits).
-export const tanpaStripKcm = (pn: string): string => (/^\d+(?:-\d+)+$/.test(pn) ? pn.replace(/-/g, '') : pn);
+const tanpaStripKcm = (pn: string): string => (/^\d+(?:-\d+)+$/.test(pn) ? pn.replace(/-/g, '') : pn);
 
 export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<WebPart[]> {
   const asli = pn.toUpperCase().trim();

@@ -5,7 +5,7 @@ import type { StageEvent } from './telemetry';
 
 export type RerankSource = 'google' | 'cohere';
 
-export interface RerankOut { results: { index: number; score: number }[]; error?: string; source?: RerankSource }
+interface RerankOut { results: { index: number; score: number }[]; error?: string; source?: RerankSource }
 
 export interface Deps {
   requestId?: string;
@@ -26,10 +26,10 @@ export interface Deps {
   deadlineAt?: number;
 }
 
-export interface StreamChunk {
+interface StreamChunk {
   text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string;
 }
-export interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
+interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 
 export interface Usage { input: number; output: number; calls: number; thinking: number; cached: number; cost?: number }
 export function newUsage(): Usage { return { input: 0, output: 0, calls: 0, thinking: 0, cached: 0 }; }

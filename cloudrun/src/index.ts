@@ -1,6 +1,6 @@
 export { runWithDeps, newUsage } from './deps';
 export { stage, instrumentDeps } from './telemetry';
-export type { Deps, StreamChunk, StreamOpts, RerankOut, Usage } from './deps';
+export type { Deps, Usage } from './deps';
 export {
   generateResponse,
   generateResponseStream,
@@ -10,6 +10,5 @@ export {
 export { boundLiveHistory, ringkasUntukSuara } from './liveContext';
 export { UNIT_MODELS } from './types';
 export { fetchHexParts } from './rag';
-export { SYSTEM_PROMPT } from './constants';
-export { MODEL_CHAIN, FALLBACK_MODELS } from './vertex';
+export { FALLBACK_MODELS } from './vertex';
 export type { UnitModel, Message, InlineImage, AgentEvent } from './types';

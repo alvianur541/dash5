@@ -1,5 +1,5 @@
 import type { EvidenceDocument } from './evidence';
-export interface GroundingClaim {
+interface GroundingClaim {
   component: string; attribute: string; value: string; unit: string; model: string;
   condition?: string; variant?: string; document_id?: string | number; section?: string;
 }

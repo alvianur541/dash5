@@ -32,9 +32,6 @@ export function createMonoResampler(rate: number) {
     return out;
   };
 }
-export function resampleMono(channels: Float32Array[], rate: number): Float32Array {
-  return createMonoResampler(rate)(channels);
-}
 export function pcm16(samples: Float32Array): Uint8Array {
   const bytes = new Uint8Array(samples.length * 2); const view = new DataView(bytes.buffer);
   samples.forEach((sample, i) => { const n = Math.min(1, Math.max(-1, sample)); view.setInt16(i * 2, n < 0 ? n * 32768 : n * 32767, true); });

@@ -4,7 +4,8 @@ const esbuild = require('esbuild');
 const Module = require('node:module');
 const output = esbuild.buildSync({ entryPoints: ['src/lib/liveAudio.ts'], bundle: true, platform: 'node', format: 'cjs', write: false }).outputFiles[0].text;
 const mod = new Module('live-audio'); mod._compile(output, 'live-audio');
-const { pcm16, resampleMono, createMonoResampler } = mod.exports;
+const { pcm16, createMonoResampler } = mod.exports;
+const resampleMono = (channels, rate) => createMonoResampler(rate)(channels);
 test('streamed callback resampling preserves sample clock and chunk boundaries', () => {
  for (const rate of [44100, 48000]) {
   const input = Float32Array.from({length: 2048 * 100}, (_, i) => Math.sin(i / 37));

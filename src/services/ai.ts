@@ -37,7 +37,7 @@ interface AskBody {
   sessionId?: string;
 }
 
-export interface AskOptions {
+interface AskOptions {
   sessionId?: string;
   signal?: AbortSignal;
 }
