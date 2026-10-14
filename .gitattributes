@@ -1,3 +1,7 @@
 # Tidak ikut `git archive` — paket Hexindo hanya butuh aplikasinya.
 supabase/       export-ignore
 .gitattributes  export-ignore
+
+# Parser fixtures are compared line by line; CRLF from a Windows checkout breaks them.
+cloudrun/test/*.txt text eol=lf
+cloudrun/test/**/*.pcm binary
