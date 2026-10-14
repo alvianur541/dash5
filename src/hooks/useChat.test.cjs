@@ -35,7 +35,7 @@ async function harness() {
   return { render, requests, saved };
 }
 
-test('visible completed answer preserves the same persisted message ID for illustration lookup', async () => {
+test('visible completed answer preserves the same persisted message ID', async () => {
   const h = await harness();
   assert.equal(h.render().handleSendMessage('Jelaskan konsep belajar'), true);
   for (let i = 0; i < 100 && !h.saved.length; i++) await new Promise(r => setTimeout(r, 5));

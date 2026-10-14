@@ -157,7 +157,6 @@ export default function App() {
 
         <ChatWindow
           key={`${user.uid}:${currentSessionId ?? "new"}`}
-          sessionId={currentSessionId}
           messages={messages}
           isTyping={isTyping}
           isStreaming={isStreaming}

@@ -38,7 +38,6 @@ app.get('/v1/live/access', verifyToken, (req, res) => res.json({
 registerMetrics(app);
 
 registerTranscribe(app, { verifyToken, rateLimit, bigJson });
-require('./server/image-generation').registerImageGeneration(app, { verifyToken: [verifyToken, rateLimit] });
 
 const { PostgrestClient } = require('@supabase/postgrest-js');
 
