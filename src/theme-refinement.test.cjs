@@ -50,16 +50,17 @@ test('light palette and Hexindo accent remain unchanged', () => {
 });
 
 test('landing font roles use versioned self-hosted woff2 files', () => {
-  assert.match(css, /--font-sans:\s*"DM Sans"/);
-  assert.match(css, /--font-heading:\s*"Space Grotesk"/);
+  assert.match(css, /--font-sans:\s*"Plus Jakarta Sans"/);
+  assert.match(css, /--font-heading:\s*var\(--font-sans\)/);
+  assert.doesNotMatch(css, /DM Sans|Space Grotesk/);
   assert.doesNotMatch(css, /fonts\.googleapis|fonts\.gstatic|font-family: 'Inter'/);
-  for (const font of ['dm-sans-400', 'dm-sans-500', 'dm-sans-600', 'space-grotesk']) {
+  for (const font of ['plus-jakarta-sans', 'source-serif-4', 'source-serif-4-italic']) {
     const file = `/fonts/${font}-v1.woff2`;
     assert.ok(css.includes(file));
     assert.equal(readFileSync(path.join(__dirname, '../public', file)).subarray(0, 4).toString(), 'wOF2');
   }
-  assert.match(read('../index.html'), /preload[^>]+dm-sans-400-v1\.woff2/);
-  assert.match(read('lib/tableImage.ts'), /const SANS = '"DM Sans"/);
+  assert.match(read('../index.html'), /preload[^>]+plus-jakarta-sans-v1\.woff2/);
+  assert.match(read('lib/tableImage.ts'), /const SANS = '"Plus Jakarta Sans"/);
 });
 
 test('15px conversation has a distinct heading hierarchy and dense PN tables', () => {

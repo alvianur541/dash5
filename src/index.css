@@ -1,7 +1,3 @@
-@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/dm-sans-400-v1.woff2') format('woff2'); }
-@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 500; font-display: swap; src: url('/fonts/dm-sans-500-v1.woff2') format('woff2'); }
-@font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/dm-sans-600-v1.woff2') format('woff2'); }
-@font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 300 700; font-display: swap; src: url('/fonts/space-grotesk-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Source Serif 4'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('/fonts/source-serif-4-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Source Serif 4'; font-style: italic; font-weight: 200 900; font-display: swap; src: url('/fonts/source-serif-4-italic-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/plus-jakarta-sans-v1.woff2') format('woff2'); }
@@ -11,9 +7,9 @@
 
 
 @theme {
-  --font-sans:    "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
-  --font-heading: "Space Grotesk", var(--font-sans);
-  --font-ui:      "Plus Jakarta Sans", var(--font-sans);
+  --font-sans:    "Plus Jakarta Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --font-ui:      var(--font-sans);
   --font-serif:   "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-mono:    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
 }
@@ -76,6 +72,7 @@ body {
   font-weight: 400;
   line-height: 1.55;
   letter-spacing: -0.005em;
+  word-spacing: 0.12em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-size-adjust: from-font;
@@ -138,6 +135,7 @@ img {
   line-height: 1.65;
   color: var(--text-primary);
   letter-spacing: 0;
+  word-spacing: normal;
 }
 
 .markdown-body hr { display: none; }
@@ -150,7 +148,7 @@ img {
 .markdown-body :is(h1, h2, h3) + .md-source { margin-top: -0.1em; }
 /* Source label: a quiet accent tag, not grey text that reads as faded body copy. */
 .markdown-body .md-cite {
-  font-family: var(--font-sans); font-size: 12px; font-weight: 500; letter-spacing: 0;
+  font-family: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: 0;
   color: color-mix(in srgb, var(--accent-main) 55%, var(--text-secondary));
   background: color-mix(in srgb, var(--accent-main) 9%, transparent);
   padding: 0.12em 0.5em 0.12em 0.42em; border-radius: 5px;
@@ -160,7 +158,7 @@ img {
 /* Price source under price tables: stronger accent tag than manual citations, clickable to the store. */
 .markdown-body .md-price-src {
   display: inline-flex; align-items: center; gap: 0.4em;
-  font-family: var(--font-sans); font-size: 13px; font-weight: 500; text-decoration: none;
+  font-family: inherit; font-size: 13.5px; font-weight: 500; text-decoration: none;
   color: var(--accent-active);
   background: color-mix(in srgb, var(--accent-main) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--accent-main) 28%, transparent);
@@ -300,6 +298,7 @@ img {
 
 .markdown-body table {
   font-family: var(--font-sans);
+  word-spacing: 0.12em;
   width: 100%;
   border-collapse: collapse;
   font-size: 14px;
@@ -422,10 +421,9 @@ img {
 
 .sidebar-header { padding-top: 20px; background: var(--bg-sidebar); }
 
-/* Sidebar typeface: Plus Jakarta Sans everywhere inside the panel; chat stays DM Sans/serif. */
-.sidebar-font { font-family: var(--font-ui); word-spacing: 0.12em; }
-.sidebar-font :is(button, input) { word-spacing: inherit; }
-.sidebar-font input { font-family: var(--font-ui); }
+/* Browsers reset word-spacing on form controls; let them follow the page. */
+:is(button, input, textarea, select) { word-spacing: inherit; }
+.sidebar-font { font-family: var(--font-ui); }
 .sb-row {
   width: 100%; display: flex; align-items: center; gap: 10px;
   min-height: 36px; padding: 0 10px; border-radius: 9px; text-align: left;
@@ -493,7 +491,7 @@ img {
 .topbar-center:active { transform: scale(0.97); }
 .topbar-model-name {
   font-family: var(--font-heading);
-  font-size: 15px; font-weight: 700; letter-spacing: -0.035em; color: var(--text-primary);
+  font-size: 15px; font-weight: 700; letter-spacing: -0.015em; color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 .topbar-newchat {
@@ -583,7 +581,7 @@ img {
 .welcome-greeting {
   display: inline-flex; align-items: center; justify-content: center; gap: 10px; flex-wrap: wrap;
   font-family: var(--font-heading);
-  font-size: 22px; font-weight: 700; letter-spacing: -0.035em; line-height: 1.15;
+  font-size: 22px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.15;
   color: var(--text-primary);
   text-wrap: balance;
 }
@@ -962,7 +960,7 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 /* Official high-resolution wordmark crop, with the existing monochrome colours. */
 .sidebar-wordmark {
   display: block;
-  height: 22px;
+  height: 18px;
   width: auto;
 }
 .sidebar-wordmark-dark { display: none; }

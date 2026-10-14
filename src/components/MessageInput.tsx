@@ -312,7 +312,7 @@ export function MessageInput({
               rows={1}
               disabled={disabled || isTranscribing}
               style={{ height: '24px', resize: 'none' }}
-              className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] font-ui text-[16px] md:text-[14px] placeholder:text-[var(--text-muted)] py-0 leading-[24px] [word-spacing:0.12em] max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide block"
+              className="w-full bg-transparent border-none outline-none resize-none text-[var(--text-primary)] font-ui text-[16px] md:text-[14px] placeholder:text-[var(--text-muted)] py-0 leading-[24px] max-h-[80px] md:max-h-[120px] overflow-y-auto scrollbar-hide block"
             />
           </div>
 
