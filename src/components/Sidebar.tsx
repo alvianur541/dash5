@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Search, WifiOff } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, History as HistoryIcon, Search, WifiOff } from 'lucide-react';
 import { ExcavatorIcon, WheelLoaderIcon } from './UnitIcons';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
@@ -80,7 +80,7 @@ export function Sidebar({
     const group = MODEL_GROUPS.find(g => g.models.includes(selectedModel));
     return group?.type ?? MODEL_GROUPS[0].type;
   });
-  const [showSearch, setShowSearch] = useState(false);
+  const [showHistory, setShowHistory] = useState(true);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showSupport, setShowSupport] = useState(false);
   const userMenuRef = useRef<HTMLDivElement>(null);
@@ -130,7 +130,7 @@ export function Sidebar({
         }
         transition={{ duration: 0.25, ease: [0.4, 0, 0.2, 1] }}
         className={cn(
-          "bg-[var(--bg-sidebar)] flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
+          "sidebar-font bg-[var(--bg-sidebar)] flex flex-col z-20 overflow-hidden border-r border-[var(--border-main)]",
           isMobile ? cn("absolute top-0 left-0 h-full", !isCollapsed && "sidebar-drawer") : "relative shrink-0 h-full"
         )}
       >
@@ -159,55 +159,148 @@ export function Sidebar({
             </div>
           </div>
 
-          <nav className="px-2 pt-1 shrink-0 flex flex-col gap-px">
+          <div className="px-2 pt-1 shrink-0">
             <button onClick={() => { onNewChat(); if (isMobile) onToggle(); }} className="sb-row">
               <span className="sb-new-icon"><Plus size={15} strokeWidth={2.25} /></span>
               <span>New chat</span>
             </button>
-            <button
-              onClick={() => { setShowSearch(v => !v); setHistoryQuery(''); }}
-              aria-expanded={showSearch}
-              className={cn("sb-row", showSearch && "is-active")}
-            >
-              <Search size={17} />
-              <span>Search</span>
-            </button>
-            {pocketItems.length > 0 && (
+          </div>
+
+          <div className="shrink-0 px-2 pb-1">
+            <p className="sb-section px-4 pt-4 pb-2">
+              <ExcavatorIcon size={12} /> Model Unit
+            </p>
+            <div className="flex flex-col gap-px">
+              {MODEL_GROUPS.map(({ type, models }) => {
+                const isOpen = expandedType === type;
+                return (
+                  <div key={type}>
+                    <button
+                      onClick={() => setExpandedType(isOpen ? '' : type)}
+                      aria-expanded={isOpen}
+                      className="sb-row"
+                    >
+                      {type === 'Wheel Loader' ? <WheelLoaderIcon size={17} /> : <ExcavatorIcon size={17} />}
+                      <span className="flex-1 truncate">{type}</span>
+                      <ChevronRight size={14} className={cn("sb-chevron transition-transform duration-200", isOpen && "rotate-90")} />
+                    </button>
+                    <AnimatePresence initial={false}>
+                      {isOpen && (
+                        <m.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          transition={{ duration: 0.18 }}
+                          className="overflow-hidden flex flex-col gap-px"
+                        >
+                          {models.map((model) => {
+                            const isActive = model === selectedModel;
+                            return (
+                              <button
+                                key={model}
+                                onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
+                                aria-current={isActive}
+                                className={cn("sb-row sb-sub", isActive && "is-active")}
+                              >
+                                <span className={cn("sb-dot", isActive && "is-on")} />
+                                <span className="sb-unit truncate">{model}</span>
+                              </button>
+                            );
+                          })}
+                        </m.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {pocketItems.length > 0 && (
+            <div className="shrink-0 px-3">
+              <div className="border-t border-[var(--border-main)] mt-3" />
               <button
+                type="button"
                 onClick={() => setShowBookmarks(v => !v)}
                 aria-expanded={showBookmarks}
-                className={cn("sb-row", showBookmarks && "is-active")}
+                className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/bm"
               >
-                <Bookmark size={17} />
-                <span>Bookmark</span>
-                {isOffline && <span className="offline-pill"><WifiOff size={9} /> offline</span>}
-                <span className="sb-count">{pocketItems.length}</span>
-              </button>
-            )}
-          </nav>
-
-          {showSearch && (
-            <div className="px-2 pt-2 shrink-0">
-              <div className="history-search">
-                <Search size={13} className="shrink-0 text-[var(--text-muted)]" />
-                <input
-                  autoFocus
-                  style={{ fontSize: '16px' }}
-                  value={historyQuery}
-                  onChange={e => setHistoryQuery(e.target.value)}
-                  placeholder="Cari riwayat…"
-                  aria-label="Cari riwayat"
+                <span className="sb-section pt-3 pb-2 group-hover/bm:text-[var(--text-primary)]">
+                  <Bookmark size={12} /> Bookmark
+                  {isOffline && <span className="offline-pill"><WifiOff size={9} /> tersimpan offline</span>}
+                </span>
+                <ChevronRight
+                  size={12}
+                  className={cn(
+                    "text-[var(--text-muted)] group-hover/bm:text-[var(--text-secondary)] transition-all duration-200 mt-0.5",
+                    showBookmarks ? "rotate-90" : ""
+                  )}
                 />
-                {historyQuery && (
-                  <button onClick={() => setHistoryQuery('')} aria-label="Hapus pencarian" className="text-[var(--text-muted)]"><X size={13} /></button>
+              </button>
+              <AnimatePresence initial={false}>
+                {showBookmarks && (
+                  <m.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: 'auto', opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.18 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="space-y-0.5 pb-1">
+                      {pocketItems.map(item => (
+                        <div key={item.id} className="relative group/pocket">
+                          <button
+                            onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
+                            className="w-full text-left px-3 py-2 rounded-xl transition-colors duration-100 pr-10 hover:bg-white/5 active:bg-white/8 group/pbtn"
+                          >
+                            <span className="block truncate text-[13.5px] text-[var(--text-secondary)] group-hover/pbtn:text-[var(--text-primary)] transition-colors">
+                              {pocketPreview(item.answer) || '(kosong)'}
+                            </span>
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
+                            className={cn(
+                              "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all flex items-center justify-center",
+                              isMobile ? "w-9 h-9 opacity-100" : "w-7 h-7 opacity-0 group-hover/pocket:opacity-100 focus-visible:opacity-100"
+                            )}
+                            title="Hapus dari Bookmark"
+                            aria-label="Hapus dari Bookmark"
+                          >
+                            <Trash2 size={isMobile ? 14 : 12} />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  </m.div>
                 )}
-              </div>
+              </AnimatePresence>
             </div>
           )}
 
-          <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide px-2 pb-2">
+          <div className="shrink-0 px-3">
+            <div className="border-t border-[var(--border-main)] mt-3" />
+            <button
+              type="button"
+              onClick={() => setShowHistory(v => !v)}
+              aria-expanded={showHistory}
+              className="w-full flex items-center justify-between px-3 py-1 cursor-pointer group/hist"
+            >
+              <span className="sb-section pt-3 pb-2 group-hover/hist:text-[var(--text-primary)]">
+                <HistoryIcon size={12} /> History
+              </span>
+              <ChevronRight
+                size={12}
+                className={cn(
+                  "text-[var(--text-muted)] group-hover/hist:text-[var(--text-secondary)] transition-all duration-200 mt-0.5",
+                  showHistory ? "rotate-90" : ""
+                )}
+              />
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto scrollbar-hide px-3 pb-2">
             <AnimatePresence initial={false}>
-              {showBookmarks && pocketItems.length > 0 && (
+              {showHistory && (
                 <m.div
                   initial={{ height: 0, opacity: 0 }}
                   animate={{ height: 'auto', opacity: 1 }}
@@ -215,134 +308,90 @@ export function Sidebar({
                   transition={{ duration: 0.18 }}
                   className="overflow-hidden"
                 >
-                  <p className="sb-label">Bookmark</p>
-                  <div className="flex flex-col gap-px">
-                    {pocketItems.map(item => (
-                      <div key={item.id} className="relative group/pocket">
-                        <button
-                          onClick={() => { onOpenPocketItem?.(item); if (isMobile) onToggle(); }}
-                          className="sb-row pr-10"
-                        >
-                          <span className="truncate">{pocketPreview(item.answer) || '(kosong)'}</span>
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onDeletePocketItem?.(item.id); }}
-                          className={cn(
-                            "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-all flex items-center justify-center",
-                            isMobile ? "w-9 h-9 opacity-100" : "w-7 h-7 opacity-0 group-hover/pocket:opacity-100 focus-visible:opacity-100"
-                          )}
-                          title="Hapus dari Bookmark"
-                          aria-label="Hapus dari Bookmark"
-                        >
-                          <Trash2 size={isMobile ? 14 : 12} />
-                        </button>
-                      </div>
-                    ))}
-                  </div>
+                  {sessions.length > 4 && (
+                    <div className="history-search">
+                      <Search size={12} className="shrink-0 text-[var(--text-muted)]" />
+                      <input
+                        style={{ fontSize: '16px' }}
+                        value={historyQuery}
+                        onChange={e => setHistoryQuery(e.target.value)}
+                        placeholder="Cari riwayat…"
+                        aria-label="Cari riwayat"
+                      />
+                      {historyQuery && (
+                        <button onClick={() => setHistoryQuery('')} aria-label="Hapus pencarian" className="text-[var(--text-muted)]"><X size={12} /></button>
+                      )}
+                    </div>
+                  )}
+                  {sessions.length === 0 ? (
+                    <div className="px-2 py-3 text-center">
+                      <p className="text-[12.5px] text-[var(--text-muted)]">Belum ada history chat</p>
+                    </div>
+                  ) : filteredSessions.length === 0 ? (
+                    <div className="px-2 py-3 text-center">
+                      <p className="text-[12.5px] text-[var(--text-muted)]">Tidak ada yang cocok</p>
+                    </div>
+                  ) : (
+                    <div className="space-y-0.5">
+                      {filteredSessions.map((session) => {
+                        const isActive = session.id === currentSessionId;
+                        return (
+                          <div
+                            key={session.id}
+                            className="relative group/item"
+                            onMouseEnter={() => setHoveredSession(session.id)}
+                            onMouseLeave={() => setHoveredSession(null)}
+                          >
+                            <button
+                              onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
+                              className={cn(
+                                "w-full flex items-center gap-2 text-left px-3 py-2 rounded-xl text-[13.5px] transition-colors duration-100 pr-10 active:bg-white/8",
+                                isActive
+                                  ? "bg-[var(--accent-active)]/20 text-[var(--text-primary)] font-medium"
+                                  : "text-[var(--text-secondary)] hover:bg-white/5 hover:text-[var(--text-primary)]"
+                              )}
+                            >
+                              <span className={cn(
+                                "w-1.5 h-1.5 rounded-full shrink-0 self-start mt-[7px]",
+                                isActive ? "bg-[var(--accent-active)]" : "bg-[var(--text-muted)]/40"
+                              )} />
+                              <span className="flex flex-col min-w-0 gap-[3px]">
+                                <span className="block truncate">{session.title}</span>
+                                <span className="history-meta">
+                                  <span className="history-model">{session.model}</span>
+                                  <span>·</span>
+                                  <span>{relativeTime(session.updatedAt)}</span>
+                                </span>
+                              </span>
+                            </button>
+                            <AnimatePresence>
+                              {(isMobile || hoveredSession === session.id) && (
+                                <m.button
+                                  initial={{ opacity: 0, scale: 0.8 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  exit={{ opacity: 0, scale: 0.8 }}
+                                  transition={{ duration: 0.1 }}
+                                  onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
+                                  className={cn(
+                                    "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-colors flex items-center justify-center",
+                                    isMobile ? "w-9 h-9" : "w-7 h-7"
+                                  )}
+                                  title="Hapus sesi"
+                                  aria-label="Hapus percakapan"
+                                >
+                                  <Trash2 size={isMobile ? 14 : 12} />
+                                </m.button>
+                              )}
+                            </AnimatePresence>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </m.div>
               )}
             </AnimatePresence>
-
-            {!showSearch && (
-              <>
-                <p className="sb-label">Model unit</p>
-                <div className="flex flex-col gap-px">
-                  {MODEL_GROUPS.map(({ type, models }) => {
-                    const isOpen = expandedType === type;
-                    return (
-                      <div key={type}>
-                        <button
-                          onClick={() => setExpandedType(isOpen ? '' : type)}
-                          aria-expanded={isOpen}
-                          className="sb-row"
-                        >
-                          {type === 'Wheel Loader' ? <WheelLoaderIcon size={17} /> : <ExcavatorIcon size={17} />}
-                          <span className="flex-1 truncate">{type}</span>
-                          <ChevronRight size={14} className={cn("sb-chevron transition-transform duration-200", isOpen && "rotate-90")} />
-                        </button>
-                        <AnimatePresence initial={false}>
-                          {isOpen && (
-                            <m.div
-                              initial={{ height: 0, opacity: 0 }}
-                              animate={{ height: 'auto', opacity: 1 }}
-                              exit={{ height: 0, opacity: 0 }}
-                              transition={{ duration: 0.18 }}
-                              className="overflow-hidden flex flex-col gap-px"
-                            >
-                              {models.map((model) => {
-                                const isActive = model === selectedModel;
-                                return (
-                                  <button
-                                    key={model}
-                                    onClick={() => { onSelectModel(model); setExpandedType(type); if (isMobile) onToggle(); }}
-                                    aria-current={isActive}
-                                    className={cn("sb-row sb-sub", isActive && "is-active")}
-                                  >
-                                    <span className={cn("sb-dot", isActive && "is-on")} />
-                                    <span className="sb-unit truncate">{model}</span>
-                                  </button>
-                                );
-                              })}
-                            </m.div>
-                          )}
-                        </AnimatePresence>
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-
-            <p className="sb-label">{showSearch ? 'Hasil pencarian' : 'Recents'}</p>
-            {sessions.length === 0 ? (
-              <p className="px-2.5 py-1.5 text-[13px] text-[var(--text-muted)]">Belum ada history chat</p>
-            ) : filteredSessions.length === 0 ? (
-              <p className="px-2.5 py-1.5 text-[13px] text-[var(--text-muted)]">Tidak ada yang cocok</p>
-            ) : (
-              <div className="flex flex-col gap-px">
-                {filteredSessions.map((session) => {
-                  const isActive = session.id === currentSessionId;
-                  return (
-                    <div
-                      key={session.id}
-                      className="relative group/item"
-                      onMouseEnter={() => setHoveredSession(session.id)}
-                      onMouseLeave={() => setHoveredSession(null)}
-                    >
-                      <button
-                        onClick={() => { onSelectSession(session.id); if (isMobile) onToggle(); }}
-                        aria-current={isActive}
-                        title={`${session.model} · ${relativeTime(session.updatedAt)}`}
-                        className={cn("sb-row pr-10", isActive && "is-active")}
-                      >
-                        <span className="truncate">{session.title}</span>
-                      </button>
-                      <AnimatePresence>
-                        {(isMobile || hoveredSession === session.id) && (
-                          <m.button
-                            initial={{ opacity: 0, scale: 0.8 }}
-                            animate={{ opacity: 1, scale: 1 }}
-                            exit={{ opacity: 0, scale: 0.8 }}
-                            transition={{ duration: 0.1 }}
-                            onClick={(e) => { e.stopPropagation(); onDeleteSession(session.id); }}
-                            className={cn(
-                              "absolute right-0.5 top-1/2 -translate-y-1/2 rounded-lg hover:bg-red-500/10 text-[var(--text-muted)] hover:text-red-400 transition-colors flex items-center justify-center",
-                              isMobile ? "w-9 h-9" : "w-7 h-7"
-                            )}
-                            title="Hapus sesi"
-                            aria-label="Hapus percakapan"
-                          >
-                            <Trash2 size={isMobile ? 14 : 12} />
-                          </m.button>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
           </div>
-
 
           <div className="shrink-0 px-2 pt-2 pb-3 border-t border-[var(--border-main)] sidebar-footer-safe">
             <div className="relative" ref={userMenuRef}>

@@ -3,6 +3,7 @@
 @font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/dm-sans-600-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 300 700; font-display: swap; src: url('/fonts/space-grotesk-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Source Serif 4'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('/fonts/source-serif-4-v1.woff2') format('woff2'); }
+@font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/plus-jakarta-sans-v1.woff2') format('woff2'); }
 
 @import "tailwindcss";
 
@@ -11,6 +12,7 @@
 @theme {
   --font-sans:    "DM Sans", ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
   --font-heading: "Space Grotesk", var(--font-sans);
+  --font-ui:      "Plus Jakarta Sans", var(--font-sans);
   --font-serif:   "Source Serif 4", Georgia, "Times New Roman", serif;
   --font-mono:    ui-monospace, "SF Mono", "Cascadia Mono", "Roboto Mono", Menlo, Consolas, monospace;
 }
@@ -419,11 +421,14 @@ img {
 
 .sidebar-header { padding-top: 20px; background: var(--bg-sidebar); }
 
-/* Claude.ai-style sidebar: icon + label rows, quiet tinted hover, sentence-case section labels. */
+/* Sidebar typeface: Plus Jakarta Sans everywhere inside the panel; chat stays DM Sans/serif. */
+.sidebar-font { font-family: var(--font-ui); word-spacing: 0.12em; }
+.sidebar-font :is(button, input) { word-spacing: inherit; }
+.sidebar-font input { font-family: var(--font-ui); }
 .sb-row {
   width: 100%; display: flex; align-items: center; gap: 10px;
   min-height: 36px; padding: 0 10px; border-radius: 9px; text-align: left;
-  font-family: var(--font-sans); font-size: 14px; font-weight: 400; letter-spacing: -0.005em;
+  font-family: var(--font-ui); font-size: 14px; font-weight: 500; letter-spacing: 0;
   color: var(--text-primary); cursor: pointer; transition: background 0.12s;
 }
 .sb-row:hover { background: color-mix(in srgb, var(--text-primary) 6%, transparent); }
@@ -434,12 +439,13 @@ img {
   display: flex; align-items: center; justify-content: center;
   color: #fff; background: var(--accent-main);
 }
-.sb-label { padding: 18px 10px 6px; font-family: var(--font-sans); font-size: 12px; font-weight: 500; color: var(--text-muted); }
-.sb-count { margin-left: auto; font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.sb-section { word-spacing: normal; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; color: var(--text-muted); transition: color 0.15s; }
 .sb-sub { padding-left: 37px; gap: 9px; }
 .sb-dot { width: 6px; height: 6px; border-radius: 999px; flex-shrink: 0; background: color-mix(in srgb, var(--text-muted) 45%, transparent); }
 .sb-dot.is-on { background: var(--accent-main); }
-.sb-unit { font-family: var(--font-heading); font-size: 13.5px; letter-spacing: -0.01em; }
+.sb-unit { font-size: 13.5px; font-weight: 500; letter-spacing: 0; font-variant-numeric: tabular-nums; }
+.history-meta { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-muted); font-weight: 450; }
+.history-model { font-size: 11px; font-weight: 600; padding: 1px 6px; border-radius: 5px; background: var(--bg-card-hover); color: var(--text-secondary); letter-spacing: 0.01em; }
 .sb-user { min-height: 44px; padding: 0 8px; }
 
 @media all and (display-mode: standalone) and (max-width: 767px) {
