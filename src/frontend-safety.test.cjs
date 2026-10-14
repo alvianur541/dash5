@@ -49,9 +49,11 @@ test('PWA and mobile view are locked against pinch zoom and pull; editable input
   assert.match(read('../index.html'), /maximum-scale=1(\.0)?, user-scalable=no/);
   assert.match(read('index.css'), /html \{[^}]*touch-action: pan-x pan-y;/);
   assert.match(read('lib/viewport.ts'), /gesturestart/);
-  for (const file of ['LoginPage', 'ChangePasswordDialog', 'MessageInput']) {
+  for (const file of ['LoginPage', 'ChangePasswordDialog']) {
     assert.match(read(`components/${file}.tsx`), /text-\[16px\]/);
   }
+  // Composer is 15px by request (15 Oct); maximum-scale=1 above is what keeps iOS from zooming on focus.
+  assert.match(read('components/MessageInput.tsx'), /text-\[15px\]/);
 });
 
 test('mobile sidebar drawer is sized by the app container, not the iOS initial containing block', () => {

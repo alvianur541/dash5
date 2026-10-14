@@ -30,9 +30,9 @@ test('heading size, weight and spacing establish a relative hierarchy', () => {
   assert.match(css, /font-weight: 650;[\s\S]*margin-top: 1\.55em;\s*margin-bottom: 0\.4em/);
 });
 
-test('composer keeps the 16px iOS floor and 24px leading', () => {
+test('composer is 15px on phones (zoom locked by maximum-scale=1), 14px on desktop, 24px leading', () => {
   const input = read('components/MessageInput.tsx');
-  assert.match(input, /font-ui text-\[16px\] md:text-\[14px\][^\n]+leading-\[24px\]/);
+  assert.match(input, /font-ui text-\[15px\] md:text-\[14px\][^\n]+leading-\[24px\]/);
 });
 
 test('surrounding navigation and modal roles stay subordinate to conversation prose', () => {
