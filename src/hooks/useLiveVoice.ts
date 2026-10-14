@@ -71,7 +71,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
         try {
           const m = JSON.parse(event.data);
           if (m.type === 'error') { stop(m.message); return; }
-          if (m.type === 'searching') { setPhase('searching'); return; }
+          if (m.type === 'searching') { transcript.searching(); setPhase('searching'); return; }
           if (m.type === 'answer' && typeof m.text === 'string') { for (const msg of transcript.answer(m.text)) cb.current.onMessage(msg); setPhase(playing.size ? 'speaking' : 'listening'); return; }
           if (m.type === 'ready') {
             clearTimeout(timeout);

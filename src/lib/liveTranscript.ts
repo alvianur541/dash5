@@ -51,35 +51,47 @@ export function tidyTranscript(text: string): string {
     .replace(/\bkawasaki\s+loader\s+60\s*Z\s*V\b/gi, 'KCM60ZV')
     .replace(/\b(Z[XW])\s*(\d+)\s*([A-Z]{0,3})\s*(?:dash|strip|-)\s*(\d)\s*([A-Z])\b/g, '$1$2$3-$4$5')
     .replace(/\b(Z[XW])\s+(\d+)\b/g, '$1$2')
-    .replace(/(\d{4,})\s+((?:[A-Z]-)+[A-Z])\b/g, (_, n, l) => n + l.replace(/-/g, ''));
+    .replace(/(\d{4,})\s+((?:[A-Z]-)+[A-Z])\b/g, (_, n, l) => n + l.replace(/-/g, ''))
+    .replace(/\b(tahun|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\s+(\d)\.(\d{3})\b/gi, '$1 $2$3');
 }
+
+// The voice model sometimes reads out (or invents) the bracketed tool label; never show it.
+const TOOL_ECHO_RE = /\s*\[(?:HASIL|STATUS) ALAT[\s\S]*$/i;
 
 // Turns streamed Live transcription chunks into growing chat bubbles.
 export function createLiveTranscript(newId: () => string = () => crypto.randomUUID(), now: () => number = Date.now) {
   let open: Message | null = null;
   let raw = '';
   let locked = false;
+  let waiting = false;
+  let gap = false;
   const add = (role: Message['role'], text?: string): Message[] => {
     if (!text) return [];
     if (role === 'assistant' && locked) return [];
     // The read-out of an exact answer stays hidden until the technician speaks again.
-    if (role === 'user') locked = false;
+    if (role === 'user') { locked = false; waiting = false; }
     if (!open || open.role !== role) { open = { id: newId(), role, content: '', timestamp: now() }; raw = ''; }
-    raw += text;
-    open = { ...open, content: tidyTranscript(raw) };
+    raw += gap && raw && !/\s$/.test(raw) && !/^\s/.test(text) ? ' ' + text : text;
+    gap = false;
+    open = { ...open, content: tidyTranscript(raw).replace(TOOL_ECHO_RE, '') };
     return [open];
   };
   return {
     apply(c: LiveContent): Message[] {
       const changed = [...add('user', c.inputTranscription?.text), ...add('assistant', c.outputTranscription?.text)];
-      if (c.turnComplete || c.interrupted) { open = null; raw = ''; }
+      // While a search runs, filler lines share one bubble that the answer later replaces.
+      if (c.turnComplete || c.interrupted) {
+        if (waiting && open?.role === 'assistant') gap = true;
+        else { open = null; raw = ''; }
+      }
       return changed;
     },
+    searching() { waiting = true; },
     // Exact tool text (digits, PN, tables) replaces the spoken transcript for this turn.
     answer(text: string): Message[] {
       if (!open || open.role !== 'assistant') open = { id: newId(), role: 'assistant', content: '', timestamp: now() };
       open = { ...open, content: text };
-      locked = true;
+      locked = true; waiting = false;
       return [open];
     },
   };

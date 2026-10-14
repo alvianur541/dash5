@@ -54,6 +54,38 @@ test('flywheel 12 Oct: spoken read-out after an exact answer adds no second bubb
   assert.equal(t.apply({ outputTranscription: { text: 'Oke' } }).length, 1);
 });
 
+test('filler lines during a search share one bubble that the exact answer replaces', () => {
+  let n = 0;
+  const t = createLiveTranscript(() => `id${++n}`, () => 1);
+  t.apply({ inputTranscription: { text: 'Cek harga aki berapa?' } });
+  t.searching();
+  t.apply({ outputTranscription: { text: 'Oke, harga aki aku carikan dulu.' } });
+  t.apply({ turnComplete: true });
+  assert.deepEqual(t.apply({ outputTranscription: { text: 'Masih dicari ya.' } }).map(m => [m.id, m.content]), [['id2', 'Oke, harga aki aku carikan dulu. Masih dicari ya.']]);
+  t.apply({ turnComplete: true });
+  assert.deepEqual(t.answer('| PN | Harga |').map(m => m.id), ['id2']);
+  t.apply({ turnComplete: true });
+  t.apply({ inputTranscription: { text: 'Oke.' } });
+  assert.equal(t.apply({ outputTranscription: { text: 'Siap.' } })[0].id, 'id4');
+});
+
+test('technician speaking during a search ends the filler bubble; the answer gets its own', () => {
+  let n = 0;
+  const t = createLiveTranscript(() => `id${++n}`, () => 1);
+  t.searching();
+  t.apply({ outputTranscription: { text: 'Aku carikan dulu ya.' } });
+  t.apply({ turnComplete: true });
+  t.apply({ inputTranscription: { text: 'Boleh, dicari ya.' } });
+  t.apply({ turnComplete: true });
+  assert.deepEqual(t.answer('Rp 1').map(m => m.id), ['id3']);
+});
+
+test('bracketed tool labels spoken by the model never reach the screen', () => {
+  const t = createLiveTranscript(() => 'a1', () => 1);
+  const [m] = t.apply({ outputTranscription: { text: 'Baik, aku teliti lagi ya.[HASIL ALAT ask_technical]: Data hidrolik memuat sistem utama.' } });
+  assert.equal(m.content, 'Baik, aku teliti lagi ya.');
+});
+
 test('tool answer without spoken text still creates an assistant bubble', () => {
   const t = createLiveTranscript(() => 'a1', () => 1);
   assert.deepEqual(t.answer('Rp 1').map(m => [m.role, m.content]), [['assistant', 'Rp 1']]);
@@ -76,6 +108,7 @@ test('spoken numbers and unit names in transcripts become digits like the text c
     ['Zaxis Wheel Loader seratus empat puluh siap.', 'ZW140 siap.'],
     ['Kawasaki Loader enam puluh Z V siap.', 'KCM60ZV siap.'],
     ['Zaxis Wheel Loader dan Kawasaki Loader.', 'Zaxis Wheel Loader dan Kawasaki Loader.'],
+    ['Besok tanggal tiga belas Oktober dua ribu dua puluh enam.', 'Besok tanggal 13 Oktober 2026.'],
   ];
   for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
 });
