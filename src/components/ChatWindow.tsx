@@ -320,7 +320,7 @@ const AgentThinkingIndicator = memo(function AgentThinkingIndicator({
           {view.icon === 'check'   && <Check  size={12} style={{ color: current.found ? 'var(--status-success, #22c55e)' : 'var(--text-muted)' }} />}
           {view.icon === 'spark'   && <Sparkles size={12} className="text-[var(--accent-main)]" />}
           {view.icon === 'compose' && <Loader2 size={12} className="animate-spin text-[var(--accent-main)]" />}
-          <span>{view.text}</span>
+          <span className="agent-thinking-text">{view.text}</span>
           {view.icon !== 'check' && (
             <span className="typing-dots-inline">
               {[0, 1, 2].map(i => (

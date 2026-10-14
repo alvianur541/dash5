@@ -7,7 +7,7 @@ const sidebar = readFileSync(path.join(__dirname, 'components/Sidebar.tsx'), 'ut
 
 test('sidebar wordmarks have enough native pixels for a 3x phone without changing the box', () => {
   const height = Number(css.match(/\.sidebar-wordmark \{[^}]*height: (\d+)px/)[1]);
-  assert.equal(height, 16);
+  assert.equal(height, 22);
   const files = [...sidebar.matchAll(/src="(\/hexindo-wordmark[^" ]*\.png)"/g)].map(match => match[1]);
   assert.ok(files.length > 0);
   for (const file of files) {

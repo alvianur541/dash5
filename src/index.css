@@ -3,6 +3,7 @@
 @font-face { font-family: 'DM Sans'; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/dm-sans-600-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Space Grotesk'; font-style: normal; font-weight: 300 700; font-display: swap; src: url('/fonts/space-grotesk-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Source Serif 4'; font-style: normal; font-weight: 200 900; font-display: swap; src: url('/fonts/source-serif-4-v1.woff2') format('woff2'); }
+@font-face { font-family: 'Source Serif 4'; font-style: italic; font-weight: 200 900; font-display: swap; src: url('/fonts/source-serif-4-italic-v1.woff2') format('woff2'); }
 @font-face { font-family: 'Plus Jakarta Sans'; font-style: normal; font-weight: 200 800; font-display: swap; src: url('/fonts/plus-jakarta-sans-v1.woff2') format('woff2'); }
 
 @import "tailwindcss";
@@ -132,7 +133,7 @@ img {
 
 .markdown-body {
   font-family: var(--font-serif);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
   line-height: 1.65;
   color: var(--text-primary);
@@ -271,9 +272,9 @@ img {
   margin-top: 1.55em;
   margin-bottom: 0.4em;
 }
-.markdown-body h1 { font-size: 18px; }
-.markdown-body h2 { font-size: 17px; }
-.markdown-body h3 { font-size: 16px; }
+.markdown-body h1 { font-size: 17px; }
+.markdown-body h2 { font-size: 16px; }
+.markdown-body h3 { font-size: 15px; }
 
 .markdown-body > h1:first-child,
 .markdown-body > h2:first-child,
@@ -301,7 +302,7 @@ img {
   font-family: var(--font-sans);
   width: 100%;
   border-collapse: collapse;
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.5;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0;
@@ -315,7 +316,7 @@ img {
   padding: 0.5rem 0.75rem;
   text-align: left;
   font-weight: 600;
-  font-size: 15px;
+  font-size: 14px;
   color: var(--text-secondary);
   border-bottom: 1px solid var(--border-main);
   white-space: nowrap;
@@ -525,7 +526,7 @@ img {
   border-radius: 18px;
   padding: 9px 14px;
   font-family: var(--font-sans);
-  font-size: 15px; font-weight: 400; line-height: 1.65;
+  font-size: 14px; font-weight: 400; line-height: 1.65;
   letter-spacing: -0.005em;
   color: var(--text-primary);
   user-select: text;
@@ -732,7 +733,7 @@ img {
 .pocket-modal-inner { max-width: 720px; margin: 0 auto; padding: 16px 18px 28px; }
 .pocket-question {
   font-family: var(--font-sans);
-  font-size: 15px; line-height: 1.65;
+  font-size: 14px; line-height: 1.65;
   color: var(--text-primary);
   background: var(--bg-card-hover);
   border-radius: 14px;
@@ -889,13 +890,13 @@ table.sticky-col-3 th:nth-child(3), table.sticky-col-3 td:nth-child(3) {
 table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body table .code-copy { border-bottom: none; }
 .markdown-body td.md-num { white-space: nowrap; }
-.markdown-body td.md-price { font-family: var(--font-mono); font-size: 15px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
+.markdown-body td.md-price { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; letter-spacing: 0; }
 /* Rows run long instead of squeezing (Alvian): cells stay on one line and the table scrolls sideways with the
    PN column sticky; only very long notes (md-long, >44 chars) wrap, at a comfortable width. */
 .markdown-body table { width: max-content; min-width: 100%; }
 .markdown-body tbody td, .markdown-body td.md-text { white-space: nowrap; }
 .markdown-body td.md-long { white-space: normal; min-width: 16em; max-width: 22em; }
-.markdown-body table code.code-copy { font-size: 15px; }
+.markdown-body table code.code-copy { font-size: 14px; }
 .markdown-body tbody td:has(> code.code-copy:only-child) { white-space: nowrap; }
 
 .toast-layer {
@@ -950,6 +951,8 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 }
 .history-search input::placeholder { color: var(--text-muted); }
 
+.agent-thinking-text { font-family: var(--font-serif); font-style: italic; font-size: 14px; letter-spacing: 0; }
+
 .offline-pill {
   display: inline-flex; align-items: center; gap: 4px; margin-left: 6px;
   padding: 2px 7px; border-radius: 999px; font-size: 9.5px; font-weight: 600; text-transform: none; letter-spacing: 0;
@@ -959,7 +962,7 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 /* Official high-resolution wordmark crop, with the existing monochrome colours. */
 .sidebar-wordmark {
   display: block;
-  height: 16px;
+  height: 22px;
   width: auto;
 }
 .sidebar-wordmark-dark { display: none; }

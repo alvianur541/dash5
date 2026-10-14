@@ -35,7 +35,7 @@ test('user bubbles have dedicated neutral surfaces and AA body text in both them
   assert.match(bubble, /background: var\(--bg-user-bubble\)/);
   assert.match(bubble, /box-shadow: inset 0 0 0 1px var\(--border-user-bubble\)/);
   assert.match(bubble, /padding: 9px 14px/);
-  assert.match(bubble, /font-size: 15px; font-weight: 400; line-height: 1\.65/);
+  assert.match(bubble, /font-size: 14px; font-weight: 400; line-height: 1\.65/);
   assert.match(bubble, /color: var\(--text-primary\)/);
 });
 
@@ -63,11 +63,11 @@ test('landing font roles use versioned self-hosted woff2 files', () => {
 });
 
 test('15px conversation has a distinct heading hierarchy and dense PN tables', () => {
-  assert.match(css, /\.markdown-body \{\s*font-family: var\(--font-serif\);\s*font-size: 15px/);
-  assert.match(css, /\.markdown-body h2 \{ font-size: 17px; \}/);
+  assert.match(css, /\.markdown-body \{\s*font-family: var\(--font-serif\);\s*font-size: 14px/);
+  assert.match(css, /\.markdown-body h2 \{ font-size: 16px; \}/);
   assert.match(css, /\.markdown-body code \{\s*font-family: var\(--font-mono\)/);
   assert.match(css, /\.markdown-body table \{ width: max-content; min-width: 100%; \}/);
-  assert.match(css, /\.markdown-body table code\.code-copy \{ font-size: 15px; \}/);
+  assert.match(css, /\.markdown-body table code\.code-copy \{ font-size: 14px; \}/);
 });
 
 test('theme browser chrome agrees and switching remains instantaneous', () => {
