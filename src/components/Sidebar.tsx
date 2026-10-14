@@ -2,7 +2,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Tractor, Search, WifiOff } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, Search, WifiOff } from 'lucide-react';
+import { ExcavatorIcon, WheelLoaderIcon } from './UnitIcons';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
 import { SupportModal } from './SupportModal';
@@ -255,7 +256,7 @@ export function Sidebar({
                           aria-expanded={isOpen}
                           className="sb-row"
                         >
-                          <Tractor size={17} />
+                          {type === 'Wheel Loader' ? <WheelLoaderIcon size={17} /> : <ExcavatorIcon size={17} />}
                           <span className="flex-1 truncate">{type}</span>
                           <ChevronRight size={14} className={cn("sb-chevron transition-transform duration-200", isOpen && "rotate-90")} />
                         </button>
