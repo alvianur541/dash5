@@ -175,6 +175,7 @@ const PRICE_SRC_RE = /^\s*(sumber harga|price source|価格の出典)\s*[:：]\s
 
 // Harga di tabel: angka saja, rata kanan; mata uang di judul kolom.
 const RP_CELL_RE = /^rp\.?\s?[\d.,]+$/i;
+const PRICE_STATUS_RE = /^(belum tersedia|gagal dicek(, kirim ulang)?|ketik pn untuk cek|not available)\.?$/i;
 const PRICE_HEAD_RE = /^(harga(?:\s+satuan|\s+total)?|sub-?total|total|(?:unit\s+)?price|価格)(?:\s*\(?(?:rp|idr)\)?)?$/i;
 const tanpaRp = (c: React.ReactNode): React.ReactNode =>
   typeof c === 'string' ? c.replace(/^\s*rp\.?\s?/i, '')
@@ -182,11 +183,11 @@ const tanpaRp = (c: React.ReactNode): React.ReactNode =>
     : isValidElement<{ children?: React.ReactNode }>(c) ? <strong>{tanpaRp(c.props.children)}</strong>
     : c;
 
-function PriceSource({ label }: { label: string }) {
+function PriceSource() {
   return (
     <a className="md-price-src" href="https://hexindoparts.com" target="_blank" rel="noopener noreferrer">
       <Tag size={12} strokeWidth={2.2} aria-hidden="true" />
-      <span>{label}</span><b>Hexindoparts.com</b>
+      <b>Hexindoparts.com</b>
     </a>
   );
 }
@@ -194,8 +195,7 @@ function PriceSource({ label }: { label: string }) {
 export const MD_COMPONENTS: Components = {
   p: ({ node, children }) => {
     const t = nodeText(node as HNode).trim();
-    const ps = t.replace(/[*_`]/g, '').match(PRICE_SRC_RE);
-    if (ps) return <p className="md-source"><PriceSource label={ps[1]} /></p>;
+    if (PRICE_SRC_RE.test(t.replace(/[*_`]/g, ''))) return <p className="md-source"><PriceSource /></p>;
     return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
   },
   li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
@@ -203,6 +203,7 @@ export const MD_COMPONENTS: Components = {
   td: ({ node, children, ...rest }) => {
     const t = nodeText(node as HNode).trim();
     if (RP_CELL_RE.test(t)) return <td {...rest} className="md-num md-price" style={{ ...rest.style, textAlign: 'right' }}>{tanpaRp(children)}</td>;
+    if (PRICE_STATUS_RE.test(t)) return <td {...rest} className="md-price-note" style={{ ...rest.style, textAlign: 'right' }}>{children}</td>;
     const cls = NUM_CELL_RE.test(t) ? 'md-num' : t.length > 44 ? 'md-long' : t.length > 16 && /\s/.test(t) ? 'md-text' : undefined;
     return <td {...rest} className={cls}>{children}</td>;
   },
