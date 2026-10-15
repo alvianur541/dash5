@@ -50,5 +50,29 @@ module.exports = async () => {
     const kosong = '| Part Number | Nama Part | Harga |\n| :--- | :--- | :--- |\n| `ZD00003084` | ROD;PISTON | Belum tersedia |\n\nHarga `ZD00003084` tidak terdaftar di hexindoparts.com.';
     t((await run(kosong)).includes('tidak terdaftar di hexindoparts.com'), 'tabel tanpa satu pun harga → kalimat status tidak disentuh');
   }
+  {
+    // Alur penuh: blok harga web ada → tanpa MEDIUM_CAVEAT; tabel berharga → log confidence "exact" (null).
+    const { generateResponseStream, USAGE } = require('./helpers.cjs');
+    const CPM = { metadata: { Model: 'ZX200-5G', Kategori: 'CPM' }, content: 'Section: CPM MAINTENANCE SCHEDULE\nModel: ZX200-5G\nKategori: CPM\n\n  No   Part Description                           Part Number              500hr  1000hr  2000hr\n  1    Engine Oil Filter                          4658521                      1       1       1\n' };
+    const q = { select() { return q; }, contains() { return q; }, ilike() { return q; }, filter() { return q; }, limit() { return q; }, or() { return q; }, then(r) { return Promise.resolve({ data: [], error: null }).then(r); } };
+    const supabase = { from: () => q, rpc: (_n, a) => Promise.resolve({ data: a.filter.Kategori === 'CPM' ? [{ ...CPM, similarity: 0.9 }] : [], error: null }) };
+    const jawab = (teks) => [[{ text: teks, usageMetadata: USAGE, live: true, finishReason: 'STOP' }]];
+    const webPrice = async pn => (pn === '4658521' ? [{ pn: '4658521', nama: 'FILTER;ENG OIL', harga: 'Rp 645.593' }] : []);
+    let sent = null;
+    resetHargaWebCache();
+    const { d } = mockDeps(jawab('| Part Number | Nama Part | Qty | Harga |\n| :--- | :--- | :---: | :--- |\n| `4658521` | Engine Oil Filter | 1 | Rp 645.593 |\n\nSumber harga: Hexindoparts.com'), { supabase, embed: async () => [0.1], webPrice });
+    const stream = d.stream; d.stream = (b, m, cb, o) => { sent = b; return stream(b, m, cb, o); };
+    await runWithDeps(d, () => generateResponseStream('ZX200-5G', 'Alvianur', [], 'Pket 2000', () => {}));
+    const user = sent.contents[sent.contents.length - 1].parts.map(p => p.text).join('\n');
+    t(user.includes('[HARGA HEXINDOPARTS.COM') && !user.includes('CONFIDENCE: MEDIUM'), 'data berisi harga web → tanpa catatan "CONFIDENCE: MEDIUM"');
+    t(d.meta.route === 'rag_found' && d.meta.confidence === undefined, `jawaban tabel berharga → dicatat data persis (confidence=${d.meta.confidence})`);
+    resetHargaWebCache();
+    let sent2 = null;
+    const { d: d2 } = mockDeps(jawab('Filter oli diganti tiap 500 jam.'), { supabase, embed: async () => [0.1], webPrice: async () => [] });
+    const s2 = d2.stream; d2.stream = (b, m, cb, o) => { sent2 = b; return s2(b, m, cb, o); };
+    await runWithDeps(d2, () => generateResponseStream('ZX200-5G', 'Alvianur', [], 'Pket 2000', () => {}));
+    const user2 = sent2.contents[sent2.contents.length - 1].parts.map(p => p.text).join('\n');
+    t(user2.includes('CONFIDENCE: MEDIUM'), 'situs tanpa harga satu pun → catatan "CONFIDENCE: MEDIUM" tetap dikirim');
+  }
   return done();
 };

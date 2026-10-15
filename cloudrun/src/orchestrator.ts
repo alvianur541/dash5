@@ -16,7 +16,14 @@ import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCo
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang di kalimat PERTAMA bahwa bagian itu belum ketemu di data ini (jangan simpulkan manualnya tidak memuat), jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
 
-const LEAK_RE = /^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
+// Price answers quote exact data (promo rows / hexindoparts.com, re-checked by lengkapiHarga): log them as an
+// exact lookup (confidence null = dashboard "exact part / price data"), not as the reranker tier of the catalog
+// search, and never send MEDIUM_CAVEAT with a site price block — it made the model open with "harga tidak
+// terdaftar" above a priced table (Alvian 15 Oct).
+const TABEL_HARGA_RE = /^\s*\|[^\n]*\b(?:Rp|IDR)\.?\s*\d/m;
+const ADA_HARGA_WEB_RE = /\[HARGA HEXINDOPARTS\.COM[^\]\n]*\]\n\s+Part Number/;
+
+const LEAK_RE =/^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
 const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
 
 const LATEX_SYMBOL: Record<string, string> = {
@@ -203,7 +210,7 @@ export async function generateResponseStream(
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
     ? RERANK_DEGRADED_NOTE
-    : ragConfidence !== 'high'
+    : ragConfidence !== 'high' && !ADA_HARGA_WEB_RE.test(ragContent)
       ? MEDIUM_CAVEAT
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
@@ -221,6 +228,7 @@ export async function generateResponseStream(
     ...systemFor(model, isCasual),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical)), ragContent, history);
+  if (routeResult.type === 'rag_found' && TABEL_HARGA_RE.test(fullText)) deps().meta.confidence = undefined;
 
   if (routeResult.type === 'rag_found' && fullText
       && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
@@ -376,7 +384,7 @@ export async function generateResponse(
       if (route?.type === 'rag_found' && partsAsk && (route.dataLabel === RAG_LABEL.parts || listMode)) thinkFoto = 'low';
       if (route?.type === 'rag_found') {
         deps().meta.confidence = route.confidence;
-        const caveat = route.confidence !== 'high' ? MEDIUM_CAVEAT : '';
+        const caveat = route.confidence !== 'high' && !ADA_HARGA_WEB_RE.test(route.content) ? MEDIUM_CAVEAT : '';
         ragBlock = `${caveat}\n\n[${route.dataLabel}]\n${route.content}`;
         if (!promoAktif()) ragBlock = tanpaHargaDb(ragBlock);
         dataFoto = ragBlock;
@@ -411,5 +419,6 @@ export async function generateResponse(
   };
 
   const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)), dataFoto, history);
+  if (TABEL_HARGA_RE.test(streamed)) deps().meta.confidence = undefined;
   return streamed || FALLBACK_RESPONSE;
 }
