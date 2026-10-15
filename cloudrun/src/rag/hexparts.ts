@@ -333,17 +333,43 @@ const PRICE_HEADER_RE = /^(?:harga|price|unit price|cost|amount|total)(?:\s|$)/i
 // Once the table has real prices, prose written around the old placeholder ("harga online-nya belum sempat
 // ditarik", "ketik PN untuk cek harganya") contradicts it: drop those sentences, keep the rest (Alvian 5 Oct).
 const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu|tersedia)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
+// Same contradiction in other words/languages (audit 14-15 Oct: JA "価格は登録されていません" + a priced table,
+// ID "tidak terdaftar/tercantum", "konfirmasi ke Parts Counter").
+const KLAIM_LAIN_RE = new RegExp([
+  String.raw`\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b[^.?!\n]*\b(?:harga|promo|price)|\b(?:harga|promo)\w*[^.?!\n]*\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b`,
+  String.raw`\bparts?\s*counter\b`,
+  String.raw`\bprices?\b[^.?!\n]*\b(?:not\s+(?:registered|listed|found|included|in\s+(?:the|our)\s+(?:price\s*list|promo|data)))|\bnot\s+(?:registered|listed|found)\b[^.?!\n]*\b(?:price|promo)`,
+  String.raw`(?:価格|値段|プロモ)[^。！？\n]*(?:登録されていません|掲載されていません|見つかりません|ありません)|パーツカウンター`,
+].join('|'), 'i');
+const klaim = (k: string) => KLAIM_TANPA_HARGA_RE.test(k) || KLAIM_LAIN_RE.test(k) || /\bprice\b[^.?!]*\b(?:not (?:yet )?available|unavailable|not (?:checked|retrieved))\b/i.test(k);
+const KALIMAT_RE = /.+?(?:[.?!]+(?=\s|$)\s*|[。！？]+\s*|$)/g;
 function buangKlaimTanpaHarga(text: string): string {
   return text.split('\n').map(l => {
     if (l.trim().startsWith('|')) return l;
-    const kal = l.match(/.+?(?:[.?!]+(?=\s|$)\s*|$)/g)?.filter(Boolean) ?? [l];
+    const kal = l.match(KALIMAT_RE)?.filter(Boolean) ?? [l];
     const sisa = kal.map(k => {
-      if (!(KLAIM_TANPA_HARGA_RE.test(k) || /\bprice\b[^.?!]*\b(?:not (?:yet )?available|unavailable|not (?:checked|retrieved))\b/i.test(k)) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
-      const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1');
-      return potong !== k && !KLAIM_TANPA_HARGA_RE.test(potong) ? potong : '';
+      if (!klaim(k) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
+      const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1').replace(/ですが、[^。]*。?(\s*)$/, 'です。$1');
+      return potong !== k && !klaim(potong) ? potong : '';
     }).filter(Boolean);
     return sisa.join('') === kal.join('') ? l : sisa.join('').trim();
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+// A Rupiah amount in prose that could not be verified: drop its sentence (or only its comma clause when the
+// sentence also holds a verified amount) rather than printing "seharga Gagal dicek, kirim ulang" mid-sentence
+// (Abdul 15 Oct, rod cylinder bucket).
+function buangHargaProsaTakSah(line: string, sah: (d: string) => boolean): string {
+  const nilai = (s: string) => [...s.matchAll(new RegExp(RP_RE.source, 'gi'))].map(m => sah(m[0].replace(/\D/g, '')));
+  const kal = line.match(KALIMAT_RE)?.filter(Boolean) ?? [line];
+  return kal.map(k => {
+    const v = nilai(k);
+    if (v.every(Boolean)) return k;
+    if (!v.some(Boolean)) return '';
+    const [, tanda = '', spasi = ''] = k.match(/([.?!。！？]*)(\s*)$/) ?? [];
+    const sisa = k.replace(/[.?!。！？]*\s*$/, '').split(/(?<=[,，、])\s*/).filter(p => nilai(p).every(Boolean));
+    const isi = sisa.join(' ').replace(/[,，、]\s*$/, '');
+    return isi ? `${isi}${tanda || '.'}${spasi}` : '';
+  }).join('').trim();
 }
 
 // PN rows with a price from an earlier answer, so a follow-up "hitung totalnya" table can be checked and filled.
@@ -485,9 +511,10 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     }
     baris[r.i] = r.cells.join('|');
   }
-  for (const i of prosa) baris[i] = baris[i].replace(rpGlobal, m => (sah.has(angka(m)) ? m : failed));
+  for (const i of prosa) baris[i] = buangHargaProsaTakSah(baris[i], d => sah.has(d));
   let out = baris.join('\n');
-  if (verified) out = buangKlaimTanpaHarga(out);
+  // Run whenever a table row shows a real price, not only after a site lookup: promo-only tables contradict too.
+  if (verified || rows.some(r => r.prices.some(n => RP_RE.test(r.cells[n] ?? '')))) out = buangKlaimTanpaHarga(out);
   if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   return out;
 }
