@@ -54,12 +54,15 @@ test('surrounding navigation and modal roles stay subordinate to conversation pr
 });
 
 test('table rows remain dense, nowrap and deliberately horizontally scrollable', () => {
-  assert.equal(property('.markdown-body table', 'font-size'), '14px');
+  assert.equal(property('.markdown-body table', 'font-size'), '13px');
   assert.match(rule('.markdown-body table'), /width: max-content; min-width: 100%/);
   assert.equal(property('.markdown-table-wrap', 'overflow-x'), 'auto');
   assert.match(css, /\.markdown-body tbody td, \.markdown-body td\.md-text \{ white-space: nowrap; \}/);
   assert.match(css, /\.markdown-body td\.md-long \{ white-space: normal; min-width: 16em; max-width: 22em; \}/);
-  assert.equal(property('.markdown-body table code.code-copy', 'font-size'), '14px');
+  assert.equal(property('.markdown-body table code.code-copy', 'font-size'), '13px');
   assert.equal(property('.markdown-body code', 'font-family'), 'var(--font-mono)');
+  assert.equal(property('.markdown-body code', 'font-size'), '14px');
+  assert.equal(property('.markdown-body table code', 'font-family'), 'inherit');
+  assert.equal(property('.markdown-body td.md-price', 'font-family'), 'inherit');
   assert.match(read('components/ChatWindow.tsx'), /overflow-x-hidden/);
 });
