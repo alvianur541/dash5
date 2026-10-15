@@ -4,6 +4,7 @@ import { X } from 'lucide-react';
 import { cn } from '../lib/utils';
 import type { UnitModel } from '../types';
 import { MODEL_GROUPS } from './Sidebar';
+import { ExcavatorIcon, WheelLoaderIcon } from './UnitIcons';
 
 interface ModelSheetProps {
   open: boolean;
@@ -42,22 +43,25 @@ export function ModelSheet({ open, selected, onSelect, onClose }: ModelSheetProp
             onClick={e => e.stopPropagation()}
           >
             <div className="flex justify-center pt-3 pb-1"><div className="w-9 h-1 rounded-full bg-[var(--border-main)]" /></div>
-            <div className="flex items-center justify-between px-5 pb-2">
+            <div className="flex items-center justify-between pl-[22px] pr-4 pb-2">
               <p className="text-[17px] font-heading font-semibold text-[var(--text-primary)]">Pilih unit</p>
               <button onClick={onClose} className="topbar-hamburger" aria-label="Tutup"><X size={16} /></button>
             </div>
             {MODEL_GROUPS.map(({ type, models }) => (
-              <div key={type} className="px-3 pb-2">
-                <p className="px-3 pt-2 pb-1 text-[12px] font-semibold uppercase tracking-[0.06em] text-[var(--text-muted)]">{type}</p>
+              <div key={type} className="px-3 pb-2 flex flex-col gap-px">
+                <p className="sb-head">
+                  {type === 'Wheel Loader' ? <WheelLoaderIcon size={17} /> : <ExcavatorIcon size={17} />}
+                  {type}
+                </p>
                 {models.map(model => (
                   <button
                     key={model}
                     onClick={() => onSelect(model)}
                     aria-current={model === selected ? 'true' : undefined}
-                    className={cn('model-sheet-item', model === selected && 'model-sheet-item-active')}
+                    className={cn('sb-row sb-sub model-sheet-row', model === selected && 'is-active')}
                   >
-                    <span className={cn('w-2 h-2 rounded-full shrink-0', model === selected ? 'bg-[var(--accent-active)]' : 'bg-[var(--text-muted)]/40')} />
-                    <span>{model}</span>
+                    <span className={cn('sb-dot', model === selected && 'is-on')} />
+                    <span className="sb-unit">{model}</span>
                   </button>
                 ))}
               </div>
