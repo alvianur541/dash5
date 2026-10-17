@@ -93,3 +93,33 @@ test('fast search: no nudge at all', async () => {
     assert.equal(texts.filter(t => /STATUS ALAT/.test(t)).length, 0);
   } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
 });
+test('tool lookup carries the language of the technician\'s own words, not of the rephrased question (16-17 Oct)', async () => {
+  const { detectLang } = require('../dist/orchestrator.cjs');
+  const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
+  provider.send = () => {}; provider.terminate = () => { provider.readyState = 3; };
+  const server = http.createServer();
+  const calls = [];
+  const wss = registerLiveVoice(server, {
+    enabled: true, allowed: new Set(['*']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], nudgeMs: 5000, detectLang,
+    verifyToken: (req, _res, next) => { req.authUser = { id: 'u3' }; req.authToken = 'jwt'; next(); },
+    connect: async () => { setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; },
+    ask: async (...args) => { calls.push(args); return 'ok'; }, usageLog: () => {},
+  });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
+  const emit = o => provider.emit('message', Buffer.from(JSON.stringify(o)));
+  try {
+    await once(ws, 'open'); const ready = once(ws, 'message');
+    ws.send(JSON.stringify({ type: 'auth', token: 'jwt', unit: 'ZX200-5G' })); await ready;
+    emit({ serverContent: { inputTranscription: { text: 'I am using MPDr.' } } });
+    emit({ toolCall: { functionCalls: [{ id: 'a1', name: 'ask_technical', args: { question: 'Cara cek status Wiper 1 Input di MPDr ZX200-5G' } }] } });
+    await new Promise(r => setTimeout(r, 50));
+    emit({ serverContent: { turnComplete: true } });
+    emit({ serverContent: { inputTranscription: { text: 'Okay.' } } });
+    emit({ toolCall: { functionCalls: [{ id: 'a2', name: 'ask_technical', args: { question: 'harga switch box wiper ZX200-5G' } }] } });
+    await new Promise(r => setTimeout(r, 50));
+    assert.equal(calls.length, 2);
+    assert.equal(calls[0][6], 'en', 'English speech → lang en although the tool question is Indonesian');
+    assert.equal(calls[1][6], 'en', 'an ambiguous follow-up keeps the session language');
+  } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
+});

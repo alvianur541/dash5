@@ -8,6 +8,7 @@ export {
   INTENT_MODEL,
 } from './orchestrator';
 export { boundLiveHistory, ringkasUntukSuara } from './liveContext';
+export { detectLang } from './templates';
 export { UNIT_MODELS } from './types';
 export { fetchHexParts } from './rag';
 export { FALLBACK_MODELS } from './vertex';

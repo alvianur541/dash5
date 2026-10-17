@@ -340,7 +340,7 @@ export async function resolvePartsQuery(
     || [trimmed, ...userLalu].some(u => /\b(?:s\/?n|sn|serial|nomor\s*seri|no\.?\s*seri)\w*\b[^\n]{0,12}\d{4,}/i.test(u));
   if (izinkanCepat && !butuhSn && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
     const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
-      ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history));
+      ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history, deps().langHint));
     if (cepat) {
       try { deps().meta.route = 'harga_cepat'; } catch { /* di luar konteks */ }
       return { type: 'rag_canned', text: cepat };
@@ -362,7 +362,7 @@ export async function resolvePartsQuery(
         return { type: 'rag_found', content: note + wmResult.content, dataLabel: RAG_LABEL.parts, confidence: wmResult.confidence };
       }
     }
-    return { type: 'rag_canned', text: partsNotFoundTemplate(extractPartNumber(trimmed) ?? trimmed, model, sessionLang(trimmed, history)) };
+    return { type: 'rag_canned', text: partsNotFoundTemplate(extractPartNumber(trimmed) ?? trimmed, model, sessionLang(trimmed, history, deps().langHint)) };
   }
 
   let finalContent = ragResult.content;
@@ -465,7 +465,7 @@ export async function resolveNaturalLanguageQuery(
 
   const resolved = questionFor(trimmed, history, model);
   const intent = unitFeatureIntent(resolved.text, await analyzeIntent(resolved.text, history));
-  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history) };
+  if (intent.searchType === 'off_topic') return { type: 'rag_canned', text: offTopicTemplate(trimmed, history, deps().langHint) };
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
@@ -519,7 +519,7 @@ export async function resolveNaturalLanguageQuery(
   emit({ type: 'tool_result', tool: 'search_technical_manual', found: ragResult.hasResults });
 
   if (ragResult.ragError) {
-    const errMsg = ragErrorTemplate(ragResult.ragError, sessionLang(trimmed, history));
+    const errMsg = ragErrorTemplate(ragResult.ragError, sessionLang(trimmed, history, deps().langHint));
     if (errMsg) return { type: 'rag_canned', text: errMsg };
   }
 

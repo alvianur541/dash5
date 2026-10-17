@@ -159,7 +159,7 @@ export async function generateResponseStream(
   deps().resolvedQuestion = resolved;
   const q = resolved.text;
 
-  const lang = sessionLang(q, history);
+  const lang = sessionLang(q, history, deps().langHint);
 
   const foreignModel = detectForeignModel(q, model);
   if (foreignModel) {
@@ -221,7 +221,9 @@ export async function generateResponseStream(
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
 
-  contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}` }] });
+  // The question can be rephrased in Indonesian (Live voice) and the data is Indonesian: state the language explicitly.
+  const bahasa = langDirective(lang);
+  contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}${bahasa ? `\n\n${bahasa}` : ''}` }] });
 
   const fullText = await lengkapiHargaAman(scrubLeaks(await callProxyStream({
     contents,
@@ -265,7 +267,7 @@ export async function generateResponse(
   const system = systemFor(model, false);
   const contents: VContent[] = historyToContents(history);
   const currentParts: Part[] = [];
-  const lang = sessionLang(userInput, history);
+  const lang = sessionLang(userInput, history, deps().langHint);
 
   emit({ type: 'thinking', message: 'Membaca foto…' });
   deps().meta.route = 'image';

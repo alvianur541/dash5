@@ -24,6 +24,7 @@ export interface Deps {
   };
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
+  langHint?: 'id' | 'en' | 'ja';
 }
 
 interface StreamChunk {
