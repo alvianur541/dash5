@@ -123,3 +123,37 @@ test('tool lookup carries the language of the technician\'s own words, not of th
     assert.equal(calls[1][6], 'en', 'an ambiguous follow-up keeps the session language');
   } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
 });
+test('session language is locked from chat history and re-announced when the technician switches (17 Oct)', async () => {
+  const { detectLang } = require('../dist/orchestrator.cjs');
+  const p = makeSetup('proj', 'us-central1', 'ZX200-5G', 'en').setup.systemInstruction.parts[0].text;
+  assert.match(p, /^LANGUAGE FOR THIS SESSION: the technician speaks English/);
+  assert.match(makeSetup('proj', 'us-central1', 'ZX200-5G').setup.systemInstruction.parts[0].text, /^Kamu Hexindo/);
+  const run = async (history, said) => {
+    const provider = new EventEmitter(); provider.readyState = 1; provider.bufferedAmount = 0;
+    const sent = []; provider.send = x => sent.push(JSON.parse(x)); provider.terminate = () => { provider.readyState = 3; };
+    const server = http.createServer(); let opts;
+    const wss = registerLiveVoice(server, {
+      enabled: true, allowed: new Set(['*']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], detectLang,
+      verifyToken: (req, _res, next) => { req.authUser = { id: `u-${Math.random()}` }; req.authToken = 'jwt'; next(); },
+      connect: async (_unit, o) => { opts = o; setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider; },
+      ask: async () => 'ok', usageLog: () => {},
+    });
+    await new Promise(r => server.listen(0, '127.0.0.1', r));
+    const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
+    try {
+      await once(ws, 'open'); const ready = once(ws, 'message');
+      ws.send(JSON.stringify({ type: 'auth', token: 'jwt', unit: 'ZX200-5G', history })); await ready;
+      provider.emit('message', Buffer.from(JSON.stringify({ serverContent: { inputTranscription: { text: said } } })));
+      provider.emit('message', Buffer.from(JSON.stringify({ serverContent: { turnComplete: true } })));
+      await new Promise(r => setTimeout(r, 30));
+      return { lang: opts?.lang, notes: sent.map(x => x.clientContent?.turns?.[0]?.parts?.[0]?.text || '').filter(t => /Language note|Catatan bahasa/.test(t)) };
+    } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
+  };
+  const en = await run([{ role: 'user', content: 'What should I check first' }, { role: 'assistant', content: 'Check the sensors.' }], "I've checked the sensor connector. It's clean.");
+  assert.equal(en.lang, 'en', 'English chat history → session opens in English');
+  assert.equal(en.notes.length, 0, 'same language → no extra note');
+  const sw = await run([{ role: 'user', content: 'Cek fault code yang muncul dong' }], 'I am using MPDr.');
+  assert.equal(sw.lang, 'id');
+  assert.equal(sw.notes.length, 1, 'switch to English → one language note');
+  assert.match(sw.notes[0], /^Language note from the system/);
+});

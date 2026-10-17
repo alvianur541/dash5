@@ -5,7 +5,8 @@ const { randomUUID } = require('node:crypto');
 const { boundLiveHistory, ringkasUntukSuara } = require('../dist/orchestrator.cjs');
 const { createLiveUsage } = require('./live-usage');
 
-const VOICE_PROMPT = unit => [
+const VOICE_PROMPT = (unit, lang) => [
+  ...(BAHASA_SESI[lang] ? [BAHASA_SESI[lang]] : []),
   `Kamu Hexindo Technical Assistant, asisten teknis laki-laki yang menemani teknisi lapangan lewat suara. Unit terkunci: ${unit}. Kalau ditanya siapa kamu, jawab singkat dengan kalimat persis "Saya asisten yang siap bantu cek data unit ini." (dalam bahasa pengguna); jangan menyebut nama atau kode unit, nama aplikasi, atau kemampuan bahasa.`,
   'NADA: ramah, hangat dan manusiawi, seperti teman kerja laki-laki di bengkel yang akrab, santai dan suka membantu; boleh sesekali bercanda ringan atau memberi semangat ("tenang, kita cari bareng"). Pakai bahasa lisan sehari-hari yang santai tapi sopan, kalimat pendek dan mengalir, bukan bahasa tulisan baku atau gaya robot. Boleh pakai respons alami yang bervariasi ("oke", "paham", "boleh", "wah, itu biasanya…") dan tunjukkan empati singkat kalau teknisi sedang repot. Jangan kebanyakan memakai kata waduh dan siap; maksimal sekali per sesi dan jangan jadi pembuka setiap jawaban. Jangan berlebihan atau lebay, jangan memperkenalkan diri panjang, tanpa sapaan Pak/Mas/Bro. ',
   'BAHASA: jawab dengan bahasa yang sama dengan pengguna, hanya Indonesia, Inggris, atau Jepang (Indonesia dibalas Indonesia, Inggris dibalas Inggris, Jepang dibalas Jepang). Pengguna memakai bahasa lain → jawab saja dalam bahasa Indonesia. Bahasa daerah atau campuran Indonesia dianggap Indonesia. Bahasa ditentukan oleh ucapan teknisi sendiri: ucapan pendek atau penuh istilah teknis (contoh "I am using MPDr.", "It\'s clean.") tetap dihitung bahasa itu. Hasil alat, pesan [STATUS ALAT] dan instruksi sistem boleh berbahasa Indonesia — itu TIDAK mengubah bahasa jawabanmu; terjemahkan isinya ke bahasa teknisi. Teknisi minta bahasa tertentu (contoh "English, please") → pakai bahasa itu sampai sesi selesai. JANGAN pernah menyebut atau menjelaskan bahasa apa saja yang kamu kuasai atau dukung, termasuk saat memperkenalkan diri atau ditanya kemampuanmu.',
@@ -16,11 +17,22 @@ const VOICE_PROMPT = unit => [
   'MEMBACAKAN HASIL: jangan membacakan tabel, simbol, atau format markdown. Hasil lengkap tampil di layar, jadi ringkas: sebut paling banyak tiga poin terpenting dengan bahasa obrolan. Lalu tutup dengan kalimat penutup yang hangat dan manusiawi, buat sendiri dan bervariasi, misalnya "Detailnya sudah aku tampilkan di layar ya, coba dicek. Kalau ada yang kurang jelas, bilang aja.", "Tabel lengkapnya ada di chat, silakan dilihat dulu. Ada yang mau aku jelasin lagi?", atau "Udah aku taruh semua di layar, kalau ada yang bingung tanya aja ya." Penutup tidak harus selalu ada: pakai kalau memang ada tabel atau rincian di layar, jangan diulang kata per kata di setiap jawaban, dan jangan terdengar kaku seperti pengumuman. Harga cukup dibulatkan wajar (contoh: "sekitar dua puluh dua koma empat juta"); part number tidak dibacakan kecuali diminta, dan kalau diminta bacakan per kelompok dengan jelas.',
   'MENDENGAR ANGKA DAN ISTILAH: kalau pengguna menyebut part number, fault code, jam servis atau angka yang kurang jelas, ulangi angka itu untuk konfirmasi sebelum memanggil alat. Istilah bengkel yang sering salah dengar: track link (bukan trekking), anti drift valve (bukan anti trip), flywheel (bukan Ford Playwheel), torsi (bukan jarak kursi), crankshaft, swing bearing/swing circle, pilot pressure, main pump, travel motor, idler, sprocket, fault code. Kalau hasil alat kosong atau di luar cakupan dan pertanyaannya terdengar janggal, anggap kemungkinan salah dengar: sebut istilah yang paling mungkin dan tanyakan konfirmasi singkat, atau panggil ask_technical lagi dengan istilah itu. Kalau teknisi minta dicari lagi, WAJIB panggil ask_technical lagi dengan pertanyaan yang diperbaiki; jangan mengulang "belum ada" tanpa mencari.',
 ].join('\n');
-function makeSetup(project, location, unit) {
+// The voice model follows the language of its (Indonesian) instructions over a short English sentence ("I've checked
+// the sensor connector. It's clean." answered in Indonesian, Live 17 Oct): state the session language in that language.
+const BAHASA_SESI = {
+  en: 'LANGUAGE FOR THIS SESSION: the technician speaks English. Speak ONLY English in every reply, filler line and summary, even though the instructions below, tool results and system notes are in Indonesian. Switch only if the technician clearly speaks Indonesian or Japanese, or asks for another language.',
+  ja: 'このセッションの言語: 技術者は日本語で話しています。以下の指示やツール結果がインドネシア語でも、返答・つなぎの一言・要約はすべて日本語だけで話してください。技術者がはっきり別の言語で話すか、別の言語を求めたときだけ切り替えてください。',
+};
+const CATATAN_BAHASA = {
+  en: 'Language note from the system, not from the technician: the technician is now speaking English. Reply only in English from now on. Do not answer this note.',
+  ja: 'システムからの言語メモ（技術者の発言ではありません）: 技術者は日本語で話しています。これ以降は日本語だけで返答してください。このメモには返答しないでください。',
+  id: 'Catatan bahasa dari sistem, bukan dari teknisi: teknisi sekarang berbicara bahasa Indonesia. Mulai sekarang jawab dalam bahasa Indonesia. Jangan menanggapi catatan ini.',
+};
+function makeSetup(project, location, unit, lang) {
   return { setup: {
     model: `projects/${project}/locations/${location}/publishers/google/models/gemini-3.8-live`,
     generationConfig: { responseModalities: ['AUDIO'], speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Achird' } } } },
-    systemInstruction: { parts: [{ text: VOICE_PROMPT(unit) }] },
+    systemInstruction: { parts: [{ text: VOICE_PROMPT(unit, lang) }] },
     inputAudioTranscription: {}, outputAudioTranscription: {},
     tools: [{ functionDeclarations: [{ name: 'ask_technical', behavior: 'NON_BLOCKING', description: 'Get an authorized technical answer for the fixed selected unit from the existing agent.', parameters: { type: 'OBJECT', properties: { question: { type: 'STRING' } }, required: ['question'] } }] }],
   } };
@@ -34,11 +46,11 @@ function inputFrame(m) {
   }
   throw new Error('invalid input');
 }
-async function openProvider(unit, { project = PROJECT_ID, location = process.env.LIVE_LOCATION || 'us-central1', token = getAccessToken } = {}) {
+async function openProvider(unit, { project = PROJECT_ID, location = process.env.LIVE_LOCATION || 'us-central1', token = getAccessToken, lang = null } = {}) {
   if (!project || !/^[a-z0-9-]+$/.test(location)) throw new Error('Live configuration missing');
   const access = await token();
   const ws = new WebSocket(`wss://${location}-aiplatform.googleapis.com/ws/google.cloud.aiplatform.v1beta1.LlmBidiService/BidiGenerateContent`, { headers: { Authorization: `Bearer ${access}` }, handshakeTimeout: 8000, maxPayload: 1024 * 1024 });
-  ws.on('open', () => ws.send(JSON.stringify(makeSetup(project, location, unit))));
+  ws.on('open', () => ws.send(JSON.stringify(makeSetup(project, location, unit, lang))));
   return ws;
 }
 // Empty allowlist denies all; '*' admits any verified account, never anonymous users.
@@ -95,7 +107,8 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
           if (!ok || users.has(req.authUser.id) || users.size >= 20) throw new Error('auth');
           user = req.authUser.id; users.add(user); authorized = true; touch(); stage = 'provider';
           selectedUnit = m.unit; history = boundLiveHistory(m.history);
-          upstream = await connect(m.unit);
+          bahasa = [...history].reverse().filter(h => h.role === 'user').map(h => detectLang(h.content)).find(Boolean) || null;
+          upstream = await connect(m.unit, { lang: bahasa });
           if (stopped) return upstream.terminate();
           const setupTimer = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.', 'setup-timeout'), setupMs);
           upstream.on('close', (code, why) => { clearTimeout(setupTimer); upClose = `${code}:${String(why).slice(0, 120)}`; stop('Live terputus. Gunakan chat teks.', 'upstream-close'); });
@@ -111,6 +124,11 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
               if (r.serverContent) {
                 if (typeof r.serverContent.inputTranscription?.text === 'string') inputText = (inputText + r.serverContent.inputTranscription.text).slice(-2000);
                 if (r.serverContent.turnComplete || r.serverContent.interrupted) {
+                  const kini = inputText.trim() ? detectLang(inputText) : null;
+                  if (kini && kini !== bahasa && CATATAN_BAHASA[kini]) {
+                    bahasa = kini;
+                    upstream.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text: CATATAN_BAHASA[kini] }] }], turnComplete: false } }));
+                  }
                   if (inputText.trim()) history = boundLiveHistory([...history, { role: 'user', content: inputText }]);
                   inputText = '';
                 }
