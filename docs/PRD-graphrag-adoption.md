@@ -20,9 +20,9 @@ GraphRAG tidak akan menggantikan retrieval yang sudah ada. Index dibuat secara o
 
 ### 1.1 Hasil review repository resmi Microsoft
 
-Repository Microsoft menyebut GraphRAG sebagai contoh atau metodologi dan memperingatkan bahwa implementasinya belum ditujukan sebagai solusi production-ready. Repository juga berada dalam maintenance mode: Microsoft tetap menerima kontribusi, tetapi dukungan utamanya berasal dari komunitas dan bukan support resmi Microsoft.[1]
+Repository Microsoft menyebut GraphRAG sebagai contoh atau metodologi dan memperingatkan bahwa implementasinya belum ditujukan sebagai solusi production-ready. Repository juga berada dalam maintenance mode; README saat ini menyatakan project tidak menerima PR atau fitur baru, sementara diskusi komunitas tetap tersedia.[1]
 
-Release terbaru yang tersedia saat review ini adalah `v3.3.0`. Project juga memiliki catatan breaking changes dan menjelaskan bahwa perubahan versi tertentu dapat membuat index lama tidak kompatibel dengan versi query yang baru.[2][8]
+Release terbaru yang tersedia saat review ini adalah `v3.3.0`. Project juga memiliki catatan breaking changes dan menyediakan migration notebook untuk upgrade tertentu ketika index lama tidak kompatibel dengan versi query yang baru.[2][8]
 
 GraphRAG menyediakan dua metode indexing. Standard GraphRAG memakai LLM untuk entity extraction dan summarization. FastGraphRAG lebih murah, tetapi graph-nya lebih noisy dan pendekatan default-nya terutama cocok untuk teks bahasa Inggris.[3] Karena manual Dash5 dapat berisi campuran bahasa Inggris dan Indonesia, PRD tidak menetapkan FastGraphRAG sebagai pilihan default.
 
@@ -32,7 +32,7 @@ DRIFT menggabungkan community information dengan local search dan pertanyaan lan
 
 ### 1.2 Perubahan PRD setelah review
 
-- Versi evaluasi harus dipin ke `graphrag==3.3.0`; upgrade membutuhkan schema compatibility test dan re-index.
+- Versi evaluasi harus dipin ke `graphrag==3.3.0`; upgrade membutuhkan schema compatibility test. Migration notebook boleh dievaluasi, tetapi pilot memakai full rebuild agar hasilnya deterministik.
 - Runtime evaluasi memakai Python 3.12 agar tetap berada dalam rentang runtime yang didokumentasikan project.[1]
 - Standard GraphRAG menjadi baseline. FastGraphRAG hanya boleh dibandingkan sebagai varian biaya setelah evaluasi bahasa campuran.
 - Importer harus membaca output Parquet resmi dan memiliki contract test untuk setiap tabel yang dipakai.
@@ -162,6 +162,8 @@ Setiap hasil index memiliki:
 - status selesai atau gagal.
 
 Job menulis `index_manifest.json` di samping output Parquet. Manifest menjadi kontrak antara job Python dan Dash5, sehingga service Dash5 tidak perlu mengimpor internal API GraphRAG.
+
+Fase pilot tidak memakai incremental update untuk penghapusan dokumen. Ada open issue yang melaporkan dokumen yang sudah dihapus dari input masih dapat bertahan di output entity, community, dan report setelah update run.[9] Jika scope atau allow-list index berubah, job harus membuat index baru dari nol lalu mengganti pointer versi secara atomik.
 
 ### FR-3: Import artifact
 
@@ -301,8 +303,9 @@ Target kualitas akhir akan ditetapkan setelah baseline 20 pertanyaan selesai diu
 - Indexing standar memakai banyak panggilan LLM dan dapat mahal.
 - Global dan DRIFT search dapat menambah latency besar.
 - Perubahan versi GraphRAG dapat mengubah schema artifact.
-- Project berada dalam maintenance mode dan tidak mempunyai jalur support produksi resmi dari Microsoft.[1]
-- Index dapat tidak kompatibel setelah upgrade tertentu, sehingga upgrade dapat membutuhkan full re-index.[8]
+- Project berada dalam maintenance mode, tidak menerima PR atau fitur baru, dan tidak mempunyai jalur support produksi resmi dari Microsoft.[1]
+- Index dapat tidak kompatibel setelah upgrade tertentu. Project menyediakan migration notebook, tetapi Dash5 tetap membutuhkan contract test dan opsi full rebuild.[8]
+- Penghapusan dokumen melalui incremental update dilaporkan dapat meninggalkan entity atau report lama di index.[9]
 - Entity extraction dapat salah pada istilah teknis, singkatan, atau teks bilingual.
 - Graph yang terlihat masuk akal tetap dapat menghasilkan hubungan yang tidak didukung source chunk.
 
@@ -345,3 +348,4 @@ Keputusan adopsi setelah evaluasi hanya boleh berupa salah satu dari tiga hasil:
 [6] https://microsoft.github.io/graphrag/query/drift_search — GraphRAG DRIFT search
 [7] https://microsoft.github.io/graphrag/config/yaml — GraphRAG configuration
 [8] https://github.com/microsoft/graphrag/blob/main/breaking-changes.md — GraphRAG breaking changes policy
+[9] https://github.com/microsoft/graphrag/issues/2590 — GraphRAG issue 2590: removed documents remain indexed
