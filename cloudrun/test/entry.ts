@@ -16,8 +16,9 @@ export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, p
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';
 export { extractCatalogCode } from '../src/rag';
-export { computeConfidence, rerankDocs, mmrSelect } from '../src/rag/rerank';
-export { wantsNumeric, rankAndSelect } from '../src/rag/retrieve';
+export { capRerankPayload, computeConfidence, rerankDocs, mmrSelect } from '../src/rag/rerank';
+export { wantsNumeric, rankAndSelect, gatherCandidates } from '../src/rag/retrieve';
+export { retrieveKnowledgeGraph } from '../src/rag/graph';
 export { unitFeatureIntent } from '../src/routes';
 export { promoAktif, tanpaHargaDb, hargaPromo, bersihkanPromoLama, PROMO_BERAKHIR, PROMO_KATEGORI, PROMO_KATEGORI_LAMA } from '../src/promo';
 export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';

@@ -21,6 +21,7 @@ export interface Deps {
     stages?: StageEvent[];
     modelUsed?: string; cacheable?: boolean; route?: string; confidence?: string; degraded?: boolean;
     groundingUnknown?: number; msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
+    graphEnabled?: boolean; graphAttempted?: boolean; graphDocumentCount?: number; graphMs?: number; graphFallbackReason?: string;
   };
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;

@@ -2,6 +2,7 @@ import { deps, type RerankSource } from '../deps';
 import { stage } from '../telemetry';
 import { evidenceFor, registerEvidence, type EvidenceDocument } from '../evidence';
 import { getEmbedding } from './embed';
+import { retrieveKnowledgeGraph, type GraphRetrievalScope } from './graph';
 import { RERANK_RETURN_N, capRerankPayload, computeConfidence, mmrSelect, rerankDocs } from './rerank';
 import { NUMERIC_INTENT_RE, SPEC_TERMS, STOP_WORDS, SYMPTOM_RE, batangKata, escapeLike, stripModelFromQuery } from './terms';
 
@@ -132,10 +133,17 @@ export async function gatherCandidates(
     return hasil;
   });
 
-  const [kwSettled, rankedSettled, vectorSettled] = await Promise.allSettled([
+  const graphScope: GraphRetrievalScope = {
+    Model: model,
+    ...(strictFilter.Kategori ? { Kategori: strictFilter.Kategori } : {}),
+  };
+  const graphPromise = retrieveKnowledgeGraph(primaryQuery, graphScope, faultCode);
+
+  const [kwSettled, rankedSettled, vectorSettled, graphSettled] = await Promise.allSettled([
     kwPromise,
     rankedPromise,
     vectorPromise,
+    graphPromise,
   ]);
   const msCari = Date.now() - tMulai;
 
@@ -163,6 +171,9 @@ export async function gatherCandidates(
   for (let i = 0; i < Math.max(kwDocs.length, vecDocs.length); i++) {
     pushUnik(kwDocs[i]);
     pushUnik(vecDocs[i]);
+  }
+  if (graphSettled.status === 'fulfilled') {
+    for (const content of graphSettled.value) pushUnik(content);
   }
 
   let usedLooseFallback = false;
