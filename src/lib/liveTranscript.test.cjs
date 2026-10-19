@@ -113,6 +113,21 @@ test('spoken numbers and unit names in transcripts become digits like the text c
   for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
 });
 
+test('English speech: unit names and numbers become digits too (Live 19 Oct)', () => {
+  const { tidyTranscript } = mod.exports;
+  const cases = [
+    ["Let me know if you need anything else while you're working on the Zaxis forty-eight U dash five A. Good luck with the pressure test!", "Let me know if you need anything else while you're working on the ZX48U-5A. Good luck with the pressure test!"],
+    ['Zaxis two hundred dash five G, Zaxis one hundred thirty-eight MF dash five G and Zaxis sixty-five USB dash five A.', 'ZX200-5G, ZX138MF-5G and ZX65USB-5A.'],
+    ['Zaxis Wheel Loader one hundred forty and Kawasaki Loader sixty Z V.', 'ZW140 and KCM60ZV.'],
+    ['Service at two thousand hours, pilot pressure three point nine MPa, torque two hundred and forty newton meters.', 'Service at 2,000 hours, pilot pressure 3.9 MPa, torque 240 newton meters.'],
+    ['Part number nine two four eight seven zero six.', 'Part number 9248706.'],
+    ['Check it every twelve hours, about a hundred liters.', 'Check it every 12 hours, about 100 liters.'],
+    ['One of the two hoses is the main one.', 'One of the two hoses is the main one.'],
+    ['It was updated on October twenty twenty-six.', 'It was updated on October 2026.'],
+  ];
+  for (const [input, want] of cases) assert.equal(tidyTranscript(input), want);
+});
+
 test('assistant bubble shows tidied numbers while streaming', () => {
   const t = createLiveTranscript(() => 'a', () => 1);
   t.apply({ outputTranscription: { text: 'Unit ZX dua ratus dash ' } });

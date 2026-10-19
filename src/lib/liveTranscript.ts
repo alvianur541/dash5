@@ -34,11 +34,46 @@ function spokenValue(words: string[]): number {
   return total + group + last;
 }
 
+// English speech ("Zaxis forty-eight U dash five A", Live 19 Oct) needs its own number words.
+const EN_DIGIT: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
+const EN_TEEN: Record<string, number> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
+const EN_TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const EN_MULT: Record<string, number> = { hundred: 100, thousand: 1e3, million: 1e6, billion: 1e9 };
+const ED = Object.keys(EN_DIGIT).join('|');
+const EW = `(?:${[ED, ...Object.keys(EN_TEEN), ...Object.keys(EN_TENS), ...Object.keys(EN_MULT)].join('|')})`;
+const EN_RUN = new RegExp(`\\b${EW}(?:[\\s-]+${EW})*\\b`, 'gi');
+const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+
+// "forty eight" = 48, but "nine two four" or "twenty twenty-six" are read digit by digit / pair by pair.
+function englishNumber(words: string[]): string {
+  const parts: string[] = [];
+  let total = 0, group = 0, small = 0, prev = '', has = false;
+  const flush = () => { if (has) parts.push(String(total + group + small)); total = group = small = 0; has = false; };
+  for (const w of words) {
+    if (w in EN_DIGIT) { if (prev === 'digit' || prev === 'teen') flush(); small += EN_DIGIT[w]; prev = 'digit'; }
+    else if (w in EN_TEEN || w in EN_TENS) { if (prev === 'digit' || prev === 'teen' || prev === 'tens') flush(); small = EN_TEEN[w] ?? EN_TENS[w]; prev = w in EN_TEEN ? 'teen' : 'tens'; }
+    else if (w === 'hundred') { group += (small || 1) * 100; small = 0; prev = 'mult'; }
+    else { total += (group + small || 1) * EN_MULT[w]; group = small = 0; prev = 'mult'; }
+    has = true;
+  }
+  flush();
+  return parts.length > 1 ? parts.join('') : commas(Number(parts[0]));
+}
+
 // Speech transcripts spell numbers out ("ZX dua ratus dash lima G"); show them as the text chat does.
 export function tidyTranscript(text: string): string {
   const digits = (s: string) => s.toLowerCase().split(/\s+/).map(w => DIGIT[w]).join('');
+  const enDigits = (s: string) => s.toLowerCase().split(/\s+/).map(w => EN_DIGIT[w]).join('');
   return text
-    .replace(new RegExp(`\\bzaxis\\s+(?=\\d|${W}\\b)`, 'gi'), 'ZX ')
+    .replace(/\b(hundred|thousand)\s+and\s+/gi, '$1 ')
+    .replace(/\ba\s+(hundred|thousand)\b/gi, 'one $1')
+    .replace(new RegExp(`\\b(${ED})\\s+point\\s+((?:${ED})(?:\\s+(?:${ED}))*)\\b`, 'gi'), (_, a, b) => `${enDigits(a)}.${enDigits(b)}`)
+    .replace(new RegExp(`\\bzaxis\\s+(?=\\d|${W}\\b|${EW}\\b)`, 'gi'), 'ZX ')
+    .replace(new RegExp(`\\b(dash)\\s+(${ED})\\b`, 'gi'), (_, d, n) => `${d} ${enDigits(n)}`)
+    .replace(EN_RUN, run => {
+      const words = run.toLowerCase().split(/[\s-]+/);
+      return words.length === 1 && words[0] in EN_DIGIT ? run : englishNumber(words);
+    })
     .replace(/\b(Z[XW])(?=[a-z])/g, '$1 ')
     .replace(new RegExp(`\\b(${D})\\s+koma\\s+((?:${D})(?:\\s+(?:${D}))*)\\b`, 'gi'), (_, a, b) => `${digits(a)},${digits(b)}`)
     .replace(new RegExp(`\\b(dash|strip)\\s+(${D})\\b`, 'gi'), (_, d, n) => `${d} ${digits(n)}`)
@@ -52,7 +87,8 @@ export function tidyTranscript(text: string): string {
     .replace(/\b(Z[XW])\s*(\d+)\s*([A-Z]{0,3})\s*(?:dash|strip|-)\s*(\d)\s*([A-Z])\b/g, '$1$2$3-$4$5')
     .replace(/\b(Z[XW])\s+(\d+)\b/g, '$1$2')
     .replace(/(\d{4,})\s+((?:[A-Z]-)+[A-Z])\b/g, (_, n, l) => n + l.replace(/-/g, ''))
-    .replace(/\b(tahun|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\s+(\d)\.(\d{3})\b/gi, '$1 $2$3');
+    .replace(/\b(tahun|januari|februari|maret|april|mei|juni|juli|agustus|september|oktober|november|desember)\s+(\d)\.(\d{3})\b/gi, '$1 $2$3')
+    .replace(/\b(year|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d),(\d{3})\b/gi, '$1 $2$3');
 }
 
 // The voice model sometimes reads out (or invents) the bracketed tool label; never show it.
