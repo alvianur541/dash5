@@ -59,3 +59,13 @@ test('PWA and mobile view are locked against pinch zoom and pull; editable input
 test('mobile sidebar drawer is sized by the app container, not the iOS initial containing block', () => {
   assert.match(read('App.tsx'), /<div className="relative flex h-full overflow-hidden/);
 });
+
+test('only voice-originated user messages receive the microphone indicator', () => {
+  const input = read('components/MessageInput.tsx');
+  const chat = read('components/ChatWindow.tsx');
+  const css = read('index.css');
+  assert.match(input, /onSendMessage\(combined,[\s\S]*'voice'\)/);
+  assert.match(chat, /message\.source === 'voice'/);
+  assert.match(chat, /<Mic[^>]*className="voice-message-icon"/);
+  assert.match(css, /\.voice-message-icon\s*\{/);
+});

@@ -3,7 +3,7 @@ import { createContext, isValidElement, useContext, useEffect, useRef, useState,
 import type { Components } from 'react-markdown';
 import { Message, UnitModel } from '../types';
 import { m, AnimatePresence } from 'motion/react';
-import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore, BookOpen, Tag } from 'lucide-react';
+import { ThumbsUp, ThumbsDown, Check, Search, Sparkles, Loader2, ChevronDown, X, ImageDown, Bookmark, BookmarkCheck, RotateCcw, Camera, MessageCircleMore, BookOpen, Tag, Mic } from 'lucide-react';
 import { useToast } from './Toast';
 import type { ReactNode } from 'react';
 import { getGreeting } from '../lib/greeting';
@@ -376,6 +376,7 @@ const MessageItem = memo(function MessageItem({
             )}
             {message.content && (
               <div className="user-bubble">
+                {message.source === 'voice' && <Mic size={14} strokeWidth={2} className="voice-message-icon" role="img" aria-label="Dikirim lewat suara" />}
                 <span>{message.content}</span>
               </div>
             )}

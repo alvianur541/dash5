@@ -3,11 +3,11 @@ import { useState, useRef, useLayoutEffect, useEffect } from 'react';
 import { ArrowUp, AudioLines, Camera, Mic, Loader2, WifiOff, Square, X } from 'lucide-react';
 import { AnimatePresence, m } from 'motion/react';
 import { cn } from '../lib/utils';
-import { UnitModel } from '../types';
+import { Message, UnitModel } from '../types';
 import { authHeaders, PROXY_URL } from '../services/ai';
 
 interface MessageInputProps {
-  onSendMessage: (content: string, attachments?: File[]) => boolean;
+  onSendMessage: (content: string, attachments?: File[], source?: Message['source']) => boolean;
   disabled?: boolean;
   selectedModel: UnitModel;
   isOffline?: boolean;
@@ -91,6 +91,7 @@ export function MessageInput({
   onSendMessage, disabled, selectedModel, isOffline = false, isStreaming = false, onStop, onLive,
 }: MessageInputProps) {
   const [input, setInput] = useState('');
+  const [inputSource, setInputSource] = useState<Message['source']>();
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [transcribeError, setTranscribeError] = useState<string | null>(null);
   const [recordSec, setRecordSec] = useState(0);
@@ -138,6 +139,7 @@ export function MessageInput({
 
   const resetBox = () => {
     setInput('');
+    setInputSource(undefined);
     if (textareaRef.current) textareaRef.current.style.height = '24px';
   };
 
@@ -146,7 +148,7 @@ export function MessageInput({
     const text = input.trim();
     if (!text && !pendingImage) return;
     buzz();
-    const accepted = onSendMessage(text, pendingImage ? [pendingImage.file] : undefined);
+    const accepted = onSendMessage(text, pendingImage ? [pendingImage.file] : undefined, inputSource);
     if (!accepted) return;
     setPendingImage(null);
     resetBox();
@@ -196,12 +198,14 @@ export function MessageInput({
             const combined = currentInput ? `${currentInput} ${text}` : text;
             if (streamingRef.current) {
               setInput(combined);
+              setInputSource('voice');
               flash('Jawaban masih berjalan — pesan suaramu disimpan di kotak ketik.');
               return;
             }
-            const accepted = onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined);
+            const accepted = onSendMessage(combined, pendingRef.current ? [pendingRef.current.file] : undefined, 'voice');
             if (!accepted) {
               setInput(combined);
+              setInputSource('voice');
               flash('Pesan belum terkirim — tersimpan di kotak ketik. Kirim lagi saat siap.');
               return;
             }
@@ -298,7 +302,7 @@ export function MessageInput({
             <textarea
               ref={textareaRef}
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={e => { setInput(e.target.value); if (!e.target.value) setInputSource(undefined); }}
               onKeyDown={e => {
                 if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
               }}

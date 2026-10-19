@@ -47,6 +47,16 @@ test('visible completed answer preserves the same persisted message ID', async (
   assert.equal(visible.content, persisted.content);
 });
 
+test('recorded STT source survives in the visible and persisted user message', async () => {
+  const h = await harness();
+  assert.equal(h.render().handleSendMessage('Cek pilot pressure', undefined, 'voice'), true);
+  for (let i = 0; i < 100 && !h.saved.length; i++) await new Promise(r => setTimeout(r, 5));
+  const visible = h.render().messages.find(m => m.role === 'user');
+  const persisted = h.saved[0]?.find(m => m.role === 'user');
+  assert.equal(visible?.source, 'voice');
+  assert.equal(persisted?.source, 'voice');
+});
+
 test('A to B to A navigation rejects the first stale A response', async () => {
   const h = await harness();
   const oldA = h.render().handleSelectSession('A');

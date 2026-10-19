@@ -106,7 +106,7 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
     if (role === 'assistant' && locked) return [];
     // The read-out of an exact answer stays hidden until the technician speaks again.
     if (role === 'user') { locked = false; waiting = false; }
-    if (!open || open.role !== role) { open = { id: newId(), role, content: '', timestamp: now() }; raw = ''; }
+    if (!open || open.role !== role) { open = { id: newId(), role, content: '', timestamp: now(), source: role === 'user' ? 'voice' : undefined }; raw = ''; }
     raw += gap && raw && !/\s$/.test(raw) && !/^\s/.test(text) ? ' ' + text : text;
     gap = false;
     open = { ...open, content: tidyTranscript(raw).replace(TOOL_ECHO_RE, '') };

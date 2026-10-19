@@ -134,6 +134,13 @@ test('assistant bubble shows tidied numbers while streaming', () => {
   assert.equal(t.apply({ outputTranscription: { text: 'lima G siap.' } })[0].content, 'Unit ZX200-5G siap.');
 });
 
+test('user Live transcript is marked as a voice message', () => {
+  const t = createLiveTranscript(() => 'voice-1', () => 1);
+  const [message] = t.apply({ inputTranscription: { text: 'Cek pilot pressure.' } });
+  assert.equal(message.role, 'user');
+  assert.equal(message.source, 'voice');
+});
+
 test('empty or missing transcription is ignored', () => {
   const t = createLiveTranscript(() => 'x', () => 1);
   assert.deepEqual(t.apply({}), []);

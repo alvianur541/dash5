@@ -28,7 +28,7 @@ export function useChat(user: User, isOnline: boolean) {
   const [loadingSession, setLoadingSession] = useState(false);
 
 
-  const lastSentRef = useRef<{ content: string; attachments?: File[] } | null>(null);
+  const lastSentRef = useRef<{ content: string; attachments?: File[]; source?: Message['source'] } | null>(null);
   const sessionIdRef = useRef<string | null>(null);
   const messagesRef = useRef<Message[]>([]);
   const sessionListRef = useRef<SessionMeta[]>([]);
@@ -173,9 +173,9 @@ export function useChat(user: User, isOnline: boolean) {
     if (await deleteAllChatSessions(uid, at) && pendingClearAt(uid) === at) clearPendingClear(uid);
   }, [user, startNewSession]);
 
-  const sendMessage = useCallback(async (content: string, attachments?: File[]) => {
+  const sendMessage = useCallback(async (content: string, attachments?: File[], source?: Message['source']) => {
     if (!user) return;
-    lastSentRef.current = { content, attachments };
+    lastSentRef.current = { content, attachments, source };
 
     let sessionId = sessionIdRef.current;
     if (!sessionId) {
@@ -187,7 +187,7 @@ export function useChat(user: User, isOnline: boolean) {
     const attachmentUrls = attachments?.length ? await makeThumbnails(attachments) : [];
     if (!mountedRef.current || userIdRef.current !== user.uid || sessionIdRef.current !== sessionId) return;
     const userMessage: Message = {
-      id: crypto.randomUUID(), role: 'user', content: content.trim(), timestamp: Date.now(), attachments: attachmentUrls,
+      id: crypto.randomUUID(), role: 'user', content: content.trim(), timestamp: Date.now(), attachments: attachmentUrls, source,
     };
 
     const currentMessages = messagesRef.current;
@@ -274,14 +274,14 @@ export function useChat(user: User, isOnline: boolean) {
     release();
   }, [user, selectedModel]);
 
-  const handleSendMessage = useCallback((content: string, attachments?: File[]): boolean => {
+  const handleSendMessage = useCallback((content: string, attachments?: File[], source?: Message['source']): boolean => {
     if (!user || !mountedRef.current || userIdRef.current !== user.uid || sendingRef.current || (!content.trim() && !attachments?.length)) return false;
     if (!isOnline || !navigator.onLine) {
       setError('Sedang offline. Pesan tidak dikirim otomatis; kirim lagi setelah sinyal kembali.');
       return false;
     }
     sendingRef.current = true;
-    void sendMessage(content, attachments).catch(err => {
+    void sendMessage(content, attachments, source).catch(err => {
       if (userIdRef.current === user.uid) setError(errorMessage(err));
     }).finally(() => { sendingRef.current = false; });
     return true;
@@ -289,7 +289,7 @@ export function useChat(user: User, isOnline: boolean) {
 
   const retryLast = useCallback(() => {
     const last = lastSentRef.current;
-    if (last) handleSendMessage(last.content, last.attachments);
+    if (last) handleSendMessage(last.content, last.attachments, last.source);
   }, [handleSendMessage]);
 
   // Live voice: transcript chunks become chat bubbles in the open session.
