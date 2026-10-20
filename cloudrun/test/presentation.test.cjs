@@ -115,9 +115,15 @@ module.exports = async function () {
     document: 'Technical News No.07/TSD-CE/TN/10/2023 — Different bulletin',
     content: secondChunk.content.replaceAll('06/TSD-CE/TN/9/2023', '07/TSD-CE/TN/10/2023'),
   };
-  t(buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
+  const withUnrelatedBulletin = buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
     ...f.evidence, differentBulletin,
-  ] }) === undefined, 'does not create a Technical News card from multiple distinct bulletins');
+  ] });
+  t(withUnrelatedBulletin?.blocks?.[0]?.type === 'technical_news'
+    && withUnrelatedBulletin.blocks[0].bulletinId === '06/TSD-CE/TN/9/2023',
+  'ignores unrelated retrieved bulletins that are not identified in the final answer');
+  t(buildAnswerPresentation({ answer: `${f.answer} Technical News 07/TSD-CE/TN/10/2023 — Different bulletin.`, model: f.model, evidence: [
+    ...f.evidence, differentBulletin,
+  ] }) === undefined, 'does not create a Technical News card when the final answer identifies multiple bulletins');
 
   const { d } = mockDeps([[]], { richAnswersEnabled: true });
   await runWithDeps(d, async () => attachAnswerPresentation({

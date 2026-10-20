@@ -77,10 +77,17 @@ function technicalNews(answer: string, model: UnitModel, evidence: readonly Evid
   const eligible = evidence.filter(doc => doc.source?.trim().toUpperCase() === 'TECHNICAL NEWS'
     && doc.model === model && validDocumentId(doc.document_id));
   if (!eligible.length) return undefined;
-  const bulletinIds = new Set(eligible.map(bulletinIdFor).filter((id): id is string => !!id));
-  if (bulletinIds.size !== 1 || eligible.some(doc => !bulletinIdFor(doc))) return undefined;
-  const doc = eligible[0];
-  const sources = eligible.map(sourceFor).filter((source): source is PresentationSource => !!source)
+  const mentioned = eligible.filter(doc => {
+    const bulletinId = bulletinIdFor(doc);
+    const title = clean(doc.section, 200) ?? clean(doc.document, 200);
+    return (bulletinId && answer.toLowerCase().includes(bulletinId.toLowerCase()))
+      || (title && answer.toLowerCase().includes(title.toLowerCase()));
+  });
+  if (!mentioned.length) return undefined;
+  const bulletinIds = new Set(mentioned.map(bulletinIdFor).filter((id): id is string => !!id));
+  if (bulletinIds.size !== 1 || mentioned.some(doc => !bulletinIdFor(doc))) return undefined;
+  const doc = mentioned[0];
+  const sources = mentioned.map(sourceFor).filter((source): source is PresentationSource => !!source)
     .filter((source, index, all) => all.findIndex(item => item.documentId === source.documentId) === index).slice(0, 3);
   const title = clean(doc.section, 200) ?? clean(doc.document, 200);
   if (!sources.length || !title) return undefined;
