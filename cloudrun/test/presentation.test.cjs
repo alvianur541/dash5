@@ -32,6 +32,9 @@ module.exports = async function () {
   t(specPresentation?.blocks?.[0]?.unitModel === spec.model, 'binds the immutable selected unit model');
   t(specPresentation?.blocks?.[0]?.sources?.[0]?.documentId === String(spec.evidence[0].document_id),
     'binds the specification to the authorized document id');
+  t(buildAnswerPresentation({ answer: 'Engine speed adalah 2000 min-1.', model: spec.model, evidence: [{
+    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Engine speed 2000 min-1'),
+  }] })?.blocks?.[0]?.type === 'spec_value', 'does not confuse the inverse-minute unit with a minimum qualifier');
 
   const conflictEvidence = [{
     ...spec.evidence[0],
@@ -42,6 +45,17 @@ module.exports = async function () {
   t(buildAnswerPresentation({ answer: 'Voltage battery adalah 10–14 V.', model: spec.model, evidence: [{
     ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Voltage 10–14 V'),
   }] }) === undefined, 'does not create a specification card from a range');
+  t(buildAnswerPresentation({ answer: 'High pressure adalah 34 MPa.', model: spec.model, evidence: [{
+    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'High 34 MPa\nLow 4 MPa'),
+  }] }) === undefined, 'rejects separate high and low specification lines');
+  t(buildAnswerPresentation({ answer: 'Pressure adalah 34 MPa.', model: spec.model, evidence: [{
+    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Pressure 34 MPa\nTolerance 2 MPa'),
+  }] }) === undefined, 'rejects a specification document containing a separate tolerance');
+  t(buildAnswerPresentation({ answer: 'Voltage range is 10 to 12 V.', model: spec.model, evidence: spec.evidence }) === undefined,
+    'rejects a range claim even when its endpoint exactly matches the source value');
+  t(buildAnswerPresentation({ answer: 'Minimum operating pressure adalah 34 MPa.', model: spec.model, evidence: [{
+    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Minimum operating pressure 34 MPa'),
+  }] }) === undefined, 'rejects a minimum specification under narrow V1');
   t(buildAnswerPresentation({ answer: spec.answer, model: 'ZX200-5G', evidence: spec.evidence }) === undefined,
     'does not create a card from evidence for the wrong selected unit');
   t(buildAnswerPresentation({ answer: spec.answer, model: spec.model, evidence: [{ ...spec.evidence[0], document_id: null }] }) === undefined,

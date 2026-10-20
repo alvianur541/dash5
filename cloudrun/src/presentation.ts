@@ -4,6 +4,11 @@ import type { AnswerPresentationV1, PresentationSource, SpecValueBlock, Technica
 
 const MAX_TEXT = 500;
 const HTML_RE = /<\/?[a-z][^>]*>/i;
+const SPEC_UNITS = 'MPa|kPa|bar|psi|kgf\\/cm(?:2|²)|L\\/min|N[·.]?m|Nm|kgf[·.]?m|mm|cm(?:3|³)|mL|L|kg|rpm|min(?:-1|⁻¹)|km\\/h|V|Ω|ohm|mA|Ah|A|°C|kW';
+const AMBIGUOUS_SPEC_RE = new RegExp(
+  `\\b(?:high|low|range|tolerance|toleransi|minimum|maximum|max)\\b|\\bmin\\b(?!-1|⁻¹)|±|(?:-?\\d+(?:[.,]\\d+)?)\\s*(?:${SPEC_UNITS})?\\s*(?:[-–—~]|to\\b|sampai\\b|hingga\\b)\\s*-?\\d+(?:[.,]\\d+)?\\s*(?:${SPEC_UNITS})(?![A-Za-z])`,
+  'i',
+);
 
 function clean(value: string | null | undefined, max = MAX_TEXT): string | undefined {
   if (!value) return undefined;
@@ -61,11 +66,11 @@ function technicalNews(answer: string, model: UnitModel, evidence: readonly Evid
 }
 
 function specification(answer: string, model: UnitModel, evidence: readonly EvidenceDocument[]): SpecValueBlock | undefined {
-  const units = 'MPa|kPa|bar|psi|kgf\\/cm(?:2|²)|L\\/min|N[·.]?m|Nm|kgf[·.]?m|mm|cm(?:3|³)|mL|L|kg|rpm|min(?:-1|⁻¹)|km\\/h|V|Ω|ohm|mA|Ah|A|°C|kW';
-  const valueRe = new RegExp(`(-?\\d+(?:[.,]\\d+)?)\\s*(${units})(?![A-Za-z])`, 'gi');
+  const valueRe = new RegExp(`(-?\\d+(?:[.,]\\d+)?)\\s*(${SPEC_UNITS})(?![A-Za-z])`, 'gi');
   const eligible = evidence.filter(doc => validDocumentId(doc.document_id)
     && doc.model === model && !!doc.source
     && /(?:MANUAL|TROUBLESHOOTING|CIRCUIT DIAGRAM|FUEL CONSUMPTION)/i.test(doc.source));
+  if (AMBIGUOUS_SPEC_RE.test(answer) || eligible.some(doc => AMBIGUOUS_SPEC_RE.test(doc.content))) return undefined;
   const candidates: Array<{ value: string; unit: string; label: string; doc: EvidenceDocument }> = [];
   const observed: Array<{ value: string; unit: string; label: string }> = [];
   for (const doc of eligible) {
@@ -78,7 +83,7 @@ function specification(answer: string, model: UnitModel, evidence: readonly Evid
         const unit = match[2];
         const start = match.index ?? 0;
         const context = line.slice(Math.max(0, start - 12), start + match[0].length + 16);
-        if (/±|~|\b(?:to|sampai|hingga|or more|or less|minimum|maximum|min\.?|max\.?)\b|\d\s*[-–]\s*\d/i.test(context)) continue;
+        if (/±|~|\b(?:to|sampai|hingga|or more|or less|minimum|maximum|max)\b|\bmin\b(?!-1|⁻¹)|\d\s*[-–]\s*\d/i.test(context)) continue;
         const label = clean(line.slice(0, start).replace(/^\s*[-*|#]+\s*/, '').replace(/[.:|\s]+$/, ''), 120);
         if (!label) continue;
         observed.push({ value, unit, label });
