@@ -60,6 +60,21 @@ test('mobile sidebar drawer is sized by the app container, not the iOS initial c
   assert.match(read('App.tsx'), /<div className="relative flex h-full overflow-hidden/);
 });
 
+test('rich technical answers render only validated post-final payloads with responsive semantic cards', () => {
+  const chat = read('components/ChatWindow.tsx');
+  const card = read('components/AnswerPresentation.tsx');
+  const css = read('index.css');
+  assert.match(chat, /validateAnswerPresentation\(message\.presentation, message\.content\)/);
+  assert.match(chat, /!isStreaming && presentation/);
+  assert.match(chat, /<AnswerPresentation presentation=\{presentation\}/);
+  assert.match(card, /<dl className="rich-facts">/);
+  assert.match(card, /aria-label="Spesifikasi teknis terverifikasi"/);
+  assert.match(card, /aria-label="Technical News terverifikasi"/);
+  assert.match(css, /\.rich-card\s*\{/);
+  assert.match(css, /@media \(max-width: 390px\)[\s\S]*\.rich-card/);
+  assert.match(read('main.tsx'), /import\.meta\.env\.DEV[\s\S]*fixture=rich-answers/);
+});
+
 test('only voice-originated user messages receive the microphone indicator', () => {
   const input = read('components/MessageInput.tsx');
   const chat = read('components/ChatWindow.tsx');

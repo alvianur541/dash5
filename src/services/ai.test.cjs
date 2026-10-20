@@ -55,8 +55,8 @@ test('answers always use authenticated server, never legacy shared cache or cach
   const { client, entries, requests } = await loadClient([
     { ev: 'text', text: fresh }, { ev: 'meta', full: fresh, cacheable: true }, { ev: 'done' },
   ], { [key]: original });
-  assert.equal(await send(client), fresh);
-  assert.equal(await send(client), fresh);
+  assert.equal((await send(client)).text, fresh);
+  assert.equal((await send(client)).text, fresh);
   assert.equal(requests(), 2);
   assert.equal(entries.get(key), original);
 });
@@ -71,5 +71,30 @@ test('final server text replaces streamed draft only on completed success', asyn
     { ev: 'text', text: 'Uncorrected draft' },
     { ev: 'meta', full: 'Corrected answer', cacheable: false }, { ev: 'done' },
   ]);
-  assert.equal(await send(client), 'Corrected answer');
+  assert.equal((await send(client)).text, 'Corrected answer');
+});
+
+test('returns a validated presentation only after the completed final answer', async () => {
+  const full = 'Battery voltage adalah 12 V.';
+  const presentation = {
+    version: 1,
+    blocks: [
+      { type: 'spec_value', label: 'Battery voltage', value: '12', unit: 'V', unitModel: 'ZX200-5G', sources: [{ documentId: '42', title: 'Electrical Manual', category: 'MANUAL' }] },
+      { type: 'markdown', content: full },
+    ],
+  };
+  const { client } = await loadClient([
+    { ev: 'text', text: full }, { ev: 'meta', full }, { ev: 'presentation', presentation }, { ev: 'done' },
+  ]);
+  assert.equal(JSON.stringify((await send(client)).presentation), JSON.stringify(presentation));
+});
+
+test('ignores malformed or answer-mismatched presentation payloads', async () => {
+  const full = 'Battery voltage adalah 12 V.';
+  const { client } = await loadClient([
+    { ev: 'text', text: full }, { ev: 'meta', full },
+    { ev: 'presentation', presentation: { version: 1, blocks: [{ type: 'markdown', content: 'different' }] } },
+    { ev: 'done' },
+  ]);
+  assert.equal((await send(client)).presentation, undefined);
 });

@@ -11,6 +11,8 @@ import { saveFeedback } from '../services/supabase';
 import { useAuth } from './AuthProvider';
 import type { AgentEvent } from '../types';
 import { tidyStreamingTail } from '../lib/streamPacer';
+import { validateAnswerPresentation } from '../lib/presentation';
+import { AnswerPresentation } from './AnswerPresentation';
 
 const Markdown = lazy(() => import('./Markdown'));
 
@@ -361,6 +363,8 @@ const MessageItem = memo(function MessageItem({
     [onSaveTable],
   );
 
+  const presentation = validateAnswerPresentation(message.presentation, message.content);
+
   if (message.role === 'user') {
     return (
       <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
@@ -390,6 +394,7 @@ const MessageItem = memo(function MessageItem({
     <m.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
       <div className="msg-ai">
         <div className="ai-msg-wrap">
+          {!isStreaming && presentation && <AnswerPresentation presentation={presentation} />}
           <div className="markdown-body">
             <Suspense fallback={<span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>…</span>}>
               <TableSaveCtx.Provider value={!isStreaming && onSaveTable ? saveTable : undefined}>

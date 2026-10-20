@@ -13,13 +13,14 @@ async function harness() {
     useState(value) { const i = slot++; if (!(i in slots)) slots[i] = value; return [slots[i], v => { slots[i] = typeof v === 'function' ? v(slots[i]) : v; }]; },
     useCallback(fn, deps) { const i = slot++; if (!slots[i] || deps.some((d, n) => d !== slots[i].deps[n])) slots[i] = { fn, deps }; return slots[i].fn; },
     useEffect(fn, deps) { const i = slot++; if (!slots[i] || deps.some((d, n) => d !== slots[i][n])) { slots[i] = deps; effects.push(fn); } },
+    response: { text: 'fixture' },
     fetchSessionData(id) { return new Promise(resolve => requests.push({ id, resolve })); },
     saveSession(_userId, _sessionId, _model, messages) { saved.push(messages); return []; },
   };
   const stubs = {
     react: 'export const {useRef,useState,useCallback,useEffect}=globalThis.fixture;',
     '../services/supabase': 'export const fetchSessionData=globalThis.fixture.fetchSessionData; export const fetchUserSessionList=async()=>null; export const saveOrUpdateChatSession=()=>{}; export const deleteChatSession=()=>{}; export const deleteAllChatSessions=async()=>true;',
-    '../services/ai': 'export const warmupProxy=()=>{}; export const generateResponse=async()=>"fixture"; export const generateResponseStream=async()=>"fixture";',
+    '../services/ai': 'export const warmupProxy=()=>{}; export const generateResponse=async()=>globalThis.fixture.response; export const generateResponseStream=async()=>globalThis.fixture.response;',
     '../services/storage': 'export const loadSessionData=()=>null; export const loadSessionList=()=>[]; export const loadSessionTombstones=()=>({}); export const pendingClearAt=()=>0; export const saveSession=globalThis.fixture.saveSession; export const deleteSessionData=()=>{}; export const deleteAllSessionData=()=>{}; export const listKey=()=>"fixture"; export const addSessionTombstones=()=>{}; export const setPendingClear=()=>{}; export const clearPendingClear=()=>{};',
     '../lib/onForeground': 'export const onForeground=()=>()=>{};',
   };
@@ -32,7 +33,7 @@ async function harness() {
   const user = { uid: 'fixture-user' };
   const render = () => { slot = 0; const hook = ctx.module.exports.useChat(user, true); while (effects.length) effects.shift()(); return hook; };
   render();
-  return { render, requests, saved };
+  return { render, requests, saved, fixture };
 }
 
 test('visible completed answer preserves the same persisted message ID', async () => {
@@ -45,6 +46,25 @@ test('visible completed answer preserves the same persisted message ID', async (
   assert.ok(visible); assert.ok(persisted);
   assert.equal(visible.id, persisted.id);
   assert.equal(visible.content, persisted.content);
+});
+
+test('completed rich presentation survives in the visible and persisted assistant message', async () => {
+  const h = await harness();
+  const presentation = {
+    version: 1,
+    blocks: [
+      { type: 'spec_value', label: 'Battery voltage', value: '12', unit: 'V', unitModel: 'ZX200-5G', sources: [{ documentId: '42', title: 'Electrical Manual', category: 'MANUAL' }] },
+      { type: 'markdown', content: 'fixture' },
+    ],
+  };
+  h.fixture.response = { text: 'fixture', presentation };
+  assert.equal(h.render().handleSendMessage('Cek voltage'), true);
+  for (let i = 0; i < 100 && !h.saved.length; i++) await new Promise(r => setTimeout(r, 5));
+  await new Promise(r => setTimeout(r, 5));
+  const visible = h.render().messages.find(m => m.role === 'assistant');
+  const persisted = h.saved[0]?.find(m => m.role === 'assistant');
+  assert.equal(JSON.stringify(visible?.presentation), JSON.stringify(presentation));
+  assert.equal(JSON.stringify(persisted?.presentation), JSON.stringify(presentation));
 });
 
 test('recorded STT source survives in the visible and persisted user message', async () => {

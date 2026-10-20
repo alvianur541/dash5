@@ -202,9 +202,9 @@ export function useChat(user: User, isOnline: boolean) {
     const rawTitle = content.trim() || (attachmentUrls.length > 0 ? '[Gambar]' : 'New chat');
     const sessionTitle = rawTitle.length > 60 ? rawTitle.slice(0, 57) + '...' : rawTitle;
 
-    const persist = (fullText: string) => {
+    const persist = (fullText: string, presentation?: Message['presentation']) => {
       if (loadSessionTombstones(user.uid)[sessionId]) return;
-      const assistantMessage: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs };
+      const assistantMessage: Message = { id: assistantId, role: 'assistant', content: fullText, timestamp: assistantTs, ...(presentation ? { presentation } : {}) };
       const messagesForStorage = [...currentMessages, userMessage, assistantMessage];
       saveSession(user.uid, sessionId, selectedModel, messagesForStorage, rawTitle);
       const newMeta: SessionMeta = { id: sessionId, title: sessionTitle, model: selectedModel, updatedAt: Date.now() };
@@ -219,10 +219,10 @@ export function useChat(user: User, isOnline: boolean) {
     abortStreamRef.current = streamCtrl;
     const ownsSession = () => mountedRef.current && userIdRef.current === user.uid && sessionIdRef.current === sessionSnapshot;
     const stillActive = () => ownsSession() && !streamCtrl.signal.aborted;
-    const upsertAssistant = (text: string) => setMessages(prev => {
+    const upsertAssistant = (text: string, presentation?: Message['presentation']) => setMessages(prev => {
       const exists = prev.some(m => m.id === assistantId);
-      if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: text, timestamp: assistantTs }];
-      return prev.map(m => m.id === assistantId ? { ...m, content: text } : m);
+      if (!exists) return [...prev, { id: assistantId, role: 'assistant', content: text, timestamp: assistantTs, ...(presentation ? { presentation } : {}) }];
+      return prev.map(m => m.id === assistantId ? { ...m, content: text, ...(presentation ? { presentation } : {}) } : m);
     });
     const pacer = createPacer(upsertAssistant, stillActive);
     const onChunk = (chunk: string) => {
@@ -237,10 +237,13 @@ export function useChat(user: User, isOnline: boolean) {
 
     const opts = { sessionId: sessionSnapshot, signal: streamCtrl.signal };
     let fullText: string;
+    let presentation: Message['presentation'];
     try {
-      fullText = attachments?.length
+      const response = attachments?.length
         ? await generateResponse(selectedModel, userName, historyForAi, content, attachments, onChunk, onAgentEvent, opts)
         : await generateResponseStream(selectedModel, userName, historyForAi, content, onChunk, onAgentEvent, opts);
+      fullText = response.text;
+      presentation = response.presentation;
     } catch (err) {
       pacer.cancel();
       if (!ownsSession()) return;
@@ -264,11 +267,12 @@ export function useChat(user: User, isOnline: boolean) {
       release();
       return;
     }
-    persist(fullText);
+    persist(fullText, streamCtrl.signal.aborted ? undefined : presentation);
     if (streamCtrl.signal.aborted) {
       upsertAssistant(fullText);
     } else {
       await pacer.finish(fullText);
+      upsertAssistant(fullText, presentation);
       try { navigator.vibrate?.([12, 40, 12]); } catch { }
     }
     release();

@@ -128,6 +128,195 @@ img {
   animation: status-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+.rich-presentation {
+  width: 100%;
+  min-width: 0;
+  margin: 0 0 18px;
+  font-family: var(--font-sans);
+}
+.rich-card {
+  min-width: 0;
+  overflow: hidden;
+  padding: 17px;
+  border: 1px solid color-mix(in srgb, var(--accent-main) 24%, var(--border-main));
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--accent-main) 5%, var(--bg-card));
+  color: var(--text-primary);
+}
+.rich-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+  color: var(--text-secondary);
+}
+.rich-card-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 680;
+  letter-spacing: 0.01em;
+  color: var(--accent-active);
+}
+.rich-card-head time,
+.rich-model {
+  flex: 0 0 auto;
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.rich-spec-main h3,
+.rich-news-title {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: 14px;
+  font-weight: 590;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.rich-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 5px 0 0;
+  font-variant-numeric: tabular-nums;
+}
+.rich-value > span:first-child {
+  font-size: clamp(32px, 8vw, 42px);
+  font-weight: 720;
+  line-height: 1;
+  letter-spacing: -0.03em;
+}
+.rich-value > span:last-child {
+  color: var(--accent-active);
+  font-size: 17px;
+  font-weight: 680;
+}
+.rich-alternates {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 12px;
+}
+.rich-alternates span {
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.rich-facts,
+.rich-news-meta {
+  display: grid;
+  gap: 0;
+  margin: 16px 0 0;
+}
+.rich-facts > div,
+.rich-news-meta > div {
+  display: grid;
+  grid-template-columns: minmax(110px, 0.45fr) minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 0;
+  border-top: 1px solid var(--border-main);
+}
+.rich-facts dt,
+.rich-news-meta dt {
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+.rich-facts dd,
+.rich-news-meta dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 560;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+.rich-bulletin {
+  margin: 0 0 7px;
+  color: var(--accent-active);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.rich-news-title {
+  color: var(--text-primary);
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.015em;
+}
+.rich-sources {
+  display: grid;
+  gap: 8px;
+  margin-top: 15px;
+  padding-top: 13px;
+  border-top: 1px solid var(--border-main);
+}
+.rich-source {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+  color: var(--text-muted);
+}
+.rich-source > svg {
+  flex: 0 0 auto;
+  margin-top: 2px;
+  color: var(--accent-main);
+}
+.rich-source > span {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+.rich-source strong,
+.rich-source span span {
+  overflow-wrap: anywhere;
+}
+.rich-source strong {
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 620;
+}
+.rich-source span span {
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+@media (max-width: 390px) {
+  .rich-card { padding: 14px; border-radius: 13px; }
+  .rich-card-head { align-items: flex-start; flex-wrap: wrap; margin-bottom: 14px; }
+  .rich-value > span:first-child { font-size: 34px; }
+  .rich-facts > div,
+  .rich-news-meta > div { grid-template-columns: 1fr; gap: 3px; padding: 8px 0; }
+}
+.rich-fixture-shell {
+  width: min(100%, 760px);
+  min-height: 100%;
+  margin: 0 auto;
+  padding: 28px 20px 60px;
+  background: var(--bg-app);
+}
+.rich-fixture-shell > header { margin-bottom: 24px; }
+.rich-fixture-shell > header h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; }
+.rich-fixture-shell > header p { margin: 4px 0 0; color: var(--text-muted); font-size: 13px; }
+.rich-fixture-answer { margin-bottom: 34px; }
+@media (max-width: 390px) {
+  .rich-fixture-shell { padding: 16px 12px 40px; }
+}
+
 .markdown-body {
   font-family: var(--font-serif);
   font-size: 14px;

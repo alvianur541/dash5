@@ -1,5 +1,6 @@
-import { UnitModel, Message, AgentEvent } from '../types';
+import { UnitModel, Message, AgentEvent, AnswerPresentationV1 } from '../types';
 import { getAuthToken } from './supabase';
+import { validateAnswerPresentation } from '../lib/presentation';
 
 // Above the server deadline (120 s) so the server's own message wins instead of us guessing.
 const ASK_IDLE_TIMEOUT_MS = 130_000;
@@ -43,12 +44,17 @@ interface AskOptions {
 }
 
 
+interface AIResponse {
+  text: string;
+  presentation?: AnswerPresentationV1;
+}
+
 async function ask(
   body: AskBody,
   onChunk: (text: string) => void,
   onAgentEvent: ((e: AgentEvent) => void) | undefined,
   cancel: AbortSignal | undefined,
-): Promise<{ text: string }> {
+): Promise<AIResponse> {
   const ctrl = new AbortController();
   const stop = () => ctrl.abort();
   cancel?.addEventListener('abort', stop);
@@ -61,6 +67,7 @@ async function ask(
   let text = '';
   let completed = false;
   let receivedFinal = false;
+  let rawPresentation: unknown;
   let serverError: string | null = null;
   try {
     const send = async () => fetch(`${PROXY_URL}/v1/ask`, {
@@ -123,6 +130,9 @@ async function ask(
               receivedFinal = true;
             }
             break;
+          case 'presentation':
+            rawPresentation = frame.presentation;
+            break;
           case 'done':
             completed = true;
             break;
@@ -140,7 +150,8 @@ async function ask(
   if (serverError) throw new Error(serverError);
   if (ctrl.signal.aborted) throw abortReason();
   if (!completed || !receivedFinal || !text.trim()) throw new Error('Stream terputus sebelum jawaban selesai.');
-  return { text };
+  const presentation = validateAnswerPresentation(rawPresentation, text);
+  return { text, ...(presentation ? { presentation } : {}) };
 }
 
 export async function generateResponseStream(
@@ -151,12 +162,11 @@ export async function generateResponseStream(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
   { sessionId, signal }: AskOptions = {},
-): Promise<string> {
-  const { text } = await ask(
+): Promise<AIResponse> {
+  return ask(
     { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, sessionId },
     onChunk, onAgentEvent, signal,
   );
-  return text;
 }
 
 function fileToInline(file: File): Promise<{ mimeType: string; data: string }> {
@@ -183,16 +193,15 @@ export async function generateResponse(
   onChunk: (text: string) => void,
   onAgentEvent?: (event: AgentEvent) => void,
   { sessionId, signal }: AskOptions = {},
-): Promise<string> {
+): Promise<AIResponse> {
   const settled = await Promise.allSettled(attachments.map(fileToInline));
   const images = settled
     .filter((r): r is PromiseFulfilledResult<{ mimeType: string; data: string }> => r.status === 'fulfilled')
     .map(r => r.value);
-  if (images.length === 0) return 'Maaf, gagal membaca file gambar.';
+  if (images.length === 0) return { text: 'Maaf, gagal membaca file gambar.' };
 
-  const { text } = await ask(
+  return ask(
     { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined, sessionId },
     onChunk, onAgentEvent, signal,
   );
-  return text;
 }
