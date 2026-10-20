@@ -7,7 +7,8 @@ function Source({ source }: { source: PresentationSource }) {
       <BookOpen size={15} strokeWidth={1.8} aria-hidden="true" />
       <span>
         <strong>{source.title}</strong>
-        <span>{source.category}{source.section ? ` · ${source.section}` : ''}{source.revision ? ` · ${source.revision}` : ''}</span>
+        {/* Non-breaking space keeps each "·" at a line end, never at the start of a wrapped line. */}
+        <span>{[source.category, source.section, source.revision].filter(Boolean).join(' · ')}</span>
       </span>
     </div>
   );
