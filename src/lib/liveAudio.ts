@@ -7,6 +7,14 @@ export function createEchoGate(tailMs: number) {
     open: (t: number) => t > until + tailMs,
   };
 }
+export function louderOutput(ctx: BaseAudioContext, gain = 2.2): AudioNode {
+  const boost = ctx.createGain();
+  const limit = ctx.createDynamicsCompressor();
+  boost.gain.value = gain;
+  limit.threshold.value = -10; limit.knee.value = 4; limit.ratio.value = 20; limit.attack.value = 0.002; limit.release.value = 0.15;
+  boost.connect(limit).connect(ctx.destination);
+  return boost;
+}
 export function liveSocketUrl(page: string, backend?: string): string {
   const url = new URL(backend ? '/v1/live' : '/api/v1/live', backend || page);
   if (backend) {

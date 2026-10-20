@@ -38,3 +38,14 @@ test('resamples stereo 48k to mono 16k and clamps little-endian PCM', () => {
  assert.ok(resampleMono([a, b], 48000).every(x => x === 0));
  assert.deepEqual([...pcm16(new Float32Array([-2, 0, 2]))], [0, 128, 0, 0, 255, 127]);
 });
+
+test('Live playback goes through a boost and a limiter before the speaker', () => {
+  const chain = [];
+  const node = name => ({ name, gain: { value: 0 }, threshold: { value: 0 }, knee: { value: 0 }, ratio: { value: 0 }, attack: { value: 0 }, release: { value: 0 },
+    connect(next) { chain.push(`${name}->${next.name}`); return next; } });
+  const ctx = { destination: node('speaker'), createGain: () => node('boost'), createDynamicsCompressor: () => node('limit') };
+  const out = mod.exports.louderOutput(ctx);
+  assert.equal(out.name, 'boost');
+  assert.deepEqual(chain, ['boost->limit', 'limit->speaker']);
+  assert.ok(out.gain.value > 1);
+});
