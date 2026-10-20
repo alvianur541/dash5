@@ -5,7 +5,7 @@ import type {
 } from '../types';
 
 const UNIT_SET = new Set<string>(UNIT_MODELS);
-const SPEC_UNITS = /^(?:MPa|kPa|bar|psi|kgf\/cm(?:2|²)|L\/min|N[·.]?m|Nm|kgf[·.]?m|mm|cm(?:3|³)|mL|L|kg|rpm|min(?:-1|⁻¹)|km\/h|V|Ω|ohm|mA|Ah|A|°C|kW)$/i;
+const SPEC_UNITS = /^(?:MPa|kPa|bar|psi|kgf\/cm(?:2|²)|L\/min|N[·⋅.]?m|Nm|kgf[·⋅.]?m|lbf[·⋅.]?ft|mm|cm(?:3|³)|mL|L|kg|rpm|min(?:-1|⁻¹)|km\/h|V|Ω|ohm|mA|Ah|A|°C|kW)$/i;
 const HTML_RE = /<\/?[a-z][^>]*>/i;
 
 function text(value: unknown, max = 500): value is string {

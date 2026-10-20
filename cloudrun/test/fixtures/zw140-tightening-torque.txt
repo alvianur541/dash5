@@ -1,0 +1,9 @@
+Section: GENERAL - TIGHTENING (Tightening Torque Specifications)
+Model: ZW140
+Kategori: WORKSHOP MANUAL
+Document: W4FC-E-00 Workshop Manual
+
+TIGHTENING TORQUE SPECIFICATIONS
+Bolts and Nuts of Machine: Standard Tightening Torque Chart Bolt | Wrench | Torque NO. | Locations | Quantity Diameter | Size | N⋅m (kgf⋅m, lbf⋅ft) 1 | Front axle mounting bolt | 24 | 8 | 36 | 785 (80, 580) 2 | Rear axle support mounting bolt(Front) | 20 | 4 | 30 | 529 (54, 390) Rear axle support mounting bolt(Rear) | 24 | 4 | 36 | 890 (91, 660) 3 | Wheel rim mounting bolt | 24 | 48 | 36 | 890 (91, 660) 4 | Propeller shaft mounting bolt | 10 | 20 | 17 | **74 (7.5, 55) 5 | Propeller shaft support bearing mounting bolt | 16 | 2 | 24 | 223.4 (23, 165) 6 | Transmission mounting bolt; Bracket | 16 | 8 | 24 | **205 (21, 151) 7 | Transmission mounting bolt; Cushion rubber | 18 | 4 | 27 | 315 (32, 230) 8 | HST Motor mounting bolts | 16 | 8 | 24 | 232 (24, 170) 9 | HST Pump mounting bolts | 16 | 6 | 24 | 232 (24, 170) 23 Air conditioner compressor mounting bolt | 8 | 4 | 12 | 25~30 (2~3, 18~22)
+As for torque with mark **, LOCTITE #262 is used.
+NOTE: When tightening, apply lubricant in order to reduce friction coefficient of bolts and nuts.

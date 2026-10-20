@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const fixture = require(path.join(__dirname, 'fixtures/rich-answer-evidence.json'));
 const { attachAnswerPresentation, buildAnswerPresentation, mockDeps, runWithDeps, suite } = require('./helpers.cjs');
 
@@ -53,6 +54,19 @@ module.exports = async function () {
   t(torquePresentation?.blocks?.[0]?.type === 'spec_value'
     && torquePresentation.blocks[0].alternateValues?.length === 2,
   'keeps converted torque units as alternate values instead of treating them as conflicting specifications');
+
+  const realTorqueSource = fs.readFileSync(path.join(__dirname, 'fixtures/zw140-tightening-torque.txt'), 'utf8');
+  const realTorqueAnswer = 'Komponen: HST Motor mounting bolts (Item No. 8)\nUkuran Baut (Bolt Diameter): 16 mm (Quantity: 8)\nUkuran Kunci (Wrench Size): 24 mm\nNilai Torsi Pengencangan: 232 N⋅m (24 kgf⋅m, 170 lbf⋅ft)\nSumber Manual: Workshop Manual ZW140 (Document: W4FC-E-00), Section: GENERAL - TIGHTENING (Tightening Torque Specifications)';
+  const realTorquePresentation = buildAnswerPresentation({ answer: realTorqueAnswer, model: 'ZW140', evidence: [{
+    ...spec.evidence[0], document_id: 9436, model: 'ZW140', source: 'WORKSHOP MANUAL',
+    section: 'GENERAL - TIGHTENING (Tightening Torque Specifications)', document: 'W4FC-E-00 Workshop Manual',
+    content: realTorqueSource,
+  }] });
+  t(realTorquePresentation?.blocks?.[0]?.type === 'spec_value'
+    && realTorquePresentation.blocks[0].value === '232'
+    && realTorquePresentation.blocks[0].unit === 'N⋅m'
+    && realTorquePresentation.blocks[0].alternateValues?.length === 2,
+  'builds the HST torque card from the real unitless table row and header units');
 
   const conflictEvidence = [{
     ...spec.evidence[0],

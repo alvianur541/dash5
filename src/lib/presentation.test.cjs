@@ -28,6 +28,21 @@ test('accepts a source-bound V1 presentation whose markdown exactly matches the 
   assert.deepEqual(validateAnswerPresentation(valid, markdown), valid);
 });
 
+test('accepts tightening torque units emitted from the real ZW140 manual table', async () => {
+  const { validateAnswerPresentation } = await loadValidator();
+  const torqueMarkdown = 'HST Motor mounting bolts: 232 N⋅m (24 kgf⋅m, 170 lbf⋅ft).';
+  const torque = {
+    version: 1,
+    blocks: [
+      { type: 'spec_value', label: 'HST Motor mounting bolts', value: '232', unit: 'N⋅m',
+        alternateValues: [{ value: '24', unit: 'kgf⋅m' }, { value: '170', unit: 'lbf⋅ft' }],
+        unitModel: 'ZW140', sources: [source] },
+      { type: 'markdown', content: torqueMarkdown },
+    ],
+  };
+  assert.deepEqual(validateAnswerPresentation(torque, torqueMarkdown), torque);
+});
+
 test('fails closed for unsupported, malformed, or markdown-mismatched presentations', async () => {
   const { validateAnswerPresentation } = await loadValidator();
   for (const payload of [

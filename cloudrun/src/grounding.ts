@@ -1,4 +1,5 @@
 import type { EvidenceDocument } from './evidence';
+import { normalizeTighteningText, tighteningTorqueRows } from './tightening';
 interface GroundingClaim {
   component: string; attribute: string; value: string; unit: string; model: string;
   condition?: string; variant?: string; document_id?: string | number; section?: string;
@@ -29,16 +30,28 @@ export function auditMeasurements(answer: string, docs: readonly EvidenceDocumen
   let checked = 0, supported = 0;
   const component = /travel device|swing motor|hst motor|main pump|pilot solenoid|solenoid valve|engine oil|boom cylinder|arm cylinder|bucket cylinder|undercarriage/i;
   const attr = /weight|berat|bore|diameter|stroke|pressure|tekanan|resistance|resistansi|capacity|kapasitas|refill|change|length|panjang|torque|torsi|wrench|kunci/i;
-  const canonicalAttribute = (value: string) => ({ berat: 'weight', tekanan: 'pressure', resistansi: 'resistance',
-    kapasitas: 'capacity', panjang: 'length', torsi: 'torque', kunci: 'wrench' }[value.toLowerCase()] ?? value);
+  const canonicalAttribute = (value: string) => {
+    const lower = value.toLowerCase();
+    return ({ berat: 'weight', tekanan: 'pressure', resistansi: 'resistance', kapasitas: 'capacity',
+      panjang: 'length', torsi: 'torque', kunci: 'wrench' }[lower] ?? lower);
+  };
   let activeComponent = '';
   for (const row of answer.split('\n')) {
     const foundComponent = component.exec(row)?.[0];
     if (foundComponent) activeComponent = foundComponent;
-    for (const m of row.matchAll(/(\d+(?:[.,]\d+)?)\s*(MPa|kPa|bar|psi|kg|mm|L|Ω|Nm|N·m|rpm)(?![a-z/])/gi)) {
+    for (const m of row.matchAll(/(\d+(?:[.,]\d+)?)\s*(MPa|kPa|bar|psi|kg|mm|L|Ω|Nm|N[·⋅]m|rpm)(?![a-z/])/gi)) {
       checked++;
       const a = attr.exec(row)?.[0] ?? '';
-      if (groundClaim({ component: foundComponent ?? activeComponent, attribute: canonicalAttribute(a),
+      const claimComponent = foundComponent ?? activeComponent;
+      const attribute = canonicalAttribute(a);
+      const componentKey = normalizeTighteningText(claimComponent);
+      const tableRow = componentKey ? docs.flatMap(doc => doc.model === model ? tighteningTorqueRows(doc.content) : [])
+        .find(item => normalizeTighteningText(item.location).includes(componentKey)) : undefined;
+      const unit = m[2].toLowerCase().replace(/[·⋅.]/g, '');
+      const tableSupported = !!tableRow && ((unit === 'nm' && attribute === 'torque' && m[1] === tableRow.torque)
+        || (unit === 'mm' && attribute === 'diameter' && m[1] === tableRow.boltDiameter)
+        || (unit === 'mm' && attribute === 'wrench' && m[1] === tableRow.wrenchSize));
+      if (tableSupported || groundClaim({ component: claimComponent, attribute,
         value: m[1], unit: m[2], model }, docs).status === 'supported') supported++;
     }
   }

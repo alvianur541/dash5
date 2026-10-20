@@ -1,5 +1,6 @@
 import type { EvidenceDocument } from './evidence';
 import { deps } from './deps';
+import { normalizeTighteningText, tighteningTorqueRows } from './tightening';
 import type { AnswerPresentationV1, PresentationSource, SpecValueBlock, TechnicalNewsBlock, UnitModel } from './types';
 
 const MAX_TEXT = 500;
@@ -42,6 +43,32 @@ function sourceFor(doc: EvidenceDocument): PresentationSource | undefined {
   };
 }
 
+function tighteningSpecification(answer: string, model: UnitModel, evidence: readonly EvidenceDocument[]): SpecValueBlock | undefined {
+  const normalizedAnswer = normalizeTighteningText(answer);
+  const matches = evidence.flatMap(doc => {
+    if (!validDocumentId(doc.document_id) || doc.model !== model || !/(?:MANUAL|TROUBLESHOOTING)/i.test(doc.source ?? '')) return [];
+    return tighteningTorqueRows(doc.content).filter(row => normalizedAnswer.includes(normalizeTighteningText(row.location)))
+      .map(row => ({ doc, row }));
+  });
+  if (matches.length !== 1) return undefined;
+  const { doc, row } = matches[0];
+  const visible = (value: string, unit: string) => new RegExp(`(^|\\D)${value.replace('.', '[.,]')}\\s*${unit}`, 'i').test(answer);
+  if (!visible(row.torque, 'N[·⋅.]?m') || !visible(row.kgfM, 'kgf[·⋅.]?m') || !visible(row.lbfFt, 'lbf[·⋅.]?ft')) return undefined;
+  const source = sourceFor(doc);
+  if (!source) return undefined;
+  return {
+    type: 'spec_value', label: row.location, value: row.torque, unit: 'N⋅m',
+    alternateValues: [{ value: row.kgfM, unit: 'kgf⋅m' }, { value: row.lbfFt, unit: 'lbf⋅ft' }],
+    facts: [
+      { label: 'Bolt Diameter', value: `${row.boltDiameter} mm` },
+      { label: 'Wrench Size', value: `${row.wrenchSize} mm` },
+      { label: 'Quantity', value: row.quantity },
+    ],
+    unitModel: model,
+    sources: [source],
+  };
+}
+
 function bulletinIdFor(doc: EvidenceDocument): string | undefined {
   return clean(doc.content.match(/\b(?:Technical News|Bulletin|Buletin|No\.?)\s*(?:No\.?\s*)?([A-Z0-9.-]+(?:\/[A-Z0-9.-]+)+)\b/i)?.[1], 80);
 }
@@ -76,7 +103,10 @@ function specification(answer: string, model: UnitModel, evidence: readonly Evid
   const eligible = evidence.filter(doc => validDocumentId(doc.document_id)
     && doc.model === model && !!doc.source
     && /(?:MANUAL|TROUBLESHOOTING|CIRCUIT DIAGRAM|FUEL CONSUMPTION)/i.test(doc.source));
-  if (AMBIGUOUS_SPEC_RE.test(answer) || eligible.some(doc => AMBIGUOUS_SPEC_RE.test(doc.content))) return undefined;
+  if (AMBIGUOUS_SPEC_RE.test(answer)) return undefined;
+  const tightening = tighteningSpecification(answer, model, eligible);
+  if (tightening) return tightening;
+  if (eligible.some(doc => AMBIGUOUS_SPEC_RE.test(doc.content))) return undefined;
   const candidates: Array<{ value: string; unit: string; label: string; doc: EvidenceDocument; line: string; matchIndex: number; answerIndex: number }> = [];
   const observed: Array<{ value: string; unit: string; label: string }> = [];
   for (const doc of eligible) {
