@@ -14,6 +14,11 @@ const blok = [
      t(b.groundClaim({...c,model:'ZX200-5G'},docs).status!=='supported','model isolation');
      t(b.groundClaim({...c,document_id:2},docs).status!=='supported','citation must refer to real source');
      t(b.groundClaim({component:'Engine oil',attribute:'refill',value:'7.4',unit:'L',model:'ZX48U-5A',document_id:1},docs).status!=='supported','condition-specific capacity cannot be swapped');
+     const torqueDoc={document_id:2,model:'ZW140',source:'WORKSHOP MANUAL',section:'GENERAL - TIGHTENING (Torque Chart)',document:null,evidence_role:'numeric',content:'Section: GENERAL - TIGHTENING (Torque Chart)\nModel: ZW140\nKategori: WORKSHOP MANUAL\n| Description | Bolt Diameter | Wrench Size | Quantity | Torque |\n| HST Motor mounting bolts | 16 mm | 24 mm | 8 | 232 N·m (24 kgf·m, 170 lbf·ft) |'};
+     const torqueAnswer='Torsi pengencangan untuk HST Motor mounting bolts ZW140 adalah:\n\nTorsi: 232 N·m (24 kgf·m, 170 lbf·ft)\nUkuran Baut (Bolt Diameter): 16 mm\nUkuran Kunci (Wrench Size): 24 mm\nJumlah (Quantity): 8 baut';
+     const audit=b.auditMeasurements(torqueAnswer,[torqueDoc],'ZW140');
+     t(audit.checked===3 && audit.supported===3 && audit.unknown===0,
+       'multiline HST torque answer inherits its component and validates values against the same table row');
      return done();
     };
     return module.exports;

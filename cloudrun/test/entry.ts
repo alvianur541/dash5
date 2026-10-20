@@ -25,7 +25,7 @@ export { BUKAN_HARGA_SAJA_RE } from '../src/harga';
 export { compressEvidence } from '../src/compression';
 export { resolveQuestion } from '../src/question';
 export { SYSTEM_PROMPT } from '../src/constants';
-export { groundClaim } from '../src/grounding';
+export { groundClaim, auditMeasurements } from '../src/grounding';
 export { stage } from '../src/telemetry';
 export { symptomSnippet } from '../src/rag/symptom';
 export { registerEvidence, evidenceFor, evidenceBlocks } from '../src/evidence';
