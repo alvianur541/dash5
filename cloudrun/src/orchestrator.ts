@@ -233,12 +233,10 @@ export async function generateResponseStream(
   }, onChunk, gsTechnical)), ragContent, history);
   if (routeResult.type === 'rag_found' && TABEL_HARGA_RE.test(fullText)) deps().meta.confidence = undefined;
 
-  if (routeResult.type === 'rag_found' && fullText
-      && !fullText.includes(STREAM_CUT_NOTE.trim()) && !fullText.includes(STREAM_HALT_NOTE.trim())
-      && !fullText.includes(STREAM_LONG_NOTE.trim())
-      && looksComplete(fullText)) {
-    deps().meta.cacheable = true;
-  } else if (routeResult.type === 'rag_found' && fullText) {
+  const complete = routeResult.type === 'rag_found' && !!fullText && looksComplete(fullText)
+    && ![STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE].some(note => fullText.includes(note.trim()));
+  if (complete) deps().meta.cacheable = true;
+  else if (routeResult.type === 'rag_found' && fullText) {
     console.warn('[cache] jawaban tidak di-cache (%d huruf, tampak tidak utuh)', fullText.trim().length);
   }
 
@@ -248,13 +246,7 @@ export async function generateResponseStream(
     deps().meta.groundingUnknown = audit.unknown;
     if (audit.unknown) deps().meta.cacheable = false;
     console.info('[grounding] checked=%d supported=%d unknown=%d', audit.checked, audit.supported, audit.unknown);
-    attachAnswerPresentation({
-      answer: fullText,
-      model,
-      evidence,
-      complete: deps().meta.cacheable === true,
-      groundingUnknown: audit.unknown,
-    });
+    attachAnswerPresentation({ question: resolved.text, answer: fullText, model, evidence, complete });
   }
 
   return fullText || FALLBACK_RESPONSE;

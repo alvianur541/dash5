@@ -2,7 +2,7 @@
 export { UNIT_MODELS } from '@/cloudrun/src/types';
 export type {
   UnitModel, AgentEvent, AnswerPresentationV1, AnswerPresentationBlockV1, PresentationSource,
-  SpecValueBlock, TechnicalNewsBlock, MarkdownBlock,
+  SpecRow, SpecValueBlock, SpecTableBlock, TechnicalNewsBlock, MarkdownBlock,
 } from '@/cloudrun/src/types';
 
 import type { UnitModel, Message as BaseMessage } from '@/cloudrun/src/types';

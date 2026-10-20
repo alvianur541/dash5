@@ -68,8 +68,9 @@ test('rich technical answers render only validated post-final payloads with resp
   assert.match(chat, /!isStreaming && presentation/);
   assert.match(chat, /<AnswerPresentation presentation=\{presentation\}/);
   assert.match(card, /<dl className="rich-facts">/);
-  assert.match(card, /aria-label="Spesifikasi teknis terverifikasi"/);
-  assert.match(card, /aria-label="Technical News terverifikasi"/);
+  assert.match(card, /<dl className="rich-rows">/);
+  assert.match(card, /label="Spesifikasi teknis terverifikasi"/);
+  assert.match(card, /label="Technical News terverifikasi"/);
   assert.match(css, /\.rich-card\s*\{/);
   assert.match(css, /@media \(max-width: 390px\)[\s\S]*\.rich-card/);
   assert.match(read('main.tsx'), /import\.meta\.env\.DEV[\s\S]*fixture=rich-answers/);

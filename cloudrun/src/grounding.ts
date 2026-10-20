@@ -36,14 +36,16 @@ export function auditMeasurements(answer: string, docs: readonly EvidenceDocumen
       panjang: 'length', torsi: 'torque', kunci: 'wrench' }[lower] ?? lower);
   };
   let activeComponent = '';
+  let activeAttribute = '';
   for (const row of answer.split('\n')) {
     const foundComponent = component.exec(row)?.[0];
     if (foundComponent) activeComponent = foundComponent;
+    const foundAttribute = attr.exec(row)?.[0];
+    if (foundAttribute) activeAttribute = foundAttribute;
     for (const m of row.matchAll(/(\d+(?:[.,]\d+)?)\s*(MPa|kPa|bar|psi|kg|mm|L|Ω|Nm|N[·⋅]m|rpm)(?![a-z/])/gi)) {
       checked++;
-      const a = attr.exec(row)?.[0] ?? '';
       const claimComponent = foundComponent ?? activeComponent;
-      const attribute = canonicalAttribute(a);
+      const attribute = canonicalAttribute(foundAttribute ?? activeAttribute);
       const componentKey = normalizeTighteningText(claimComponent);
       const tableRow = componentKey ? docs.flatMap(doc => doc.model === model ? tighteningTorqueRows(doc.content) : [])
         .find(item => normalizeTighteningText(item.location).includes(componentKey)) : undefined;

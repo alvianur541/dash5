@@ -54,3 +54,13 @@ test('fails closed for unsupported, malformed, or markdown-mismatched presentati
     { ...valid, blocks: [valid.blocks[1]] },
   ]) assert.equal(validateAnswerPresentation(payload, markdown), undefined);
 });
+
+test('accepts a spec_table card and rejects one with a single row or an unknown unit', async () => {
+  const { validateAnswerPresentation } = await loadValidator();
+  const md = '- Travel Device: 310 kg (685 lb)\n- Ring gear: 39 kg';
+  const rows = [{ label: 'Travel Device', value: '310', unit: 'kg', alternateValues: [{ value: '685', unit: 'lb' }] }, { label: 'Ring gear', value: '39', unit: 'kg' }];
+  const table = { version: 1, blocks: [{ type: 'spec_table', title: 'Berat travel device', rows, unitModel: 'ZX200-5G', sources: [source] }, { type: 'markdown', content: md }] };
+  assert.deepEqual(validateAnswerPresentation(table, md), table);
+  assert.equal(validateAnswerPresentation({ ...table, blocks: [{ ...table.blocks[0], rows: rows.slice(0, 1) }, table.blocks[1]] }, md), undefined);
+  assert.equal(validateAnswerPresentation({ ...table, blocks: [{ ...table.blocks[0], rows: [rows[0], { ...rows[1], unit: 'kilo' }] }, table.blocks[1]] }, md), undefined);
+});

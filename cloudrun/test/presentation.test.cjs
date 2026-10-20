@@ -3,141 +3,92 @@ const fs = require('fs');
 const fixture = require(path.join(__dirname, 'fixtures/rich-answer-evidence.json'));
 const { attachAnswerPresentation, buildAnswerPresentation, mockDeps, runWithDeps, suite } = require('./helpers.cjs');
 
-module.exports = async function () {
-  const { t, done } = suite('rich answer presentation: source-bound technical news');
-  const f = fixture.technicalNews;
-  const presentation = buildAnswerPresentation({
-    answer: f.answer,
-    model: f.model,
-    evidence: f.evidence,
-  });
+const doc = (id, model, source, section, content) => ({ document_id: id, model, source, section, document: `${source} ${id}`, content, evidence_role: 'retrieved' });
 
-  t(presentation?.version === 1, 'uses versioned AnswerPresentationV1 contract');
-  t(presentation?.blocks?.[0]?.type === 'technical_news', 'creates Technical News block from eligible evidence');
-  t(presentation?.blocks?.[0]?.title === f.evidence[0].section, 'uses the source title without inventing metadata');
-  t(presentation?.blocks?.[0]?.bulletinId === '06/TSD-CE/TN/9/2023', 'uses bulletin identifier present in the source');
-  t(presentation?.blocks?.[0]?.sources?.[0]?.documentId === String(f.evidence[0].document_id), 'keeps the authorized document id');
-  t(presentation?.blocks?.at(-1)?.type === 'markdown' && presentation.blocks.at(-1).content === f.answer,
-    'keeps the complete Markdown answer as the authoritative fallback block');
+module.exports = async function () {
+  const { t, done } = suite('rich answer presentation: verified spec & Technical News cards');
+  const f = fixture.technicalNews;
+  const news = buildAnswerPresentation({ question: f.question, answer: f.answer, model: f.model, evidence: f.evidence });
+  t(news?.version === 1 && news.blocks[0].type === 'technical_news', 'creates a Technical News card');
+  t(news?.blocks[0].title === f.evidence[0].section && news.blocks[0].bulletinId === '06/TSD-CE/TN/9/2023', 'title and bulletin come from the source');
+  t(news?.blocks[0].sources[0].documentId === String(f.evidence[0].document_id), 'keeps the authorized document id');
+  t(news?.blocks[1].type === 'markdown' && news.blocks[1].content === f.answer, 'keeps the full Markdown answer as the second block');
 
   const spec = fixture.specification;
-  const specPresentation = buildAnswerPresentation({
-    answer: spec.answer,
-    model: spec.model,
-    evidence: spec.evidence,
-  });
-  t(specPresentation?.blocks?.[0]?.type === 'spec_value', 'creates an exact specification block');
-  t(specPresentation?.blocks?.[0]?.label === 'Voltage', 'takes the label from the exact source line');
-  t(specPresentation?.blocks?.[0]?.value === '12' && specPresentation?.blocks?.[0]?.unit === 'V',
-    'takes one exact value and unit present in both evidence and final answer');
-  t(specPresentation?.blocks?.[0]?.unitModel === spec.model, 'binds the immutable selected unit model');
-  t(specPresentation?.blocks?.[0]?.sources?.[0]?.documentId === String(spec.evidence[0].document_id),
-    'binds the specification to the authorized document id');
-  t(buildAnswerPresentation({ answer: 'Engine speed adalah 2000 min-1.', model: spec.model, evidence: [{
-    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Engine speed 2000 min-1'),
-  }] })?.blocks?.[0]?.type === 'spec_value', 'does not confuse the inverse-minute unit with a minimum qualifier');
+  const volt = buildAnswerPresentation({ question: spec.question, answer: spec.answer, model: spec.model, evidence: spec.evidence });
+  t(volt?.blocks[0].type === 'spec_value' && volt.blocks[0].value === '12' && volt.blocks[0].unit === 'V', 'single verified value → spec_value card');
+  t(volt?.blocks[0].label === 'Voltage battery ZX48U-5A', 'label is the answer text before "adalah"');
+  t(volt?.blocks[0].unitModel === spec.model && volt.blocks[0].sources[0].documentId === String(spec.evidence[0].document_id), 'binds model and document id');
 
-  const torqueAnswer = 'Torsi pengencangan: 232 N·m (24 kgf·m, 170 lbf·ft). Ukuran bolt diameter 16 mm dan wrench size 24 mm.';
-  const torquePresentation = buildAnswerPresentation({ answer: torqueAnswer, model: 'ZW140', evidence: [{
-    ...spec.evidence[0],
-    document_id: 8801,
-    model: 'ZW140',
-    source: 'WORKSHOP MANUAL',
-    section: 'GENERAL - TIGHTENING',
-    document: 'ZW140 Workshop Manual',
-    content: 'Section: GENERAL - TIGHTENING\nModel: ZW140\nKategori: WORKSHOP MANUAL\nTightening torque 232 N·m (24 kgf·m, 170 lbf·ft)\nBolt diameter 16 mm\nWrench size 24 mm',
-  }] });
-  t(torquePresentation?.blocks?.[0]?.type === 'spec_value'
-    && torquePresentation.blocks[0].value === '232'
-    && torquePresentation.blocks[0].unit === 'N·m',
-  'creates the primary torque card when the source also contains converted units and fastener dimensions');
-  t(torquePresentation?.blocks?.[0]?.type === 'spec_value'
-    && torquePresentation.blocks[0].alternateValues?.length === 2,
-  'keeps converted torque units as alternate values instead of treating them as conflicting specifications');
+  const flyDoc = doc(8377, 'ZX200-5G', 'ENGINE MANUAL', 'GENERAL INFORMATION - TIGHTENING TORQUE STANDARDS (Bolts & Nuts)',
+    'Crankshaft, Piston, and Flywheel\nN·m (kgf·m/lb.ft)\n539–637\n197–240\n(55–65/378–470)\n(20.1–24.5/145–177)\nApply engine oil');
+  const flyAnswer = 'Torsi pengencangan baut flywheel engine Isuzu 6BG1T pada ZX200-5G adalah `197–240 N·m` (`20.1–24.5 kgf·m` / `145–177 lb·ft`) *(Engine Manual — Major Component Reassembly Steps II)*.';
+  const fly = buildAnswerPresentation({ question: 'torsi baut flywheel berapa', answer: flyAnswer, model: 'ZX200-5G', evidence: [flyDoc] });
+  t(fly?.blocks[0].type === 'spec_value' && fly.blocks[0].value === '197–240' && fly.blocks[0].unit === 'N·m', 'range from a table with header units → card');
+  t(fly?.blocks[0].label === 'Torsi baut flywheel' && fly.blocks[0].alternateValues?.length === 2, 'question title + both converted ranges');
+  t(buildAnswerPresentation({ question: 'torsi baut flywheel berapa', answer: flyAnswer.replace('197–240', '200–240'), model: 'ZX200-5G', evidence: [flyDoc] }) === undefined,
+    'a range end not in the manual → no card');
+  t(buildAnswerPresentation({ question: 'torsi baut flywheel berapa', answer: 'Torsi baut flywheel `240 N·m`.', model: 'ZX200-5G', evidence: [flyDoc] }) === undefined,
+    'one end of a range quoted as a single value → no card');
 
-  const realTorqueSource = fs.readFileSync(path.join(__dirname, 'fixtures/zw140-tightening-torque.txt'), 'utf8');
-  const realTorqueAnswer = 'Komponen: HST Motor mounting bolts (Item No. 8)\nUkuran Baut (Bolt Diameter): 16 mm (Quantity: 8)\nUkuran Kunci (Wrench Size): 24 mm\nNilai Torsi Pengencangan: 232 N⋅m (24 kgf⋅m, 170 lbf⋅ft)\nSumber Manual: Workshop Manual ZW140 (Document: W4FC-E-00), Section: GENERAL - TIGHTENING (Tightening Torque Specifications)';
-  const realTorquePresentation = buildAnswerPresentation({ answer: realTorqueAnswer, model: 'ZW140', evidence: [{
-    ...spec.evidence[0], document_id: 9436, model: 'ZW140', source: 'WORKSHOP MANUAL',
-    section: 'GENERAL - TIGHTENING (Tightening Torque Specifications)', document: 'W4FC-E-00 Workshop Manual',
-    content: realTorqueSource,
-  }] });
-  t(realTorquePresentation?.blocks?.[0]?.type === 'spec_value'
-    && realTorquePresentation.blocks[0].value === '232'
-    && realTorquePresentation.blocks[0].unit === 'N⋅m'
-    && realTorquePresentation.blocks[0].alternateValues?.length === 2,
-  'builds the HST torque card from the real unitless table row and header units');
+  const travelDoc = doc(7605, 'ZX200-5G', 'WORKSHOP MANUAL', 'TRAVEL DEVICE - REMOVAL & INSTALLATION',
+    'CAUTION: Travel Device (5) weight: 310 kg (685\nlb)\nRing gear (2) weight: 39 kg (86 lb)\nSprocket and drum weight: 96 kg (215 lb)');
+  const travelAnswer = 'Berat travel device lumayan besar.\n- **Travel Device (assembly):** `310 kg` (`685 lb`) *(Workshop Manual — Travel Device Removal & Installation)*\n- **Ring gear:** `39 kg` (`86 lb`)\n- **Sprocket + drum:** `96 kg` (`215 lb`)';
+  const travel = buildAnswerPresentation({ question: 'berapa berat travel device', answer: travelAnswer, model: 'ZX200-5G', evidence: [travelDoc] });
+  t(travel?.blocks[0].type === 'spec_table' && travel.blocks[0].title === 'Berat travel device', 'several verified values → spec_table card');
+  t(travel?.blocks[0].rows.map(r => `${r.label}=${r.value} ${r.unit}/${r.alternateValues?.[0].value}`).join('|')
+    === 'Travel Device (assembly)=310 kg/685|Ring gear=39 kg/86|Sprocket + drum=96 kg/215', 'rows keep label, value and lb conversion; citation is not an alternate');
+  t(buildAnswerPresentation({ question: 'berapa berat travel device', answer: travelAnswer.replace('`39 kg`', '`41 kg`'), model: 'ZX200-5G', evidence: [travelDoc] }) === undefined,
+    'one invented value anywhere → no card at all');
+  t(buildAnswerPresentation({ question: 'berapa berat travel device', answer: travelAnswer, model: 'ZX48U-5A', evidence: [travelDoc] }) === undefined,
+    'evidence from another unit never backs a card');
+  t(buildAnswerPresentation({ question: 'berapa berat travel device', answer: travelAnswer, model: 'ZX200-5G', evidence: [{ ...travelDoc, document_id: null }] }) === undefined,
+    'no card without a real document id');
+  t(buildAnswerPresentation({ question: 'berapa berat travel device', answer: travelAnswer, model: 'ZX200-5G', evidence: [{ ...travelDoc, source: 'PARTS CATALOG' }] }) === undefined,
+    'parts catalog numbers never back a spec card');
+  t(buildAnswerPresentation({ question: 'kenapa travel device berat jalannya', answer: travelAnswer, model: 'ZX200-5G', evidence: [travelDoc] }) === undefined,
+    'diagnosis questions get no spec card');
+  t(buildAnswerPresentation({ question: 'harga travel device berapa', answer: travelAnswer, model: 'ZX200-5G', evidence: [travelDoc] }) === undefined,
+    'price questions get no spec card');
 
-  const conflictEvidence = [{
-    ...spec.evidence[0],
-    content: `${spec.evidence[0].content}\nAlternate specification Voltage 24 V`,
-  }];
-  t(buildAnswerPresentation({ answer: spec.answer, model: spec.model, evidence: conflictEvidence }) === undefined,
-    'does not create a card when eligible evidence contains conflicting exact values');
-  t(buildAnswerPresentation({ answer: 'Voltage battery adalah 10–14 V.', model: spec.model, evidence: [{
-    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Voltage 10–14 V'),
-  }] }) === undefined, 'does not create a specification card from a range');
-  t(buildAnswerPresentation({ answer: 'High pressure adalah 34 MPa.', model: spec.model, evidence: [{
-    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'High 34 MPa\nLow 4 MPa'),
-  }] }) === undefined, 'rejects separate high and low specification lines');
-  t(buildAnswerPresentation({ answer: 'Pressure adalah 34 MPa.', model: spec.model, evidence: [{
-    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Pressure 34 MPa\nTolerance 2 MPa'),
-  }] }) === undefined, 'rejects a specification document containing a separate tolerance');
-  t(buildAnswerPresentation({ answer: 'Voltage range is 10 to 12 V.', model: spec.model, evidence: spec.evidence }) === undefined,
-    'rejects a range claim even when its endpoint exactly matches the source value');
-  t(buildAnswerPresentation({ answer: 'Minimum operating pressure adalah 34 MPa.', model: spec.model, evidence: [{
-    ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Minimum operating pressure 34 MPa'),
-  }] }) === undefined, 'rejects a minimum specification under narrow V1');
-  t(buildAnswerPresentation({ answer: spec.answer, model: 'ZX200-5G', evidence: spec.evidence }) === undefined,
-    'does not create a card from evidence for the wrong selected unit');
-  t(buildAnswerPresentation({ answer: spec.answer, model: spec.model, evidence: [{ ...spec.evidence[0], document_id: null }] }) === undefined,
-    'does not create a card without a real document id');
-  t(buildAnswerPresentation({ answer: 'Jawaban tanpa nilai.', model: spec.model, evidence: spec.evidence }) === undefined,
-    'does not create a specification card unless the exact value is visible in the final answer');
+  const relief = doc(7022, 'ZX200-5G', 'TROUBLESHOOTING', 'PERFORMANCE STANDARD', 'Boom Lower, Arm Relief operation 34.3+2.0 MPa\nBrochure: Implement circuit 34.3 MPa');
+  t(buildAnswerPresentation({ question: 'berapa main relief pressure', model: 'ZX200-5G', evidence: [relief],
+    answer: 'Standar evaluasi normal pada Pump 1 & Pump 2 Delivery Pressure saat relief: `34.3` – `36.3 MPa`\n- Implement circuit: `34.3 MPa`\n- Swing circuit: `34.3 MPa`' }) === undefined,
+    'an unverified long-label value is never silently dropped from a card');
+  t(buildAnswerPresentation({ question: 'berapa suhu oli saat tes', model: 'ZX200-5G', evidence: [relief], answer: 'Suhu oli `50 ± 5 °C`.' }) === undefined,
+    'a tolerance (±) is not read as a value');
+
+  const torqueSource = fs.readFileSync(path.join(__dirname, 'fixtures/zw140-tightening-torque.txt'), 'utf8');
+  const torqueAnswer = 'Komponen: HST Motor mounting bolts (Item No. 8)\nUkuran Baut (Bolt Diameter): 16 mm (Quantity: 8)\nUkuran Kunci (Wrench Size): 24 mm\nNilai Torsi Pengencangan: 232 N⋅m (24 kgf⋅m, 170 lbf⋅ft)';
+  const torque = buildAnswerPresentation({ question: 'Berapa torsi pengencangan bolt mounting HST motor ZW140?', answer: torqueAnswer, model: 'ZW140',
+    evidence: [doc(9436, 'ZW140', 'WORKSHOP MANUAL', 'GENERAL - TIGHTENING (Tightening Torque Specifications)', torqueSource)] });
+  t(torque?.blocks[0].type === 'spec_value' && torque.blocks[0].value === '232' && torque.blocks[0].alternateValues?.length === 2
+    && torque.blocks[0].facts?.length === 3, 'ZW140 tightening table keeps its torque card with bolt facts');
+
   const secondChunk = {
-    ...f.evidence[0],
-    document_id: 10582,
+    ...f.evidence[0], document_id: 10582,
     section: 'Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda',
-    content: f.evidence[0].content.replace(
-      'Section: Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri',
-      'Section: Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda',
-    ),
+    content: f.evidence[0].content.replace('Section: Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri',
+      'Section: Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda'),
   };
-  const splitBulletin = buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
-    ...f.evidence, secondChunk,
-  ] });
-  t(splitBulletin?.blocks?.[0]?.type === 'technical_news'
-    && splitBulletin.blocks[0].sources.length === 2,
-  'allows multiple authorized chunks when they belong to the same bulletin');
-  const differentBulletin = {
-    ...secondChunk,
-    document_id: 10583,
-    document: 'Technical News No.07/TSD-CE/TN/10/2023 — Different bulletin',
-    content: secondChunk.content.replaceAll('06/TSD-CE/TN/9/2023', '07/TSD-CE/TN/10/2023'),
-  };
-  const withUnrelatedBulletin = buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
-    ...f.evidence, differentBulletin,
-  ] });
-  t(withUnrelatedBulletin?.blocks?.[0]?.type === 'technical_news'
-    && withUnrelatedBulletin.blocks[0].bulletinId === '06/TSD-CE/TN/9/2023',
-  'ignores unrelated retrieved bulletins that are not identified in the final answer');
-  t(buildAnswerPresentation({ answer: `${f.answer} Technical News 07/TSD-CE/TN/10/2023 — Different bulletin.`, model: f.model, evidence: [
-    ...f.evidence, differentBulletin,
-  ] }) === undefined, 'does not create a Technical News card when the final answer identifies multiple bulletins');
+  const split = buildAnswerPresentation({ question: f.question, answer: f.answer, model: f.model, evidence: [...f.evidence, secondChunk] });
+  t(split?.blocks[0].type === 'technical_news' && split.blocks[0].sources.length === 2, 'one bulletin over several chunks keeps all sources');
+  const other = { ...secondChunk, document_id: 10583, document: 'Technical News No.07/TSD-CE/TN/10/2023 — Different bulletin',
+    content: secondChunk.content.replaceAll('06/TSD-CE/TN/9/2023', '07/TSD-CE/TN/10/2023') };
+  t(buildAnswerPresentation({ question: f.question, answer: f.answer, model: f.model, evidence: [...f.evidence, other] })?.blocks[0].bulletinId === '06/TSD-CE/TN/9/2023',
+    'unrelated retrieved bulletins are ignored');
+  t(buildAnswerPresentation({ question: f.question, answer: `${f.answer} Technical News 07/TSD-CE/TN/10/2023 — Different bulletin.`, model: f.model, evidence: [...f.evidence, other] }) === undefined,
+    'two bulletins named in one answer → no card');
 
   const { d } = mockDeps([[]], { richAnswersEnabled: true });
-  await runWithDeps(d, async () => attachAnswerPresentation({
-    answer: f.answer, model: f.model, evidence: f.evidence, complete: true, groundingUnknown: 0,
-  }));
-  t(d.meta.presentation?.blocks?.[0]?.type === 'technical_news', 'stores the validated result only in request-scoped metadata');
-  await runWithDeps(d, async () => attachAnswerPresentation({
-    answer: f.answer, model: f.model, evidence: f.evidence, complete: false, groundingUnknown: 0,
-  }));
-  t(d.meta.presentation === undefined, 'partial or cut answers clear presentation');
-  await runWithDeps(d, async () => attachAnswerPresentation({
-    answer: f.answer, model: f.model, evidence: f.evidence, complete: true, groundingUnknown: 1,
-  }));
-  t(d.meta.presentation === undefined, 'failed grounding never stores presentation');
+  const input = { question: f.question, answer: f.answer, model: f.model, evidence: f.evidence };
+  await runWithDeps(d, async () => attachAnswerPresentation({ ...input, complete: true }));
+  t(d.meta.presentation?.blocks[0].type === 'technical_news', 'stores the card in request-scoped metadata');
+  await runWithDeps(d, async () => attachAnswerPresentation({ ...input, complete: false }));
+  t(d.meta.presentation === undefined, 'partial or cut answers clear the card');
+  const off = mockDeps([[]], { richAnswersEnabled: false }).d;
+  await runWithDeps(off, async () => attachAnswerPresentation({ ...input, complete: true }));
+  t(off.meta.presentation === undefined, 'disabled flag never stores a card');
 
   return done();
 };

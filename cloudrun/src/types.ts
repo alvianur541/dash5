@@ -12,13 +12,24 @@ export interface PresentationSource {
   revision?: string;
 }
 
-export interface SpecValueBlock {
-  type: 'spec_value';
+export interface SpecRow {
   label: string;
   value: string;
   unit: string;
   alternateValues?: Array<{ value: string; unit: string }>;
+}
+
+export interface SpecValueBlock extends SpecRow {
+  type: 'spec_value';
   facts?: Array<{ label: string; value: string }>;
+  unitModel: UnitModel;
+  sources: PresentationSource[];
+}
+
+export interface SpecTableBlock {
+  type: 'spec_table';
+  title: string;
+  rows: SpecRow[];
   unitModel: UnitModel;
   sources: PresentationSource[];
 }
@@ -37,7 +48,7 @@ export interface MarkdownBlock {
   content: string;
 }
 
-export type AnswerPresentationBlockV1 = SpecValueBlock | TechnicalNewsBlock | MarkdownBlock;
+export type AnswerPresentationBlockV1 = SpecValueBlock | SpecTableBlock | TechnicalNewsBlock | MarkdownBlock;
 
 export interface AnswerPresentationV1 {
   version: 1;

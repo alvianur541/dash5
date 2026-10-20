@@ -1,5 +1,4 @@
-export interface TighteningTorqueRow {
-  item: string;
+interface TighteningTorqueRow {
   location: string;
   boltDiameter: string;
   quantity: string;
@@ -15,7 +14,6 @@ export const normalizeTighteningText = (value: string): string => value.toLowerC
 
 export function tighteningTorqueRows(content: string): TighteningTorqueRow[] {
   return [...content.matchAll(ROW_RE)].map(match => ({
-    item: match[1],
     location: match[2].trim(),
     boltDiameter: match[3],
     quantity: match[4],
