@@ -36,6 +36,24 @@ module.exports = async function () {
     ...spec.evidence[0], content: spec.evidence[0].content.replace('Voltage 12 V', 'Engine speed 2000 min-1'),
   }] })?.blocks?.[0]?.type === 'spec_value', 'does not confuse the inverse-minute unit with a minimum qualifier');
 
+  const torqueAnswer = 'Torsi pengencangan: 232 N·m (24 kgf·m, 170 lbf·ft). Ukuran bolt diameter 16 mm dan wrench size 24 mm.';
+  const torquePresentation = buildAnswerPresentation({ answer: torqueAnswer, model: 'ZW140', evidence: [{
+    ...spec.evidence[0],
+    document_id: 8801,
+    model: 'ZW140',
+    source: 'WORKSHOP MANUAL',
+    section: 'GENERAL - TIGHTENING',
+    document: 'ZW140 Workshop Manual',
+    content: 'Section: GENERAL - TIGHTENING\nModel: ZW140\nKategori: WORKSHOP MANUAL\nTightening torque 232 N·m (24 kgf·m, 170 lbf·ft)\nBolt diameter 16 mm\nWrench size 24 mm',
+  }] });
+  t(torquePresentation?.blocks?.[0]?.type === 'spec_value'
+    && torquePresentation.blocks[0].value === '232'
+    && torquePresentation.blocks[0].unit === 'N·m',
+  'creates the primary torque card when the source also contains converted units and fastener dimensions');
+  t(torquePresentation?.blocks?.[0]?.type === 'spec_value'
+    && torquePresentation.blocks[0].alternateValues?.length === 2,
+  'keeps converted torque units as alternate values instead of treating them as conflicting specifications');
+
   const conflictEvidence = [{
     ...spec.evidence[0],
     content: `${spec.evidence[0].content}\nAlternate specification Voltage 24 V`,
@@ -62,9 +80,30 @@ module.exports = async function () {
     'does not create a card without a real document id');
   t(buildAnswerPresentation({ answer: 'Jawaban tanpa nilai.', model: spec.model, evidence: spec.evidence }) === undefined,
     'does not create a specification card unless the exact value is visible in the final answer');
+  const secondChunk = {
+    ...f.evidence[0],
+    document_id: 10582,
+    section: 'Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda',
+    content: f.evidence[0].content.replace(
+      'Section: Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri',
+      'Section: Harness ZX48U-5A — Generasi S/N 035220-up, Susunan Pin Main Connector Berbeda',
+    ),
+  };
+  const splitBulletin = buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
+    ...f.evidence, secondChunk,
+  ] });
+  t(splitBulletin?.blocks?.[0]?.type === 'technical_news'
+    && splitBulletin.blocks[0].sources.length === 2,
+  'allows multiple authorized chunks when they belong to the same bulletin');
+  const differentBulletin = {
+    ...secondChunk,
+    document_id: 10583,
+    document: 'Technical News No.07/TSD-CE/TN/10/2023 — Different bulletin',
+    content: secondChunk.content.replaceAll('06/TSD-CE/TN/9/2023', '07/TSD-CE/TN/10/2023'),
+  };
   t(buildAnswerPresentation({ answer: f.answer, model: f.model, evidence: [
-    ...f.evidence, { ...f.evidence[0], document_id: 10582 },
-  ] }) === undefined, 'does not create a Technical News card from multiple eligible documents');
+    ...f.evidence, differentBulletin,
+  ] }) === undefined, 'does not create a Technical News card from multiple distinct bulletins');
 
   const { d } = mockDeps([[]], { richAnswersEnabled: true });
   await runWithDeps(d, async () => attachAnswerPresentation({
