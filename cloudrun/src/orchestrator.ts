@@ -7,6 +7,7 @@ import { resolveQuestion } from './question';
 import { auditMeasurements } from './grounding';
 import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
+import { attachAnswerPresentation } from './presentation';
 import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
@@ -242,10 +243,18 @@ export async function generateResponseStream(
   }
 
   if (ragContent && fullText && routeResult.type === 'rag_found') {
-    const audit = auditMeasurements(fullText, routeResult.evidence ?? evidenceBlocks(ragContent), model);
+    const evidence = routeResult.evidence ?? evidenceBlocks(ragContent);
+    const audit = auditMeasurements(fullText, evidence, model);
     deps().meta.groundingUnknown = audit.unknown;
     if (audit.unknown) deps().meta.cacheable = false;
     console.info('[grounding] checked=%d supported=%d unknown=%d', audit.checked, audit.supported, audit.unknown);
+    attachAnswerPresentation({
+      answer: fullText,
+      model,
+      evidence,
+      complete: deps().meta.cacheable === true,
+      groundingUnknown: audit.unknown,
+    });
   }
 
   return fullText || FALLBACK_RESPONSE;

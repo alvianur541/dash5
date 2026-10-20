@@ -29,3 +29,4 @@ export { groundClaim } from '../src/grounding';
 export { stage } from '../src/telemetry';
 export { symptomSnippet } from '../src/rag/symptom';
 export { registerEvidence, evidenceFor, evidenceBlocks } from '../src/evidence';
+export { buildAnswerPresentation, attachAnswerPresentation } from '../src/presentation';

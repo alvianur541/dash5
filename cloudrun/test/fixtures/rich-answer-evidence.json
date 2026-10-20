@@ -1,0 +1,34 @@
+{
+  "technicalNews": {
+    "question": "Technical News harness ZX48U-5A nomor seri 035002",
+    "answer": "Technical News 06/TSD-CE/TN/9/2023 menjelaskan daftar Part Number Main & Floor Harness per Nomor Seri untuk ZX48U-5A.",
+    "model": "ZX48U-5A",
+    "evidence": [
+      {
+        "document_id": 10581,
+        "source": "TECHNICAL NEWS",
+        "section": "Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri",
+        "document": "Technical News No.06/TSD-CE/TN/9/2023 — Rincian Part Number Main dan Floor Harness ZX48U-5A",
+        "model": "ZX48U-5A",
+        "content": "Section: Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri\nModel: ZX48U-5A\nKategori: TECHNICAL NEWS\nDocument: Technical News No.06/TSD-CE/TN/9/2023 — Rincian Part Number Main dan Floor Harness ZX48U-5A\n\nTECHNICAL NEWS — Internal Service Bulletin\nNomor   : 06/TSD-CE/TN/9/2023 (September 2023)\nTentang : Rincian Part Number Main dan Floor Harness ZX48U-5A\nPenerbit: Technical Support Dept - CE, PT Hexindo Adiperkasa Tbk.\nFloor Harness Wire Harness YD00000472 YD00008339 YD00010892\nMain Harness Wire Harness YD00000471 YD00008373 YD00011077",
+        "evidence_role": "serial_bulletin"
+      }
+    ]
+  },
+  "specification": {
+    "question": "berapa voltage battery",
+    "answer": "Voltage battery ZX48U-5A adalah 12 V.",
+    "model": "ZX48U-5A",
+    "evidence": [
+      {
+        "document_id": 7704,
+        "source": "TECHNICAL MANUAL",
+        "section": "SPECIFICATIONS - ELECTRICAL",
+        "document": null,
+        "model": "ZX48U-5A",
+        "content": "Section: SPECIFICATIONS - ELECTRICAL\nModel: ZX48U-5A\nKategori: TECHNICAL MANUAL\nBATTERY Type 115D31L-MF\nVoltage 12 V\nCapacity 72 Ah or more (5-Hour Rate)",
+        "evidence_role": "numeric"
+      }
+    ]
+  }
+}
