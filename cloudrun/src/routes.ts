@@ -12,7 +12,6 @@ import { jawabanHargaCepat, BUKAN_HARGA_SAJA_RE } from './harga';
 import { promoAktif } from './promo';
 import { deps, type RerankSource } from './deps';
 import { evidenceBlocks, assembleEvidence, type EvidenceDocument, type Confidence, weakestConfidence } from './evidence';
-import { compressEvidence } from './compression';
 import { questionFor } from './question';
 
 export type AgentEventEmit = (event: AgentEvent) => void;
@@ -526,9 +525,8 @@ export async function resolveNaturalLanguageQuery(
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
   if (ragResult.confidence === 'low' && !extra && !nilai) return { type: 'google_search', mode: 'technical' };
   const evidence = ragResult.evidence ?? evidenceBlocks(ragResult.content);
-  const compressed = await compressEvidence(evidence, complaint);
   return {
-    type: 'rag_found', content: notes + assembleEvidence(compressed), evidence: compressed,
+    type: 'rag_found', content: notes + assembleEvidence(evidence), evidence,
     dataLabel: RAG_LABEL.manual, confidence: ragResult.confidence,
     rerankDegraded: isRerankError(ragResult.ragError), rerankSource: ragResult.rerankSource,
   };

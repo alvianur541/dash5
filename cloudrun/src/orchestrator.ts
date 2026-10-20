@@ -1,4 +1,4 @@
-import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime } from './constants';
+import { SYSTEM_PROMPT, SYSTEM_PROMPT_CASUAL, jakartaTime, type PromptNeed } from './constants';
 
 import { UnitModel, Message, InlineImage } from './types';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, isPartsQuery, extractPartNumber, exactPartRows, getTroubleshootingKategori, isSymptomQuery, hargaWeb, blokHargaWeb, adaHarga, MINTA_HARGA_RE, KATA_HARGA_RE, lengkapiHarga } from './rag';
@@ -58,9 +58,12 @@ async function lengkapiHargaAman(text: string, data = '', history: Message[] = [
   }
 }
 
-function systemFor(unit: UnitModel, casual: boolean): Pick<VRequest, 'systemInstruction'> {
-  return { systemInstruction: { parts: [{ text: casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit) }] } };
+function systemFor(unit: UnitModel, casual: boolean, need?: PromptNeed): Pick<VRequest, 'systemInstruction'> {
+  return { systemInstruction: { parts: [{ text: casual ? SYSTEM_PROMPT_CASUAL(unit) : SYSTEM_PROMPT(unit, undefined, need) }] } };
 }
+
+const PARTS_DATA_RE = /PARTS CATALOG|ENGINE PARTS|HARGA HEXINDOPARTS|PROMO|DAFTAR PARTS|\bCPM\b|svc:/i;
+const FAULT_DATA_RE = /fault code|error code|\[KODE/i;
 
 function sanitize(input: string): string {
   return input
@@ -228,7 +231,12 @@ export async function generateResponseStream(
 
   const fullText = await lengkapiHargaAman(scrubLeaks(await callProxyStream({
     contents,
-    ...systemFor(model, isCasual),
+    ...systemFor(model, isCasual, {
+      parts: dataLabel === RAG_LABEL.parts || hasServiceInterval || KATA_HARGA_RE.test(q) || PARTS_DATA_RE.test(ragContent),
+      fault: isFaultCode || FAULT_DATA_RE.test(ragContent),
+      web: gsTechnical || ragContent.includes('[SUMBER EKSTERNAL]'),
+      image: false,
+    }),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical)), ragContent, history);
   if (routeResult.type === 'rag_found' && TABEL_HARGA_RE.test(fullText)) deps().meta.confidence = undefined;

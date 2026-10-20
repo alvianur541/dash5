@@ -66,4 +66,4 @@ function createLiveUsage() {
     },
   };
 }
-module.exports = { createLiveUsage, LIVE_PRICES, LIVE_FX_IDR };
+module.exports = { createLiveUsage };

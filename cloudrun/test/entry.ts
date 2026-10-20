@@ -22,7 +22,6 @@ export { unitFeatureIntent } from '../src/routes';
 export { promoAktif, tanpaHargaDb, hargaPromo, bersihkanPromoLama, PROMO_BERAKHIR, PROMO_KATEGORI, PROMO_KATEGORI_LAMA } from '../src/promo';
 export { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, lengkapiHarga } from '../src/rag';
 export { BUKAN_HARGA_SAJA_RE } from '../src/harga';
-export { compressEvidence } from '../src/compression';
 export { resolveQuestion } from '../src/question';
 export { SYSTEM_PROMPT } from '../src/constants';
 export { groundClaim, auditMeasurements } from '../src/grounding';

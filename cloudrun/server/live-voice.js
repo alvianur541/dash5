@@ -181,4 +181,4 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
   });
   return wss;
 }
-module.exports = { makeSetup, inputFrame, openProvider, registerLiveVoice, liveAllowed, LIVE_ALLOWED_USERS };
+module.exports = { makeSetup, inputFrame, registerLiveVoice, liveAllowed };
