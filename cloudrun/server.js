@@ -292,7 +292,7 @@ require('./server/live-voice').registerLiveVoice(server, {
   },
 });
 server.listen(PORT, () => {
-  console.info('[boot] Dash5 proxy siap di port %d', PORT);
+  console.info('[boot] Dash5 proxy siap di port %d (node %s)', PORT, process.version);
   getAccessToken()
     .then(() => console.info('[boot] kredensial GCP siap'))
     .catch(e => console.warn('[boot] kredensial GCP belum siap:', e && e.message));
