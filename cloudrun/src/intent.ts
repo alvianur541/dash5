@@ -61,6 +61,9 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
 "technical" → Diagnosis, troubleshooting, fault codes, specs (torque/pressure/displacement/clearance/
               weight/diameter/length/dimension/size/capacity), procedures (teardown/assembly),
               oil/fuel/coolant capacity, electrical circuit, hydraulic flow, operating procedure.
+              ALSO fuel/lubricant/coolant types & grades (solar, Dexlite, biodiesel B30/B40/B50, SAE oil grade),
+              basic technical/electrical concepts used on the machine (ampere, ohm, CAN bus, relay), and
+              calculations from unit specs (travel time from travel speed) — these are NEVER off_topic.
               RULE: berat/dimensi/diameter/ukuran/clearance sebuah komponen = "technical" (ada di
               Workshop/Technical Manual), BUKAN "parts" — walau komponennya sebuah part.
               NOTE: "harga promo" / "promo Q4" without interval → "parts". With procedure context → "technical".
@@ -128,6 +131,9 @@ Technical — specs & symptoms:
 "iya di gigi2" [ctx: warning transmisi muncul di atas 13 km/jam] → technical, "HST warning indicator buzzer 2nd speed above 13 km/h"
 "listrik dulu" [ctx: mundur lemah, cek listrik atau hidrolik?]   → technical, "reverse travel weak electrical solenoid check"
 "berapa standarnya" [ctx: ukur resistansi reverse solenoid]     → technical, "reverse solenoid resistance standard"
+"solar Dexlite B50 itu apa?"                  → technical, "biodiesel B50 fuel"
+"apa itu ampere"                              → technical, "ampere electrical current"
+"unit jalan 20 km berapa lama"                → technical, "travel speed"
 
 Technical — wheel loader (KCM/ZW: steering, transmission, lift arm, brake):
 "steering berat sebelah"                      → technical, "steering heavy one side"
