@@ -156,16 +156,16 @@ const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
   { re: /\brelief\b/i, line: 'relief[^\\n]{0,40}?pressure|relief valve set', word: 'relief' },
   { re: /\bcharg(?:e|ing)\b/i, line: 'charg(?:e|ing)[^\\n]{0,30}?pressure|low[- ]pressure relief', word: 'pressure' },
-  { re: /\bpressure\b/i, line: 'pressure', word: 'pressure' },
-  { re: /\bflow\b/i, line: 'flow rate|flow', word: 'flow' },
-  { re: /\b(?:ampere|amper|amps?|ah|capacit(?:y|ies))\b/i, line: 'capacity', word: 'capacit' },
-  { re: /\btorque\b/i, line: 'torque|tightening', word: 'torque' },
-  { re: /\b(?:speed|rpm)\b/i, line: 'speed|rpm', word: 'speed' },
-  { re: /\bvoltage\b/i, line: 'voltage', word: 'voltage' },
-  { re: /\bresistance\b/i, line: 'resistance', word: 'resistance' },
-  { re: /\bcurrent\b/i, line: 'current', word: 'current' },
-  { re: /\btemperature\b/i, line: 'temperature', word: 'temperature' },
-  { re: /\bclearance\b/i, line: 'clearance', word: 'clearance' },
+  { re: /\b(?:pressure|tekanan)\b/i, line: 'pressure', word: 'pressure' },
+  { re: /\b(?:flow|debit|aliran)\b/i, line: 'flow rate|flow', word: 'flow' },
+  { re: /\b(?:ampere|amper|amps?|ah|capacit(?:y|ies)|kapasitas)\b/i, line: 'capacity', word: 'capacit' },
+  { re: /\b(?:torque|torsi)\b/i, line: 'torque|tightening', word: 'torque' },
+  { re: /\b(?:speed|rpm|putaran|kecepatan)\b/i, line: 'speed|rpm', word: 'speed' },
+  { re: /\b(?:voltage|tegangan)\b/i, line: 'voltage', word: 'voltage' },
+  { re: /\b(?:resistance|resistansi|hambatan|tahanan)\b/i, line: 'resistance', word: 'resistance' },
+  { re: /\b(?:current|arus)\b/i, line: 'current', word: 'current' },
+  { re: /\b(?:temperature|suhu|temperatur)\b/i, line: 'temperature', word: 'temperature' },
+  { re: /\b(?:clearance|celah)\b/i, line: 'clearance', word: 'clearance' },
   { re: /\bdisplacement\b/i, line: 'displacement', word: 'displacement' },
 ];
 const SPEC_UNIT = '(?:MPa|kPa|bar|psi|kgf/cm|L/min|N·m|Nm|kgf·m|mm|cm3|cm³|mL|L|kg|rpm|min-1|min⁻¹|km/h|V|Ω|ohm|mA|Ah|A|°C|kW)';
@@ -178,6 +178,9 @@ const SPEC_NOT_COMPONENT = new Set([
   'kpa', 'bar', 'psi', 'what', 'how', 'much', 'the', 'and', 'for', 'of', 'unit', 'machine', 'test', 'delivery', 'valve',
   'ampere', 'amper', 'amp', 'amps', 'rating', 'berapa', 'brp', 'yang', 'cek', 'kalau', 'kalo', 'jika', 'ini', 'itu',
   'pakai', 'pake', 'memakai', 'gunakan', 'using', 'use', 'untuk', 'buat', 'tolong', 'please', 'saja', 'aja', 'jadi',
+  'tekanan', 'debit', 'aliran', 'kapasitas', 'torsi', 'putaran', 'kecepatan', 'tegangan', 'resistansi', 'hambatan',
+  'tahanan', 'arus', 'suhu', 'temperatur', 'celah', 'nilai', 'standar', 'standart', 'exact', 'berikan', 'satu', 'sumber',
+  'manual', 'dari', 'dan', 'pada', 'beserta', 'sesuai', 'data',
 ]);
 
 // A spec value is one "Relief Valve Set Pressure ....44.6 MPa" line in a chunk titled for something else (ZW140 HST specs sit under "BATTERY").
@@ -186,7 +189,7 @@ export async function findSpecLines(model: string, query: string, have: string):
   if (!attr || !sb() || !wantsNumeric(query)) return null;
   const comp = query.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
     .map(w => w.replace(/(?<=..)(?:nya|ny)$/, '')).map(w => SPEC_ID_EN[w] ?? w)
-    .filter(w => w.length >= 3 && !/^\d/.test(w) && !SPEC_NOT_COMPONENT.has(w)).slice(0, 3);
+    .filter(w => w.length >= 3 && !/^\d/.test(w) && !/^(?:zx|zw|kcm)\d/.test(w) && !SPEC_NOT_COMPONENT.has(w)).slice(0, 3);
   if (!comp.length) return null;
   const valueRe = new RegExp(`(?:${attr.line})[^\\n]{0,80}?\\d[\\d.,±~\\-–]*\\s*${SPEC_UNIT}(?![a-z])`, 'gi');
   try {

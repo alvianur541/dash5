@@ -82,6 +82,20 @@ module.exports = async function () {
       const { d } = mockDeps([[]], { supabase: fakeSupabase([SALAH]), rerank: ranker(0.057) });
       t(await runWithDeps(d, () => findSpecLines('ZW140', 'battery pressure', '')) === null, 'nama komponen dekat angka milik komponen lain tidak lolos bypass skor rendah');
     }
+    {
+      // Real question 19 Oct (answered "not found"): Indonesian sentence + English intent query.
+      const calls = [];
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.057) });
+      const q = 'Berapa kapasitas battery ZX48U-5A? Berikan satu nilai exact dan sumber manual. battery capacity ZX48U-5A';
+      t(await runWithDeps(d, () => findSpecLines('ZX48U-5A', q, '')) === AKI, 'kalimat Indonesia "kapasitas battery" + intent Inggris → kapasitas aki ketemu');
+      t(!calls.some(c => c[0] === 'ilike' && /kapasitas|zx48u|berikan|nilai|exact|sumber|manual/.test(c[1])), 'kata atribut Indonesia, kode unit & kata perintah bukan filter komponen');
+    }
+    for (const [q, attr] of [['tegangan aki berapa', 'voltage'], ['torsi baut swing bearing', 'torque'], ['tekanan relief hst', 'relief']]) {
+      const calls = [];
+      const { d } = mockDeps([[]], { supabase: fakeSupabase([], calls), rerank: ranker(0.5) });
+      await runWithDeps(d, () => findSpecLines('ZW140', q, ''));
+      t(calls.some(c => c[0] === 'filter' && c[2].includes(attr)), `kata Indonesia "${q.split(' ')[0]}" dikenali sebagai atribut ${attr}`);
+    }
     for (const q of ['battery ampere capacity', 'akinya berapa ampere', 'battery Ah rating']) {
       const calls = [];
       const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.5) });
