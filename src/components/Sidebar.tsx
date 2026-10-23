@@ -2,7 +2,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { UnitModel, SessionMeta } from '../types';
 import { cn } from '../lib/utils';
-import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, History as HistoryIcon, HardHat, Search, WifiOff } from 'lucide-react';
+import { PanelLeft, Plus, LogOut, ChevronsUpDown, ChevronRight, Trash2, X, KeyRound, HelpCircle, Sun, Moon, Bookmark, History as HistoryIcon, LayoutGrid, Search, WifiOff } from 'lucide-react';
 import { ExcavatorIcon, WheelLoaderIcon } from './UnitIcons';
 import { relativeTime } from '../lib/relativeTime';
 import { PocketItem } from '../services/storage';
@@ -168,7 +168,7 @@ export function Sidebar({
 
           <div className="shrink-0 px-2 pb-1">
             <p className="sb-head mt-3">
-              <HardHat size={17} /> Model unit
+              <LayoutGrid size={17} /> Model unit
             </p>
             <div className="flex flex-col gap-px">
               {MODEL_GROUPS.map(({ type, models }) => {
