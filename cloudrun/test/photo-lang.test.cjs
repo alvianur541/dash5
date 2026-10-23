@@ -46,6 +46,6 @@ module.exports = async function () {
   { const { out } = await photo('tolong cek kode ini', [], reads('13004-02'));
     t(/tidak ada di manual \*\*/.test(out), 'ID caption: Indonesian not-found reply unchanged'); }
 
-  t(langDirective('id') === '', 'ID adds nothing (prompt already Indonesian)');
+  t(/bahasa Indonesia/.test(langDirective('id')), 'ID directive pins Indonesian even after an English reply in history');
   return done();
 };

@@ -6,8 +6,8 @@ const JP_RE = /[぀-ヿ一-鿿]/;
 // Spoken English often has none of the question words ("I am using MPDr.", "I've checked the connector. It's clean."
 // were answered in Indonesian, Live 16-17 Oct). Bare "on"/"off"/"same"/"problem" stay out: Indonesian chats use
 // them too ("fuse putus saat kontak on").
-const EN_RE = /\b(what|who|whose|how|why|when|where|which|can|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/i;
-const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo)\b/i;
+const EN_RE = /\b(what|who|whose|how|why|when|where|which|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/i;
+const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo|dan|berapa|brp|pada|di|ke|semua|hasil|jika|jadi|terus|tapi|karena|nilai|apakah|mana|nya)\b/i;
 
 export function detectLang(text: string): Lang | null {
   if (JP_RE.test(text)) return 'ja';
@@ -41,7 +41,7 @@ function pick<T>(lang: Lang, opts: { id: T; en: T; ja: T }): T {
 // Photo turns wrap the caption in Indonesian instructions; without this the model answers in Indonesian.
 export function langDirective(lang: Lang): string {
   return pick(lang, {
-    id: '',
+    id: '[BAHASA: Teknisi menulis dalam bahasa Indonesia. Tulis SELURUH jawaban dalam bahasa Indonesia, walau jawaban sebelumnya berbahasa lain. Salin part number, kode, angka, dan satuan persis.]',
     en: '[LANGUAGE: The technician wrote in English. Write the ENTIRE answer in English — headings, explanations, steps, and closing. The instructions and manual data above are internal and may be in Indonesian; do not copy their language. Copy part numbers, codes, numbers, and units exactly.]',
     ja: '[言語: 技術者は日本語で書いています。回答はすべて日本語で書いてください（見出し・説明・手順・締めくくりまで）。上の指示とマニュアルデータは内部用でインドネシア語の場合がありますが、その言語をまねしないでください。部品番号・コード・数値・単位はそのまま写してください。]',
   });

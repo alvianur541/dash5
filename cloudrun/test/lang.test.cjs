@@ -18,6 +18,10 @@ module.exports = async function () {
   t(detectLang('Oke, siap mantap. Thank you, arigatou.') !== 'en' && detectLang('Enggak usah, itu saja. Thank you, thank you.') === 'id', '"thank you" di obrolan Indonesia bukan tanda EN');
   t(detectLang('resistan CAN 0 ohm') !== 'en' && detectLang('Can you check the price?') === 'en', '"CAN" (CAN bus) bukan kata "can"');
   t(detectLang('Cek harga swing motor') === 'id' && detectLang('relay sudah saya ganti tapi masih sama') === 'id', 'kalimat teknisi Indonesia tetap ID');
+  t(['can harness dan suplai daya normal semua', 'berapa hasil pengukuran jalur can pada masing masing controler', 'Standart pengukuran can h dan can l', 'can nya monitor 120. gmn cara vonis dia rusak?']
+    .every(s => detectLang(s) === 'id'), '"jalur can"/"can harness" (huruf kecil, 20 Okt) bukan tanda EN');
+  t(detectLang('can you check the relief pressure') === 'en', 'kalimat EN berawalan "can" tetap EN');
+  t(sessionLang('kalau salah satu controller di cabut, berapa nilainya?', [{ role: 'user', content: 'I have checked it' }]) === 'id', 'pesan ID baru menang atas riwayat EN');
   t(sessionLang('Cara cek status Wiper 1 Input di MPDr', [], 'en') === 'en', 'petunjuk bahasa (ucapan asli teknisi) menang atas pertanyaan susunan ulang');
 
   const histEN = [
