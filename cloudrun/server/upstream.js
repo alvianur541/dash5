@@ -45,9 +45,11 @@ async function resolveUpstream(model, { stream }) {
 
 const STALL_MS_NONSTREAM     = 8_000;
 
-const STALL_MS_STREAM_CEPAT  = 5_000;
+// Keep both well below FIRST_TOKEN_TIMEOUT_MS (45 s) × STALL_MAX — see the timeout ladder in CLAUDE.md §4.
+const envMs = (name, fallback, max) => Math.min(Math.max(Number(process.env[name]) || fallback, 1_000), max);
+const STALL_MS_STREAM_CEPAT  = envMs('STALL_MS_STREAM_CEPAT', 5_000, 10_000);
 
-const STALL_MS_STREAM_MIKIR  = 12_000;
+const STALL_MS_STREAM_MIKIR  = envMs('STALL_MS_STREAM_MIKIR', 12_000, 20_000);
 
 const STALL_MAX = 3;
 
