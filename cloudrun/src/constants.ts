@@ -49,7 +49,7 @@ function unitProfile(model: UnitModel) {
 const SOURCE_INVENTORY: Record<UnitModel, string[]> = {
   'ZX48U-5A':   ['OPERATOR MANUAL', 'PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'Circuit Diagram', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'ZX65USB-5A': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'ENGINE MANUAL', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
-  'ZX138MF-5G': ['TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'BROSUR MANUAL', 'SALES MANUAL', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
+  'ZX138MF-5G': ['PARTS CATALOG', 'TECHNICAL MANUAL', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'SALES MANUAL', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'ZX200-5G':   ['PARTS CATALOG', 'OPERATOR MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'OPERATIONAL PRINCIPLE', 'ENGINE MANUAL', 'ENGINE PARTS CATALOG', 'Circuit Diagram', 'BROSUR MANUAL', 'TECHNICAL NEWS', 'FUEL CONSUMPTION', 'PROMO', 'CPM'],
   'KCM 60ZV':   ['WORKSHOP MANUAL', 'PARTS CATALOG', 'OPERATOR MANUAL', 'ENGINE PARTS CATALOG', 'BROSUR MANUAL', 'PROMO'],
   'ZW140':      ['PARTS CATALOG', 'TECHNICAL MANUAL', 'TROUBLESHOOTING', 'WORKSHOP MANUAL', 'Circuit Diagram', 'BROSUR MANUAL', 'SALES MANUAL', 'PROMO'],
@@ -76,7 +76,7 @@ const CPM_EQUIVALENT: Partial<Record<UnitModel, string>> = {
 const ABSENT_SOURCES: Record<UnitModel, string> = {
   'ZX48U-5A':   '',
   'ZX65USB-5A': 'Parts Catalog & Operator Manual',
-  'ZX138MF-5G': 'Parts Catalog, Engine Parts Catalog & Operator Manual',
+  'ZX138MF-5G': 'Operator Manual',
   'ZX200-5G':   '',
   'KCM 60ZV':   'Technical Manual, Troubleshooting Manual, Engine Manual & CPM',
   'ZW140':      'Engine Manual, Engine Parts Catalog, Operator Manual & CPM',
@@ -149,7 +149,9 @@ export const SYSTEM_PROMPT = (model: UnitModel, promoOn: boolean = promoAktif(),
     ? 'ISUZU BB-6BG1T. Engine PN: `YZ`+10-12digit. Body PN: 5-5digit (mis. `34820-66720`).'
     : isZw
       ? 'Hitachi wheel loader seri ZW. Body PN: 5 karakter alfanumerik + dash + 5 digit (mis. `263E7-17091`, `26418-82071`) — quote persis dari data.'
-      : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
+      : model === 'ZX138MF-5G'
+        ? 'ISUZU 4BG1-TCG07. Engine PN: 10-digit murni (mis. `8944094120`). Body PN: `YA`/`YB`+8digit, 7-digit, atau huruf+6digit (mis. `4450002`, `A811090`). Katalog ZX130-5G / ZX138MF-5G gabungan.'
+        : (model === 'ZX48U-5A' || model === 'ZX65USB-5A')
         ? 'YANMAR 4TNV88-BPHBB. Engine PN: `YNM`-dash format. Body PN: `YB`/`YD`+6-10digit.'
         : 'ISUZU 6BG1-TRA14. Engine PN: 10-digit murni. Body PN: `YB`/`YA`+6-10digit.';
 
@@ -166,7 +168,7 @@ export const SYSTEM_PROMPT = (model: UnitModel, promoOn: boolean = promoAktif(),
 
   const wiringNote = model === 'ZX200-5G'
     ? `\n**Wiring diagram tersedia** (Circuit Diagram): berisi nomor kabel, kode warna JASO D607, ukuran \`sq\`, tipe kabel (\`AVSS\`/\`AVS\`/\`CAVS\`/\`AVSSCS\` shielded utk jalur CAN), connector, dan daftar harness — dokumen sama juga berlaku untuk ZX240-5G/280-5G/330-5G. Banyak fault code ${model} bertindakan "Check the harness"; kalau data wiring ikut disisipkan, pakai untuk menunjuk connector/harness yang harus dicek — SEBUT LEVEL KOMPONEN saja (nama connector/harness), SIMPAN detail per-pin/warna/nomor kabel kecuali user eksplisit minta detail wiring/pin. Jangan mengarang nomor/warna kabel yang tidak tertulis.`
-    : model === 'ZW140' || model === 'ZX48U-5A'
+    : model === 'ZW140' || model === 'ZX48U-5A' || model === 'ZX138MF-5G'
       ? `\n**Wiring diagram tersedia** (Circuit Diagram): wire list per harness, pinout controller/ECU, fuse & relay${model === 'ZX48U-5A' ? ', plus hydraulic circuit (control valve, pilot, travel, swing)' : ''}. Wire list sering berbeda per nomor seri — kalau data menyebut rentang s/n, sebut rentangnya dan tanyakan s/n unit bila beda versi memberi jawaban berbeda. Jangan mengarang nomor/warna kabel atau nomor pin yang tidak tertulis.`
       : '';
 

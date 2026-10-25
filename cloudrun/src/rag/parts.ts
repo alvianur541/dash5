@@ -11,9 +11,9 @@ import { stage } from '../telemetry';
 
 const ENGINE_PN_RE = /^(?:\d{10}|[A-Z]{2,3}\d{5,8}-\d{4,6}|[A-Z]{2,3}\d{10,12})$/i;
 
-const ENGINE_CATALOG_MODELS: ReadonlySet<string> = new Set<UnitModel>(['ZX200-5G', 'ZX48U-5A', 'KCM 60ZV']);
+const ENGINE_CATALOG_MODELS: ReadonlySet<string> = new Set<UnitModel>(['ZX200-5G', 'ZX48U-5A', 'ZX138MF-5G', 'KCM 60ZV']);
 
-export const MODELS_WITHOUT_PARTS_CATALOG: ReadonlySet<string> = new Set<UnitModel>(['ZX65USB-5A', 'ZX138MF-5G']);
+export const MODELS_WITHOUT_PARTS_CATALOG: ReadonlySet<string> = new Set<UnitModel>(['ZX65USB-5A']);
 
 export async function searchServiceIntervalParts(
   query: string,
