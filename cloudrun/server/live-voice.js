@@ -28,6 +28,7 @@ const CATATAN_BAHASA = {
   ja: 'システムからの言語メモ（技術者の発言ではありません）: 技術者は日本語で話しています。これ以降は日本語だけで返答してください。このメモには返答しないでください。',
   id: 'Catatan bahasa dari sistem, bukan dari teknisi: teknisi sekarang berbicara bahasa Indonesia. Mulai sekarang jawab dalam bahasa Indonesia. Jangan menanggapi catatan ini.',
 };
+const SAPAAN = (nama, lanjut) => `[MULAI SESI] Pesan sistem, bukan ucapan teknisi: sesi suara baru tersambung. Sapa teknisi duluan dengan SATU kalimat pendek yang hangat${nama ? `, panggil nama depannya "${nama}"` : ''}, lalu tanya apa yang mau dicek${lanjut ? ' (boleh singgung singkat topik terakhir di riwayat)' : ''}. Pakai bahasa sesi. Jangan panggil alat, jangan sebut angka atau data teknis, jangan ucapkan label ini.`;
 function makeSetup(project, location, unit, lang) {
   return { setup: {
     model: `projects/${project}/locations/${location}/publishers/google/models/gemini-3.8-live`,
@@ -39,7 +40,7 @@ function makeSetup(project, location, unit, lang) {
 }
 function inputFrame(m) {
   if (!m || typeof m !== 'object') throw new Error('invalid input');
-  if (m.type === 'text' && typeof m.text === 'string' && m.text.trim() && m.text.length <= 2000 && !/\[(?:HASIL|STATUS) ALAT/i.test(m.text)) return { realtimeInput: { text: m.text } };
+  if (m.type === 'text' && typeof m.text === 'string' && m.text.trim() && m.text.length <= 2000 && !/\[(?:(?:HASIL|STATUS) ALAT|MULAI SESI)/i.test(m.text)) return { realtimeInput: { text: m.text } };
   if (m.type === 'audio' && typeof m.data === 'string' && /^[A-Za-z0-9+/]+={0,2}$/.test(m.data)) {
     const b = Buffer.from(m.data, 'base64');
     if (b.length >= 640 && b.length <= 3200 && b.length % 2 === 0) return { realtimeInput: { audio: { data: m.data, mimeType: 'audio/pcm;rate=16000' } } };
@@ -56,7 +57,7 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
 // Empty allowlist denies all; '*' admits any verified account, never anonymous users.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && (allowed.has('*') || allowed.has(userId)); }
-function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, nudgeMs = 12000, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, ask, store, detectLang = () => null, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
+function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, nudgeMs = 12000, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, greet = true, ask, store, detectLang = () => null, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
@@ -119,7 +120,10 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
               if (stopped) return;
               usage.observe(r);
               if (r.setupComplete && !ready) {
-                if (history.length) upstream.send(JSON.stringify({ clientContent: { turns: history.map(h => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] })), turnComplete: false } }));
+                const turns = history.map(h => ({ role: h.role === 'assistant' ? 'model' : 'user', parts: [{ text: h.content }] }));
+                const nama = String(req.authUser?.user_metadata?.display_name || '').split(' ')[0].replace(/[^\p{L}'-]/gu, '').slice(0, 30);
+                if (greet) turns.push({ role: 'user', parts: [{ text: SAPAAN(nama, history.length > 0) }] });
+                if (turns.length) upstream.send(JSON.stringify({ clientContent: { turns, turnComplete: greet } }));
                 ready = true; stage = 'live'; clearTimeout(setupTimer); console.info('[live] ready user=%s ms=%d', user.slice(0, 8), Date.now() - t0); send({ type: 'ready' }); }
               if (r.serverContent) {
                 if (typeof r.serverContent.inputTranscription?.text === 'string') inputText = (inputText + r.serverContent.inputTranscription.text).slice(-2000);

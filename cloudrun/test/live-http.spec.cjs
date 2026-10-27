@@ -39,7 +39,7 @@ test('offline Aziz photo-analysis history seeds provider before ready and reache
     server.listen = (_port, cb) => listen(0, '127.0.0.1', cb); return server;
    } };
    if (name === './server/live-voice') return { registerLiveVoice: (s, deps) => {
-    wss = real(name).registerLiveVoice(s, { ...deps, enabled: true, allowed: new Set(['fixture-user']), origins: ['http://fixture.local'], connect: async () => {
+    wss = real(name).registerLiveVoice(s, { ...deps, greet: false, enabled: true, allowed: new Set(['fixture-user']), origins: ['http://fixture.local'], connect: async () => {
      setTimeout(() => provider.emit('message', Buffer.from('{"setupComplete":{}}')), 5); return provider;
     } });
    } };
