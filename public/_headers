@@ -6,6 +6,8 @@
 # (mengunci host di sini berisiko memutus app kalau URL berubah).
 
 /*
+  # HTTPS — protect returning browsers across both app custom domains.
+  Strict-Transport-Security: max-age=31536000; includeSubDomains
   # Clickjacking — app tidak pernah di-embed di mana pun.
   X-Frame-Options: DENY
   # MIME sniffing — cegah file di-eksekusi sebagai tipe lain.

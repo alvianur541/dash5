@@ -1,14 +1,14 @@
 FROM node:24.22.1-alpine AS build
 WORKDIR /app
-COPY package.json .
-RUN npm install
+COPY package*.json ./
+RUN npm ci
 COPY src ./src
 RUN npm run build
 
 FROM node:24.22.1-alpine
 WORKDIR /app
-COPY package.json .
-RUN npm install --omit=dev
+COPY package*.json ./
+RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY server.js .
 COPY server ./server
