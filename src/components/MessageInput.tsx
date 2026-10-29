@@ -135,7 +135,7 @@ export function MessageInput({
     el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
   }, [input]);
 
-  const buzz = () => { try { navigator.vibrate?.(8); } catch { } };
+  const buzz = () => { try { navigator.vibrate?.(8); } catch {} };
 
   const resetBox = () => {
     setInput('');
@@ -171,7 +171,6 @@ export function MessageInput({
 
     const { file: ready, compressed } = await compressImage(file);
     if (!compressed) flash('Foto tidak bisa dikecilkan — dikirim dengan ukuran asli.');
-    // Hold the photo so the technician can add what to check before sending.
     setPendingImage({ file: ready, url: URL.createObjectURL(ready) });
     textareaRef.current?.focus();
   };

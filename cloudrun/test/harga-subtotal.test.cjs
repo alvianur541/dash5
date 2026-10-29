@@ -1,6 +1,5 @@
 const { lengkapiHarga, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Regresi 10 Okt (paket 2000 jam ZX48U-5A): kolom Subtotal qty>1 ditimpa harga satuan web (591.600, 1.861.800).
 const JAWAB = [
   '| Part Number | Nama Part | Qty | Harga Satuan (Promo) | Subtotal |',
   '| :--- | :--- | :---: | :--- | :--- |',
@@ -21,7 +20,6 @@ module.exports = async () => {
   t(/Rp 502\.860 \|\s*Rp 1\.005\.720/.test(L[3]), `qty 2 → 1.005.720 (${L[3]})`);
   t(/Rp 1\.582\.530 \|\s*Rp 6\.330\.120/.test(L[4]), `qty 4 → 6.330.120 (${L[4]})`);
   t(/Rp 344\.819 \|\s*Rp 344\.819/.test(L[2]), 'qty 1 tetap');
-  // 344.819 + 1.005.720 + 6.330.120 = 7.680.659
   t(L[5].includes('Rp 7.680.659') && !out.includes('9.999.999') && !out.includes('Gagal'), `total = jumlah subtotal (${L[5]})`);
   return done();
 };

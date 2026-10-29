@@ -17,8 +17,6 @@ const VOICE_PROMPT = (unit, lang) => [
   'MEMBACAKAN HASIL: jangan membacakan tabel, simbol, atau format markdown. Hasil lengkap tampil di layar, jadi ringkas: sebut paling banyak tiga poin terpenting dengan bahasa obrolan. Lalu tutup dengan kalimat penutup yang hangat dan manusiawi, buat sendiri dan bervariasi, misalnya "Detailnya sudah aku tampilkan di layar ya, coba dicek. Kalau ada yang kurang jelas, bilang aja.", "Tabel lengkapnya ada di chat, silakan dilihat dulu. Ada yang mau aku jelasin lagi?", atau "Udah aku taruh semua di layar, kalau ada yang bingung tanya aja ya." Penutup tidak harus selalu ada: pakai kalau memang ada tabel atau rincian di layar, jangan diulang kata per kata di setiap jawaban, dan jangan terdengar kaku seperti pengumuman. Harga cukup dibulatkan wajar (contoh: "sekitar dua puluh dua koma empat juta"); part number tidak dibacakan kecuali diminta, dan kalau diminta bacakan per kelompok dengan jelas.',
   'MENDENGAR ANGKA DAN ISTILAH: kalau pengguna menyebut part number, fault code, jam servis atau angka yang kurang jelas, ulangi angka itu untuk konfirmasi sebelum memanggil alat. Istilah bengkel yang sering salah dengar: track link (bukan trekking), anti drift valve (bukan anti trip), flywheel (bukan Ford Playwheel), torsi (bukan jarak kursi), crankshaft, swing bearing/swing circle, pilot pressure, main pump, travel motor, idler, sprocket, fault code. Kalau hasil alat kosong atau di luar cakupan dan pertanyaannya terdengar janggal, anggap kemungkinan salah dengar: sebut istilah yang paling mungkin dan tanyakan konfirmasi singkat, atau panggil ask_technical lagi dengan istilah itu. Kalau teknisi minta dicari lagi, WAJIB panggil ask_technical lagi dengan pertanyaan yang diperbaiki; jangan mengulang "belum ada" tanpa mencari.',
 ].join('\n');
-// The voice model follows the language of its (Indonesian) instructions over a short English sentence ("I've checked
-// the sensor connector. It's clean." answered in Indonesian, Live 17 Oct): state the session language in that language.
 const BAHASA_SESI = {
   en: 'LANGUAGE FOR THIS SESSION: the technician speaks English. Speak ONLY English in every reply, filler line and summary, even though the instructions below, tool results and system notes are in Indonesian. Switch only if the technician clearly speaks Indonesian or Japanese, or asks for another language.',
   ja: 'このセッションの言語: 技術者は日本語で話しています。以下の指示やツール結果がインドネシア語でも、返答・つなぎの一言・要約はすべて日本語だけで話してください。技術者がはっきり別の言語で話すか、別の言語を求めたときだけ切り替えてください。',
@@ -54,7 +52,6 @@ async function openProvider(unit, { project = PROJECT_ID, location = process.env
   ws.on('open', () => ws.send(JSON.stringify(makeSetup(project, location, unit, lang))));
   return ws;
 }
-// Empty allowlist denies all; '*' admits any verified account, never anonymous users.
 const LIVE_ALLOWED_USERS = new Set((process.env.LIVE_ALLOWED_USERS || '').split(',').map(s => s.trim()).filter(Boolean));
 function liveAllowed(userId, allowed = LIVE_ALLOWED_USERS) { return !!userId && (allowed.has('*') || allowed.has(userId)); }
 function registerLiveVoice(server, { verifyToken, units, enabled = process.env.LIVE_VOICE_ENABLED === 'true', allowed = LIVE_ALLOWED_USERS, origins = ALLOWED_ORIGINS, connect = openProvider, nudgeMs = 12000, authMs = 5000, verifyMs = 10000, setupMs = 20000, idleMs = 30000, maxMs = 300000, greet = true, ask, store, detectLang = () => null, usageLog = row => console.info('[live-usage] %s', JSON.stringify(row)) }) {
@@ -69,7 +66,6 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
     const t0 = Date.now(); let stage = 'wait-auth', upClose = '';
     const usage = createLiveUsage(), sessionId = randomUUID(); let selectedUnit = null;
     const calls = new Map();
-    // Language of the technician's own words, kept for the session: the tool question is the model's rephrasing.
     let history = [], inputText = '', bahasa = null;
     let idle;
     const send = data => { if (ws.readyState === WebSocket.OPEN && ws.bufferedAmount < 1024 * 1024) ws.send(JSON.stringify(data)); else stop(); };
@@ -146,7 +142,6 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
                   reply({ status: 'searching', message: 'Pencarian manual sedang berjalan; hasil dikirim sebagai pesan [HASIL ALAT ask_technical]. Sekarang beri tanggapan singkat yang ramah sesuai topik; jangan sebut angka, PN atau kesimpulan teknis.', scheduling: 'INTERRUPT' });
                   const question = call.args.question.trim();
                   let result;
-                  // A slow search (evening queue: 20-30 s) otherwise leaves the technician in silence after the first filler line.
                   const nudge = setTimeout(() => {
                     if (!ctrl.signal.aborted && !stopped && upstream.readyState === WebSocket.OPEN) { usage.markActivity(); upstream.send(JSON.stringify({ clientContent: { turns: [{ role: 'user', parts: [{ text: '[STATUS ALAT ask_technical] Pencarian masih berjalan; hasil belum datang.' }] }], turnComplete: true } })); }
                   }, nudgeMs);

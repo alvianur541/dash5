@@ -11,7 +11,6 @@ function fakeSupabase(rows, calls = []) {
   return { from: () => q, rpc: () => Promise.resolve({ data: [], error: null }) };
 }
 
-// Real DB text (chunk 7586): the PDF column split puts a sentence between "48" and "kg".
 const MOTOR = { content: 'Section: SWING MOTOR - DISASSEMBLY\nModel: ZX200-5G\nKategori: WORKSHOP MANUAL\nd IMPORTANT: Do not damage the mating surfaces CAUTION: The swing motor assembly weight: 48 when separating valve plate (21) from valve kg (110 lb) casing (28)' };
 const DEVICE = { content: 'Section: SWING DEVICE - REMOVAL & INSTALLATION\nModel: ZX200-5G\nKategori: WORKSHOP MANUAL\nCAUTION: Swing device (5) weight: 220 kg (490 lb)' };
 const LEAK = { content: 'Section: MACHINE TEST - SWING MOTOR LEAKAGE\nModel: ZX200-5G\n2. Load the bucket with a weight equivalent to the weight standard' };

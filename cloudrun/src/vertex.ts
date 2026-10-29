@@ -61,8 +61,6 @@ export function resetUsage(): void {
   const u = deps().usage;
   u.input = 0; u.output = 0; u.calls = 0; u.thinking = 0; u.cached = 0;
 }
-// USD per 1M tokens at Google list price (= "Usage cost" in Cloud Billing, before credits/promo).
-// Output includes thinking. Cached input bills at 10% of input. Update when Google changes prices.
 export const HARGA_MODEL: Record<string, { in: number; out: number }> = {
   'gemini-3.8-flash': { in: 1.50, out: 7.50 },
   'gemini-3.7-flash': { in: 1.50, out: 7.50 },

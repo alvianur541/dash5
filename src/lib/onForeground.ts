@@ -1,5 +1,3 @@
-// Re-sync when the app is likely showing stale data: tab/PWA returns, window regains focus, network
-// returns, and every `pollMs` while visible (a desktop tab left open never fires visibilitychange).
 export function onForeground(cb: () => void, minGapMs = 15_000, pollMs = 60_000): () => void {
   let last = Date.now();
   const run = () => {

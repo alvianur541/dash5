@@ -10,7 +10,6 @@ module.exports = async function () {
   t(detectLang('腕の動きが遅いのはどうやってチェックするの？') === 'ja', 'JA dikenali');
   t(detectLang('apa penyebab hst pump tidak keluar') === 'id', 'ID dikenali');
   t(detectLang('ok') === null, 'kata ambigu -> null (bukan default ID)');
-  // Live 16-17 Okt: ucapan Inggris tanpa kata tanya dijawab bahasa Indonesia.
   t(detectLang('I am using MPDr.') === 'en', '"I am using MPDr." → EN');
   t(detectLang("I've checked the sensor connector. It's clean.") === 'en', '"I\'ve checked … It\'s clean." → EN');
   t(detectLang('English, bro. English.') === 'en', '"English, bro" → EN');

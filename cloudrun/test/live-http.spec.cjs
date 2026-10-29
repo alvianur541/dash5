@@ -85,7 +85,6 @@ test('offline Aziz photo-analysis history seeds provider before ready and reache
   assert.equal(history.at(-2).content,'yang di atas itu');
   assert.deepEqual(sources, ['live', 'live']);
   assert.deepEqual(thinks, ['low', 'low']);
-  // The tool answer frame can still be in flight, so wait for the interruption frame itself, not the next frame.
   const interrupted = new Promise(resolve => ws.on('message', raw => { const m = JSON.parse(raw); if (m.content?.interrupted) resolve(m); }));
   provider.emit('message', Buffer.from('{"serverContent":{"interrupted":true}}'));
   assert.equal((await interrupted).content.interrupted, true);

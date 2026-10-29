@@ -1,5 +1,3 @@
-// Cloud Shell calibration for rag/symptom.ts: ranker candidates in two languages, then the small-model judge.
-// Needs ~/simtom-index.json (built from the DB, not committed). Run via: bash deploy/uji-simtom.sh
 import { readFileSync } from 'node:fs';
 
 const PROJECT = process.env.PROJECT;
@@ -7,12 +5,10 @@ const TOKEN = process.env.TOKEN;
 const MODEL = process.env.RANK_MODEL || 'semantic-ranker-fast-004';
 const JUDGE = process.env.INTENT_MODEL || 'gemini-3.5-flash-lite';
 const INDEX = JSON.parse(readFileSync(process.env.INDEX || `${process.env.HOME}/simtom-index.json`, 'utf8'));
-// Same judge prompt production uses, read from source so the test cannot drift from it.
 const VERIFY_SYS = readFileSync(new URL('../cloudrun/src/rag/symptom.ts', import.meta.url), 'utf8')
   .split('const VERIFY_SYS = `')[1].split(/`;\r?\n/)[0].replace('${MAX_PICK}', '2');
 const summaryOf = e => `${e.title} — ${e.snippet.split('\n').slice(1).join(' ').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 220)}`;
 
-// [unit, Indonesian complaint, English intent query, title substrings that count as correct ([] = nothing should be added)]
 const CASES = [
   ['ZX200-5G', 'Rpm engine drop saat handle travel digerakkn', 'engine speed drops stalls when traveling', ['Engine Ngedrop', 'E-13 -', 'E-10 -']],
   ['ZX200-5G', 'Saat handle travel digerakkn engine langsung drop', 'engine speed drops when travel lever operated', ['Engine Ngedrop', 'E-13 -', 'E-10 -']],
@@ -34,7 +30,6 @@ const CASES = [
   ['ZW140', 'fuel gauge tidak bergerak', 'fuel gauge not working', ['FUEL GAUGE']],
   ['ZX48U-5A', 'travel lambat', 'travel slow', ['T-1:']],
   ['ZX65USB-5A', 'boom swing tidak jalan', 'boom swing not operating', ['BOOM SWING']],
-  // Complaints the manual has no symptom section for: nothing should be added.
   ['ZX200-5G', 'kaca kabin retak', 'cab window glass cracked', []],
   ['ZX200-5G', 'selang hidrolik boom bocor', 'boom hydraulic hose leak', []],
   ['ZW140', 'ban bocor', 'tire flat puncture', []],
@@ -99,7 +94,6 @@ for (const [unit, id, en, want] of CASES) {
     console.log(`  ${v} (${(ms / 1000).toFixed(2)} dtk) benar di #${firstOk >= 0 ? firstOk + 1 : '-'}: ` +
       order.slice(0, 3).map(([s, i]) => `${ok(entries[i]) ? '✓' : '·'}${s.toFixed(2)} ${entries[i].title.slice(0, 55)}`).join(' | '));
 
-    // Production path: top 5 per query (English + technician's words), merged, then the judge picks.
     if (v !== 'D') continue;
     const best = new Map();
     for (const r of runs) {

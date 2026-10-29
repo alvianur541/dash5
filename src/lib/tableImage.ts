@@ -22,7 +22,6 @@ const NUM_RE = /^(?:rp\.?\s*)?[\d.,%\s-]*\d[\d.,%\s-]*$/i;
 
 const LOGO_H = 26;
 
-// Official Hexindo emblem + wordmark (same file as the light login logo); text fallback if it fails to load.
 function loadLogo(): Promise<HTMLImageElement | null> {
   return new Promise(resolve => {
     const img = new Image();
@@ -59,7 +58,6 @@ function rightAligned(g: Grid): boolean[] {
     return cells.length > 0 && cells.every(isNumeric);
   });
 }
-// Prices are mono too, so digits line up like in the chat table.
 const isCode = (s: string) => (CODE_RE.test(s) && /\d/.test(s)) || (/\d{1,3}(?:\.\d{3})+/.test(s) && NUM_RE.test(s));
 
 const font = (weight: number, size: number, mono = false) =>
@@ -108,7 +106,7 @@ function columnWidths(ctx: CanvasRenderingContext2D, g: Grid, avail: number): nu
 }
 
 export async function renderTablePng(table: HTMLTableElement, opts: TableImageOptions): Promise<Blob> {
-  if (document.fonts?.ready) { try { await document.fonts.ready; } catch { /* fall back to system fonts */ } }
+  if (document.fonts?.ready) { try { await document.fonts.ready; } catch {} }
 
   const grid = readTable(table);
   if (!grid.head.length || !grid.rows.length) throw new Error('Tabel kosong');
@@ -154,7 +152,6 @@ export async function renderTablePng(table: HTMLTableElement, opts: TableImageOp
   ctx.fillRect(0, 0, cardW, cardH);
 
   const stamp = new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' });
-  // Logo left; date and unit stacked on the right at the same 13px as the price-source note.
   const logo = await loadLogo();
   ctx.fillStyle = INK;
   if (logo) ctx.drawImage(logo, PAD, PAD + 4, LOGO_H * logo.naturalWidth / logo.naturalHeight, LOGO_H);
@@ -210,13 +207,11 @@ export function tableImageName(unit: string): string {
     + '-' + p(d.getHours()) + p(d.getMinutes()) + '.png';
 }
 
-// iOS puts <a download> into Files, never Photos — a long-press preview is the usable path there.
 export function isIosLike(): boolean {
   const ua = navigator.userAgent;
   return /iPad|iPhone|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
 }
 
-// iOS blocks <a download> into Photos; the share sheet is the only route that reaches it.
 export async function shareImage(blob: Blob, filename: string): Promise<'shared' | 'cancelled' | 'unsupported'> {
   if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return 'unsupported';
   let file: File;

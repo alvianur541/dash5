@@ -3,15 +3,11 @@ import { UNIT_MODELS } from './types';
 export type Lang = 'id' | 'en' | 'ja';
 
 const JP_RE = /[぀-ヿ一-鿿]/;
-// Spoken English often has none of the question words ("I am using MPDr.", "I've checked the connector. It's clean."
-// were answered in Indonesian, Live 16-17 Oct). Bare "on"/"off"/"same"/"problem" stay out: Indonesian chats use
-// them too ("fuse putus saat kontak on").
 const EN_RE = /\b(what|who|whose|how|why|when|where|which|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/i;
 const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo|dan|berapa|brp|pada|di|ke|semua|hasil|jika|jadi|terus|tapi|karena|nilai|apakah|mana|nya)\b/i;
 
 export function detectLang(text: string): Lang | null {
   if (JP_RE.test(text)) return 'ja';
-  // "thank you" is everyday Indonesian chat; upper-case "CAN" is the CAN bus, not the verb.
   const t = text.replace(/\bthanks?\s*(?:you|u)\b/gi, ' ').replace(/\bCAN\b/g, ' ');
   const id = ID_RE.test(t);
   const en = EN_RE.test(t);
@@ -20,7 +16,6 @@ export function detectLang(text: string): Lang | null {
   return null;
 }
 
-// hint = language of the technician's own words when the question was rephrased by someone else (Live voice).
 export function sessionLang(current: string, history: { role: string; content: string }[] = [], hint?: Lang | null): Lang {
   if (hint) return hint;
   const now = detectLang(current);
@@ -38,7 +33,6 @@ function pick<T>(lang: Lang, opts: { id: T; en: T; ja: T }): T {
   return opts[lang];
 }
 
-// Photo turns wrap the caption in Indonesian instructions; without this the model answers in Indonesian.
 export function langDirective(lang: Lang): string {
   return pick(lang, {
     id: '[BAHASA: Teknisi menulis dalam bahasa Indonesia. Tulis SELURUH jawaban dalam bahasa Indonesia, walau jawaban sebelumnya berbahasa lain. Salin part number, kode, angka, dan satuan persis.]',

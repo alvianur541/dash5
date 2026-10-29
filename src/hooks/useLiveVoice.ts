@@ -13,7 +13,6 @@ type LiveContent = {
 };
 export type LivePhase = 'idle' | 'connecting' | 'listening' | 'searching' | 'speaking';
 
-// Live session: mic -> server relay -> audio playback; transcripts surface as chat messages.
 export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (m: Message) => void, onTurnEnd: () => void, onEnd: (error?: string) => void, getHistory: () => Message[]) {
   const [phase, setPhase] = useState<LivePhase>('idle');
   const [allowed, setAllowed] = useState<{ uid?: string; ok: boolean }>({ ok: false });
@@ -45,7 +44,7 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
     let stopped = false, stream: MediaStream | undefined, ws: WebSocket | undefined, processor: ScriptProcessorNode | undefined;
     let audio: AudioContext | undefined;
     const playing = new Set<AudioBufferSourceNode>(); let next = 0;
-    const clear = () => { for (const source of playing) { try { source.stop(); } catch { /* already ended */ } } playing.clear(); next = audio?.currentTime ?? 0; };
+    const clear = () => { for (const source of playing) { try { source.stop(); } catch {} } playing.clear(); next = audio?.currentTime ?? 0; };
     const hidden = () => { if (document.hidden) stop(); };
     const stop = (error?: string) => {
       if (stopped) return; stopped = true; busyRef.current = false;
@@ -60,7 +59,6 @@ export function useLiveVoice(uid: string | undefined, unit: string, onMessage: (
     document.addEventListener('visibilitychange', hidden);
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('Mikrofon tidak tersedia.');
-      // Mic before AudioContext: started the other way round, iOS moves playback to the quiet call path.
       const mic = await navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true, noiseSuppression: true }, video: false });
       stream = mic;
       if (stopped) { mic.getTracks().forEach(t => t.stop()); return; }

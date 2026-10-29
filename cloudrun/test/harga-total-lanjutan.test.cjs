@@ -1,7 +1,5 @@
 const { lengkapiHarga, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Regresi 10 Okt (sesi 2a35a5d9): "Hitung totalny" sesudah tabel paket 2000 jam -> tabel total tanpa PN,
-// dulu semua sel jadi "Gagal dicek, kirim ulang" karena harga per PN ada di jawaban sebelumnya.
 const SEBELUMNYA = [
   '| Part Number | Nama Part | Qty | Harga |',
   '| :--- | :--- | :--- | :--- |',
@@ -25,7 +23,6 @@ module.exports = async () => {
   const promo = new Map([['YA00058283', new Set(['759296', '607437'])], ['4616545', new Set(['342748', '274198'])], ['HTCDH1C', new Set(['628575', '502860'])]]);
 
   const out = await runWithDeps(d, () => lengkapiHarga(TOTAL, promo, SEBELUMNYA));
-  // promo: 607.437 + 2x274.198 + 502.860 = 1.658.693; normal: 759.296 + 2x342.748 + 628.575 = 2.073.367
   t(out.includes('Rp 1.658.693'), `total promo benar dipertahankan (${out.split('\n')[3]})`);
   t(out.includes('Rp 2.073.367') && !out.includes('9.999.999'), `total normal salah dihitung ulang (${out.split('\n')[2]})`);
   t(!out.includes('Gagal dicek'), 'tidak ada "Gagal dicek" lagi');

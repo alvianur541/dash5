@@ -52,7 +52,6 @@ test('PWA and mobile view are locked against pinch zoom and pull; editable input
   for (const file of ['LoginPage', 'ChangePasswordDialog']) {
     assert.match(read(`components/${file}.tsx`), /text-\[16px\]/);
   }
-  // Composer is 15px by request (15 Oct); maximum-scale=1 above is what keeps iOS from zooming on focus.
   assert.match(read('components/MessageInput.tsx'), /text-\[15px\]/);
 });
 

@@ -37,7 +37,6 @@ export async function searchTechnicalManualMulti(
   const { rankedDocs, allDocs, usedLooseFallback, embedFailed, embedError, msCari } =
     await gatherCandidates(queries, model, faultCode, strictFilter);
 
-  // Empty because search itself failed is not "not in the manual" — surface the error instead.
   if (allDocs.length === 0) return { content: '', hasResults: false, ...(embedFailed ? { ragError: embedError } : {}) };
 
   const filteredDocs = faultCode ? filterByFaultCode(allDocs, primaryQuery) : allDocs;
@@ -103,7 +102,6 @@ const PERF_TOPICS: Array<{ re: RegExp; term: string }> = [
   { re: /swing\s*speed|kecepatan\s*swing|swing\s*revolution|putaran\s*swing/i, term: 'Swing' },
 ];
 
-// MACHINE TEST sections only describe the procedure; the standard values live in PERFORMANCE STANDARD.
 export async function findPerformanceStandard(model: string, topicText: string, have: string): Promise<string | null> {
   const topic = PERF_TOPICS.find(t => t.re.test(topicText));
   if (!topic || !sb()) return null;
@@ -131,7 +129,6 @@ const WEIGHT_STOP = new Set([
 ]);
 const WEIGHT_ID_EN: Record<string, string> = { pompa: 'pump', silinder: 'cylinder', kabin: 'cab', mesin: 'engine', rangka: 'frame' };
 
-// Component named around "berat"/"weight": words after it first ("berat swing motor"), else before it ("swing motor beratnya").
 export function weightComponent(text: string): string | null {
   const m = WEIGHT_Q_RE.exec(text);
   if (!m) return null;
@@ -152,7 +149,6 @@ export function weightComponent(text: string): string | null {
 
 const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-// Weight has its own finder; these are the other values technicians ask for by name.
 const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
   { re: /\brelief\b/i, line: 'relief[^\\n]{0,40}?pressure|relief valve set', word: 'relief' },
   { re: /\bcharg(?:e|ing)\b/i, line: 'charg(?:e|ing)[^\\n]{0,30}?pressure|low[- ]pressure relief', word: 'pressure' },
@@ -169,7 +165,6 @@ const SPEC_ATTRS: Array<{ re: RegExp; line: string; word: string }> = [
   { re: /\bdisplacement\b/i, line: 'displacement', word: 'displacement' },
 ];
 const SPEC_UNIT = '(?:MPa|kPa|bar|psi|kgf/cm|L/min|N·m|Nm|kgf·m|mm|cm3|cm³|mL|L|kg|rpm|min-1|min⁻¹|km/h|V|Ω|ohm|mA|Ah|A|°C|kW)';
-// Workshop words technicians use for a component that the manuals name in English.
 const SPEC_ID_EN: Record<string, string> = { aki: 'battery', baterai: 'battery', accu: 'battery' };
 const SPEC_NOT_COMPONENT = new Set([
   'pressure', 'relief', 'charge', 'charging', 'flow', 'rate', 'capacity', 'torque', 'speed', 'rpm', 'voltage', 'resistance',
@@ -183,7 +178,6 @@ const SPEC_NOT_COMPONENT = new Set([
   'manual', 'dari', 'dan', 'pada', 'beserta', 'sesuai', 'data',
 ]);
 
-// A spec value is one "Relief Valve Set Pressure ....44.6 MPa" line in a chunk titled for something else (ZW140 HST specs sit under "BATTERY").
 export async function findSpecLines(model: string, query: string, have: string): Promise<string | null> {
   const attr = SPEC_ATTRS.find(a => a.re.test(query));
   if (!attr || !sb() || !wantsNumeric(query)) return null;
@@ -195,9 +189,7 @@ export async function findSpecLines(model: string, query: string, have: string):
   try {
     let q = sb().from('documents').select('id, content, metadata').contains('metadata', { Model: model });
     for (const w of comp) q = q.ilike('content', `%${escapeLike(w)}%`);
-    // Postgres caps regex repetition at 255, so the database only checks "attribute … number unit"; nearness is checked here.
     const { data } = await q.filter('content', 'imatch', `(${attr.line})[^\\n]{0,80}?\\d[\\d.,±~–-]*\\s*${SPEC_UNIT}`).limit(60);
-    // The value must sit near the component's own name, not anywhere in a long chunk.
     const near = (c: string, span = 800) => [...c.matchAll(valueRe)].some(m => {
       const before = c.slice(Math.max(0, (m.index ?? 0) - span), m.index).toLowerCase();
       return comp.some(w => before.includes(w) || m[0].toLowerCase().includes(w));
@@ -230,7 +222,6 @@ export async function findSpecLines(model: string, query: string, have: string):
   }
 }
 
-// A component's weight is one CAUTION line inside a long removal/disassembly chunk — vectors miss it, a literal match does not.
 export async function findComponentWeight(model: string, text: string, have: string): Promise<string | null> {
   const comp = weightComponent(text);
   if (!comp || !sb()) return null;

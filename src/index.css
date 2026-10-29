@@ -325,7 +325,6 @@ img {
 .markdown-body li > p { margin-bottom: 0.3em; }
 .markdown-body .md-source { margin-bottom: 0.65em; line-height: 1.5; }
 .markdown-body :is(h1, h2, h3) + .md-source { margin-top: -0.1em; }
-/* Source label: a quiet accent tag, not grey text that reads as faded body copy. */
 .markdown-body .md-cite {
   font-family: inherit; font-size: 12.5px; font-weight: 500; letter-spacing: 0;
   color: color-mix(in srgb, var(--accent-main) 55%, var(--text-secondary));
@@ -334,7 +333,6 @@ img {
   -webkit-box-decoration-break: clone; box-decoration-break: clone;
 }
 .markdown-body .md-cite svg { display: inline-block; vertical-align: -0.12em; margin-right: 0.32em; }
-/* Price source under price tables: stronger accent tag than manual citations, clickable to the store. */
 .markdown-body .md-price-src {
   display: inline-flex; align-items: center; gap: 0.4em;
   font-family: inherit; font-size: 13.5px; font-weight: 500; text-decoration: none;
@@ -345,7 +343,6 @@ img {
 }
 .markdown-body .md-price-src b { font-weight: 650; }
 .markdown-body .md-price-src:hover { background: color-mix(in srgb, var(--accent-main) 18%, transparent); }
-/* Measured values stay in the body face — monospace is kept for part numbers and codes. */
 .markdown-body .md-val {
   font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap;
   color: var(--text-primary);
@@ -574,7 +571,6 @@ img {
   flex-shrink: 0;
 }
 
-/* Room for the iPhone home indicator only — the installed desktop app is also "standalone". */
 @media all and (display-mode: standalone) and (max-width: 767px) {
   .safe-area-spacer { height: 24px; }
 }
@@ -600,7 +596,6 @@ img {
 
 .sidebar-header { padding-top: 20px; background: var(--bg-sidebar); }
 
-/* Browsers reset word-spacing on form controls; let them follow the page. */
 :is(button, input, textarea, select) { word-spacing: inherit; }
 .sidebar-font { font-family: var(--font-ui); }
 .sb-row {
@@ -641,7 +636,6 @@ img {
   position: relative; flex-shrink: 0;
 }
 
-/* Keep the mobile topbar inside the available app shell height. */
 @media (max-width: 767px) {
   :root { --topbar-h: 57px; }
   .topbar-native { position: fixed; top: 0; left: 0; right: 0; z-index: 30; }
@@ -1003,7 +997,6 @@ img {
 }
 
 .live-bar {
-  /* Same footprint as the composer card so the bar never jumps when Live starts/stops. */
   display: flex; align-items: center; gap: 12px; height: 98px; box-sizing: border-box; padding: 0 16px 0 20px;
   border-radius: 26px; background: var(--bg-card);
   border: 1px solid color-mix(in srgb, var(--accent-main) 35%, transparent);
@@ -1050,7 +1043,6 @@ img {
 @media (min-width: 768px) {
   .model-sheet { border-radius: 22px; margin-bottom: 24px; }
 }
-/* Same rows as the sidebar, a little taller for thumbs. */
 .model-sheet-row { min-height: 44px; }
 
 .code-copy { cursor: pointer; border-bottom: 1px dashed color-mix(in srgb, var(--accent-main) 55%, transparent); transition: background 0.12s; }
@@ -1071,13 +1063,10 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .markdown-body td.md-price-note { color: var(--text-muted); font-weight: 450; }
 .markdown-body td.md-num { white-space: nowrap; font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 .markdown-body td.md-price { font-family: var(--font-mono); font-size: 14px; font-weight: 500; font-variant-numeric: tabular-nums; letter-spacing: 0; }
-/* Rows run long instead of squeezing (Alvian): cells stay on one line and the table scrolls sideways with the
-   PN column sticky; only very long notes (md-long, >44 chars) wrap, at a comfortable width. */
 .markdown-body table { width: max-content; min-width: 100%; }
 .markdown-body tbody td, .markdown-body td.md-text { white-space: nowrap; }
 .markdown-body td.md-long { white-space: normal; min-width: 16em; max-width: 22em; }
 .markdown-body table code.code-copy { font-size: 14px; }
-/* Tables: words in Plus Jakarta Sans like the headers; part numbers, qty and prices in mono (14px mono = 13px Jakarta digit height). */
 .markdown-body table code { font-family: var(--font-mono); font-size: 14px; font-variant-numeric: tabular-nums; }
 .markdown-body tbody td:has(> code.code-copy:only-child) { white-space: nowrap; }
 
@@ -1141,7 +1130,6 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
   background: rgba(245,158,11,0.12); color: var(--banner-warn);
 }
 
-/* Official high-resolution wordmark crop, with the existing monochrome colours. */
 .sidebar-wordmark {
   display: block;
   height: 18px;
@@ -1151,23 +1139,14 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 .dark-theme .sidebar-wordmark-light { display: none; }
 .dark-theme .sidebar-wordmark-dark { display: block; }
 
-/* Dark theme uses Hexindo's own dark-background artwork (hexindoparts.com header logo: white wordmark, emblem
-   with white outline), recomposed on the light logo's exact layout at 4x (1440x320: emblem full height from x=0,
-   wordmark in the same box). Its orange triangle is matched to the light logo's orange (same size and spot);
-   the white outline overflows into a 9px margin (1512x392): drawn 68.6px tall with a -6.3px margin it occupies
-   exactly the light logo's 252x56 box. Regenerate with dash5-ops/scripts/logo_dark_compose.py. */
-/* Both logos are sized in px, never rem (h-14 = 3.5rem): Edge/Chrome "font size: small" sets the root to 14px,
-   which shrank only the rem-sized light logo to 49px while the px-sized dark one stayed 56px (Alvian 6 Oct). */
 .login-logo { display: inline-flex; padding: 10px 16px; }
 .login-logo img { max-width: none; flex-shrink: 0; }
 .login-logo .logo-dark { display: none; }
 .dark-theme .login-logo .logo-light { display: none; }
 .dark-theme .login-logo .logo-dark { display: block; margin: -6.3px; max-width: none; }
 
-/* Visible height from visualViewport (shrinks with the keyboard); 100% chain as fallback, never 100dvh. */
 #root { height: var(--app-h, 100%); }
 
-/* Full-screen fixed layers: iOS standalone reports a layout viewport taller than what is visible. */
 .vv-fill { position: fixed; top: 0; left: 0; right: 0; height: var(--app-h, 100%); }
 .vv-side { position: fixed; top: 0; left: 0; height: var(--app-h, 100%); }
 
@@ -1179,14 +1158,12 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
 
 .login-theme-btn { position: absolute; top: max(20px, env(safe-area-inset-top)); right: 20px; }
 
-/* Demo request pill under the login button (not at the top edge: iOS tints/blurs content under the status bar) */
 .demo-banner { display: flex; align-items: center; justify-content: center; gap: 4px; width: fit-content; margin: 10px auto 0 !important; padding: 0 4px 0 16px; min-height: 40px; border-radius: 999px; background: #F5C542; border: 1px solid #E0AE24; color: #1C1606; font-size: 14px; line-height: 1.4; }
 .demo-banner a { display: inline-flex; align-items: center; min-height: 40px; color: inherit; font-weight: 600; text-decoration: none; white-space: nowrap; }
 .demo-banner button { display: flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; border-radius: 999px; color: inherit; }
 .demo-banner a:hover, .demo-banner button:hover { opacity: .8; }
 .demo-banner a:focus-visible, .demo-banner button:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 
-/* Hover only for real pointers: iOS keeps :hover after a tap (stuck grey square, filter layer blurs the button). */
 @media (hover: hover) and (pointer: fine) {
   .topbar-hamburger:hover { background: rgba(255,255,255,0.08); }
   .topbar-center:hover { background: rgba(255,255,255,0.07); }
@@ -1195,8 +1172,6 @@ table.sticky-pn thead th { background: var(--bg-card-hover); }
   .light-theme .topbar-center:hover { background: rgba(0,0,0,0.07); }
 }
 
-/* Mobile drawer: iOS paints the status-bar/home-indicator strips from the page colour with a soft blur edge,
-   so a dark scrim made those strips look smeared. A wash of the app colour keeps every edge the same tone. */
 .sidebar-scrim { background: color-mix(in srgb, var(--bg-app) 62%, transparent); }
 .sidebar-drawer { box-shadow: 1px 0 0 var(--border-main), 12px 0 32px rgba(0, 0, 0, 0.08); }
 .dark-theme .sidebar-drawer { box-shadow: 1px 0 0 var(--border-main), 12px 0 32px rgba(0, 0, 0, 0.45); }

@@ -65,7 +65,6 @@ export async function fetchUserSessionList(userId: string): Promise<import('../t
   }));
 }
 
-// 'gone' = the server has no live row (deleted on another device); null = could not check (offline/error).
 export async function fetchSessionData(sessionId: string, userId: string): Promise<import('../types').ChatSession | 'gone' | null> {
   if (!supabase) return null;
 
@@ -99,7 +98,6 @@ export async function deleteChatSession(id: string, userId: string): Promise<boo
   return !error;
 }
 
-// Only rows last touched before `before`, so a retry never deletes chats made after the clear.
 export async function deleteAllChatSessions(userId: string, before: number): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase.from('chat_sessions')

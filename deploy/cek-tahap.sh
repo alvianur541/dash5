@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Median time per request stage (intent, search, rerank, model) from Cloud Run [stage] logs.
-# Usage (Cloud Shell): bash deploy/cek-tahap.sh 2   # last 2 days
 set -euo pipefail
 DAYS="${1:-2}"
 SINCE="$(date -u -d "-${DAYS} days" +%Y-%m-%dT%H:%M:%SZ)"

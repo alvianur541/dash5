@@ -43,7 +43,6 @@ function createLiveUsage() {
         else current = parsed;
         dirty = false;
       }
-      // Usage is per generation turn, including re-billed history, not cumulative session billing.
       if (content && (field(content, 'turnComplete') || content.interrupted) && !boundary) {
         if (current) turns.push(current); else missing = true;
         if (dirty) missing = true;

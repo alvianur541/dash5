@@ -1,4 +1,3 @@
-// Unit list lives in cloudrun/src: only that folder is uploaded by `gcloud run deploy --source=cloudrun`.
 export { UNIT_MODELS } from '@/cloudrun/src/types';
 export type {
   UnitModel, AgentEvent, AnswerPresentationV1, AnswerPresentationBlockV1, PresentationSource,

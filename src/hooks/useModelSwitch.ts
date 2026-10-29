@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { UnitModel } from '../types';
 
-// Switching unit mid-chat starts a fresh session, so ask first when messages exist.
 export function useModelSwitch(opts: {
   selected: UnitModel;
   hasMessages: boolean;

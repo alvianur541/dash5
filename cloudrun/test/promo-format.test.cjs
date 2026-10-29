@@ -1,6 +1,5 @@
 const { isPromoPriceLine, docKategoriFor, resolvePartsQuery, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Format harga file promo Q2.3 (tanpa label "Promo:") vs format lama.
 const BARU = '  HTCDH1P                | HTC ENG OIL DH1 PAIL                         |      Rp 2.337.200 |   15% |      Rp 1.986.620';
 const LAMA = '  HTCDH1P                | HTC ENG OIL DH1 PAIL                        | Normal: Rp 2.337.200      | Disc: 15%  | Promo: Rp 1.986.620';
 
@@ -40,7 +39,6 @@ module.exports = async () => {
     t(/Periode Promo/.test(r.content), 'baris periode ikut disertakan');
   }
 
-  // Data baru 22 Sep: FUEL CONSUMPTION (4 unit) + TECHNICAL NEWS ZX200-5G
   const bbm = ['berapa konsumsi bahan bakar unit ini', 'pemakaian solar per jam berapa', 'fuel consumption ZX200', 'berapa liter per jam'];
   t(bbm.every(q => docKategoriFor(q, 'ZX200-5G')?.kategori === 'FUEL CONSUMPTION'), 'pertanyaan konsumsi BBM diarahkan ke FUEL CONSUMPTION');
   t(docKategoriFor('berapa konsumsi bahan bakar', 'ZX200-5G')?.available === true, 'ZX200-5G: dokumen konsumsi BBM terdaftar ADA');

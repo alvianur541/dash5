@@ -107,12 +107,9 @@ function TableBlock({ children, sticky }: { children?: ReactNode; sticky?: strin
   );
 }
 
-// The model sometimes wraps its "(Manual — Section)" citation in backticks; as nowrap code it widens the whole chat.
 const CITE_RE = /\b(manual|catalog|katalog|bulletin|brosur|diagram|principle)\b[^()`]*[—–-]/i;
 const LONG_CODE = 28;
-// A measured value ("22 kg", "3.9 MPa", "1300±100 min⁻¹", "∞ Ω") reads as a number, not as a code to copy.
 const VALUE_RE = /^[±~≈<>≤≥]?\s?[\d∞][\d.,]*\s?(?:[±~–-]\s?[\d.,]+\s?)?(?:[a-zµ°·/³²⁻¹Ω%]{1,12}(?:\s\([^()]{1,24}\))?)?$/i;
-// Part numbers with a letter suffix (9248706HPA, 4633367HPB) look like "number + unit" to VALUE_RE; they are codes.
 const PN_SUFFIX_RE = /^\d{5,}[A-Z]{1,4}$/;
 const isValue = (t: string) => t.length <= LONG_CODE && !PN_SUFFIX_RE.test(t) && /\s|[a-zµ°Ω%]/i.test(t) && VALUE_RE.test(t);
 const stripParens = (t: string) => t.replace(/^\(\s*/, '').replace(/\s*\)\.?$/, '');
@@ -121,7 +118,6 @@ function Cite({ text }: { text: string }) {
   return <span className="md-cite"><BookOpen size={11} strokeWidth={2.2} aria-hidden="true" />{stripParens(text)}</span>;
 }
 
-// Plain-text citations inside a sentence ("… (Workshop Manual — Pump Device, Removal & Installation).") get the same tag.
 const INLINE_CITE_RE = /(\([^()]{0,40}\b(?:Manual|Catalog|Katalog|Bulletin|News|Brosur|Promo|Diagram|Principle)\b[^()]{0,140}\))/;
 
 function withCites(children: ReactNode): ReactNode {
@@ -140,7 +136,7 @@ function CodeSpan({ children }: { children?: ReactNode }) {
   const copyable = PN_CODE_RE.test(t) && /\d/.test(text);
   if (!copyable) return <code className={t.length > LONG_CODE ? 'code-long' : undefined}>{children}</code>;
   const copy = async () => {
-    try { await navigator.clipboard.writeText(text.trim()); toast('Disalin: ' + text.trim()); try { navigator.vibrate?.(6); } catch { } } catch { }
+    try { await navigator.clipboard.writeText(text.trim()); toast('Disalin: ' + text.trim()); try { navigator.vibrate?.(6); } catch {} } catch {}
   };
   return (
     <code className="code-copy" onClick={copy} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); copy(); } }}
@@ -167,15 +163,12 @@ function StrongText({ children }: { children?: ReactNode }) {
   return isPartLike ? <code>{text}</code> : <strong>{children}</strong>;
 }
 
-// Module-level so component types never change: a new table type per chunk would rebuild the table DOM.
 type HNode = { type: string; value?: string; children?: HNode[] };
 const nodeText = (n?: HNode): string => (n ? (n.type === 'text' ? n.value ?? '' : (n.children ?? []).map(nodeText).join('')) : '');
 const NUM_CELL_RE = /^(rp\s?)?[\d.,±~–-]+\s?(%|[a-zµ°·/³²⁻¹]{1,8})?$/i;
 const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|diagram|principle)[^()]*\)\.?$/i;
-// "Sumber harga: Hexindoparts.com" (also en/ja variants) under price tables → highlighted tag linking to the store.
 const PRICE_SRC_RE = /^\s*(sumber harga|price source|価格の出典)\s*[:：]\s*hexindoparts\.com\.?\s*$/i;
 
-// Harga di tabel: angka saja, rata kanan; mata uang di judul kolom.
 const RP_CELL_RE = /^rp\.?\s?[\d.,]+$/i;
 const PRICE_STATUS_RE = /^(belum tersedia|gagal dicek(, kirim ulang)?|ketik pn untuk cek|not available)\.?$/i;
 const PRICE_HEAD_RE = /^(harga(?:\s+satuan|\s+total)?|sub-?total|total|(?:unit\s+)?price|価格)(?:\s*\(?(?:rp|idr)\)?)?$/i;
@@ -201,7 +194,6 @@ export const MD_COMPONENTS: Components = {
     return SOURCE_RE.test(t) ? <p className="md-source"><Cite text={t} /></p> : <p>{withCites(children)}</p>;
   },
   li: ({ node: _node, children, ...rest }) => <li {...rest}>{withCites(children)}</li>,
-  // Cells stay on one line (table scrolls sideways); only very long notes (>44 chars) wrap.
   td: ({ node, children, ...rest }) => {
     const t = nodeText(node as HNode).trim();
     if (RP_CELL_RE.test(t)) return <td {...rest} className="md-num md-price" style={{ ...rest.style, textAlign: 'right' }}>{tanpaRp(children)}</td>;
@@ -485,7 +477,6 @@ export function ChatWindow({
   const prevLenRef = useRef(0);
   const firstIdRef = useRef<string | undefined>(undefined);
 
-  // Latest values behind stable callbacks: new function props would defeat MessageItem's memo on every chunk.
   const latest = useRef({ feedback, messages, user, selectedModel, onTogglePocket, onResend });
   useEffect(() => { latest.current = { feedback, messages, user, selectedModel, onTogglePocket, onResend }; });
 
@@ -536,7 +527,6 @@ export function ChatWindow({
     const el = scrollRef.current;
     const list = el?.querySelector('.chat-messages-list');
     if (!el || !list) return;
-    // Markdown loads lazily and grows the list after render; keep an opened chat on its latest answer.
     const ro = new ResizeObserver(() => { if (pinnedRef.current) el.scrollTop = el.scrollHeight; });
     ro.observe(list);
     return () => ro.disconnect();

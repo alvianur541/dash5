@@ -1,7 +1,5 @@
 const { pilihPnHarga, resolveMultiAspectQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Reyhan 4 Okt: "Carikan saya harga sensor coolant temperature dan standar nilainya" → jalur multi-aspek,
-// hexindoparts.com tidak pernah dicek, jawaban "Ketik PN untuk cek" padahal 4436537 ada di web.
 const ROW = { metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' }, content:
   'Section: ELECTRICAL PARTS\nParts List:\n       1 | 4436537            | SENSOR;THERMO                       | qty:1' };
 function fakeSupabase(rows) {
@@ -37,18 +35,15 @@ module.exports = async () => {
     t(dicek.length === 0, 'tanpa kata harga → web tidak dicek');
   }
   {
-    // Alvian 4 Okt: foto silinder KCM + "Cek hrga kit sealny" → kata "kit seal" harus ikut ke pemilihan PN harga.
     const c = 'Section: LIFT CYLINDER\nParts List:\n 1 | 37A-1KM-1000 | CYLINDER ASSY,LIFT | qty:2\n 2 | 49327-90920 | SEAL KIT | qty:1';
     t(!pilihPnHarga(c, ['harga hydraulic cylinder']).includes('49327-90920'), 'tanpa kata caption, seal kit tak terpilih (penyebab bug)');
     t(pilihPnHarga(c, ['harga Cek kit sealny hydraulic cylinder'])[0] === '49327-90920', 'caption ikut → seal kit dicek lebih dulu');
   }
   {
-    // KCM katalog = teks lebar-tetap, bukan tabel pipa → baris tetap harus terbaca (Alvian 4 Okt).
     const c = 'Section: HYDRAULICS - Lift Cylinder\n  3  37A-1KM-1000        CYLINDER ASSY,LIFT  2      101 -\n 14A 49327-90920        SEAL KIT (FR PISTON)  1      101 -';
     t(pilihPnHarga(c, ['Cek harga kit seal lift cylinder'])[0] === '49327-90920', 'baris KCM lebar-tetap terbaca, seal kit dipilih');
   }
   {
-    // Chunk KCM berlabel salah ("CAB OPTION") tapi berisi halaman LIFT CYLINDER; >6 SEAL KIT lain tak boleh mendesak.
     const lain = Array.from({ length: 8 }, (_, i) => ` ${i + 1}A 49327-7${i}000        SEAL KIT             1      101 -`).join('\n');
     const c = `Section: HYDRAULICS - Control Valve\n          CONTROL VALVE\n${lain}\n\n---\n\nSection: CAB OPTION - Cab Structure\n          LIFT CYLINDER\n 30A 49327-90920        SEAL KIT             1      101 -`;
     const r = pilihPnHarga(c, ['harga kit seal hydraulic cylinder']);

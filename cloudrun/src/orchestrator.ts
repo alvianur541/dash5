@@ -17,10 +17,6 @@ import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCo
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang di kalimat PERTAMA bahwa bagian itu belum ketemu di data ini (jangan simpulkan manualnya tidak memuat), jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
 
-// Price answers quote exact data (promo rows / hexindoparts.com, re-checked by lengkapiHarga): log them as an
-// exact lookup (confidence null = dashboard "exact part / price data"), not as the reranker tier of the catalog
-// search, and never send MEDIUM_CAVEAT with a site price block — it made the model open with "harga tidak
-// terdaftar" above a priced table (Alvian 15 Oct).
 const TABEL_HARGA_RE = /^\s*\|[^\n]*\b(?:Rp|IDR)\.?\s*\d/m;
 const ADA_HARGA_WEB_RE = /\[HARGA HEXINDOPARTS\.COM[^\]\n]*\]\n\s+Part Number/;
 
@@ -44,12 +40,10 @@ export function scrubLeaks(text: string): string {
   return out;
 }
 
-// The model cannot reliably count its own greetings, so later turns are marked explicitly.
 const userTag = (userName: string, history: Message[]) =>
   `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}${
     history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
 
-// Never let the price safety net break an answer: on any error the original text stands.
 async function lengkapiHargaAman(text: string, data = '', history: Message[] = []): Promise<string> {
   const sebelumnya = history.filter(m => m.role === 'assistant').slice(-2).map(m => m.content).join('\n\n');
   try { return await lengkapiHarga(text, promoAktif() ? hargaPromo(data) : new Map(), sebelumnya); } catch (err) {
@@ -81,13 +75,10 @@ export { classifyAspect, fallbackDecompose, extractLastOffer, resolveAffirmative
 
 
 const WANTS_LIST_RE = /\b(?:list\w*|daftar\w*|semua|smua|lengkap\w*|sebutkan|tampilkan|kirim\w*|paket|package|overhaul\w*|reseal\w*|oh)\b/i;
-// Short but asking for a mechanism/procedure — brevity here removes the answer's substance.
 const WANTS_DETAIL_RE = /\b(?:cara\s*kerja|caranya|bagaimana|gimana|kenapa|knp|mengapa|jelas\w*|fungsi\w*|prosedur|urutan|langkah\w*|detail\w*|rinci\w*|analisa\w*|analisis)\b/i;
 
-// A new complaint is a fresh diagnosis, not a follow-up, even when it is short.
 const NEW_PROBLEM_RE = /\b(?:(?:ngga?k?|nggak|gak|ga|tidak|tdk|tak)\s+(?:bisa|mau|jalan|nyala|hidup|kuat)|mati\w*|mogok|macet|lambat|lemot|bocor|overheat\w*|panas|rusak|error|trouble|alarm|bunyi)\b/i;
 
-// "hei bro", "halo kak" — a greeting plus a filler word is still small talk.
 function isSmallTalk(s: string): boolean {
   const words = s.trim().split(/\s+/);
   return isCasualExact(s) || (words.length <= 3 && isCasualExact(words[0]));
@@ -102,16 +93,13 @@ export function isShortFollowUp(trimmed: string, history: Message[]): boolean {
 
 export const AC_CODE_RE = /^A\/?C\s*:?\s*(\d{1,2})$/i;
 
-// Backslashes must be doubled: this is a template literal, so `\s` would become a plain "s".
 export const acRowRe = (num: string): RegExp => new RegExp(`(?:^|\\n)\\s*(?:Fault Code:\\s*)?${num}\\b`);
 
-// A bare 2-digit AC code matches unrelated tables; search with context, then require the code row itself.
 async function searchAcCode(code: string, num: string, model: UnitModel, topN: number): Promise<{ code: string; found: boolean; content: string }> {
   const r = await searchTechnicalManualMulti([`air conditioner fault code ${num}`], model, topN, getTroubleshootingKategori(model));
   return { code, found: r.hasResults && acRowRe(num).test(r.content), content: r.content };
 }
 
-// A photographed parts list: look up every code exactly and name the misses, so none is called absent.
 export async function searchPhotoCodes(codes: string[], model: string, emit: AgentEventEmit): Promise<RagRouteResult | null> {
   emit({ type: 'thinking', message: `Terbaca ${codes.length} kode part — mencari satu per satu…` });
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
@@ -202,10 +190,8 @@ export async function generateResponseStream(
   const isFollowUp = !offer && isShortFollowUp(trimmed, history);
   const recentComplaint = trimmed.split(/\s+/).length <= 8
     && history.filter(m => m.role === 'user').slice(-2).some(m => isSymptomQuery(m.content));
-  // Diagnosis and explanations think at medium; spec/PN/price lookups only quote a row, so low keeps them fast (Alvian, 2 Oct).
   const diagnostic = isFaultCode || isSymptomQuery(q) || WANTS_DETAIL_RE.test(q) || recentComplaint;
   const thinkingLevel: ThinkingLevel = isCasual || dataLabel === RAG_LABEL.parts || !diagnostic ? 'low' : 'medium';
-  // Thinking tokens count against maxOutputTokens — medium needs headroom or long answers end in MAX_TOKENS.
   const thinkHeadroom    = thinkingLevel === 'medium' ? 4096 : 0;
   const maxOutputTokens  = (ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536) + thinkHeadroom;
   const followUpNote = isFollowUp && ragContent
@@ -225,7 +211,6 @@ export async function generateResponseStream(
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
 
-  // The question can be rephrased in Indonesian (Live voice) and the data is Indonesian: state the language explicitly.
   const bahasa = langDirective(lang);
   contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}${bahasa ? `\n\n${bahasa}` : ''}` }] });
 
@@ -286,8 +271,6 @@ export async function generateResponse(
   if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
   let sendImageToModel = true;
   let dataFoto = '';
-  // Photo + parts/price ask ("cek harga kit sealnya") is a lookup, not a diagnosis: medium thinking added ~6 s
-  // before the first word (log median 8.2 s vs 2.0 s on low). Fault codes and visual diagnosis keep medium.
   let thinkFoto: ThinkingLevel = 'medium';
 
   try {
@@ -368,8 +351,6 @@ export async function generateResponse(
       const codes = extractPartNumber(q) ? [] : scan.pns;
       const listMode = codes.length >= 2 || (codes.length === 1 && extractPartNumber(codes[0]) !== codes[0]);
       const imagePN = listMode ? null : codes[0] ?? null;
-      // "cek hrgany" + photo (Reyhan, 4 Oct): a price ask must reach hexindoparts.com even when the caption names no part.
-      // "berapa" alone asks pressures and weights too; only real price words send a photo to the parts route.
       const hargaFoto = KATA_HARGA_RE.test(q);
       console.info('[foto] komponen=%s pn=%s harga=%s', scan.component || '-', codes.join(',') || '-', hargaFoto ? 1 : 0);
       const partsAsk = isPartsQuery(q) || !!imagePN || listMode || hargaFoto;
@@ -378,11 +359,8 @@ export async function generateResponse(
         emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
         route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit, undefined, false);
       }
-      // Captions rarely name the part ("carikan part number ini"), so search by what the photo shows.
       if (route?.type !== 'rag_found' && scan.component && partsAsk) {
         emit({ type: 'thinking', message: `Terlihat ${scan.component} — mencari di katalog…` });
-        // Keep the caption's part words ("kit seal") with the component, else the price check picks the
-        // cylinders themselves and the seal kits stay "Ketik PN untuk cek" (Alvian 4 Oct, KCM 60ZV photo).
         const byComponent = hargaFoto ? `harga ${q.replace(MINTA_HARGA_RE, ' ').replace(/\s+/g, ' ').trim()} ${scan.component}`.replace(/\s+/g, ' ') : `${scan.component} part number`;
         route = await resolvePartsQuery(byComponent, [], model, emit, byComponent, false);
       }

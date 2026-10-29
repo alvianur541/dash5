@@ -43,7 +43,6 @@ export function usePocket(uid: string | null, mountedRef: MutableRefObject<boole
         answer: r.answer, savedAt: new Date(r.saved_at).getTime() || Date.now(), synced: true,
       }));
     const remoteIds = new Set(remoteItems.map(i => i.id));
-    // A synced item missing from the server was deleted on another device; only unsynced ones are uploaded.
     const keep = loadPocket(uid).filter(i => !tomb[i.id] && !remoteIds.has(i.id)
       && (i.synced === false || i.savedAt >= startedAt));
     keep.filter(i => !i.synced).forEach(push);

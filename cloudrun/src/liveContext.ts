@@ -25,7 +25,6 @@ export function boundLiveHistory(input: unknown): LiveHistory {
 const WARNING_RE = /⚠|peringatan|bahaya|hati-hati|caution|warning|danger|jangan/i;
 const plain = (s: string) => s.replace(/^#{1,6}\s*/, '').replace(/\*\*|__|`/g, '').replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/\s+/g, ' ').trim();
 
-// The full answer is already on screen; the voice model only needs the gist, and every word it is given is billed again on each later turn.
 export function ringkasUntukSuara(text: string, max = 2400): string {
   const out: string[] = [];
   let header: string[] | null = null, shown = 0, hidden = 0;

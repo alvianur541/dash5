@@ -34,7 +34,6 @@ function spokenValue(words: string[]): number {
   return total + group + last;
 }
 
-// English speech ("Zaxis forty-eight U dash five A", Live 19 Oct) needs its own number words.
 const EN_DIGIT: Record<string, number> = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9 };
 const EN_TEEN: Record<string, number> = { ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19 };
 const EN_TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
@@ -44,7 +43,6 @@ const EW = `(?:${[ED, ...Object.keys(EN_TEEN), ...Object.keys(EN_TENS), ...Objec
 const EN_RUN = new RegExp(`\\b${EW}(?:[\\s-]+${EW})*\\b`, 'gi');
 const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 
-// "forty eight" = 48, but "nine two four" or "twenty twenty-six" are read digit by digit / pair by pair.
 function englishNumber(words: string[]): string {
   const parts: string[] = [];
   let total = 0, group = 0, small = 0, prev = '', has = false;
@@ -60,7 +58,6 @@ function englishNumber(words: string[]): string {
   return parts.length > 1 ? parts.join('') : commas(Number(parts[0]));
 }
 
-// Speech transcripts spell numbers out ("ZX dua ratus dash lima G"); show them as the text chat does.
 export function tidyTranscript(text: string): string {
   const digits = (s: string) => s.toLowerCase().split(/\s+/).map(w => DIGIT[w]).join('');
   const enDigits = (s: string) => s.toLowerCase().split(/\s+/).map(w => EN_DIGIT[w]).join('');
@@ -91,10 +88,8 @@ export function tidyTranscript(text: string): string {
     .replace(/\b(year|january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d),(\d{3})\b/gi, '$1 $2$3');
 }
 
-// The voice model sometimes reads out (or invents) the bracketed tool label; never show it.
 const TOOL_ECHO_RE = /\s*\[(?:HASIL|STATUS) ALAT[\s\S]*$/i;
 
-// Turns streamed Live transcription chunks into growing chat bubbles.
 export function createLiveTranscript(newId: () => string = () => crypto.randomUUID(), now: () => number = Date.now) {
   let open: Message | null = null;
   let raw = '';
@@ -104,7 +99,6 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
   const add = (role: Message['role'], text?: string): Message[] => {
     if (!text) return [];
     if (role === 'assistant' && locked) return [];
-    // The read-out of an exact answer stays hidden until the technician speaks again.
     if (role === 'user') { locked = false; waiting = false; }
     if (!open || open.role !== role) { open = { id: newId(), role, content: '', timestamp: now(), source: role === 'user' ? 'voice' : undefined }; raw = ''; }
     raw += gap && raw && !/\s$/.test(raw) && !/^\s/.test(text) ? ' ' + text : text;
@@ -115,7 +109,6 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
   return {
     apply(c: LiveContent): Message[] {
       const changed = [...add('user', c.inputTranscription?.text), ...add('assistant', c.outputTranscription?.text)];
-      // While a search runs, filler lines share one bubble that the answer later replaces.
       if (c.turnComplete || c.interrupted) {
         if (waiting && open?.role === 'assistant') gap = true;
         else { open = null; raw = ''; }
@@ -123,7 +116,6 @@ export function createLiveTranscript(newId: () => string = () => crypto.randomUU
       return changed;
     },
     searching() { waiting = true; },
-    // Exact tool text (digits, PN, tables) replaces the spoken transcript for this turn.
     answer(text: string): Message[] {
       if (!open || open.role !== 'assistant') open = { id: newId(), role: 'assistant', content: '', timestamp: now() };
       open = { ...open, content: text };

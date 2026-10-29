@@ -54,7 +54,7 @@ async function vertexStreamParsed(model, body, onChunk, signal, requestId) {
   if (!upstream.ok) {
     const errText = await upstream.text();
     let reason = '', message = '';
-    try { const e = JSON.parse(errText).error; reason = e.status || ''; message = e.message || ''; } catch { }
+    try { const e = JSON.parse(errText).error; reason = e.status || ''; message = e.message || ''; } catch {}
     console.error('[upstream] %s HTTP %d %s: %s', model, upstream.status, reason, (message || errText).slice(0, 160).replace(/\s+/g, ' '));
     onChunk({ error: `Upstream ${upstream.status} ${reason}`.trim(), code: upstream.status });
     return;
@@ -212,7 +212,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     }, { process_first_request: processFirstRequest }));
     const totalMs = Date.now() - tMulai;
     const m = deps.meta;
-    // usage.output already includes thinking; cost is summed per call at each model's list price (vertex.ts HARGA_MODEL).
     const biaya = deps.usage.cost || 0;
     console.info(
       '[ask] rid=%s user=%s unit=%s q="%s" route=%s conf=%s model=%s ' +

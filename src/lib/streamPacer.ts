@@ -6,7 +6,6 @@ const FINISH_MAX_MS = 900;
 const WORD_REACH = 14;
 const TABLE_ROW_RE = /^\s*\|/;
 
-// Hides half-written markdown at the streaming edge so raw pipes and asterisks never flash on screen.
 export function tidyStreamingTail(text: string): string {
   const lines = text.split('\n');
   let tail = lines.pop() ?? '';
@@ -24,7 +23,6 @@ export function tidyStreamingTail(text: string): string {
   return lines.length ? `${lines.join('\n')}\n${tail}` : tail;
 }
 
-// Releases streamed text at a steady, backlog-adaptive rate instead of in network-sized lumps.
 export function createPacer(render: (text: string) => void, isActive: () => boolean) {
   let shown = '';
   let pending = '';
@@ -43,7 +41,6 @@ export function createPacer(render: (text: string) => void, isActive: () => bool
       return gap >= 0 ? n + gap + 1 : n;
     }
     if (finishRate) return pending.length;
-    // More text is coming: hold a half-received word until the rest of it arrives.
     const partial = /\S+$/.exec(pending);
     if (partial && partial[0].length <= WORD_REACH) n = partial.index;
     return Math.min(n, pending.length);
@@ -74,7 +71,6 @@ export function createPacer(render: (text: string) => void, isActive: () => bool
   return {
     push(chunk: string) { pending += chunk; schedule(); },
     text: () => shown + pending,
-    // Server's final text wins; it only animates when it continues what is already on screen.
     finish(full: string): Promise<void> {
       if (!isActive()) return Promise.resolve();
       if (!full.startsWith(shown) || document.hidden) {

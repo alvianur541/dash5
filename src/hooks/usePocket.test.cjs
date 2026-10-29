@@ -4,7 +4,6 @@ const { build } = require('esbuild');
 const vm = require('node:vm');
 const path = require('node:path');
 
-// Offline real-hook test, with deterministic auth switching and deferred fixture reads.
 async function harness() {
   let slot = 0;
   const slots = [], effects = [], requests = [], writes = [];

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Usage: bash deploy/uji-simtom.sh   (upload simtom-index.json to ~ first; it holds manual text and is never committed)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 export PROJECT="${PROJECT:-project-85bfc388-3106-4361-a9f}"

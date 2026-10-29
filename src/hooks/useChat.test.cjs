@@ -4,7 +4,6 @@ const { build } = require('esbuild');
 const vm = require('node:vm');
 const path = require('node:path');
 
-// Offline hook harness: real useChat, fixture React scheduler and network promises.
 async function harness() {
   let slot = 0;
   const slots = [], effects = [], requests = [], saved = [];

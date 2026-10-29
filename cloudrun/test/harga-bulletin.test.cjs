@@ -1,7 +1,5 @@
 const { resolvePartsQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Reyhan 5 Okt (ZX48U-5A S/N 035002): Technical News 06/2023 (harness per S/N) tak pernah ikut di jalur parts,
-// jalur cepat memilih harness generasi lama. Bulletin harus masuk data, dan jalur cepat dilewati.
 const TN = { metadata: { Model: 'ZX48U-5A', Kategori: 'TECHNICAL NEWS' }, content:
   'Section: Harness ZX48U-5A — Daftar Part Number Main & Floor Harness per Nomor Seri\nModel: ZX48U-5A\nKategori: TECHNICAL NEWS\n  Floor Harness   Wire Harness   YD00000472   YD00008339   YD00010892\n  Main Harness    Wire Harness   YD00000471   YD00008373   YD00011077' };
 const CAT = { metadata: { Model: 'ZX48U-5A', Kategori: 'PARTS CATALOG' }, content: 'Section: ELECTRIC PARTS\nParts List:\n   1 | YD00000472 | HARNESS;WIRE | qty:1' };

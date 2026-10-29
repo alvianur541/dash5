@@ -1,6 +1,5 @@
 const { callProxyStream, runWithDeps, resetPemutus, USAGE, suite, BODY, MODEL_CHAIN } = require('./helpers.cjs');
 
-// Pemutus sirkuit (§12 #7): sesudah 429/hang, model utama dilewati 5 menit (4 Okt: 429 baru datang setelah 22,7 dtk).
 const OK = 'Jawaban lengkap.';
 function deps(perModel, models) {
   return {

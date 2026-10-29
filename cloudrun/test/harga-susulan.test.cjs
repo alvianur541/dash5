@@ -1,7 +1,5 @@
 const { lengkapiHarga, tanpaHargaDb, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Alvian 5 Okt (nepple grease adjuster): tabel jawaban berisi "Ketik PN untuk cek" padahal 2 dari 3 PN ada di situs.
-// Audit 2-5 Okt: 66 dari 79 baris seperti itu sebenarnya punya harga. Jaring pengaman sesudah jawaban selesai.
 const WEB = { YD00005193: [{ pn: 'YD00005193', nama: 'KIT;SEAL', harga: 'Rp 8.493.254' }], 8970728231: [{ pn: '8970728231', nama: 'SEAL', harga: 'Rp 1.108.655' }], YA00020592: [{ pn: 'YA00020592', nama: 'VALVE', harga: 'Rp 942.464' }], YA00026375: [{ pn: 'YA00026375', nama: 'VALVE', harga: 'Rp 900.827' }], 4724585: [] };
 const JAWAB = 'Untuk nipple grease adjuster:\n\n| Part Number | Nama Part | Harga |\n| :--- | :--- | :--- |\n| `4724585` | VALVE | Ketik PN untuk cek |\n| `YA00020592` | VALVE | Ketik PN untuk cek |\n| `YA00026375` | VALVE | Ketik PN untuk cek |\n\nSumber harga: Hexindoparts.com\n\nKetik salah satu part number di atas kalau mau dicek harganya.';
 
@@ -18,7 +16,6 @@ module.exports = async () => {
   const biasa = 'Tekanan pilot 3,9 MPa.';
   t(await runWithDeps(d, () => lengkapiHarga(biasa)) === biasa, 'jawaban tanpa tabel harga tidak disentuh');
   {
-    // Alvian 5 Okt: HAPDH1-CI4 tidak ada di situs, tapi harga promo lama lolos dari DB karena tag "[New Item]".
     const baris = '  HAPDH1-CI4             | HAP ENG OIL CI4. DRUM                        |     Rp 16.458.600 |   20% |     Rp 13.166.880  [New Item]';
     const b = tanpaHargaDb(baris);
     t(!/Rp/.test(b) && b.includes('HAPDH1-CI4'), `harga DB bertag [New Item] ikut dibuang ("${b.trim()}")`);
@@ -30,7 +27,6 @@ module.exports = async () => {
     t(o2.includes('| `YA00026375` | VALVE | Rp 900.827 |'), 'harga yang sudah benar tidak diubah');
   }
   {
-    // Alvian 5 Okt: tabel sudah terisi harga, tapi kalimat di bawahnya masih bilang harga belum sempat ditarik.
     const j = 'Ketemu:\n\n| Part Number | Nama Part | Qty | Harga |\n| :--- | :--- | :---: | :--- |\n| `8970728231` | SEAL; OIL,CR/SHF,RR | 1 | Ketik PN untuk cek |\n\nSumber harga: Hexindoparts.com\n\nPart number-nya `8970728231` (posisi item 175 di flywheel housing), tapi harga online-nya belum sempat ditarik di pencarian ini. Mau sekalian saya carikan part number gasket atau komponen lain di sekitar flywheel housing-nya?';
     const o = await runWithDeps(d, () => lengkapiHarga(j));
     t(o.includes('Rp 1.108.655') && !/belum sempat ditarik/.test(o), 'kalimat "harga belum sempat ditarik" dibuang setelah harga terisi');
@@ -43,7 +39,6 @@ module.exports = async () => {
     t(r[0] === '8970728231', `"seal cranksfat belakang" → SEAL; OIL,CR/SHF,RR dipilih pertama (${r.join(',')})`);
   }
   {
-    // Alvian 6 Okt: model menulis "Belum tersedia" padahal situs punya harganya.
     const j = 'Part number untuk seal kit arm cylinder ZX48U-5A adalah `YD00005193`, dan saat ini harganya belum tersedia di data hexindoparts.com.\n\n| Part Number | Nama Part | Qty | Harga |\n| :--- | :--- | :---: | :--- |\n| `YD00005193` | KIT;SEAL (Arm Cylinder) | 1 | Belum tersedia |\n\nSumber harga: Hexindoparts.com\n\nMau dicek harga seal kit cylinder lainnya (boom atau bucket)?';
     const o = await runWithDeps(d, () => lengkapiHarga(j));
     t(o.includes('| Rp 8.493.254 |') && !/belum tersedia/i.test(o) && o.startsWith('Part number untuk seal kit arm cylinder ZX48U-5A adalah `YD00005193`.\n'), `"Belum tersedia" diganti harga situs + kalimatnya dibuang (${o.split('\n')[0].slice(0, 90)})`);

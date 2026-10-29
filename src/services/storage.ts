@@ -178,7 +178,6 @@ export function clearPocketTombstone(uid: string, id: string): void {
 export const loadSessionTombstones = (uid: string) => loadTomb(sessionTombKey(uid));
 export const addSessionTombstones = (uid: string, ids: string[]) => addTomb(sessionTombKey(uid), ids);
 
-// Timestamp of a "delete all" the server has not confirmed yet; 0 when none is pending.
 export function pendingClearAt(uid: string): number {
   const ts = parseInt(localStorage.getItem(clearedKey(uid)) || '', 10);
   return Number.isFinite(ts) ? ts : 0;

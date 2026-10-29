@@ -5,9 +5,7 @@ import { sb } from './retrieve';
 import { SYMPTOM_RE } from './terms';
 import { registerEvidence } from '../evidence';
 
-// Sections that start with a symptom: "E-10 - When traveling…", "MALFUNCTION OF HST WARNING INDICATOR", "Engine Ngedrop".
 const SYMPTOM_SECTION_RE = '^Section: (TROUBLESHOOT|ENGINE TROUBLESHOOT|TURBOCHARGER - TROUBLESHOOT|AIR CONDITIONER - (TROUBLESHOOT|OTHER SYMPTOM)|SECTION 5 TROUBLESHOOT|MAINTENANCE - TROUBLESHOOT)';
-// Correlation tables lost their tick marks in extraction; lists and contents pages match everything and answer nothing.
 const SKIP_TITLE_RE = /CORRELATION TABLE|RELATIONSHIP TABLE|FAULT CODE|INTRODUCTION|CONTENTS|Daftar Gejala|PROCEDURE \(Yes/i;
 const INDEX_TTL_MS = 30 * 60_000;
 const MAX_RECORDS = 200;
@@ -17,7 +15,6 @@ const MAX_PICK = 2;
 
 interface Entry { content: string; snippet: string; summary: string }
 
-// Cached document contents must never cross the per-request JWT client boundary.
 let caches = new WeakMap<object, Map<string, { at: number; entries: Promise<Entry[]> }>>();
 export const resetSymptomIndex = (): void => { caches = new WeakMap(); };
 
@@ -79,7 +76,6 @@ Pick a candidate only when its symptom is the same as the complaint, or a broade
 A different system, a fault-code list, a component layout, or a test procedure for something else does NOT count.
 Wording can be Indonesian or English; judge the meaning. If nothing fits, output [].`;
 
-// The ranker's absolute score drifts with language and phrasing; a small model judging its top candidates does not.
 async function verify(complaint: string, cands: Entry[]): Promise<Entry[]> {
   const list = cands.map((c, i) => `[${i + 1}] ${c.summary}`).join('\n');
   const res = await callProxy({
@@ -93,7 +89,6 @@ async function verify(complaint: string, cands: Entry[]): Promise<Entry[]> {
   return [...new Set(JSON.parse(arr) as number[])].map(n => cands[n - 1]).filter(Boolean).slice(0, MAX_PICK);
 }
 
-// Vectors match a complaint to whatever chunk shares its words; the manual's own symptom titles are the better key.
 export async function findSymptomSections(model: string, rankQueries: string[], complaint: string, triggerText: string): Promise<string[]> {
   if (!sb() || !isSymptomQuery(triggerText)) return [];
   try {
@@ -123,7 +118,6 @@ export async function findSymptomSections(model: string, rankQueries: string[], 
     try {
       picked = await verify(complaint, ranked.map(r => r.entry));
     } catch (err) {
-      // Without the judge, only a confident ranker score is safe to inject.
       console.warn('[simtom] verifikasi gagal (%s) — pakai ambang skor', (err as Error)?.message);
       picked = ranked.filter(r => r.high).slice(0, MAX_PICK).map(r => r.entry);
     }

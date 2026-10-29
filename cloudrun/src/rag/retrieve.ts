@@ -39,7 +39,6 @@ interface Candidates {
 
 export function wantsNumeric(primaryQuery: string): boolean {
   if (NUMERIC_INTENT_RE.test(primaryQuery)) return true;
-  // "engine speed drops" is a complaint; reserving slots for the speed tables crowded out the troubleshooting procedure.
   if (SYMPTOM_RE.test(primaryQuery)) return false;
   return primaryQuery.toLowerCase().split(/\s+/)
       .map(w => w.replace(/[^\w°·/-]/g, ''))
@@ -237,7 +236,7 @@ export async function rankAndSelect(
     const m = deps().meta;
     m.msRag = (m.msRag || 0) + msCari;
     m.msRerank = (m.msRerank || 0) + msRerank;
-  } catch { /* di luar konteks request */ }
+  } catch {}
 
   console.info('[chunks] %s', top.map((t, i) =>
     `#${i + 1}(${t.score.toFixed(2)}) ${t.content.split('\n').filter(Boolean).slice(0, 3).join(' / ').slice(0, 90)}`
@@ -250,7 +249,7 @@ export async function rankAndSelect(
       if (model) lookup = lookup.contains('metadata', { Model: model });
       const { data } = await stage('db_search', () => lookup) as { data: Array<{ id?: number; content?: string; metadata?: any }> | null };
       registerEvidence((data ?? []).filter(d => missingIds.some(m => m.content === d.content)));
-    } catch { /* unknown id stays unknown */ }
+    } catch {}
   }
   const content = top.map(t => t.content).join('\n\n---\n\n');
   return { content, hasResults: top.length > 0, evidence: top.map(t => ({ ...evidenceFor(t.content, wantsNumericAnswer && rankedDocs.slice(0, 2).includes(t.content) ? 'numeric' : 'retrieved'), score: t.score, score_source: reranked.some(r => r.content === t.content) ? rerankSource : undefined })), rerankSource, confidence: effectiveConfidence, topScore, ...(rerankErr ? { ragError: rerankErr } : {}) };

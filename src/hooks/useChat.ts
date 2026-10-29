@@ -80,7 +80,6 @@ export function useChat(user: User, isOnline: boolean) {
     }
     const list = await fetchUserSessionList(uid).catch(() => null);
     if (list === null || !mountedRef.current || userIdRef.current !== uid) return;
-    // A delete-all made while this request was in flight makes its answer stale.
     if (pendingClearAt(uid) > startedAt) return;
     const tomb = loadSessionTombstones(uid);
     const gone = (s: SessionMeta) => !!tomb[s.id] || (!!clearAt && s.updatedAt <= clearAt);
@@ -89,7 +88,6 @@ export function useChat(user: User, isOnline: boolean) {
     if (live.length) localStorage.setItem(listKey(uid), JSON.stringify(live));
     else deleteAllSessionData(uid);
     const liveIds = new Set(live.map(s => s.id));
-    // The open chat was deleted on another device: close it instead of letting a new message revive it locally.
     const open = sessionIdRef.current;
     if (open && !liveIds.has(open) && sessionListRef.current.some(s => s.id === open && s.updatedAt < startedAt)) {
       deleteSessionData(uid, open);
@@ -102,7 +100,6 @@ export function useChat(user: User, isOnline: boolean) {
     ]);
   }, [startNewSession]);
 
-  // Keyed on uid, not the user object: a token refresh must not reset the open chat.
   const uid = user?.uid;
   useEffect(() => {
     startNewSession();
@@ -273,7 +270,7 @@ export function useChat(user: User, isOnline: boolean) {
     } else {
       await pacer.finish(fullText);
       upsertAssistant(fullText, presentation);
-      try { navigator.vibrate?.([12, 40, 12]); } catch { }
+      try { navigator.vibrate?.([12, 40, 12]); } catch {}
     }
     release();
   }, [user, selectedModel]);
@@ -296,7 +293,6 @@ export function useChat(user: User, isOnline: boolean) {
     if (last) handleSendMessage(last.content, last.attachments, last.source);
   }, [handleSendMessage]);
 
-  // Live voice: transcript chunks become chat bubbles in the open session.
   const liveUpsert = useCallback((msg: Message) => {
     if (!sessionIdRef.current) {
       const id = crypto.randomUUID();

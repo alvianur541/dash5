@@ -4,15 +4,11 @@ import { callProxy, getText, INTENT_MODEL } from './vertex';
 import { komponenBaris, selBaris, judulKcm } from './rag/hexparts';
 import type { Lang } from './templates';
 
-// Fast price path (4 Oct): the main model used to read ~24k tokens just to copy prices into a table.
-// Now flash-lite only PICKS which candidate rows answer the question; code builds the table, so every
-// number is copied straight from hexindoparts.com and the format never drifts.
 
 export const BUKAN_HARGA_SAJA_RE = /\b(?:cara|prosedur|langkah|pasang|bongkar|lepas|ganti(?!\s*rugi)|torque|torsi|spec|spesifikasi|kenapa|mengapa|rusak|error|fault|bocor|lambat|ukur|tekanan|pressure|berat|weight|fungsi|letak|posisi|lokasi|dimana|di\s*mana|interval|jadwal|kapasitas|beda|perbedaan|bandingkan|compare|why|install|remove|yang\s*mana|yg\s*mana|mana\s*yang|mana\s*yg|yg\s*mna|yang\s*mna|mna\s*y\w*|betul|benar|cocok|sesuai|serial|s\/?n)\b/i;
 
 const PEMILIH_MS = 3500;
 
-// Catalog section → the component name technicians use, so the picker sees "Main Pump" on every pump row.
 const KOMPONEN: Array<[RegExp, string]> = [
   [/^(?:PUMP DEVICE|PUMP;UNIT|REGULATOR;PUMP|PUMP;GEAR|MAIN PUMP)\b/i, 'Main Pump'],
   [/^(?:SWING DEVICE|MOTOR;SWING|SWING MOTOR|DEVICE;SWING)\b/i, 'Swing Motor'],
@@ -32,11 +28,7 @@ const LABEL: Record<Lang, { pn: string; nama: string; harga: string; ket: string
   ja: { pn: '部品番号', nama: '部品名', harga: '価格', ket: '備考', kosong: '掲載なし', gagal: '確認失敗・再送してください', sumber: '価格の出典: Hexindoparts.com' },
 };
 
-// PN → catalog name + section title, read from the retrieved chunks.
 function katalogPn(content: string): Map<string, { nama: string; section: string }> {
-  // A PN often appears twice: in the price/parts list (generic title "ZX MINI PARTS (Filter, Seal Kit, …)", no
-  // component) and in the catalog page that says where it fits ("CYL.;ARM"). The catalog page wins, otherwise every
-  // seal kit looks the same and "seal kit arm" returns all of them (Alvian 5 Oct, ZX48U-5A).
   const peta = new Map<string, { nama: string; section: string; umum: boolean }>();
   let section = '';
   let umum = false;
@@ -88,7 +80,6 @@ Pilih SEMUA nomor baris yang (a) jenis part-nya sama dengan yang ditanya — tul
 Kolom section sudah menyebut komponennya (mis. "Main Pump (REGULATOR;PUMP)" = bagian main pump); pilih semua baris komponen itu yang jenis part-nya cocok.
 Balas HANYA JSON satu baris: {"pilih":[nomor,...],"pembuka":"<kalimat pengantar ≤12 kata, ${bahasa}, tanpa angka harga, tanpa salam, sapa dengan "kamu" bukan "Anda">"}`;
   try {
-    // A slow picker must not make the fast path slower than the main model (seen once: 19,5 s).
     let batas: ReturnType<typeof setTimeout> | undefined;
     const res = await Promise.race([
       callProxy({

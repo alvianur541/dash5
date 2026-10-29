@@ -1,8 +1,6 @@
-// Evidence, provenance, grounding and telemetry regressions. Each block was its own file; kept verbatim in its own scope.
 const fs = require('fs');
 const path = require('path');
 const blok = [
-  // claim-grounding
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -25,7 +23,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // claim-prompt
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -40,7 +37,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // confidence-provenance
   (module => {
     const b = require('./helpers.cjs');
     const rows = [{ id:9590, content:'Section: CYLINDER LIFT ARM\nModel: ZW140\nKategori: PARTS CATALOG\n01 | 263E8-47231 | SEAL KIT | qty:1', metadata:{Model:'ZW140',Kategori:'PARTS CATALOG'}, similarity:.8 }];
@@ -57,7 +53,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // engine-provenance
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -71,7 +66,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // evidence-boundaries
   (module => {
     const { rankAndSelect, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
     module.exports = async () => {
@@ -87,7 +81,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // keyword-provenance
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -101,7 +94,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // minority-evidence
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -111,7 +103,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // numeric-pin
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -127,7 +118,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // provenance-downgrade
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -137,7 +127,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // selection-telemetry
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -153,7 +142,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // stage-telemetry
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -171,7 +159,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // symptom-integrity
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -187,7 +174,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // symptom-window
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -201,7 +187,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // resolved-rerank
   (module => {
     const b=require('./helpers.cjs');
     module.exports=async()=>{
@@ -215,7 +200,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // resolved-question
   (module => {
     const b = require('./helpers.cjs');
     module.exports = async () => {
@@ -241,7 +225,6 @@ const blok = [
     };
     return module.exports;
   })({ exports: null }),
-  // log-privacy
   (module => {
     const { ringkasTanya } = require('../server/observability');
     const { suite } = require('./helpers.cjs');

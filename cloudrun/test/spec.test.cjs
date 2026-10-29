@@ -1,8 +1,6 @@
 const { findSpecLines, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Real text (ZW140 chunk 9307): the HST pump values sit in a chunk titled "BATTERY".
 const SPEC = 'Section: COMPONENT SPECS - BATTERY (Fan Pump, Fan Motor, Fan Valve, Hst Pump)\nModel: ZW140\nKategori: TECHNICAL MANUAL\nHST PUMP Type: Variable Displacement Axial Plunger Charge Pump: Trochoid Type\nHigh-Pressure Relief Valve Set Pressure .........44.6±1.0 MPa (455±10 kgf/cm2, 6480±145 psi)\nLow-Pressure Relief Valve Set Pressure..........2.5±0.1 MPa (26±1 kgf/cm2, 360±14.5 psi)';
-// "HST" only in the intro; the pressure value 2 000 characters later belongs to something else.
 const FAR = `Section: CONTROL SYSTEM - OUTLINE\nModel: ZW140\nThe HST control unit controls the machine.${' Lorem.'.repeat(300)}\nPilot Relief Valve Set Pressure .........3.7 MPa`;
 
 function fakeSupabase(rows, calls = []) {
@@ -55,10 +53,8 @@ module.exports = async function () {
   }
 
   {
-    // Real chunks 7704 (ZX48U-5A) / 8264 (ZX200-5G): "akinya berapa ampere" went to the web on 12 Oct.
     const AKI = 'Section: SPECIFICATIONS - ELECTRICAL\nModel: ZX48U-5A\nBATTERY Type 115D31L-MF\nVoltage 12 V\nCapacity 72 Ah or more (5-Hour Rate)';
     {
-      // Live Google score for chunk 8264 was 0.057: a minority line in a long ENGINE spec chunk.
       const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI]), rerank: ranker(0.057) });
       t(await runWithDeps(d, () => findSpecLines('ZX48U-5A', 'battery capacity ampere', '')) === AKI, 'nilai persis di baris komponen tetap dipakai walau skor 0,057');
     }
@@ -83,7 +79,6 @@ module.exports = async function () {
       t(await runWithDeps(d, () => findSpecLines('ZW140', 'battery pressure', '')) === null, 'nama komponen dekat angka milik komponen lain tidak lolos bypass skor rendah');
     }
     {
-      // Real question 19 Oct (answered "not found"): Indonesian sentence + English intent query.
       const calls = [];
       const { d } = mockDeps([[]], { supabase: fakeSupabase([AKI], calls), rerank: ranker(0.057) });
       const q = 'Berapa kapasitas battery ZX48U-5A? Berikan satu nilai exact dan sumber manual. battery capacity ZX48U-5A';

@@ -1,4 +1,3 @@
-// Rp per USD as used by the Cloud Billing account (derived from the 2026-10-03 SKU report).
 const KURS_IDR = 17977;
 const { GOOGLE_RANK_MODEL, RERANKER, SUPABASE_ANON_KEY, SUPABASE_URL, USAGE_LOG_ON } = require('./config');
 
@@ -134,7 +133,6 @@ async function kirimPemakaian(req, d, pakaiKolomBaru) {
 async function catatPemakaian(req, d) {
   if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken) return;
   try {
-    // Deployed before the migration: PostgREST rejects unknown columns with 400 — fall back, never drop the row.
     const kolomBaru = Date.now() - kolomBaruGagal > COBA_LAGI_MS;
     let r = await kirimPemakaian(req, d, kolomBaru);
     if (!r.ok && r.status === 400 && kolomBaru) {
@@ -158,7 +156,6 @@ async function catatPemakaian(req, d) {
 }
 
 const LIVE_COLS = ['session_id', 'model', 'unit', 'duration_ms', 'ready', 'tools', 'reason', 'billed_turns', 'prompt_tokens', 'response_tokens', 'thoughts_tokens', 'input_tokens', 'output_tokens', 'cost_idr', 'cost_complete'];
-// One row per closed Live session, written with the caller's JWT (RLS: own NIK only).
 async function catatLive(req, u) {
   const nik = (req.authUser && req.authUser.email || '').split('@')[0];
   if (!USAGE_LOG_ON || !SUPABASE_URL || !SUPABASE_ANON_KEY || !req.authToken || !nik) return;

@@ -1,6 +1,5 @@
 const { fetchHexParts, hargaWeb, blokHargaWeb, resetHargaWebCache, pilihPnHarga, MINTA_HARGA_RE, resolvePartsQuery, searchPhotoCodes, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Harga dari hexindoparts.com kalau daftar harga DB tidak punya (Alvian, 3 Okt). Bentuk JSON = respons asli situs.
 const produk = (name, desc, amount) => ({ name, short_description: desc, price: { amount: `${amount}.0000` }, special_price: null });
 const SITUS = {
   '1144003771': [produk('1144003771', 'TURBOCHARGER', 49587999), produk('1144003771PU', 'TURBOCHARGER', 53920759)],
@@ -48,15 +47,12 @@ module.exports = async () => {
     const filter = await fetchHexParts('4658521');
     t(filter.map(p => p.pn).join(',') === '4658521,4658521RCP', 'PN lain yang kebetulan berawalan sama (46585219) ditolak');
     t((await fetchHexParts('ZZ999999')).length === 0, 'PN tak terdaftar → kosong, bukan tebakan');
-    // Abdul 4 Okt (ZW140): situs campur — 263E2-52031 hanya ada tanpa strip, 26418-82071 dengan strip.
     const zw1 = await fetchHexParts('263E2-52031');
     t(zw1.length === 1 && zw1[0].pn === '263E2-52031' && zw1[0].harga === 'Rp 18.308.172', `PN ZW berstrip tak ketemu → coba tanpa strip (${zw1.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
     const zw2 = await fetchHexParts('26418-82071');
     t(zw2.length === 1 && zw2[0].harga === 'Rp 9.372.279', 'PN ZW yang terdaftar dengan strip tetap ketemu');
-    // Alvian 6 Okt: katalog Yanmar menulis YNM729630-51520, situs mendaftarkan 729630-51520.
     const ynm = await fetchHexParts('YNM729630-51520');
     t(ynm.length === 1 && ynm[0].harga === 'Rp 52.677.007' && ynm[0].pn === 'YNM729630-51520', `PN YNM dicari juga tanpa prefix, tampil ejaan katalog (${ynm.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
-    // Reyhan 4 Okt: katalog KCM menulis 49327-90920, situs mendaftarkan 4932790920.
     const kcm = await fetchHexParts('49327-90920');
     t(kcm.length === 1 && kcm[0].harga === 'Rp 1.198.487' && kcm[0].pn === '49327-90920', `PN KCM berstrip dicari tanpa strip, tampil ejaan katalog (${kcm.map(p => p.pn + ' ' + p.harga).join(', ') || 'kosong'})`);
     let lempar = false;
@@ -145,7 +141,6 @@ module.exports = async () => {
   }
 
   {
-    // Sesi 4 Okt: "klo cek harga cylinder arm" — seal kit di section CYL.;ARM tidak dicek ke web.
     const ARM = 'Section: CYL.;ARM\nParts List:\n       1 | 4711561            | CYL.;ARM                            | qty:1\n      10 | 4422222            | BOLT                                | qty:8\n     100 | YA00001400         | KIT;SEAL                            | qty:1\n'
       + '\nSection: SWING MOTOR\n      5 | 4333333            | KIT;SEAL                            | qty:1';
     const pick = pilihPnHarga(ARM, ['klo cek harga cylinder arm', 'arm cylinder price']);
@@ -154,7 +149,6 @@ module.exports = async () => {
   }
 
   {
-    // Sesi Hikmal 4 Okt: situs balas HTTP 500 sekali untuk YB00003778 → dulu tampil "Belum tersedia".
     resetHargaWebCache();
     let n = 0, jalan = 0, puncak = 0;
     const kadangError = async pn => {

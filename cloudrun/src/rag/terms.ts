@@ -1,7 +1,6 @@
 import { UNIT_MODELS } from '../types';
 
 const FAULT_CODE_RE = /^(?:[A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}(?:-[0-9A-F]{1,4})?)$/i;
-// Currency, unit and interval words before a number ("rp 50000", "pkt 2000") are not fault-code prefixes.
 const NOT_CODE_PREFIX_RE = /^(?:rp|pm|pkt|jam|hm|hr|pn|no|kg|mm|cm|km|hp|kw|rpm)\s/i;
 
 export function isFaultCode(query: string): boolean {
@@ -15,7 +14,6 @@ const HARGA_COMPONENT_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg|hraga\w*|price)\s+
 
 const PART_NUMBER_RE = /\b([A-Z]{1,3}\d{5,8}-\d{4,6}|[A-Z]{1,3}\d{6,12}|\d{7,10}|\d{2,4}-\d{2,3}-\d{4,6}|\d[0-9A-Z]{4}-\d{5})\b/;
 
-// Price words only ("berapa" alone also asks pressures/weights, so it does not count here).
 export const KATA_HARGA_RE = /\b(?:harg\w*|hrg\w*|hraga\w*|price\w*|prise|biaya|cost)\b/i;
 
 export function isPartsQuery(query: string): boolean {
@@ -26,7 +24,6 @@ export function isPartsQuery(query: string): boolean {
     || kodeKatalogSaja(query);
 }
 
-// A bare catalog code ("4S00509HPA", "cek YD00005194") is a parts lookup even when PART_NUMBER_RE misses its shape.
 function kodeKatalogSaja(query: string): boolean {
   const tok = query.trim().replace(/^(?:(?:cek|check|harga\w*|hrga\w*|hrg|brp|berapa)\s+)+/i, '').split(/\s+/);
   return tok.length === 1 && tok[0].length >= 6 && /\d/.test(tok[0]) && /[A-Z]/i.test(tok[0]) && !/^(?:ZX|ZW)\d/i.test(tok[0]) && !!extractCatalogCode(tok[0]);
@@ -39,7 +36,6 @@ export function extractPartNumber(query: string): string | null {
 
 const CATALOG_CODE_RE = /^(?:(?:HTC|HAP|MOHD)[A-Z0-9]{2,12}(?:-[A-Z]{1,3})?|SOS-IR|4S\d{5}[A-Z]{0,4}|(?:[A-Z]{1,3}\d{6,12}|\d{6,10})(?:-?[A-Z]{1,6}){1,2})$/;
 
-// Photo-only: lubricant and suffixed promo codes (HTCDH1C, 4249339-F) never match PART_NUMBER_RE.
 export function extractCatalogCode(token: string): string | null {
   const t = token.toUpperCase().replace(/\s+/g, '').replace(/[.;:]+$/, '');
   return CATALOG_CODE_RE.test(t) ? t : extractPartNumber(t);
@@ -156,7 +152,6 @@ export const STOP_WORDS = new Set([
   'how', 'what', 'why', 'when', 'where', 'please', 'help', 'tell', 'me', 'about',
 ]);
 
-// A complaint about the machine (Indonesian or the English intent query), as opposed to a spec/PN lookup.
 export const SYMPTOM_RE = new RegExp([
   '\\b(?:ngga?k?|nggak|gak|ga|tidak|tdk|tak|kurang|belum)\\s+(?:bisa|mau|jalan|nyala|hidup|kuat|normal|berfungsi|fungsi|bekerja|kerja|keluar|naik|turun|stabil|respon\\w*)\\b',
   '\\b(?:mati\\w*|mogok|macet|lambat|lemot|lemah|bocor|rembes|overheat\\w*|panas|rusak|error|eror|trouble\\w*|alarm|warning|buzzer|indikator|bunyi|berisik|getar\\w*|goyang|tersendat|selip|slip|n?gedrop|drop(?:s|ped|ping)?|anjlok|ngempos|asap|berasap|hunting|melorot|kedip\\w*|blank|restart|gangguan|keluhan)\\b',
@@ -192,7 +187,6 @@ export function expandQuery(query: string): string {
   return extras.length ? `${query} ${extras.join(' ')}` : query;
 }
 
-// Workshop Manual names the main pump assembly "pump device"; its weight and R/I steps exist only under that name.
 export function manualTerms(q: string): string {
   return /\bmain\s+pump\b/i.test(q) && /\b(?:weight|berat|removal|installation|install|disassembl\w*|assembl\w*|lifting)\b/i.test(q)
     ? q.replace(/\bmain\s+pump\b/gi, 'pump device')

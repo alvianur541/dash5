@@ -1,7 +1,5 @@
 const { lengkapiHarga, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Audit 14-15 Okt: kalimat "harga tidak terdaftar" tampil di atas tabel yang justru berisi harga.
-// Jawaban di bawah disalin dari chat_sessions (0585f22a JA, 8fd3dda8 ID, 72144103 ID).
 const WEB = {
   1102302: [{ pn: '1102302', nama: 'ROD;PISTON', harga: 'Rp 40.600.640' }],
   ZD00003084: [],
@@ -51,7 +49,6 @@ module.exports = async () => {
     t((await run(kosong)).includes('tidak terdaftar di hexindoparts.com'), 'tabel tanpa satu pun harga → kalimat status tidak disentuh');
   }
   {
-    // Alur penuh: blok harga web ada → tanpa MEDIUM_CAVEAT; tabel berharga → log confidence "exact" (null).
     const { generateResponseStream, USAGE } = require('./helpers.cjs');
     const CPM = { metadata: { Model: 'ZX200-5G', Kategori: 'CPM' }, content: 'Section: CPM MAINTENANCE SCHEDULE\nModel: ZX200-5G\nKategori: CPM\n\n  No   Part Description                           Part Number              500hr  1000hr  2000hr\n  1    Engine Oil Filter                          4658521                      1       1       1\n' };
     const q = { select() { return q; }, contains() { return q; }, ilike() { return q; }, filter() { return q; }, limit() { return q; }, or() { return q; }, then(r) { return Promise.resolve({ data: [], error: null }).then(r); } };

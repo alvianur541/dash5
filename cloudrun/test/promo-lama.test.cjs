@@ -1,6 +1,5 @@
 const { bersihkanPromoLama, PROMO_KATEGORI, PROMO_KATEGORI_LAMA, suite } = require('./helpers.cjs');
 
-// Promo Q2 (expired 30 Sep) stays searchable for PN discovery; its prices must never reach an answer.
 const Q2 = [
   'Section: PROMO Q2 FY2026 - HITACHI SPECIAL PARTS (Bucket, Pin, G.E.T.)',
   'Model: ZX200-5G',

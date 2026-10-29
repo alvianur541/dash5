@@ -1,6 +1,5 @@
 const { promoAktif, tanpaHargaDb, PROMO_BERAKHIR, generateResponseStream, runWithDeps, mockDeps, suite, USAGE } = require('./helpers.cjs');
 
-// Promo berakhir → harga DB dibuang, harga hanya dari hexindoparts.com (Alvian, 3–4 Okt).
 const CHUNK = [
   'Section: PROMO Q2 FY2026 - LUBRICANT (Engine Oil, Hydraulic Oil, Gear Oil, Grease) — Berlaku Semua Model',
   'Model: ZX200-5G',
@@ -51,7 +50,6 @@ module.exports = async () => {
   t(tanpaHargaDb(`${WEB}\n\n${CHUNK}`).startsWith(WEB), 'blok harga hexindoparts.com tidak ikut dibuang');
   t(tanpaHargaDb('Torque 245 N·m | Rp bukan harga') === 'Torque 245 N·m | Rp bukan harga', 'baris non-harga tidak disentuh');
 
-  // End-to-end: paket service → isi yang dikirim ke model.
   const rpc = args => (args.filter.Kategori === 'CPM' ? [{ ...CPM, similarity: 0.9 }]
     : /^PROMO/.test(args.filter.Kategori || '') ? [{ metadata: { Model: 'ZX200-5G', Kategori: 'PROMO Q2 FY2026' }, content: CHUNK, similarity: 0.8 }] : []);
   let sent = null;

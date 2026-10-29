@@ -33,7 +33,6 @@ export function useTheme() {
 
   const toggle = useCallback(() => {
     const next: Theme = current.current === 'dark' ? 'light' : 'dark';
-    // Hover transitions (0.12–0.15 s) would otherwise make buttons lag behind the rest of the screen.
     const root = document.documentElement;
     root.classList.add('theme-switching');
     applyTheme(next);

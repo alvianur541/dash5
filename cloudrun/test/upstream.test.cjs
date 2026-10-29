@@ -1,7 +1,6 @@
 const { suite } = require('./helpers.cjs');
 const { fetchAntiMacet, STALL_MAX } = require('../server/upstream');
 
-// rencana[i] = { ms, gagal?, status? } untuk panggilan fetch ke-i
 function pasangFetch(rencana) {
   const catat = [];
   global.fetch = (_url, opts) => {

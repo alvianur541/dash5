@@ -1,6 +1,5 @@
 import { RefObject, useEffect } from 'react';
 
-// Keeps --input-bar-h in sync so the message list never hides behind the input bar.
 export function useInputBarHeight(
   barRef: RefObject<HTMLElement | null>,
   hostRef: RefObject<HTMLElement | null>,

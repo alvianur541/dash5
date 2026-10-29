@@ -160,7 +160,6 @@ export function streamCanned(text: string, onChunk: (text: string) => void): str
 const EMBEDDED_FAULT_CODE_RE = /\b([A-Z]{1,3}\s*:?\s*(?:(?=[0-9A-F]*\d)[0-9A-F]{4,6}-[0-9A-F]{1,4}|\d{2,6}-[0-9A-F]{1,4}|\d{4,6})|\d{3,6}-[0-9A-F]{1,4})\b/gi;
 
 export function detectFaultCodeInQuery(trimmed: string): { isFaultCode: boolean; faultQuery: string } {
-  // "SN 70015" / "serial number 70015" is a unit serial, not a fault code (Arip 4 Oct).
   if (/\b(?:s\/?n|serial(?:\s*n(?:umber|o)\w*)?|no\.?\s*seri|nomor\s*seri)\b/i.test(trimmed)) return { isFaultCode: false, faultQuery: trimmed };
   if (isFaultCode(trimmed)) return { isFaultCode: true, faultQuery: trimmed };
   const embedded = [...trimmed.matchAll(EMBEDDED_FAULT_CODE_RE)].map(m => m[1].trim()).find(isFaultCode);
@@ -260,7 +259,6 @@ export const REDO_RE = /\b(?:cek|coba|cb|cari)\s*(?:lagi|lg|ulang)\b|\bcoba\s+ca
 
 const REFERS_BACK_RE =/\b(?:ini|itu|tsb|tersebut|tadi|td|di\s*atas|d\s*atas|yg\s*d\w*|yang\s+di|sesuai|semua|smua|lagi|lg|list\w*|daftar\w*)\b/i;
 
-// Price rows carry two Rp amounts; the older dump labelled them "Promo: Rp", the newer one does not.
 export const isPromoPriceLine = (line: string): boolean =>
   line.includes('|') && (line.match(/Rp\s?[\d.]{3,}/g) ?? []).length >= 2;
 
@@ -297,7 +295,6 @@ export async function resolvePartsQuery(
         .split('\n').filter(l => !l.trim().startsWith('|')).join('\n').slice(0, 800)
     : '';
   emit({ type: 'tool_call', tool: 'search_parts_catalog' });
-  // Catalog-format codes too (4S00509HPA, YD00005194): PART_NUMBER_RE stays narrow for routing only.
   const kodeQuery = [...new Set(trimmed.split(/[\s,;/()]+/).map(tok => extractCatalogCode(tok))
     .filter((c): c is string => !!c && /\d/.test(c) && !/^(?:ZX|ZW)\d/.test(c)))];
   const pnLiteral = extractPartNumber(trimmed);
@@ -309,8 +306,6 @@ export async function resolvePartsQuery(
     : await searchPartsCatalog(searchQuery, model, usedOptimized, 12, `${trimmed}\n${prevAnswer}`);
   emit({ type: 'tool_result', tool: 'search_parts_catalog', found: ragResult.hasResults });
   const webHasil: HasilWeb = webPromise ? await webPromise : new Map();
-  // A price conversation carries over: "solenoid di hst motor" after "harga solenoid motor", "klo seal kit swing
-  // cylinder" after a bare PN that was priced. A bare code is itself a price/lookup ask.
   const kodeSaja = (t: string) => t.trim().split(/\s+/).every(tok => !!extractCatalogCode(tok));
   const userLalu = history.filter(m => m.role === 'user').slice(-3).map(m => m.content);
   const percakapanHarga = userLalu.some(u => MINTA_HARGA_RE.test(u) || kodeSaja(u));
@@ -331,9 +326,6 @@ export async function resolvePartsQuery(
   const webLiteral = blokHargaWeb(webHasil);
   const adaHargaWeb = adaHarga(webHasil);
 
-  // Pure price question → flash-lite picks the rows, code writes the table (no main-model call).
-  // Fast path picks rows by name only. A bulletin in the data or a serial number in the conversation means the
-  // right PN depends on S/N or supersession, which only the main model reads (Reyhan 5 Oct, ZX48U harness).
   const butuhSn = /Kategori:\s*TECHNICAL NEWS/i.test(ragResult.content ?? '')
     || (/^Section: OH PACKAGE/m.test(ragResult.content ?? '') && OH_RE.test(trimmed))
     || [trimmed, ...userLalu].some(u => /\b(?:s\/?n|sn|serial|nomor\s*seri|no\.?\s*seri)\w*\b[^\n]{0,12}\d{4,}/i.test(u));
@@ -341,7 +333,7 @@ export async function resolvePartsQuery(
     const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
       ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history, deps().langHint));
     if (cepat) {
-      try { deps().meta.route = 'harga_cepat'; } catch { /* di luar konteks */ }
+      try { deps().meta.route = 'harga_cepat'; } catch {}
       return { type: 'rag_canned', text: cepat };
     }
   }
@@ -444,7 +436,6 @@ export function docKategoriFor(text: string, model: UnitModel): { kategori: stri
 }
 
 const UNIT_FEATURE_RE = /\b(?:kelebihan\w*|keunggulan\w*|unggulan|advantages?|strengths?|selling\s+points?)\b/i;
-// "Kelebihan unit ini" is a brochure question; the intent model sometimes calls it chat and asks the user to resend (12 Oct).
 export function unitFeatureIntent<T extends { searchType: string; shouldSearch: boolean; optimizedQuery: string }>(text: string, intent: T): T {
   if (intent.shouldSearch || !UNIT_FEATURE_RE.test(text)) return intent;
   return { ...intent, searchType: 'technical', shouldSearch: true, optimizedQuery: 'machine features advantages performance brochure' };
@@ -474,7 +465,6 @@ export async function resolveNaturalLanguageQuery(
   const rawOpt = intent.optimizedQuery?.trim() ?? '';
   const query  = stripModelFromQuery(rawOpt.split(/\s+/).length >= 2 ? rawOpt : trimmed);
   emit({ type: 'tool_call', tool: 'search_technical_manual' });
-  // A short reply ("iya di gigi 2", "listrik dulu") only makes sense together with the complaint before it.
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
   const complaint = resolved.text;
   const symptomPromise = findSymptomSections(model, [query, complaint], complaint, `${trimmed} ${query} ${prevUser}`);
@@ -576,8 +566,6 @@ export async function resolveMultiAspectQuery(
     return { sub, kind, tm, parts };
   }));
 
-  // Price asked in a multi-aspect question ("harga sensor X dan standar nilainya"): the parts aspects must get
-  // hexindoparts.com prices too, otherwise the model writes "Ketik PN untuk cek" (Reyhan 4 Oct).
   let blokHarga = '';
   if (KATA_HARGA_RE.test(trimmed)) {
     const pns = [...new Set(perAspect.flatMap(a => (a.parts.hasResults && a.parts.content)

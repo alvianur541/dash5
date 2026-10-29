@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Vertex AI usage report for the backend. Run in Cloud Shell: bash deploy/cek-vertex.sh [DAYS]
 set -uo pipefail
 
 HARI="${1:-1}"

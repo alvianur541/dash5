@@ -12,31 +12,21 @@ const PARALEL = 6;
 const JEDA_ULANG_MS = 400;
 let caches = new WeakMap<object, Map<string, { t: number; v: WebPart[] }>>();
 
-// PN → listings; [] = checked and not listed; null = lookup failed (site error/timeout), never cached.
 export type HasilWeb = Map<string, WebPart[] | null>;
 
 const rupiah = (n: number): string => `Rp ${Math.round(n).toLocaleString('id-ID')}`;
 
-// Exact PN or a short letter suffix (PU, RCP, HPB, -F); prefix hits like 4658521 → 46585219 are rejected.
 const cocok = (pn: string, nama: string): boolean => {
   const n = nama.toUpperCase().replace(/\s+/g, ' ').trim();
   return n === pn || (n.startsWith(pn) && /^-?[A-Z]{1,4}$/.test(n.slice(pn.length)));
 };
 
-// Real lookup against the hexindoparts.com JSON listing; wired into deps().webPrice by server.js.
-// Non-JSON or non-2xx throws so a site hiccup is retried and never cached as "not listed".
-// KCM catalogs write PNs with a dash ("49327-90920"); hexindoparts.com lists them without ("4932790920")
-// and returns nothing for the dashed form (Reyhan 4 Oct, KCM 60ZV seal kits).
 const tanpaStripKcm = (pn: string): string => (/^\d+(?:-\d+)+$/.test(pn) ? pn.replace(/-/g, '') : pn);
 
 export async function fetchHexParts(pn: string, signal?: AbortSignal): Promise<WebPart[]> {
   const asli = pn.toUpperCase().trim();
-  // The site is inconsistent with dashes: KCM always undashed; ZW mixed (26418-82071 listed with the dash,
-  // 263E2-52031 only as 263E252031 — Abdul 4 Oct). Try the likely spelling first, then the other one.
   const tanpa = asli.replace(/-/g, '');
   const ejaan = tanpa === asli ? [asli] : (tanpaStripKcm(asli) !== asli ? [tanpa, asli] : [asli, tanpa]);
-  // Yanmar engine PNs: catalogs write "YNM729630-51520", the site lists about half of them without the prefix
-  // ("729630-51520", injection pump ZX48U-5A — Alvian 6 Oct; sample of 30: 5 with YNM, 5 bare, 20 absent).
   if (/^YNM\d/.test(asli)) ejaan.push(asli.slice(3));
   for (const kunci of ejaan) {
     const hasil = await cariSatu(asli, kunci, signal);
@@ -63,7 +53,6 @@ async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Prom
     return (data.products?.data ?? [])
       .filter(p => p.name && cocok(kunci, p.name) && Number(p.price?.amount) > 0)
       .slice(0, 4)
-      // Keep the catalog spelling so the answer's PN matches the table row.
       .map(p => ({ pn: kunci === asli ? p.name!.trim() : asli + p.name!.trim().toUpperCase().slice(kunci.length), nama: (p.short_description ?? '').trim(), harga: rupiah(Number(p.price!.amount)) }));
   } finally {
     clearTimeout(timer);
@@ -99,7 +88,6 @@ export async function hargaWeb(pns: string[], maks = MAKS_PN_OH): Promise<HasilW
     gagal++;
     hasil.set(pn, null);
   };
-  // A small pool: a burst of 16 parallel hits made the site answer 500 (Hikmal, 4 Oct).
   const antre = [...daftar];
   await Promise.all(Array.from({ length: Math.min(PARALEL, antre.length) }, async () => {
     for (let pn = antre.shift(); pn; pn = antre.shift()) await satu(pn);
@@ -129,17 +117,10 @@ export function blokHargaWeb(hasil: HasilWeb): string {
 const ASSY_RE = /\b(?:ASM|ASSY|ASS'Y|ASSEMBLY|ASSEMBLE)\b/;
 const INTERNAL_RE = /\b(?:kit|seal\w*|sealkit|brush|armature|yoke|bearing|bushing|o-?ring|gasket|internal\w*|dalam|isi\w*|komponen\w*|component\w*|parts?\s+list|rincian|detail|semua|all|repair|overhaul|rekondisi)\b/i;
 const BUKAN_KATA = new Set(['harga', 'hargany', 'hargannya', 'harganya', 'price', 'prices', 'berapa', 'brp', 'berpa', 'cek', 'check', 'ada', 'ngga', 'nggak', 'gak', 'tidak', 'part', 'parts', 'number', 'nomor', 'unit', 'model', 'yang', 'untuk', 'buat', 'dan', 'atau', 'klo', 'kalau', 'kalo', 'dong', 'tolong', 'coba', 'minta', 'info', 'hexindoparts', 'com', 'web', 'website', 'the', 'for', 'and', 'what', 'how', 'much', 'cost', 'biaya', 'catalog', 'katalog', 'list', 'daftar', 'semua']);
-// Technicians type fast on site: "hrga", "hrgany", "hraga", "brapa" (Reyhan, 4 Oct) must count as a price ask.
 export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|price\w*|prise|berapa|brapa|brpa|brp|berpa|biaya|cost)\b|hexindo\s*parts?/i;
 
-// Catalog row → cells. Hitachi chunks are pipe tables; KCM catalogs are fixed-width text
-// (" 53A 49327-70060        SEAL KIT            1      101 -") and must be read as [item, PN, name] too,
-// otherwise no KCM row ever gets a web price (Alvian 4 Oct, KCM 60ZV seal kits).
-// OH PACKAGE: "    1  4613831       Seal;Oil        1"
 const OH_BARIS_RE = /^\s*(\d{1,3})\s{2,}([A-Z0-9][A-Z0-9-]{4,21})\s{2,}(\S.*?)\s{2,}(?:\d+|-)(?:\s{2,}\S.*)?\s*$/;
 const KCM_BARIS_RE = /^\s*(\d{1,3}[A-Z]?)\s+(\d{5}-\d{5}(?:-\d+)?)\s{2,}(\S.*?)\s{2,}\d/;
-// KCM scanned pages carry their own title line ("          LIFT CYLINDER") and one chunk can hold several pages
-// under a wrong Section label (lift cylinder rows inside "CAB OPTION - Cab Structure"); use it as sub-section.
 const KCM_JUDUL_RE = /^\s{6,}([A-Z][A-Z ,&/.()-]{3,40}?)\s*$/;
 export function judulKcm(line: string): string | null {
   const m = line.match(KCM_JUDUL_RE);
@@ -168,7 +149,6 @@ function jarak(a: string, b: string): number {
   return d[b.length];
 }
 
-// Catalog names abbreviate ("CYL.;ARM"), so a short catalog word may be the start of the asked word.
 const kataCocok = (k: string, w: string): boolean =>
   w === k || (k.length >= 4 && w.startsWith(k)) || (w.length >= 3 && k.startsWith(w))
   || (k.length >= 6 && w.length >= 6 && jarak(k, w) <= 2);
@@ -176,7 +156,6 @@ const kataCocok = (k: string, w: string): boolean =>
 const kataDari = (t: string): string[] => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 const KOMPONEN_UTAMA_RE = /\b(?:KIT|ASSY|ASM|ASS'Y)\b/i;
 
-/** Trailing component tag of a promo row: "... Rp 2.102.691  [Swing Motor]" → "Swing Motor". */
 export function komponenBaris(line: string): string | null {
   return line.match(/\[([A-Za-z][A-Za-z0-9 ;&/.-]{2,40})\]\s*$/)?.[1].trim() ?? null;
 }
@@ -190,11 +169,6 @@ const skorNama = (kunci: string[], kata: string[]): number => {
   return n;
 };
 
-// Rows ("item | PN | NAME | …" or "PN | DESC | …") whose name matches the question pick which PNs get a web price;
-// rows under a matching section title count too (seal kit inside "CYL.;ARM"), kits/assemblies first.
-// With no match, a short follow-up ("harganya berapa") prices the PNs quoted in the previous answer.
-// No row name matched the question (technician says "harness", catalog says "CABLE ASSY"): price the rows of the
-// best-ranked chunk instead, since that chunk is what the answer will be built from (Abdul 4 Oct, KCM 60ZV).
 export function pnChunkTeratas(content: string, maks = 8): string[] {
   const pertama = content.split('\n\n---\n\n')[0] ?? '';
   const out: string[] = [];
@@ -207,8 +181,6 @@ export function pnChunkTeratas(content: string, maks = 8): string[] {
   return out;
 }
 
-// Workshop words → catalog words. Technicians say "nepple grease", the catalog row is VALVE under ADJUSTER;
-// "metal duduk" is METAL KIT; CRANKSHAFT; "bearing" is often METAL (Isuzu). Only adds words, never removes.
 const SINONIM: Array<[RegExp, string[]]> = [
   [/^(?:nipp?le|nepp?le|nepel|niple|nepple|nippel)$/, ['valve', 'fitting', 'nipple']],
   [/^(?:harness|harnes|kabel|wiring)$/, ['harness', 'cable', 'wire']],
@@ -221,7 +193,6 @@ const SINONIM: Array<[RegExp, string[]]> = [
   [/^(?:saringan)$/, ['filter', 'element']],
   [/^(?:sil|seal|sealkit)$/, ['seal']],
   [/^(?:oring|o-ring)$/, ['ring', 'o-ring']],
-  // Isuzu/Hitachi catalog abbreviations: "SEAL; OIL,CR/SHF,RR" = rear crankshaft oil seal (Alvian 5 Oct).
   [/^(?:sealkit|sealkid|silkit|sielkit|selkit)$/, ['seal', 'kit']],
   [/^(?:crankshaft|cranksh?aft|cranksfat|crankshat|krenk\w*|kruk\w*|crank\w*)$/, ['crankshaft', 'cr', 'shf', 'crank']],
   [/^(?:camshaft|camsh?aft|nok\w*)$/, ['camshaft', 'cam']],
@@ -238,7 +209,6 @@ function denganSinonim(kunci: string[]): string[] {
   return out;
 }
 
-// Pertanyaan menyebut paket OH yang ada di data → semua item paket itu (urut nomor), bukan pilihan per nama.
 const MAKS_PN_OH = 40;
 function itemPaketOh(content: string, kunci: string[]): string[] {
   let best: { skor: number; pns: string[] } = { skor: 0, pns: [] };
@@ -254,8 +224,6 @@ function itemPaketOh(content: string, kunci: string[]): string[] {
 const OH_KATA_RE = /\b(?:overhaul\w*|oh|reseal\w*|paket|package|turun|rekondisi)\b/;
 
 export function pilihPnHarga(content: string, teks: string[], jawabanSebelumnya = '', maks = 20): string[] {
-  // Several components at once ("piston, connecting rod, main bearing, injection pump" from a photo): rank per
-  // component and take turns, else one component with many rows (injection pump) fills every slot (Abdul 4 Oct).
   const frasa = teks.join(' , ').split(/\s*(?:,|;|\bdan\b|&|\+)\s*/i).map(f => f.trim()).filter(f => kataDari(f).some(w => w.length >= 3 && !BUKAN_KATA.has(w) && !MINTA_HARGA_RE.test(w)));
   if (frasa.length >= 2 && frasa.length <= 6 && teks.join(' ').includes(',')) {
     const daftar = [...new Set(frasa)].map(f => pilihPnHargaSatu(content, [f], '', maks));
@@ -284,34 +252,26 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
       if (i < 0 || !sel[i + 1]) continue;
       const kataNama = kataDari(sel[i + 1]);
       const nama = skorNama(kunci, kataNama);
-      // Promo rows carry their own component tag ("[Main Pump]") under a shared title that lists several
-      // components; judge the row by its tag, not the title (Arip 4 Oct: swing motor got main pump seal kits).
       const tag = komponenBaris(line);
       const kataKomp = tag ? kataDari(tag) : judulKata;
       const skorKomp = tag ? skorNama(kunci, kataKomp) : skorSection;
-      // -1 = the question names nothing beyond this part's own name, so there is no component to disagree with.
       const sisa = kunci.filter(k => !kataNama.some(w => kataCocok(k, w)));
       const komp = sisa.length ? skorKomp : -1;
       const n = nama * 2 + (skorKomp >= 3 ? 1 + (KOMPONEN_UTAMA_RE.test(sel[i + 1]) ? 2 : 0) : 0);
       if (n > 0 && n > (skor.get(sel[i])?.n ?? 0)) skor.set(sel[i], { n, nama: sel[i + 1].toUpperCase(), komp, grup: kataKomp.join(' '), cocokNama: nama > 0 });
     }
   }
-  // The question names a component beyond the part ("kit seal SWING MOTOR") and some rows sit in that
-  // component → drop rows that sit in a different one.
   if ([...skor.values()].some(v => v.komp >= 3)) {
     for (const [pn, v] of skor) if (v.komp === 0) skor.delete(pn);
   }
   const oh = itemPaketOh(content, kunci);
   if (oh.length) return oh.slice(0, MAKS_PN_OH);
-  // Assembly diminta (mis. "harga starter") → cukup baris ASSY; isi internal ditawarkan, bukan dicek semua.
   const assy = [...skor.entries()].filter(([, v]) => v.cocokNama && ASSY_RE.test(v.nama));
   const setujuIsi = /komponen internal|internal (?:parts|components)/i.test(jawabanSebelumnya.slice(-400))
     && /^(?:ok\w*|oke\w*|ya\w*|iya|boleh|lanjut\w*|gas|siap|mau|yes|sip|listkan|tampilkan)\b/i.test((teks[0] ?? '').trim());
   if (assy.length && !setujuIsi && !INTERNAL_RE.test(teks.join(' '))) {
     return assy.sort((a, b) => b[1].n - a[1].n).slice(0, 3).map(([pn]) => pn);
   }
-  // At most 3 PNs per part name within one component, so a dozen arm-cylinder variants cannot crowd out the
-  // seal kit, and seal kits of one component cannot crowd out another's (KCM: 8 SEAL KIT rows, lift cylinder lost).
   const perNama = new Map<string, number>();
   const dariData = [...skor.entries()].sort((a, b) => b[1].n - a[1].n)
     .filter(([, v]) => { const k = `${v.nama}|${v.grup}`; const c = (perNama.get(k) ?? 0) + 1; perNama.set(k, c); return c <= 3; })
@@ -320,21 +280,12 @@ function pilihPnHargaSatu(content: string, teks: string[], jawabanSebelumnya = '
   return [...new Set([...dariData, ...dariJawaban])].slice(0, maks);
 }
 
-// Safety net after the answer is written, so every price shown comes from hexindoparts.com:
-// - rows still saying "Ketik PN untuk cek" are looked up and filled (audit 2-5 Oct: 66 of 79 were listed);
-// - rows WITH a Rupiah price are re-checked against the site: a price the site does not list (old promo price
-//   from the DB, invented number) is replaced by the site price or "Belum tersedia" (Alvian 5 Oct, HAPDH1-CI4).
-// The client replaces the streamed text with meta.full.
 const KETIK_RE = /Ketik PN untuk cek|(?:type|enter|send) (?:the )?(?:PN|part number) to check/i;
 const RP_RE = /\b(?:Rp|IDR)\.?\s*\d[\d.,]*/i;
 const BELUM_RE = /\|\s*(?:Belum tersedia|Tidak tersedia|Not (?:yet )?available)\s*\|/i;
 const TAWAR_CEK_RE = /^\s*(?:\*|_)?(?:ketik|kirim|sebut)\b[^\n]*\b(?:pn|part\s*number|nomor\s*part|partnumber)\b[^\n]*\b(?:cek|harga)\w*[^\n]*$/i;
 const PRICE_HEADER_RE = /^(?:harga|price|unit price|cost|amount|total)(?:\s|$)/i;
-// Once the table has real prices, prose written around the old placeholder ("harga online-nya belum sempat
-// ditarik", "ketik PN untuk cek harganya") contradicts it: drop those sentences, keep the rest (Alvian 5 Oct).
 const KLAIM_TANPA_HARGA_RE = /\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|ada|muncul|tersedia|kebaca|terbaca|ketemu)|tidak\s+(?:ada|tersedia|muncul|ketemu)|gak\s+ada|ngga\s+ada|tidak\s+bisa\s+(?:ditarik|dicek))\b[^.?!\n]*\bharga|\bharga\w*[^.?!\n]*\b(?:belum\s+(?:sempat\s+)?(?:ditarik|dicek|muncul|ada|kebaca|terbaca|ketemu|tersedia)|tidak\s+(?:muncul|tersedia|ada)|gak\s+ada|ngga\s+ada)|\b(?:ketik|kirim|sebut)\b[^.?!\n]*\b(?:pn|part\s*number|nomor\s*part)\b[^.?!\n]*\b(?:cek|harga)/i;
-// Same contradiction in other words/languages (audit 14-15 Oct: JA "価格は登録されていません" + a priced table,
-// ID "tidak terdaftar/tercantum", "konfirmasi ke Parts Counter").
 const KLAIM_LAIN_RE = new RegExp([
   String.raw`\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b[^.?!\n]*\b(?:harga|promo|price)|\b(?:harga|promo)\w*[^.?!\n]*\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b`,
   String.raw`\bparts?\s*counter\b`,
@@ -355,9 +306,6 @@ function buangKlaimTanpaHarga(text: string): string {
     return sisa.join('') === kal.join('') ? l : sisa.join('').trim();
   }).join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
-// A Rupiah amount in prose that could not be verified: drop its sentence (or only its comma clause when the
-// sentence also holds a verified amount) rather than printing "seharga Gagal dicek, kirim ulang" mid-sentence
-// (Abdul 15 Oct, rod cylinder bucket).
 function buangHargaProsaTakSah(line: string, sah: (d: string) => boolean): string {
   const nilai = (s: string) => [...s.matchAll(new RegExp(RP_RE.source, 'gi'))].map(m => sah(m[0].replace(/\D/g, '')));
   const kal = line.match(KALIMAT_RE)?.filter(Boolean) ?? [line];
@@ -372,7 +320,6 @@ function buangHargaProsaTakSah(line: string, sah: (d: string) => boolean): strin
   }).join('').trim();
 }
 
-// PN rows with a price from an earlier answer, so a follow-up "hitung totalnya" table can be checked and filled.
 function barisSebelumnya(text: string): Array<{ pn: string; qty: number; shown: string }> {
   const out: Array<{ pn: string; qty: number; shown: string }> = [];
   let qtyCol: number | undefined;
@@ -415,7 +362,6 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     }
     if (!diTabel) { diTabel = true; table++; }
     const cells = line.split('|');
-    // A "| **Total** | … | Rp … |" row is not a header: only a line without amounts can be one.
     const headers = RP_RE.test(line) ? [] : cells.flatMap((c, n) => PRICE_HEADER_RE.test(c.replace(/[*`]/g, '').trim()) ? [n] : []);
     if (headers.length) {
       priceCols = headers;
@@ -450,7 +396,6 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     const qtyCol = head ? [...head].find(([, h]) => /^(qty|jumlah|jml|quantity)$/.test(h))?.[0] : undefined;
     const qty = qtyCol != null ? Number(angka(r.cells[qtyCol] ?? '')) || 1 : 1;
     let normalDiisi = false;
-    // Line-total columns (Subtotal, Jumlah) = unit price x qty: never re-checked against the site (Alvian 10 Oct).
     const totalCols = r.prices.filter(n => /^(?:sub\s*-?total|total|jumlah(?:\s+harga)?|amount)\b/.test(head?.get(n) ?? ''));
     let satuan: string | null = null;
     for (const n of r.prices) {
@@ -483,7 +428,6 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     baris[r.i] = r.cells.join('|');
   }
   for (const k of jumlah.keys()) sah.add(String(jumlah.get(k)));
-  // Total rows of a follow-up answer: recompute from the previous answer's PN rows (Alvian 10 Oct, "Hitung totalny").
   const lalu = rows.some(r => !r.pn) && sebelumnya ? barisSebelumnya(sebelumnya) : [];
   const totalLalu = { normal: 0n, promo: 0n, shown: 0n };
   if (lalu.length) {
@@ -503,7 +447,6 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
     const hitung = /promo|diskon|disc|hemat/.test(label) ? totalLalu.promo : /normal|hexindoparts/.test(label) ? totalLalu.normal : totalLalu.shown;
     for (const n of r.prices) {
       const cell = r.cells[n] ?? '';
-      // Grand total under a Subtotal column = sum of the recomputed subtotals.
       const kunci = `${r.table}:${n}`;
       if (kolTotal.has(kunci) && cell.trim()) { r.cells[n] = cell.replace(/(?:Rp|IDR)\.?\s*\d[\d.,]*/i, rupiah(String(jumlah.get(kunci)))); continue; }
       if (!(cell.trim() && !rpDi(cell).every(x => sah.has(x)) || KETIK_RE.test(cell))) continue;
@@ -513,7 +456,6 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
   }
   for (const i of prosa) baris[i] = buangHargaProsaTakSah(baris[i], d => sah.has(d));
   let out = baris.join('\n');
-  // Run whenever a table row shows a real price, not only after a site lookup: promo-only tables contradict too.
   if (verified || rows.some(r => r.prices.some(n => RP_RE.test(r.cells[n] ?? '')))) out = buangKlaimTanpaHarga(out);
   if (!KETIK_RE.test(out)) out = out.split('\n').filter(l => !TAWAR_CEK_RE.test(l)).join('\n').replace(/\n{3,}/g, '\n\n').trim();
   return out;

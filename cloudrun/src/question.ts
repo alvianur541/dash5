@@ -33,6 +33,6 @@ export function resolveQuestion(raw: string, history: Message[], model: string, 
     aspects: Object.freeze(raw.split(/\s+(?:dan|sekalian|beserta)\s+|[;&]/i).filter(Boolean)), acceptedOffer });
 }
 export function questionFor(raw: string, history: Message[], model: string): ResolvedQuestion {
-  try { const r = deps().resolvedQuestion; if (r) return r; } catch { /* no request */ }
+  try { const r = deps().resolvedQuestion; if (r) return r; } catch {}
   return resolveQuestion(raw, history, model);
 }

@@ -29,8 +29,6 @@ interface UsageMeta {
   thoughtsTokenCount?: number; cachedContentTokenCount?: number;
 }
 
-// Circuit breaker: a model that just answered 429 or hung is tried last for a while, so during a capacity
-// crunch each question does not first wait 20-30 s on it (4 Oct: 3.7 429 after 22.7 s, then 3.6 answered).
 const SAKIT_MS = 5 * 60_000;
 const sakitSampai = new Map<string, number>();
 export function resetPemutus(): void { sakitSampai.clear(); }
@@ -48,8 +46,7 @@ function urutanModel(): string[] {
 }
 
 function catatSebab(sebab: string): void {
-  // First cause only — that is what made the primary model fail.
-  try { const m = deps().meta; if (!m.fallbackSebab) m.fallbackSebab = sebab; } catch { /* di luar konteks */ }
+  try { const m = deps().meta; if (!m.fallbackSebab) m.fallbackSebab = sebab; } catch {}
 }
 
 function pastDeadline(): boolean {
@@ -68,7 +65,6 @@ export async function callProxyStream(
   enableGoogleSearch = false,
 ): Promise<string> {
   const STREAM_TIMEOUT_MS = 90_000;
-  // 45 s, not 25 — two stall retries burn 20 s, leaving the third connection no time to finish.
   const FIRST_TOKEN_TIMEOUT_MS = 45_000;
 
   const MAX_ATTEMPT = Math.max(3, MODEL_CHAIN.length);
@@ -85,12 +81,12 @@ export async function callProxyStream(
     usage = null;
     modelUsed = modelAt(attempt);
     if (attempt === 1 && modelUsed !== MODEL) {
-      try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+      try { deps().meta.fallbackTo = modelUsed; } catch {}
       catatSebab('pemutus');
     }
     if (attempt > 1) {
       console.warn('[fallback] percobaan %d → model %s', attempt, modelUsed);
-      try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+      try { deps().meta.fallbackTo = modelUsed; } catch {}
     }
     let upstreamError: string | null = null;
     let quotaFull = false;
@@ -109,7 +105,6 @@ export async function callProxyStream(
       }
     }, FIRST_TOKEN_TIMEOUT_MS);
 
-    // Hedge: model cadangan paralel bila model utama diam
     type Lane = { model: string; ctrl: AbortController; done: boolean };
     const lanes: Lane[] = [];
     const running: Promise<void>[] = [];
@@ -121,7 +116,7 @@ export async function callProxyStream(
       if (lane.model !== modelUsed) {
         console.warn('[hedge] %s lebih dulu menjawab dari %s', lane.model, modelUsed);
         modelUsed = lane.model;
-        try { deps().meta.fallbackTo = modelUsed; } catch { /* di luar konteks */ }
+        try { deps().meta.fallbackTo = modelUsed; } catch {}
         catatSebab('hedge');
       }
     };
@@ -222,7 +217,6 @@ export async function callProxyStream(
       await tunggu(300);
       continue;
     }
-    // A finished Vertex stream always ends with finishReason; none means the connection was cut.
     if (!finishReason && fullText.trim()) {
       if (canRetry) {
         console.warn('[stream] jawaban sepotong (%d huruf, tanpa finishReason) — percobaan %d/%d, ulangi', fullText.trim().length, attempt, MAX_ATTEMPT);
@@ -237,7 +231,6 @@ export async function callProxyStream(
       break;
     }
     if (finishReason === 'MAX_TOKENS') {
-      // Same cap would truncate again; retrying only burns quota and drops to the fallback model.
       console.warn('[stream] finishReason=MAX_TOKENS setelah %d huruf — batas panjang, tidak diulang', fullText.trim().length);
       fullText += STREAM_LONG_NOTE;
       onChunk(STREAM_LONG_NOTE);

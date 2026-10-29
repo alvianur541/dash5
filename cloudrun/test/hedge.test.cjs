@@ -1,6 +1,5 @@
 const { callProxyStream, runWithDeps, resetPemutus, USAGE, suite, BODY, MODEL_CHAIN } = require('./helpers.cjs');
 
-// Alvian 6 Okt: 3.7 Flash diam 45 dtk tanpa header, jawaban baru keluar 54 dtk.
 module.exports = async () => {
   const { t, done } = suite('hedge model cadangan saat model utama diam');
   resetPemutus();

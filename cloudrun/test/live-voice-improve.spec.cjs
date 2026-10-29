@@ -6,7 +6,6 @@ const { WebSocket } = require('ws');
 const { ringkasUntukSuara } = require('../dist/orchestrator.cjs');
 const { registerLiveVoice, inputFrame, makeSetup } = require('../server/live-voice');
 
-// Shape of a real hexindoparts answer (4 Oct): a 14-row price table the screen already shows.
 const TABEL = ['Ini harga seal kit cylinder arm:', '', '| Part Number | Nama Part | Harga |', '|---|---|---|',
   ...Array.from({ length: 14 }, (_, i) => `| \`YA0000${1400 + i}\` | **KIT;SEAL** | Rp ${6 + i}.238.417 |`),
   '', '⚠️ Buang tekanan sisa sebelum melepas cylinder.', 'Sumber harga: Hexindoparts.com'].join('\n');

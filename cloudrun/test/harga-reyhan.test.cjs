@@ -1,7 +1,5 @@
 const { resolvePartsQuery, isPartsQuery, KATA_HARGA_RE, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Sesi Reyhan 4 Okt: harga baru muncul kalau PN diketik sendiri. Penyebab: "hrga/hrgany" tak dikenali, kode katalog
-// 4S00509HPA tak dianggap PN, lanjutan sesudah PN polos tidak mewarisi niat harga.
 const ROW = { metadata: { Model: 'ZX138MF-5G', Kategori: 'PARTS CATALOG' }, content:
   'Section: UNDERCARRIAGE PARTS (Track Link, Sprocket, Idler, Roller, Shoe)\nParts List:\n       1 | 4S00509HPA         | ROLLER;LOWER                        | qty:1\n       2 | YD00000074         | KIT;SEAL                            | qty:1' };
 const WEB = { '4S00509HPA': [{ pn: '4S00509HPA', nama: 'ROLLER;LOWER', harga: 'Rp 9.876.543' }], YD00000074: [{ pn: 'YD00000074', nama: 'KIT;SEAL', harga: 'Rp 6.045.421' }] };
@@ -35,7 +33,6 @@ module.exports = async () => {
 
   t(['Cek hrga roller lower', 'Cek hrga 4S00509HPA', 'Ad koq cek yg betul hrgany', '4S00509HPA', 'Cek hrgany'].every(isPartsQuery), 'typo harga & kode katalog polos → jalur parts');
   t(!isPartsQuery('Cek berat travel device') && !isPartsQuery('berapa tekanan pompa'), '"berapa" saja (tekanan/berat) tidak dipaksa ke parts');
-  // Photo captions and multi-aspect questions use the same strict test: a gauge photo asking a pressure is not a price ask.
   t(['cek hrgany', 'harga ini', 'brp harganya', 'Cek hrga roller lower'].every(s => KATA_HARGA_RE.test(s)), 'caption foto "cek hrgany" / "brp harganya" → minta harga');
   t(!['berapa tekanan standarnya', 'brp nilai ini', 'berapa tekanan dan berat swing motor'].some(s => KATA_HARGA_RE.test(s)), 'caption "berapa tekanan standarnya" bukan minta harga');
   {
@@ -56,7 +53,6 @@ module.exports = async () => {
   }
 
   {
-    // Abdul 4 Okt (KCM 60ZV): "harga harness body", katalog menyebutnya CABLE ASSY → nama tak cocok, tetap harus dicek.
     const { dicek } = await jalan('harga harness body');
     t(dicek.length > 0, `nama beda istilah (harness vs CABLE/ROLLER) → PN chunk teratas tetap dicek (${dicek.join(',') || 'tak dicek'})`);
   }

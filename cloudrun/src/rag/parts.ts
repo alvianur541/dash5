@@ -45,7 +45,6 @@ export async function searchServiceIntervalParts(
   };
 }
 
-// Hybrid RPC only exact-matches "Part Number:" chunks; section and promo chunks need this literal lookup.
 export async function exactPartRows(pn: string, model: string): Promise<HybridResult[]> {
   if (!sb()) return [];
   const kategori = new Set<string>(['PARTS CATALOG', 'ENGINE PARTS CATALOG', PROMO_KATEGORI, ...PROMO_KATEGORI_LAMA]);
@@ -56,7 +55,6 @@ export async function exactPartRows(pn: string, model: string): Promise<HybridRe
       .ilike('content', `%${escapeLike(pn)}%`)
       .limit(12);
     registerEvidence(data ?? []);
-    // Active promo / catalog first so the 4 slots do not fill with expired-period copies of the same PN.
     const urut = (d: { metadata?: any }) => PROMO_KATEGORI_LAMA.includes(d.metadata?.Kategori) ? 1 : 0;
     return bersihkanPromoLama((data ?? [])
       .filter((d: { content?: string; metadata?: any }) => d?.content && d.metadata?.Model === model
@@ -87,7 +85,6 @@ const ENGINE_SECTION_TERMS: Array<[RegExp, string]> = [
   [/oil\s*cooler/i, 'OIL COOLER'],
 ];
 
-// Vector search returns only 3 engine sections; an overhaul spans several, so pin them by section title.
 export async function engineSectionRows(text: string, model: string): Promise<HybridResult[]> {
   if (!sb() || !ENGINE_CATALOG_MODELS.has(model)) return [];
   const keys = [...new Set(ENGINE_SECTION_TERMS.filter(([re]) => re.test(text)).map(([, k]) => k))].slice(0, 3);
@@ -118,7 +115,6 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
   return out;
 }
 
-// Paket overhaul/reseal (Kategori OH PACKAGE, Alvian 7 Okt).
 export const OH_RE = /\b(?:overhaul\w*|over\s*haul|o\/h|oh|reseal\w*|re-?seal|turun\s*mesin|rekondisi|bom)\b|\bpaket\s+(?:oh|overhaul|reseal|perbaikan|repair)\b/i;
 
 async function ohIndeks(model: string): Promise<HybridResult[]> {
@@ -174,8 +170,6 @@ export async function searchPartsCatalog(
     hybrid(queryText, embedding, promoCount, { Model: model, Kategori: PROMO_KATEGORI }, 0.25),
     ...PROMO_KATEGORI_LAMA.map(k => hybrid(queryText, embedding, 3, { Model: model, Kategori: k }, 0.25)),
     ...(hasEngineCatalog ? [hybrid(queryText, embedding, engineCount, { Model: model, Kategori: 'ENGINE PARTS CATALOG' }, 0.28)] : []),
-    // Service bulletins carry PN tables the catalog lacks or that supersede it (per-S/N harness PNs,
-    // Technical News 06/2023 ZX48U-5A): without them a parts question never sees the newest data (Reyhan 5 Oct).
     hybrid(queryText, embedding, 2, { Model: model, Kategori: 'TECHNICAL NEWS' }, 0.35),
     hybrid(queryText, embedding, mintaOh ? 2 : 1, { Model: model, Kategori: 'OH PACKAGE' }, mintaOh ? 0.2 : 0.4),
   ];
@@ -196,7 +190,6 @@ export async function searchPartsCatalog(
   const cpmData: HybridResult[]    = getData(CPM_IDX);
   const promoData: HybridResult[]  = [
     ...getData(PROMO_IDX),
-    // Expired periods: PN/description only (prices stripped), tagged by query so it never depends on RPC metadata.
     ...bersihkanPromoLama(PROMO_KATEGORI_LAMA.flatMap((k, i) =>
       getData(PROMO_IDX + 1 + i).map(d => ({ ...d, metadata: { ...d.metadata, Kategori: k } })))),
   ];
@@ -282,7 +275,6 @@ export async function searchPartsCatalog(
     }
   }
 
-  // Bulletins pinned right after literal PN hits: they are the most specific source when they match.
   const pinned = mintaOh ? [...exact, ...ohData, ...newsData, ...sectionRows] : [...exact, ...newsData, ...sectionRows, ...ohData];
   const merged = [
     ...pinned,

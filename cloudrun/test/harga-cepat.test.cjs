@@ -1,6 +1,5 @@
 const { resolvePartsQuery, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Jalur harga cepat (4 Okt): flash-lite memilih baris, kode menyusun tabel → angka persis dari hexindoparts.com.
 const ROW = { metadata: { Model: 'ZX200-5G', Kategori: 'PARTS CATALOG' }, content:
   'Section: CYL.;ARM\nParts List:\n       1 | 4711561            | CYL.;ARM                            | qty:1\n     100 | YA00001400         | KIT;SEAL                            | qty:1' };
 const WEB = {

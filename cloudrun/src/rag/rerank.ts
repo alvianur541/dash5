@@ -27,7 +27,6 @@ interface RerankedDoc { content: string; score: number }
 
 interface RerankResult { docs: RerankedDoc[]; error?: string; source?: RerankSource }
 
-// Whole chunk, not the first 2500 chars (#1 45→50/59 in the v3 benchmark); the cap only bounds 28k-char outliers.
 const RERANK_DOC_CAP = 8000;
 
 export async function rerankDocs(query: string, docs: string[], topN: number): Promise<RerankResult> {
@@ -52,7 +51,6 @@ export async function rerankDocs(query: string, docs: string[], topN: number): P
   }
 }
 
-// Google scores run lower than Cohere for the same relevance; thresholds are per source.
 const THRESHOLDS: Record<RerankSource, { high: number; medium: number }> = {
   cohere: { high: 0.45, medium: 0.25 },
   google: { high: Number(process.env.GOOGLE_RANK_HIGH) || 0.30, medium: Number(process.env.GOOGLE_RANK_MEDIUM) || 0.10 },

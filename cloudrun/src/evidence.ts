@@ -30,18 +30,18 @@ export function registerEvidence(rows: Array<{ id?: number | string; content?: s
       const known = map.get(r.content);
       if (r.id !== undefined || known?.document_id == null) map.set(r.content, evidenceDocument({ ...r, content: r.content }));
     }
-  } catch { /* no request */ }
+  } catch {}
 }
 export function evidenceFor(content: string, role: EvidenceRole = 'retrieved'): EvidenceDocument {
   let known: EvidenceDocument | undefined;
-  try { known = records.get(deps())?.get(content); } catch { /* no request */ }
+  try { known = records.get(deps())?.get(content); } catch {}
   const doc = known ?? evidenceDocument({ content });
   return { ...doc, evidence_role: role === 'retrieved' ? doc.evidence_role : role };
 }
 export function evidenceBlocks(content: string, role: EvidenceRole = 'retrieved'): EvidenceDocument[] {
   if (!content) return [];
   let matches: EvidenceDocument[] = [];
-  try { matches = [...(records.get(deps())?.values() ?? [])].filter(d => content.includes(d.content)); } catch { /* no request */ }
+  try { matches = [...(records.get(deps())?.values() ?? [])].filter(d => content.includes(d.content)); } catch {}
   const remainder = matches.reduce((text, d) => text.replace(d.content, ''), content).replace(/\n\n---\n\n/g, '').trim();
   if (remainder) return [evidenceFor(content, role)];
   return matches.length ? matches.map(d => ({ ...d, evidence_role: role === 'retrieved' ? d.evidence_role : role })) : [evidenceFor(content, role)];

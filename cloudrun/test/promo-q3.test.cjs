@@ -1,6 +1,5 @@
 const { lengkapiHarga, hargaPromo, tanpaHargaDb, promoAktif, PROMO_KATEGORI, PROMO_BERAKHIR, resetHargaWebCache, runWithDeps, mockDeps, suite } = require('./helpers.cjs');
 
-// Promo Q3 FY2026 (id 10669-10721, 8 Okt - 31 Des 2026): format baru dengan kolom [Keterangan unit].
 const CHUNK = [
   'Section: PROMO Q3 FY2026 - FILTER PARTS (Engine Oil, Fuel, Air Cleaner, Hydraulic, AC, Breather)',
   'Model: ZX200-5G',
@@ -57,7 +56,6 @@ module.exports = async () => {
   t(!/Rp\s?\d/.test(off) && !/promo|Ketentuan|Pemesanan|Keterangan unit/i.test(off), `setelah berakhir format Q3 bersih (${(off.match(/.*(promo|Ketentuan|Pemesanan|Keterangan).*/gi) || []).join(' / ')})`);
   t(/4719920\s+\| Filter;Fuel\s+\[Unit: ZX250-5G\]/.test(off), 'tanda unit sekelas tetap ada tanpa harga');
 
-  // Regresi 10 Okt (sesi 61d14c6c): paket service 1000 — blok "--- HARGA PROMO" tanpa Section, dua kolom harga.
   {
     const blok = ['--- HARGA PROMO (khusus PN di atas) ---', 'Periode Promo  : 8 Oktober 2026 - 31 Desember 2026',
       '4616545                | Fuel Filter                              |       Rp 342.747 |  20% |       Rp 274.198',
@@ -85,7 +83,6 @@ module.exports = async () => {
     t(!o.includes('Rp 999'), 'angka prosa karangan tetap dibuang');
   }
 
-  // End-to-end: promo aktif → jawaban model dengan harga promo dari data tidak dirusak safety net.
   const { generateResponseStream } = require('./helpers.cjs');
   process.env.PROMO_UJI = 'on';
   try {

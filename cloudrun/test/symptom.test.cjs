@@ -1,6 +1,5 @@
 const { findSymptomSections, isSymptomQuery, resetSymptomIndex, wantsNumeric, generateResponseStream, runWithDeps, mockDeps, suite, USAGE } = require('./helpers.cjs');
 
-// Real section titles (ZX200-5G Troubleshooting + Circuit Diagram, ZW140 Troubleshooting C).
 const E10 = 'Section: TROUBLESHOOTING E-10 - When traveling or operating front attachment\nModel: ZX200-5G\nKategori: TROUBLESHOOTING\nSymptom: When traveling or operating front attachment with engine running at slow idle, engine hunts.';
 const NGEDROP = 'Section: TROUBLESHOOTING HIDROLIK - Semua Gerakan Lemah / Tenaga Turun / Engine Ngedrop\nModel: ZX200-5G\nKategori: Circuit Diagram\nGejala: seluruh gerakan terasa lemah, engine ngedrop saat beban.';
 const KORELASI = 'Section: TROUBLESHOOTING B - CORRELATION TABLE Engine & Actuator (E-10 to A-7)\nModel: ZX200-5G\nKategori: TROUBLESHOOTING\nTrouble Symptom E-13 E-14';
@@ -19,7 +18,6 @@ function fakeSupabase(rows, calls = []) {
   return { from: () => q, rpc: () => Promise.resolve({ data: [], error: null }) };
 }
 
-// Scores by which title the snippet carries, the way the Google ranker would.
 function rankerBy(scores, seen = []) {
   return async (query, docs, topN) => {
     seen.push(query);
@@ -30,7 +28,6 @@ function rankerBy(scores, seen = []) {
 }
 
 const INTENT = JSON.stringify({ shouldSearch: true, searchType: 'technical', optimizedQuery: 'HST warning indicator buzzer 2nd speed' });
-// The verifier and the intent classifier share deps().generate; tell them apart by system prompt.
 function judge(answer, log = []) {
   return async body => {
     const sys = body.systemInstruction?.parts?.[0]?.text ?? '';
@@ -56,7 +53,6 @@ module.exports = async function () {
   t(!wantsNumeric('engine speed drops when traveling'), '"engine speed drops" tidak memesan slot tabel angka');
   t(wantsNumeric('swing motor weight') && wantsNumeric('engine speed standard'), 'pertanyaan berat / standar tetap memesan slot angka');
 
-  // 2 Oct, 12:25: the right section ranked below the score bar; the judge must still find it.
   {
     resetSymptomIndex();
     const calls = [], seen = [], asked = [];
@@ -104,7 +100,6 @@ module.exports = async function () {
     t(Array.isArray(r) && r.length === 0, 'reranker gagal → tanpa sisipan, jawaban tetap jalan');
   }
 
-  // Achmad's session, 2 Oct: the short follow-up must be searched together with the complaint before it.
   {
     resetSymptomIndex();
     const seen = [], asked = [];

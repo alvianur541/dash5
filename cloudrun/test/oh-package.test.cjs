@@ -1,7 +1,6 @@
 const fs = require('fs'), path = require('path');
 const { pilihPnHarga, isShortFollowUp, suite } = require('./helpers.cjs');
 
-// Alvian 7 Okt: chunk baru Kategori OH PACKAGE (paket overhaul/reseal per unit).
 module.exports = async () => {
   const { t, done } = suite('OH package: semua item paket dicek harganya');
   const oh = fs.readFileSync(path.join(__dirname, 'fixtures-oh-zx200.txt'), 'utf8');

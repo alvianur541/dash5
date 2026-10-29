@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Compare Gemini models (availability + streaming latency). Run in Cloud Shell: cd ~/dash5 && bash deploy/uji-model.sh [RUNS]
 set -uo pipefail
 
 RUNS="${1:-5}"

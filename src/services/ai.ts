@@ -2,7 +2,6 @@ import { UnitModel, Message, AgentEvent, AnswerPresentationV1 } from '../types';
 import { getAuthToken } from './supabase';
 import { validateAnswerPresentation } from '../lib/presentation';
 
-// Above the server deadline (120 s) so the server's own message wins instead of us guessing.
 const ASK_IDLE_TIMEOUT_MS = 130_000;
 const RETRY_DELAY_MS = 700;
 export const PROXY_URL = ((import.meta.env.VITE_VERTEX_PROXY_URL as string | undefined) ?? '/api').replace(/\/$/, '');
@@ -27,7 +26,6 @@ export function warmupProxy(): void {
   fetch(`${PROXY_URL}/health`).catch(() => { });
 }
 
-// Answer caching is disabled: shared browsers and live prices require a fresh authorized request.
 interface AskBody {
   model: UnitModel;
   userName: string;
@@ -61,7 +59,6 @@ async function ask(
   if (cancel?.aborted) stop();
   let idle = setTimeout(stop, ASK_IDLE_TIMEOUT_MS);
   const tick = () => { clearTimeout(idle); idle = setTimeout(stop, ASK_IDLE_TIMEOUT_MS); };
-  // The user's Stop surfaces as AbortError; only our idle timer means the server went quiet.
   const abortReason = () => (cancel?.aborted ? new DOMException('Dibatalkan', 'AbortError') : new Error('SERVER_DIAM'));
 
   let text = '';
@@ -78,7 +75,6 @@ async function ask(
       res = await send();
     } catch {
       if (ctrl.signal.aborted) throw abortReason();
-      // A PWA resumed from the background often sends its first request on a dead connection; one fresh try fixes it.
       await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
       if (ctrl.signal.aborted) throw abortReason();
       try {
@@ -89,7 +85,7 @@ async function ask(
     }
     if (!res.ok) {
       let detail = '';
-      try { detail = (await res.json())?.error ?? ''; } catch { }
+      try { detail = (await res.json())?.error ?? ''; } catch {}
       throw new Error(`Ask error ${res.status}${detail ? `: ${detail}` : ''}`);
     }
     if (!res.body) throw new Error('Ask response has no body');
@@ -124,7 +120,6 @@ async function ask(
             if (frame.event && onAgentEvent) onAgentEvent(frame.event as AgentEvent);
             break;
           case 'meta':
-            // Server text is final: retries and leak/LaTeX cleanup can make it shorter than what streamed.
             if (typeof frame.full === 'string' && frame.full.trim()) {
               text = frame.full;
               receivedFinal = true;

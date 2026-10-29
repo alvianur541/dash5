@@ -45,7 +45,6 @@ async function resolveUpstream(model, { stream }) {
 
 const STALL_MS_NONSTREAM     = 8_000;
 
-// Keep both well below FIRST_TOKEN_TIMEOUT_MS (45 s) × STALL_MAX — see the timeout ladder in CLAUDE.md §4.
 const envMs = (name, fallback, max) => Math.min(Math.max(Number(process.env[name]) || fallback, 1_000), max);
 const STALL_MS_STREAM_CEPAT  = envMs('STALL_MS_STREAM_CEPAT', 5_000, 10_000);
 
@@ -55,7 +54,6 @@ const STALL_MAX = 3;
 
 const BATAS_TOTAL_MS = 60_000;
 
-// Hedged: a slow connection is kept alive while a spare races it — the first header wins.
 async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONSTREAM) {
   if (signal && signal.aborted) throw new Error('Dibatalkan sebelum request');
   const ctrls = [];
@@ -84,7 +82,6 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
           label, stallMs / 1000, ke, STALL_MAX);
         fetch(url, { ...opts, signal: ctrl.signal }).then(
           res => {
-            // A 429 must not cancel sibling connections that may still succeed.
             if (res.status !== 429) return tutup(resolve, res, ctrl);
             jalan--;
             if (ditolak) ctrl.abort(); else ditolak = { res, ctrl };
@@ -130,7 +127,6 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   if (msAuth > 1000 || msFetch > 3000) {
     console.warn('[upstream] LAMBAT %s auth=%dms fetch=%dms status=%d', label, msAuth, msFetch, upstream.status);
   }
-  // Streaming 429 goes straight to the fallback model in stream.ts; retrying the same model only adds delay.
   for (let i = 0; !stream && upstream.status === 429 && i < UPSTREAM_429_RETRIES; i++) {
     const waitMs = UPSTREAM_429_BACKOFF_MS[i];
     console.warn(`Vertex 429 (${label}) — tunggu ${waitMs}ms lalu coba lagi (${i + 1}/${UPSTREAM_429_RETRIES})`);
@@ -228,7 +224,6 @@ async function cohereRerank(query, documents, topN) {
       return data;
     } catch (err) {
       if (err.status) throw err;
-      // Another key would wait on the same slow server; give up and let retrieval run unranked.
       if (err.name === 'TimeoutError') throw new Error(`Rerank timeout (${RERANK_TIMEOUT_MS / 1000}s)`);
       console.warn('Cohere key error, trying next:', err);
     }
@@ -241,7 +236,6 @@ async function cohereRerank(query, documents, topN) {
 
 const GOOGLE_RANK_TIMEOUT_MS = 4_000;
 
-// One retry for transient timeouts/5xx; 4xx and a second failure fall through to the backup.
 async function retryRank(fn) {
   try { return await fn(); } catch (err) {
     if (!(err.name === 'TimeoutError' || /timeout/i.test(err.message) || err.status >= 500)) throw err;

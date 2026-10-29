@@ -5,7 +5,6 @@ const path = require('node:path');
 const vm = require('node:vm');
 const { transformSync } = require('esbuild');
 
-// Desktop tabs stay 'visible' while another window is focused, so visibilitychange alone never re-syncs.
 function load() {
   const ls = { doc: {}, win: {} }, timers = [];
   let now = 1_000_000;
