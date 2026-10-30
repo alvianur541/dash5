@@ -244,11 +244,18 @@ async function retryRank(fn) {
   }
 }
 
+function rankTitle(content) {
+  const section = content.match(/^Section:[^\n]*/m)?.[0];
+  if (section) return section.slice(0, 200);
+  const chapter = content.match(/^Chapter:\s*([^\n]*)\nTopic:\s*([^\n]*)/m);
+  return chapter ? `Section: ${chapter[1]} - ${chapter[2]}`.slice(0, 200) : '';
+}
+
 async function googleRerank(query, documents, topN) {
   if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
   const token = await getAccessToken();
   const records = documents.map((content, i) => {
-    const title = (content.match(/^Section:[^\n]*/m) || [''])[0].slice(0, 200);
+    const title = rankTitle(content);
     return title ? { id: String(i), title, content } : { id: String(i), content };
   });
   return retryRank(async () => {

@@ -64,6 +64,8 @@ module.exports = async function () {
     t(res[0].index === 1 && res[0].score === 0.62 && res[1].index === 0, 'jawaban Google dipetakan ke index dokumen');
     t(dikirim.body.records[0].title === 'Section: SWING DEVICE' && !('title' in dikirim.body.records[1]), 'judul section dikirim kalau ada');
     t(dikirim.body.model === 'semantic-ranker-fast-004' && dikirim.opts.headers['x-goog-user-project'] === 'test-project', 'model fast-004 + header project');
+    await googleRerank('engine oil change', ['Chapter: MAINTENANCE\nTopic: Change Engine Oil\nModel: ZX200-5G\nDocument Type: OPERATOR MANUAL\n\nDrain the oil.'], 1);
+    t(dikirim.body.records[0].title === 'Section: MAINTENANCE - Change Engine Oil', 'Operator Manual: judul dari Chapter + Topic');
 
     global.fetch = async () => ({ ok: false, status: 403, json: async () => ({ error: { message: 'Permission denied' } }) });
     let err = null;
