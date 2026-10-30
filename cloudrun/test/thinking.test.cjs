@@ -15,18 +15,19 @@ async function configFor(question) {
 }
 
 module.exports = async function () {
-  const { t, done } = suite('thinking: obrolan & cek angka low, diagnosa & penjelasan medium (+ruang token berpikir)');
+  const { t, done } = suite('thinking: semua low, diagnosa & penjelasan tetap dapat ruang token lebih');
 
   const santai = await configFor('halo');
   t(santai.thinkingConfig.thinkingLevel === 'low', `sapaan → low (${santai.thinkingConfig.thinkingLevel})`);
   t(santai.maxOutputTokens === 1536, `sapaan → batas 1536 tanpa tambahan (${santai.maxOutputTokens})`);
 
   const teknis = await configFor('auto idle ngga fungsi');
-  t(teknis.thinkingConfig.thinkingLevel === 'medium', `keluhan/diagnosa → medium (${teknis.thinkingConfig.thinkingLevel})`);
-  t(teknis.maxOutputTokens >= 2048 + 4096, `diagnosa → batas ditambah 4096 untuk berpikir (${teknis.maxOutputTokens})`);
+  t(teknis.thinkingConfig.thinkingLevel === 'low', `keluhan/diagnosa → low (${teknis.thinkingConfig.thinkingLevel})`);
+  t(teknis.maxOutputTokens >= 2048 + 4096, `diagnosa → batas panjang jawaban tidak berkurang (${teknis.maxOutputTokens})`);
 
   const fungsi = await configFor('coba jelaskan fungsi dari regenerative valve');
-  t(fungsi.thinkingConfig.thinkingLevel === 'medium', `penjelasan cara kerja/fungsi → medium (${fungsi.thinkingConfig.thinkingLevel})`);
+  t(fungsi.thinkingConfig.thinkingLevel === 'low', `penjelasan cara kerja/fungsi → low (${fungsi.thinkingConfig.thinkingLevel})`);
+  t(fungsi.maxOutputTokens >= 2048 + 4096, `penjelasan → batas panjang jawaban tidak berkurang (${fungsi.maxOutputTokens})`);
 
   const spec = await configFor('berat swing motor');
   t(spec.thinkingConfig.thinkingLevel === 'low', `cek angka/spec → low (${spec.thinkingConfig.thinkingLevel})`);

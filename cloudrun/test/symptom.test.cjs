@@ -119,7 +119,7 @@ module.exports = async function () {
     const sent = body.contents[body.contents.length - 1].parts[0].text;
     t(seen.some(q => q.includes('transmisi warning')) && asked[0]?.includes('transmisi warning'), 'balasan pendek dicari & dinilai bersama keluhan sebelumnya');
     t(sent.includes('MALFUNCTION OF HST WARNING INDICATOR') && sent.includes('[SIMTOM MANUAL PALING MIRIP'), 'section HST WARNING INDICATOR + label simtom sampai ke model');
-    t(body.generationConfig.thinkingConfig.thinkingLevel === 'medium', 'lanjutan dari keluhan → thinking medium');
+    t(body.generationConfig.maxOutputTokens >= 4096 + 4096, 'lanjutan dari keluhan → diperlakukan sebagai diagnosa');
   }
 
   {

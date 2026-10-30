@@ -9,7 +9,7 @@ import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
 import { attachAnswerPresentation } from './presentation';
 import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
-import { Part, VContent, VRequest, ThinkingLevel, MODEL, resetUsage, toInlineData } from './vertex';
+import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, RAG_LABEL, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
@@ -191,8 +191,9 @@ export async function generateResponseStream(
   const recentComplaint = trimmed.split(/\s+/).length <= 8
     && history.filter(m => m.role === 'user').slice(-2).some(m => isSymptomQuery(m.content));
   const diagnostic = isFaultCode || isSymptomQuery(q) || WANTS_DETAIL_RE.test(q) || recentComplaint;
-  const thinkingLevel: ThinkingLevel = isCasual || dataLabel === RAG_LABEL.parts || !diagnostic ? 'low' : 'medium';
-  const thinkHeadroom    = thinkingLevel === 'medium' ? 4096 : 0;
+  const answersDiagnosis = diagnostic && !isCasual && dataLabel !== RAG_LABEL.parts;
+  const thinkingLevel: ThinkingLevel = answersDiagnosis ? DIAGNOSIS_THINKING : 'low';
+  const thinkHeadroom    = answersDiagnosis ? 4096 : 0;
   const maxOutputTokens  = (ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536) + thinkHeadroom;
   const followUpNote = isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab intinya dalam ≤ 8 kalimat atau 1 tabel kecil; boleh diawali satu kalimat pengantar singkat yang natural. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
@@ -271,7 +272,7 @@ export async function generateResponse(
   if (imageParts.length === 0) return 'Maaf, gagal membaca file gambar.';
   let sendImageToModel = true;
   let dataFoto = '';
-  let thinkFoto: ThinkingLevel = 'medium';
+  let thinkFoto: ThinkingLevel = DIAGNOSIS_THINKING;
 
   try {
     emit({ type: 'thinking', message: 'Memindai layar monitor untuk fault code…' });

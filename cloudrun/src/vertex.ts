@@ -26,6 +26,8 @@ export interface VRequest {
 
 export type ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
+export const DIAGNOSIS_THINKING: ThinkingLevel = process.env.THINKING_DIAGNOSA === 'medium' ? 'medium' : 'low';
+
 const NO_MINIMAL_THINKING_RE = /^gemini-(?:3\.(?:[7-9]|\d{2,})|(?:[4-9]|\d{2,})\.\d+)-/i;
 
 export function clampThinking(body: VRequest, model: string): VRequest {
