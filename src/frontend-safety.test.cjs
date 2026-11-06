@@ -16,6 +16,14 @@ test('startup purges all legacy answer generations without deleting user session
   assert.deepEqual([...entries.keys()], ['dash-sessions-user']);
 });
 
+test('logout clears the stored Supabase session even when the network sign-out fails', () => {
+  const src = read('components/AuthProvider.tsx');
+  const logout = src.slice(src.indexOf('const logout'), src.indexOf('setUser(null);', src.indexOf('const logout')));
+  assert.match(logout, /signOut\(\)\.catch/);
+  assert.match(logout, /localStorage\.removeItem/);
+  assert.match(logout, /sb-\.\+-auth-token/);
+});
+
 test('login does not publish shared demo credentials or autofill', () => {
   assert.doesNotMatch(read('components/LoginPage.tsx'), /H000|Demo Account|setDemoTutup/);
 });

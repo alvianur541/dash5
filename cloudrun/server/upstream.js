@@ -62,8 +62,9 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
   const batalSemua = () => { for (const c of ctrls) c.abort(); };
   if (signal) signal.addEventListener('abort', batalSemua);
 
+  let menang = false;
   try {
-    return await new Promise((resolve, reject) => {
+    const res = await new Promise((resolve, reject) => {
       const tutup = (fn, nilai, menang) => {
         if (selesai) return;
         selesai = true;
@@ -105,8 +106,10 @@ async function fetchAntiMacet(url, opts, signal, label, stallMs = STALL_MS_NONST
         () => tutup(reject, errTerakhir || new Error('Upstream tidak menjawab')), BATAS_TOTAL_MS));
       kirim();
     });
+    menang = true;
+    return res;
   } finally {
-    if (signal) signal.removeEventListener('abort', batalSemua);
+    if (signal && !menang) signal.removeEventListener('abort', batalSemua);
   }
 }
 

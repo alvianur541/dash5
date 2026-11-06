@@ -33,5 +33,10 @@ module.exports = async () => {
 
   const sendiri = await runWithDeps(d, () => lengkapiHarga(TOTAL, promo, ''));
   t(sendiri.includes('Gagal dicek'), 'tanpa jawaban sebelumnya perilaku lama tetap (total tak terverifikasi)');
+
+  resetHargaWebCache();
+  const bukanTotal = ['| Keterangan | Harga |', '| :--- | :--- |', '| Ongkos kirim ke site | Rp 750.000 |'].join('\n');
+  const ongkir = await runWithDeps(d, () => lengkapiHarga(bukanTotal, promo, SEBELUMNYA));
+  t(ongkir.includes('Gagal dicek') && !ongkir.includes('Rp 2.073.367') && !ongkir.includes('Rp 1.658.693'), `baris tanpa PN yang BUKAN total tidak diisi total jawaban lalu (${ongkir.split('\n')[2]})`);
   return done();
 };

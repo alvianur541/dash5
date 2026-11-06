@@ -53,12 +53,19 @@ async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Prom
     return (data.products?.data ?? [])
       .filter(p => p.name && cocok(kunci, p.name) && Number(p.price?.amount) > 0)
       .slice(0, 4)
-      .map(p => ({ pn: kunci === asli ? p.name!.trim() : asli + p.name!.trim().toUpperCase().slice(kunci.length), nama: (p.short_description ?? '').trim(), harga: rupiah(Number(p.price!.amount)) }));
+      .map(p => ({ pn: kunci === asli ? p.name!.trim() : asli + p.name!.trim().toUpperCase().slice(kunci.length), nama: namaAman(p.short_description), harga: rupiah(Number(p.price!.amount)) }));
   } finally {
     clearTimeout(timer);
     signal?.removeEventListener('abort', lepas);
   }
 }
+
+export const namaAman = (s: unknown) => Array.from(String(s ?? ''), c => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? ' ' : c)).join('')
+  .replace(/\(?(?:https?:\/\/|www\.)[^\s)]*\)?/gi, '')
+  .replace(/[|`*_~<>[\]#\\]/g, ' ')
+  .replace(/\s+/g, ' ')
+  .trim()
+  .slice(0, 80);
 
 export async function hargaWeb(pns: string[], maks = MAKS_PN_OH): Promise<HasilWeb> {
   const hasil: HasilWeb = new Map();
@@ -444,7 +451,8 @@ export async function lengkapiHarga(text: string, promo: Map<string, Set<string>
   }
   for (const r of rows.filter(r => !r.pn)) {
     const label = r.cells.filter((_, n) => !r.prices.includes(n)).join(' ').toLowerCase();
-    const hitung = /promo|diskon|disc|hemat/.test(label) ? totalLalu.promo : /normal|hexindoparts/.test(label) ? totalLalu.normal : totalLalu.shown;
+    const barisTotal = /total|jumlah|grand|hemat/.test(label);
+    const hitung = !barisTotal ? 0n : /promo|diskon|disc|hemat/.test(label) ? totalLalu.promo : /normal|hexindoparts/.test(label) ? totalLalu.normal : totalLalu.shown;
     for (const n of r.prices) {
       const cell = r.cells[n] ?? '';
       const kunci = `${r.table}:${n}`;

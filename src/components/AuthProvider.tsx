@@ -98,7 +98,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
-    await supabase?.auth.signOut();
+    await supabase?.auth.signOut().catch(() => null);
+    try {
+      for (const k of Object.keys(localStorage)) if (/^sb-.+-auth-token/.test(k)) localStorage.removeItem(k);
+    } catch {}
     setUser(null);
   };
 

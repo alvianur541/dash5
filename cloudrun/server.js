@@ -104,6 +104,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) return res.status(503).json({ error: 'Supabase belum dikonfigurasi' });
 
   const userName = (typeof b.userName === 'string' ? b.userName.replace(/[^\p{L}\p{N} .'-]/gu, '').trim().slice(0, 40) : '') || 'Teknisi';
+  const akun = (req.authUser.email || '').split('@')[0].replace(/[^\w.+-]/g, '').slice(0, 64) || req.authUser.id;
   const history  = (Array.isArray(b.history) ? b.history.slice(-HISTORY_MAX_MSG) : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .map(m => ({ role: m.role, content: m.content.slice(0, HISTORY_MAX_CHARS) }));
@@ -153,6 +154,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     meta: {},
     richAnswersEnabled: process.env.RICH_ANSWERS_ENABLED !== 'false' && b.source !== 'live' && images.length === 0,
     deadlineAt,
+    aborted: () => ctrl.signal.aborted,
     embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
     webPrice: (pn) => orch.fetchHexParts(pn, ctrl.signal),
     rerank: async (query, documents, topN) => {
@@ -216,7 +218,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     console.info(
       '[ask] rid=%s user=%s unit=%s q="%s" route=%s conf=%s model=%s ' +
       'ttft=%d rag=%d rerank=%d total=%d in=%d out=%d calls=%d cost=%s%s%s',
-      requestId, userName, unit, ringkasTanya(userInput, images.length),
+      requestId, akun, unit, ringkasTanya(userInput, images.length),
       m.route || '-', m.confidence || '-', m.modelUsed || orch.MODEL,
       ttft, m.msRag || 0, m.msRerank || 0, totalMs,
       deps.usage.input, deps.usage.output, deps.usage.calls,
@@ -225,7 +227,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       m.fallbackTo ? ` fallback=${m.fallbackTo}${m.fallbackSebab ? `(${m.fallbackSebab})` : ''}` : '');
     catatPemakaian(req, {
       requestId, userName, unit, usage: deps.usage, meta: m,
-      ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId : null, source: b.source === 'live' ? 'live' : undefined,
+      ttft, totalMs, biaya, sessionId: typeof b.sessionId === 'string' ? b.sessionId.slice(0, 100) : null, source: b.source === 'live' ? 'live' : undefined,
     });
     catatStat(_stat.req, {
       t: Date.now(), ttft, total: totalMs, unit, route: m.route || '-',
@@ -247,7 +249,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     const kuota = err && err.message === 'KUOTA_PENUH';
     const sebab = deadlineHit ? 'deadline' : kuota ? 'kuota-penuh' : 'exception';
     console.error('[ask-error] rid=%s user=%s unit=%s q="%s" after=%dms sebab=%s | %s',
-      requestId, userName, unit, ringkasTanya(userInput, images.length), Date.now() - tMulai, sebab,
+      requestId, akun, unit, ringkasTanya(userInput, images.length), Date.now() - tMulai, sebab,
       (err && err.stack) || err);
     catatStat(_stat.err, { t: Date.now(), unit, sebab });
     sseWrite(res, 'error', { message: kuota ? 'KUOTA_PENUH' : deadlineHit ? 'Waktu proses habis — coba kirim ulang pertanyaanmu.' : 'Gagal memproses pertanyaan.' });

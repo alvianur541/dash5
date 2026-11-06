@@ -176,6 +176,8 @@ export async function callProxyStream(
       clearTimeout(hardTimer);
     }
 
+    if (deps().aborted?.()) throw new Error('DIBATALKAN_KLIEN');
+
     if (quotaFull) {
       if (attempt < MAX_ATTEMPT && !pastDeadline()) {
         console.warn('[fallback] %s 429 (kapasitas penuh) — pindah model', modelUsed);

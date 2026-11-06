@@ -58,7 +58,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
   const users = new Set();
   const wss = new WebSocketServer({ noServer: true, maxPayload: 32768, perMessageDeflate: false });
   server.on('upgrade', (req, socket, head) => {
-    if (req.url !== '/v1/live' || !enabled || !origins.includes(req.headers.origin)) { socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
+    if (req.url !== '/v1/live' || !enabled || !origins.includes(req.headers.origin)) { socket.on('error', () => {}); socket.end('HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n'); return; }
     wss.handleUpgrade(req, socket, head, ws => wss.emit('connection', ws, req));
   });
   wss.on('connection', (ws, req) => {
@@ -106,7 +106,7 @@ function registerLiveVoice(server, { verifyToken, units, enabled = process.env.L
           selectedUnit = m.unit; history = boundLiveHistory(m.history);
           bahasa = [...history].reverse().filter(h => h.role === 'user').map(h => detectLang(h.content)).find(Boolean) || null;
           upstream = await connect(m.unit, { lang: bahasa });
-          if (stopped) return upstream.terminate();
+          if (stopped) { upstream.on('error', () => {}); return upstream.terminate(); }
           const setupTimer = setTimeout(() => stop('Live belum tersedia. Gunakan chat teks.', 'setup-timeout'), setupMs);
           upstream.on('close', (code, why) => { clearTimeout(setupTimer); upClose = `${code}:${String(why).slice(0, 120)}`; stop('Live terputus. Gunakan chat teks.', 'upstream-close'); });
           upstream.on('error', err => { clearTimeout(setupTimer); upClose = `error:${String(err?.message).slice(0, 120)}`; stop('Live belum tersedia. Gunakan chat teks.', 'upstream-error'); });

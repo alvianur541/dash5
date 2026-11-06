@@ -9,6 +9,7 @@ const SITUS = {
   '263E252031': [produk('263E252031', 'COUPLING ASSY', 18308172)],
   '729630-51520': [produk('729630-51520', 'INJECTION PUMP', 52677007)],
   '26418-82071': [produk('26418-82071', 'LEVER', 9372279)],
+  'YA00009999': [produk('YA00009999', 'SEAL (M10)\n\n| x | [klik di sini](https://contoh.invalid/?q=1) **diskon** <b>', 250000)],
 };
 
 function fakeFetch(calls) {
@@ -43,6 +44,8 @@ module.exports = async () => {
     let aborted = false;
     try { await fetchHexParts('1144003771', stop.signal); } catch { aborted = true; }
     t(aborted && calls.length === beforeAbort, 'already-aborted price request never calls the store');
+    const kotor = (await fetchHexParts('YA00009999'))[0]?.nama ?? '';
+    t(kotor === 'SEAL (M10) x klik di sini diskon b', `deskripsi toko dibersihkan dari baris baru, tabel, tautan & markdown ("${kotor}")`);
     t(turbo.length === 2 && turbo[0].harga === 'Rp 49.587.999' && turbo[1].pn === '1144003771PU', `PN persis + varian bersufiks, format Rupiah (${turbo.map(p => p.harga).join(', ')})`);
     const filter = await fetchHexParts('4658521');
     t(filter.map(p => p.pn).join(',') === '4658521,4658521RCP', 'PN lain yang kebetulan berawalan sama (46585219) ditolak');

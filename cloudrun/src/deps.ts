@@ -27,6 +27,7 @@ export interface Deps {
   richAnswersEnabled?: boolean;
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
+  aborted?: () => boolean;
   langHint?: 'id' | 'en' | 'ja';
 }
 

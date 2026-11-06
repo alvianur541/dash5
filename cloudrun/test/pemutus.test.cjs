@@ -34,5 +34,12 @@ module.exports = async () => {
   await runWithDeps(deps(() => sehat, m4), () => callProxyStream(BODY, () => {}));
   t(m4.join() === UTAMA, 'sesudah masa sakit habis → kembali ke model utama');
 
+  resetPemutus();
+  const m5 = [];
+  const d5 = { ...deps(() => [{ error: 'AbortError: This operation was aborted' }], m5), aborted: () => true };
+  let e5 = null;
+  try { await runWithDeps(d5, () => callProxyStream(BODY, () => {})); } catch (e) { e5 = e; }
+  t(m5.join() === UTAMA && e5 && !d5.meta.fallbackTo && !d5.meta.fallbackSebab, `klien sudah menekan Stop → tidak pindah ke model cadangan, tidak tercatat fallback (${m5.join(' → ')})`);
+
   return done();
 };

@@ -94,6 +94,30 @@ test('long AI speech keeps the session alive while the mic is held', async () =>
     assert.equal(ws.readyState, WebSocket.OPEN); assert.equal(provider.readyState, 1);
   } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
 });
+test('stop while the provider is still connecting does not crash the process', async () => {
+  const http = require('node:http'); const { EventEmitter, once } = require('node:events');
+  const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');
+  const provider = new EventEmitter(); provider.readyState = 0;
+  provider.terminate = () => setImmediate(() => provider.emit('error', new Error('WebSocket was closed before the connection was established')));
+  const server = http.createServer();
+  let lepas;
+  const tersambung = new Promise(r => { lepas = r; });
+  const wss = registerLiveVoice(server, { enabled: true, allowed: new Set(['u']), units: new Set(['ZX200-5G']), origins: ['http://localhost'], usageLog: () => {},
+    verifyToken: (req, _res, next) => { req.authUser = { id: 'u' }; req.authToken = 't'; next(); },
+    connect: async () => { await tersambung; return provider; } });
+  await new Promise(r => server.listen(0, '127.0.0.1', r));
+  const ws = new WebSocket(`ws://127.0.0.1:${server.address().port}/v1/live`, { origin: 'http://localhost' });
+  try {
+    await once(ws, 'open');
+    ws.send(JSON.stringify({ type: 'auth', token: 't', unit: 'ZX200-5G' }));
+    await new Promise(r => setTimeout(r, 20));
+    ws.send('{"type":"stop"}');
+    await new Promise(r => setTimeout(r, 20));
+    lepas();
+    await new Promise(r => setTimeout(r, 50));
+    assert.ok(true);
+  } finally { ws.terminate(); await new Promise(r => wss.close(r)); await new Promise(r => server.close(r)); }
+});
 test('authenticated relay fixes unit, forwards PCM and tools, cleans concurrency on stop', async () => {
   const http = require('node:http'); const { EventEmitter, once } = require('node:events');
   const { WebSocket } = require('ws'); const { registerLiveVoice } = require('../server/live-voice');

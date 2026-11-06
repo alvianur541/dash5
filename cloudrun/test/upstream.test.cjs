@@ -74,6 +74,14 @@ module.exports = async () => {
   }
 
   {
+    const catat = pasangFetch([{ ms: 5 }]);
+    const ctrl = new AbortController();
+    const res = await fetchAntiMacet('u', {}, ctrl.signal, 'uji', STALL);
+    ctrl.abort();
+    t(res.ke === 0 && catat[0].dibatalkan === true, 'klien putus SESUDAH header tiba → koneksi pemenang ikut dibatalkan (stream Vertex berhenti)');
+  }
+
+  {
     const ctrl = new AbortController();
     ctrl.abort();
     pasangFetch([{ ms: 5 }]);

@@ -19,8 +19,26 @@ function persentil(v, p) {
 }
 
 
+const { createHash, timingSafeEqual } = require('node:crypto');
+const sidik = s => createHash('sha256').update(String(s)).digest();
+
+function operator(req) {
+  const token = process.env.METRICS_TOKEN || '';
+  const kirim = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  return token.length >= 16 && kirim.length > 0 && timingSafeEqual(sidik(kirim), sidik(token));
+}
+
 function registerMetrics(app) {
-  app.get('/metrics', (_req, res) => {
+  app.get('/metrics', (req, res) => {
+    const config = {
+      model: process.env.VERTEX_MODEL || '-',
+      fallback: process.env.FALLBACK_MODELS || '-',
+      intent: process.env.INTENT_MODEL || 'gemini-3.5-flash-lite',
+      reranker: RERANKER === 'google' ? `google ${GOOGLE_RANK_MODEL} (cadangan cohere)` : 'cohere',
+      usage_log: USAGE_LOG_ON ? 'on' : 'off',
+    };
+    const uptime = Math.round((Date.now() - _stat.mulai) / 1000);
+    if (!operator(req)) return res.json({ status: 'ok', uptime_detik: uptime, config });
     const batas = Date.now() - JENDELA_MS;
     const r = _stat.req.filter(x => x.t >= batas);
     const e = _stat.err.filter(x => x.t >= batas);
@@ -44,7 +62,7 @@ function registerMetrics(app) {
     const menit = Math.max(1, Math.min(15, (Date.now() - _stat.mulai) / 60000));
     res.json({
       status: 'ok',
-      uptime_detik: Math.round((Date.now() - _stat.mulai) / 1000),
+      uptime_detik: uptime,
       jendela: '15 menit terakhir',
       trafik: {
         request: r.length,
@@ -68,13 +86,7 @@ function registerMetrics(app) {
         usd: Number(biaya.toFixed(4)),
         idr: Math.round(biaya * KURS_IDR),
       },
-      config: {
-        model: process.env.VERTEX_MODEL || '-',
-        fallback: process.env.FALLBACK_MODELS || '-',
-        intent: process.env.INTENT_MODEL || 'gemini-3.5-flash-lite',
-        reranker: RERANKER === 'google' ? `google ${GOOGLE_RANK_MODEL} (cadangan cohere)` : 'cohere',
-        usage_log: USAGE_LOG_ON ? 'on' : 'off',
-      },
+      config,
     });
   });
 }
