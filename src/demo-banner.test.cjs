@@ -27,7 +27,7 @@ function renderApp(hostname, user = null, dismissed = false, loading = false) {
       if (id === 'motion/react') return { m: { div: 'div', form: 'form' }, AnimatePresence: React.Fragment };
       if (id.startsWith('.')) {
         const name = path.basename(id);
-        if (id.includes('components/') && !['LoginPage', 'DemoBanner', 'MoveBanner'].includes(name)) {
+        if (id.includes('components/') && name !== 'LoginPage') {
           return { [name]: () => null };
         }
         return load(path.resolve(path.dirname(file), id + (id.endsWith('/types') ? '.ts' : name === 'utils' ? '.ts' : '.tsx')));
@@ -42,71 +42,15 @@ function renderApp(hostname, user = null, dismissed = false, loading = false) {
   return renderToStaticMarkup(React.createElement(load(path.join(__dirname, 'App.tsx')).default));
 }
 
-test('app login shows the request pill under the login button, not at the top edge', () => {
-  const html = renderApp('app.dash5.id');
-  assert.equal((html.match(/Request demo access/g) || []).length, 1);
-  assert.match(html, /class="demo-banner" role="status"/);
-  assert.match(html, /type="button" aria-label="Tutup"/);
-  assert.ok(html.indexOf('demo-banner') > html.indexOf('type="submit"'));
-  assert.ok(html.indexOf('demo-banner') < html.indexOf('</form>'));
-  assert.doesNotMatch(html, /min-h-0 flex-1/);
-  assert.doesNotMatch(html, /Demo access|For portfolio review|Contact us/);
-  assert.match(html, /href="mailto:alvianur@dash5.id"/);
-  assert.doesNotMatch(html, /h000|dash5\.internal|Demo Account/i);
-  assert.match(html, /autoComplete="username"/);
-  assert.match(html, /value=""/);
-});
-
-test('legacy session dismissal is ignored after reload', () => {
-  for (const user of [null, { uid: 'fixture', displayName: 'Reviewer' }]) {
-    assert.equal((renderApp('app.dash5.id', user, true).match(/Request demo access/g) || []).length, user ? 0 : 1);
-  }
-});
-
-test('old and unrelated hostnames have neither portfolio nor migration banners', () => {
-  for (const host of ['dash5.my.id', 'localhost', 'dash5.id', 'app.dash5.id.example.com']) {
+test('login has no demo request banner on any hostname', () => {
+  for (const host of ['app.dash5.id', 'dash5.my.id', 'localhost', 'dash5.id']) {
     const html = renderApp(host);
-    assert.doesNotMatch(html, /Request demo access|demo-banner|Demo access|Aplikasi pindah|move-banner|mailto:alvianur@dash5.id/);
+    assert.match(html, /type="submit"/);
+    assert.doesNotMatch(html, /Request demo access|demo-banner|mailto:alvianur@dash5.id|h000|dash5.internal|Demo Account/i);
   }
 });
 
-test('authenticated app never has a request strip or extra banner wrapper', () => {
-  const user = { uid: 'fixture', displayName: 'Reviewer' };
-  const html = renderApp('app.dash5.id', user);
-  assert.doesNotMatch(html, /Request demo access|demo-banner|min-h-0 flex-1/);
-  for (const host of ['dash5.my.id', 'localhost', 'dash5.id', 'app.dash5.id.example.com']) {
-    assert.doesNotMatch(renderApp(host, user), /Request demo access|demo-banner|move-banner/);
-  }
-});
-
-test('close lasts only for the mounted banner and remount restores it', () => {
-  let closed;
-  const module = { exports: {} };
-  const stateReact = { ...React, useState: initial => {
-    if (closed === undefined) closed = initial;
-    return [closed, value => { closed = value; }];
-  } };
-  vm.runInNewContext(transformSync(readFileSync(path.join(__dirname, 'components/DemoBanner.tsx'), 'utf8'),
-    { loader: 'tsx', format: 'cjs', jsx: 'automatic' }).code, {
-    module, exports: module.exports,
-    require: id => id === 'react' ? stateReact : require(id),
-    window: { location: { hostname: 'app.dash5.id' } },
-    sessionStorage: { getItem() { throw Error('must not read persistence'); }, setItem() { throw Error('must not persist dismissal'); } },
-  });
-  const render = module.exports.DemoBanner;
-  assert.ok(render());
-  render().props.children[1].props.onClick();
-  assert.equal(render(), null);
-  closed = undefined;
-  assert.ok(render());
-});
-
-test('auth loading has no request strip', () => {
-  assert.doesNotMatch(renderApp('app.dash5.id', null, true, true), /Request demo access|demo-banner/);
-});
-
-test('request demo pill is a solid yellow banner without underline', () => {
-  const css = require('node:fs').readFileSync(require('node:path').join(__dirname, 'index.css'), 'utf8');
-  assert.match(css, /\.demo-banner \{[^}]*background: #F5C542;[^}]*color: #1C1606;/);
-  assert.match(css, /\.demo-banner a \{[^}]*text-decoration: none;/);
+test('banner component and styles are gone', () => {
+  assert.equal(require('node:fs').existsSync(path.join(__dirname, 'components/DemoBanner.tsx')), false);
+  assert.doesNotMatch(readFileSync(path.join(__dirname, 'index.css'), 'utf8'), /demo-banner/);
 });
