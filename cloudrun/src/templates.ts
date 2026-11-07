@@ -3,16 +3,18 @@ import { UNIT_MODELS } from './types';
 export type Lang = 'id' | 'en' | 'ja';
 
 const JP_RE = /[぀-ヿ一-鿿]/;
-const EN_RE = /\b(what|who|whose|how|why|when|where|which|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/i;
-const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo|dan|berapa|brp|pada|di|ke|semua|hasil|jika|jadi|terus|tapi|karena|nilai|apakah|mana|nya)\b/i;
+const EN_RE = /\b(what|who|whose|how|why|when|where|which|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/gi;
+const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo|dan|berapa|brp|pada|di|ke|semua|hasil|jika|jadi|terus|tapi|karena|nilai|apakah|mana|nya|kadang|terkadang|sering|selalu|ketika|setelah|sesudah|sebelum|sedang|kabel|mesin|nyala|mati|hidup|putus|bocor|lambat|lemah|tekanan|unitnya|kenapa|gimana|seperti|sama)\b/gi;
+
+const hitung = (re: RegExp, t: string) => t.match(re)?.length ?? 0;
 
 export function detectLang(text: string): Lang | null {
   if (JP_RE.test(text)) return 'ja';
   const t = text.replace(/\bthanks?\s*(?:you|u)\b/gi, ' ').replace(/\bCAN\b/g, ' ');
-  const id = ID_RE.test(t);
-  const en = EN_RE.test(t);
-  if (id && !en) return 'id';
-  if (en && !id) return 'en';
+  const id = hitung(ID_RE, t);
+  const en = hitung(EN_RE, t);
+  if (id > en) return 'id';
+  if (en > id) return 'en';
   return null;
 }
 

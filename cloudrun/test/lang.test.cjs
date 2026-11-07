@@ -20,6 +20,8 @@ module.exports = async function () {
   t(['can harness dan suplai daya normal semua', 'berapa hasil pengukuran jalur can pada masing masing controler', 'Standart pengukuran can h dan can l', 'can nya monitor 120. gmn cara vonis dia rusak?']
     .every(s => detectLang(s) === 'id'), '"jalur can"/"can harness" (huruf kecil, 20 Okt) bukan tanda EN');
   t(detectLang('can you check the relief pressure') === 'en', 'kalimat EN berawalan "can" tetap EN');
+  t(sessionLang('Kabel can terkadang short to ground short to power', [{ role: 'user', content: 'Kenapa kabel can di twist' }]) === 'id', 'istilah teknik Inggris di kalimat Indonesia ("short to ground") tidak membalik bahasa (6 Nov)');
+  t(detectLang('This unit have problem wiper motor') === 'en' && detectLang('Can you check price for swing bearing, please?') === 'en', 'kalimat Inggris teknisi tetap EN');
   t(sessionLang('kalau salah satu controller di cabut, berapa nilainya?', [{ role: 'user', content: 'I have checked it' }]) === 'id', 'pesan ID baru menang atas riwayat EN');
   t(sessionLang('Cara cek status Wiper 1 Input di MPDr', [], 'en') === 'en', 'petunjuk bahasa (ucapan asli teknisi) menang atas pertanyaan susunan ulang');
 
