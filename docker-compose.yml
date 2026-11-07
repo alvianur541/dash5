@@ -7,7 +7,7 @@ services:
     volumes:
       - ./secrets/sa-key.json:/app/sa-key.json:ro
     ports:
-      - "3000:8080"
+      - "127.0.0.1:3000:8080"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
@@ -25,7 +25,7 @@ services:
         VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
         VITE_VERTEX_PROXY_URL: ${VITE_VERTEX_PROXY_URL}
     ports:
-      - "8080:80"
+      - "127.0.0.1:8080:80"
     restart: unless-stopped
     depends_on:
       - backend

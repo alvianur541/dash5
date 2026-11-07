@@ -1,6 +1,7 @@
-const { ALLOWED_ORIGINS, AUTH_CACHE_TTL_MS, RATE_LIMIT_PER_MIN, SUPABASE_ANON_KEY, SUPABASE_URL } = require('./config');
+const { ALLOWED_ORIGINS, AUTH_CACHE_TTL_MS, MAX_INFLIGHT_PER_USER, RATE_LIMIT_PER_MIN, SUPABASE_ANON_KEY, SUPABASE_URL } = require('./config');
 
 const _rateBuckets = new Map();
+const _inflight = new Map();
 
 function rateLimit(req, res, next) {
   const key = (req.authUser && req.authUser.id) || req.ip || 'anon';
@@ -14,9 +15,20 @@ function rateLimit(req, res, next) {
   if (b.count > RATE_LIMIT_PER_MIN) {
     return res.status(429).json({ error: 'Terlalu banyak request. Tunggu sebentar lalu coba lagi.' });
   }
+  const jalan = _inflight.get(key) || 0;
+  if (jalan >= MAX_INFLIGHT_PER_USER) {
+    return res.status(429).json({ error: 'Masih ada pertanyaan yang diproses. Tunggu jawabannya selesai.' });
+  }
+  _inflight.set(key, jalan + 1);
+  let lepas = false;
+  res.on('close', () => {
+    if (lepas) return;
+    lepas = true;
+    const sisa = (_inflight.get(key) || 1) - 1;
+    if (sisa > 0) _inflight.set(key, sisa); else _inflight.delete(key);
+  });
   next();
 }
-
 
 function securityHeaders(app) {
   app.disable('x-powered-by');
@@ -30,12 +42,16 @@ function securityHeaders(app) {
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Max-Age', '600');
     res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('X-Frame-Options', 'DENY');
+    res.setHeader('Referrer-Policy', 'no-referrer');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
     res.setHeader('Cache-Control', 'no-store');
     if (req.method === 'OPTIONS') return res.sendStatus(204);
     next();
   });
 }
 
+const BENTUK_JWT = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/;
 
 async function verifyToken(req, res, next) {
   if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
@@ -46,11 +62,13 @@ async function verifyToken(req, res, next) {
   if (!authHeader || !authHeader.startsWith('Bearer ') || authHeader.length > 4096) {
     return res.status(401).json({ error: 'Missing authorization token' });
   }
+  const token = authHeader.slice(7);
+  if (!BENTUK_JWT.test(token)) return res.status(401).json({ error: 'Invalid or expired token' });
   try {
-    const user = await fetchAuthUser(authHeader.slice(7));
+    const user = await fetchAuthUser(token);
     if (!user || !user.id) return res.status(401).json({ error: 'Invalid or expired token' });
     req.authUser = user;
-    req.authToken = authHeader.slice(7);
+    req.authToken = token;
     next();
   } catch (err) {
     console.error('Token verification error:', err);
@@ -59,23 +77,35 @@ async function verifyToken(req, res, next) {
 }
 
 const _userCache = new Map();
+const _tolakCache = new Map();
+const TOLAK_TTL_MS = 30_000;
+
+function simpan(map, key, value) {
+  if (map.size >= 200) map.delete(map.keys().next().value);
+  map.set(key, value);
+}
 
 async function fetchAuthUser(token) {
   const hit = _userCache.get(token);
   if (hit && Date.now() < hit.expiresAt) return hit.user;
+  const tolak = _tolakCache.get(token);
+  if (tolak && Date.now() < tolak) return null;
   const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
     headers: { 'Authorization': `Bearer ${token}`, 'apikey': SUPABASE_ANON_KEY },
     signal: AbortSignal.timeout(8_000),
   });
-  if (!r.ok) { _userCache.delete(token); return null; }
+  if (!r.ok) {
+    _userCache.delete(token);
+    if (r.status === 401 || r.status === 403) simpan(_tolakCache, token, Date.now() + TOLAK_TTL_MS);
+    return null;
+  }
   const user = await r.json();
   let expiresAt = Date.now() + AUTH_CACHE_TTL_MS;
   try {
     const exp = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString()).exp;
     if (typeof exp === 'number' && Number.isFinite(exp)) expiresAt = Math.min(expiresAt, exp * 1000);
   } catch {}
-  if (_userCache.size >= 200) _userCache.delete(_userCache.keys().next().value);
-  _userCache.set(token, { user, expiresAt });
+  simpan(_userCache, token, { user, expiresAt });
   return user;
 }
 

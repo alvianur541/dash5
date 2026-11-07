@@ -28,7 +28,6 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Tanpa /v1 — frontend menambahkannya sendiri.
     location /api/ {
         proxy_pass http://127.0.0.1:3000/;
         proxy_set_header Host $host;

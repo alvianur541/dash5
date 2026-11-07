@@ -11,10 +11,8 @@ cloudrun/test/.build/
 CLAUDE.md
 CLAUDE-HISTORY.md
 
-# Google Cloud service account keys — never commit.
 secrets/*
 !secrets/.gitkeep
 
-# Dealer price lists and their backups: this repo is public.
 promo-backup-*.json
 supabase/data/

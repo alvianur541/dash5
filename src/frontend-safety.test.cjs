@@ -16,6 +16,17 @@ test('startup purges all legacy answer generations without deleting user session
   assert.deepEqual([...entries.keys()], ['dash-sessions-user']);
 });
 
+test('CSP allows no inline script and index.html carries none', () => {
+  const headers = read('../public/_headers');
+  const scriptSrc = headers.match(/script-src([^;]+);/)?.[1] ?? '';
+  assert.doesNotMatch(scriptSrc, /unsafe-inline|unsafe-eval/);
+  assert.match(headers, /frame-ancestors 'none'/);
+  const html = read('../index.html');
+  for (const tag of html.match(/<script\b[^>]*>/g) ?? []) assert.match(tag, /\bsrc=/);
+  assert.match(html, /<script src="\/theme-init\.js"><\/script>/);
+  assert.match(read('../public/theme-init.js'), /dash-theme/);
+});
+
 test('logout clears the stored Supabase session even when the network sign-out fails', () => {
   const src = read('components/AuthProvider.tsx');
   const logout = src.slice(src.indexOf('const logout'), src.indexOf('setUser(null);', src.indexOf('const logout')));

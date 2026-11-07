@@ -13,5 +13,6 @@ COPY --from=build /app/dist ./dist
 COPY server.js .
 COPY server ./server
 ENV NODE_ENV=production
+USER node
 EXPOSE 8080
 CMD ["node", "server.js"]

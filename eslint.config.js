@@ -27,7 +27,7 @@ const IOS_LAYOUT = [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist', 'cloudrun/dist', 'cloudrun/test/.build', 'public'] },
+  { ignores: ['dist', 'cloudrun/dist', 'cloudrun/test/.build', 'public', 'node-portable'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

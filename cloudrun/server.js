@@ -31,7 +31,7 @@ app.use((req, res, next) => (BIG_BODY_PATHS.has(req.path) ? next() : smallJson(r
 securityHeaders(app);
 
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
-app.get('/v1/live/access', verifyToken, (req, res) => res.json({
+app.get('/v1/live/access', verifyToken, rateLimit, (req, res) => res.json({
   allowed: process.env.LIVE_VOICE_ENABLED === 'true' && require('./server/live-voice').liveAllowed(req.authUser.id),
 }));
 
@@ -108,7 +108,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
   const history  = (Array.isArray(b.history) ? b.history.slice(-HISTORY_MAX_MSG) : [])
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .map(m => ({ role: m.role, content: m.content.slice(0, HISTORY_MAX_CHARS) }));
-  const think    = ['low', 'medium', 'high'].includes(b.think) ? b.think : null;
+  const think    = ['low', 'medium'].includes(b.think) ? b.think : null;
   const rawImages = Array.isArray(b.attachments) ? b.attachments.slice(0, 1) : [];
   const images = [];
   for (const a of rawImages) {

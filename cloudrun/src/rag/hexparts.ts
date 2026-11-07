@@ -60,7 +60,7 @@ async function cariSatu(asli: string, kunci: string, signal?: AbortSignal): Prom
   }
 }
 
-export const namaAman = (s: unknown) => Array.from(String(s ?? ''), c => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? ' ' : c)).join('')
+const namaAman = (s: unknown) => Array.from(String(s ?? ''), c => (c.charCodeAt(0) < 32 || c.charCodeAt(0) === 127 ? ' ' : c)).join('')
   .replace(/\(?(?:https?:\/\/|www\.)[^\s)]*\)?/gi, '')
   .replace(/[|`*_~<>[\]#\\]/g, ' ')
   .replace(/\s+/g, ' ')

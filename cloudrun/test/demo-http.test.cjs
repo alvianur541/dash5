@@ -24,8 +24,8 @@ module.exports = async () => {
     module: authModule, require: () => config, console, process, AbortSignal,
     fetch: async (_url, options) => {
       const token = options.headers.Authorization.slice(7);
-      const user = users[Number(token)];
-      return { ok: !!user, json: async () => user };
+      const user = users[Number(token.split('.')[1])];
+      return { ok: !!user, status: user ? 200 : 401, json: async () => user };
     },
   });
   const context = { console, process, AbortController, AbortSignal, setTimeout, clearTimeout };
@@ -59,11 +59,11 @@ module.exports = async () => {
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   try {
-    const post = (route, body, token = '0') => fetch(`http://127.0.0.1:${server.address().port}${route}`, {
+    const post = (route, body, token = 'fx.0.sig') => fetch(`http://127.0.0.1:${server.address().port}${route}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...(token === null ? {} : { Authorization: `Bearer ${token}` }) }, body: JSON.stringify(body),
     });
     const valid = { model: 'ZX200-5G', userInput: 'hello' };
-    for (const token of [null, 'invalid']) {
+    for (const token of [null, 'invalid', 'fx.9.sig']) {
       for (const route of ['/v1/ask', '/v1/transcribe']) {
         const r = await post(route, valid, token);
         t(r.status === 401, `${route} rejects missing/invalid authentication (${token})`);
@@ -71,11 +71,11 @@ module.exports = async () => {
     }
     t(pipelineCalls === 0 && upstreamCalls === 0, 'unauthorized requests never call AI');
     for (let i = 0; i < users.length; i++) {
-      const r = await post('/v1/ask', valid, String(i));
+      const r = await post('/v1/ask', valid, `fx.${i}.sig`);
       const body = await r.text();
       t(r.status === 200 && body.includes('offline answer') && body.includes('"ev":"done"'), `authenticated identity ${i} reaches normal SSE pipeline`);
-      t(dbHeaders?.Authorization === `Bearer ${i}`, 'retrieval uses caller token, not admin credentials');
-      const transcript = await post('/v1/transcribe', { audio: 'AAAA', mimeType: 'audio/webm' }, String(i));
+      t(dbHeaders?.Authorization === `Bearer fx.${i}.sig`, 'retrieval uses caller token, not admin credentials');
+      const transcript = await post('/v1/transcribe', { audio: 'AAAA', mimeType: 'audio/webm' }, `fx.${i}.sig`);
       t(transcript.status === 200 && (await transcript.json()).text === 'offline transcript', `authenticated identity ${i} reaches transcription`);
     }
     for (const [body, status] of [
