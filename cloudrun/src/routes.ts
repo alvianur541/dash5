@@ -468,6 +468,11 @@ export async function resolveNaturalLanguageQuery(
   const prevUser = trimmed.split(/\s+/).length < 4 ? ([...history].reverse().find(m => m.role === 'user')?.content ?? '') : '';
   const complaint = resolved.text;
   const symptomPromise = findSymptomSections(model, [query, complaint], complaint, `${trimmed} ${query} ${prevUser}`);
+  const extrasPromise = Promise.all([
+    findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ''),
+    findComponentWeight(model, resolved.text, ''),
+    findSpecLines(model, `${trimmed} ${query}`, ''),
+  ]);
   const featureQuery = UNIT_FEATURE_RE.test(trimmed);
   const doc = featureQuery
     ? { kategori: 'BROSUR MANUAL', available: modelHasSource(model, 'BROSUR MANUAL') }
@@ -481,13 +486,12 @@ export async function resolveNaturalLanguageQuery(
     ragResult = null;
   }
   if (!ragResult) ragResult = await searchTechnicalManualMulti([query], model, REDO_RE.test(trimmed) ? 7 : 4);
-  const [perf, berat, nilai, simtom] = await Promise.all([
-    findPerformanceStandard(model, `${trimmed} ${query} ${prevUser}`, ragResult.content),
-    findComponentWeight(model, resolved.text, ragResult.content),
-    findSpecLines(model, `${trimmed} ${query}`, ''),
-    symptomPromise,
-  ]);
+  const [[perfRaw, beratRaw, nilai], simtom] = await Promise.all([extrasPromise, symptomPromise]);
   const have = ragResult.content;
+  const belumAda = (c: string | null): string | null => c
+    && (c.split('\n\n---\n\n').filter(p => !have.includes(p.split('\n')[0])).join('\n\n---\n\n') || null);
+  const perf = belumAda(perfRaw);
+  const berat = belumAda(beratRaw);
   const simtomFresh = simtom.filter(c => !have.includes(c.split('\n')[0]));
   const simtomNote = simtom.length
     ? `[SIMTOM MANUAL PALING MIRIP: ${simtom.map(c => `"${c.split('\n')[0].replace(/^Section:\s*/, '').replace(/\r/g, '').trim()}"`).join(', ')} — pakai prosedurnya HANYA kalau gejalanya cocok dengan keluhan teknisi. Kalau tidak persis sama, sebut sebagai "simtom terdekat di manual" dan jelaskan bedanya; jangan bilang prosedurnya belum ketemu.]\n\n`

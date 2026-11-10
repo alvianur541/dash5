@@ -13,6 +13,13 @@ module.exports = async function () {
     t(min.length < full.length * 0.8, `${m}: minimal prompt is at least 20% shorter (${min.length}/${full.length})`);
   }
   t(SYSTEM_PROMPT('ZX200-5G', undefined, { ...NONE, parts: true }).includes('# PARTS & '), 'parts flag adds only the parts section');
+  const base = SYSTEM_PROMPT('ZX200-5G', undefined, NONE);
+  t(!base.includes('リリーフ弁') && SYSTEM_PROMPT('ZX200-5G', undefined, { ...NONE, ja: true }).includes('リリーフ弁') && SYSTEM_PROMPT('ZX200-5G').includes('リリーフ弁'),
+    'Japanese glossary only rides along for Japanese sessions and photos');
+  t(base.trimEnd().split('\n# ').pop().startsWith('BENTUK & PANJANG JAWABAN') && !/\r/.test(base),
+    'answer shape rules close the shared prompt');
+  t(['1. **Quote VERBATIM', '8. **SELF-CHECK', '14. **Alat diagnosa', 'LANGKAH CEK — format wajib', '# KALAU DATA TIDAK ADA'].every(s => base.includes(s)),
+    'anti-halu rules and diagnosis format survive the rewrite');
 
   let sent = null;
   const { d } = mockDeps([[{ text: 'Oke.', usageMetadata: USAGE, live: true, finishReason: 'STOP' }]], {
