@@ -7,6 +7,7 @@ import { resolveQuestion } from './question';
 import { auditMeasurements } from './grounding';
 import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
+import { blokKasus, adalahLaporan } from './kasus';
 import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
@@ -19,7 +20,7 @@ const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya seba
 const TABEL_HARGA_RE = /^\s*\|[^\n]*\b(?:Rp|IDR)\.?\s*\d/m;
 const ADA_HARGA_WEB_RE = /\[HARGA HEXINDOPARTS\.COM[^\]\n]*\]\n\s+Part Number/;
 
-const LEAK_RE =/^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
+const LEAK_RE =/^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|CATATAN KASUS[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
 const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
 
 const LATEX_SYMBOL: Record<string, string> = {
@@ -29,7 +30,7 @@ const LATEX_SYMBOL: Record<string, string> = {
 
 export function scrubLeaks(text: string): string {
   text = text.replace(/\$\s*\\([A-Za-z]+)\s*\$/g, (m, k: string) => LATEX_SYMBOL[k] ?? m);
-  if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|SIMTOM|Fault Code:)/.test(text)) return text;
+  if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|SIMTOM|CATATAN KASUS|Fault Code:)/.test(text)) return text;
   const before = text.length;
   let out = text.replace(LEAK_RE, '');
   const head = out.slice(0, 400);
@@ -205,8 +206,9 @@ export async function generateResponseStream(
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
   const shownQuery = offer ? `${trimmed}\n[User menerima tawaranmu di jawaban sebelumnya → yang diminta: ${offer}. Jawab langsung permintaan itu, jangan minta klarifikasi.]` : trimmed;
+  const kasus = dataLabel === RAG_LABEL.manual && (diagnostic || adalahLaporan(trimmed)) ? blokKasus(history, trimmed) : '';
   const userText         = ragContent
-    ? `${shownQuery || 'Halo'}${followUpNote}${caveat}\n\n[${dataLabel}]\n${ragContent}`
+    ? `${shownQuery || 'Halo'}${followUpNote}${caveat}${kasus}\n\n[${dataLabel}]\n${ragContent}`
     : gsTechnical
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
