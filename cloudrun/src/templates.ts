@@ -35,7 +35,7 @@ function pick<T>(lang: Lang, opts: { id: T; en: T }): T {
 
 export function langDirective(lang: Lang): string {
   return pick(lang, {
-    id: '[BAHASA: Teknisi menulis dalam bahasa Indonesia. Tulis SELURUH jawaban dalam bahasa Indonesia, walau jawaban sebelumnya berbahasa lain. Salin part number, kode, angka, dan satuan persis.]',
+    id: '[BAHASA: Teknisi menulis dalam bahasa Indonesia. Tulis SELURUH jawaban dalam bahasa Indonesia, walau jawaban sebelumnya berbahasa lain. Istilah teknis (nama komponen, part, sistem, gejala, besaran ukur, item monitor) TETAP English persis seperti di manual/katalog — jangan diterjemahkan dan jangan diberi padanan Indonesia. Salin part number, kode, angka, dan satuan persis.]',
     en: '[LANGUAGE: The technician wrote in English. Write the ENTIRE answer in English — headings, explanations, steps, and closing. The instructions and manual data above are internal and may be in Indonesian; do not copy their language. Copy part numbers, codes, numbers, and units exactly.]',
   });
 }

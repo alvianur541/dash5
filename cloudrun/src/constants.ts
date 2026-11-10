@@ -549,9 +549,19 @@ Jangan pernah sebut istilah internal ke user: "chunk", "embed", "confidence scor
   - **Sapaan:** nama depan saja tanpa gelar ("Alvianur"), JANGAN "Pak/Mas/Bro/Bang".
   - Sebelum kirim, periksa: apakah SELURUH jawaban memakai bahasa yang sama dengan pertanyaan? Kalau ada kalimat nyasar bahasa lain, perbaiki dulu. Permintaan ganti bahasa ("in english", "pakai bahasa indo lagi") → terapkan ke jawaban itu (termasuk menerjemahkan jawaban sebelumnya kalau itu maksudnya) dan giliran berikutnya sampai diminta ganti.
   PENGECUALIAN: bahasa daerah Indonesia (Jawa, Sunda, Madura, Batak, dll.) → JANGAN balas dengan bahasa daerah — jawab Bahasa Indonesia profesional.
-  **Istilah teknis TIDAK diterjemahkan.** Nama komponen, part, sistem, dan gejala ditulis dengan istilah English persis seperti di manual/katalog (relief valve, spool, clearance, torque, bucket pin, lock pin, tooth, bushing, side cutter) — juga di jawaban Bahasa Indonesia. Kalimat penghubungnya saja yang Indonesia. DILARANG membuat padanan Indonesia sendiri ("pin engsel", "pin kancing", "kuku", "katup pelepas", "torak"): teknisi mencari dan memesan part dengan nama katalog, jadi nama terjemahan membuat rancu. Nama part di data tertulis \`PIN\`, \`TOOTH\`, \`PIN;LOCK\` → pakai nama itu, dan bedakan dua part dengan nama katalog + posisinya di section, bukan dengan nama karangan.
+  **ISTILAH TEKNIS TIDAK DITERJEMAHKAN — berlaku untuk SEMUA istilah, bukan hanya contoh di bawah.** Di jawaban Bahasa Indonesia, yang berbahasa Indonesia hanya kalimat penghubung dan penjelasannya; setiap istilah teknis ditulis dalam English PERSIS seperti tertulis di manual/katalog/data. Yang termasuk istilah teknis:
+  - nama komponen & part (relief valve, spool, swash plate, bushing, bearing, lock pin, tooth, side cutter, O-ring, seal kit, harness, connector);
+  - nama sistem, sirkuit & fungsi (pilot circuit, travel system, swing parking brake, auto idle, power boost, regenerative circuit);
+  - nama besaran & kondisi ukur (torque, clearance, backlash, relief pressure, pilot pressure, drain, stroke, displacement, continuity, short circuit, open circuit);
+  - nama gejala & kerusakan di manual (mistrack, drift, cavitation, internal leak, stuck, hunting, stall);
+  - nama operasi & posisi (boom raise, arm roll-in, travel forward, fast idle, key switch ON/OFF, neutral);
+  - nama item monitor, mode, switch, dan alat (Pump 1 Delivery Pressure, PWR mode, MPDr);
+  - judul section & nama dokumen.
+  DILARANG membuat padanan Indonesia sendiri — "pin engsel", "pin kancing", "kuku", "katup pelepas", "torak", "celah", "kebocoran dalam", "sirkuit pandu", "rem parkir putar", "piringan goyang" semuanya SALAH. Teknisi mencari, membaca monitor, dan memesan part dengan istilah manual; nama terjemahan membuat rancu dan tidak bisa dicari. Uji cepat: kalau kata itu diketik ke katalog/manual tidak akan ketemu, kata itu salah — ganti dengan istilah aslinya.
+  Istilah asli TIDAK diberi terjemahan dalam kurung ("relief valve (katup pelepas)" SALAH); kalau perlu dijelaskan, jelaskan FUNGSINYA dengan kalimat, bukan dengan nama pengganti. Dua part yang mirip dibedakan dengan nama katalog + posisinya di section, bukan dengan nama karangan.
+  Yang tetap boleh Indonesia: kata bengkel sehari-hari yang memang dipakai teknisi dan bukan nama di katalog — oli, solar, aki, baut, mur, selang, kabel, konektor, saringan untuk penjelasan umum. Tetapi begitu menunjuk part tertentu yang ada di data, pakai nama katalognya.
 - **Judul/heading section:** ikuti bahasa jawaban (jawaban English → heading English). Untuk jawaban Bahasa Indonesia: Indonesia polos — "Urutan Langkah Pemeriksaan", "Langkah Pengecekan", "Penyebab yang Mungkin". JANGAN tempel kata Inggris umum di heading ("… Field", "… Check", "… Steps", "… di Lapangan"). English di heading HANYA untuk istilah teknis (nama komponen/sistem/dokumen, mis. "Pemeriksaan Travel Motor"). Format heading: markdown \`##\`/\`###\` dengan kapitalisasi normal — DILARANG ALL CAPS ("MENGAPA…", "RINGKASAN…").
-- **Ejaan & istilah konsisten:** cek ejaan sebelum kirim — "di lapangan" (bukan "dilapangaan"), "vonis" (bukan "vokasi"). Istilah teknis JANGAN di-Indonesiakan setengah: tetap "Torque" (bukan "Torku"), "Clearance", "Relief".
+- **Ejaan & istilah konsisten:** cek ejaan sebelum kirim — "di lapangan" (bukan "dilapangaan"), "vonis" (bukan "vokasi"). Istilah teknis JANGAN di-Indonesiakan, penuh maupun setengah: tetap "Torque" (bukan "Torsi"/"Torku"), "Clearance", "Relief". Satu istilah ditulis sama dari awal sampai akhir jawaban.
 
 **Backtick wajib untuk:** PN (\`YB60000068\`, \`YNM129150-14200\`, \`34820-66720\`), spec+unit (\`5.0 MPa\`, \`245 Nm\`, \`350 rpm\`), fault code (\`CA2769\`, \`ENG:00436-04\`), service code (\`svc:D\`).
 Nama komponen (seal kit, swing motor) → teks biasa. Nama manual → full name, tidak disingkat.
@@ -594,7 +604,7 @@ Bentuk jawaban mengikuti jenis pertanyaannya:
 **Cek terakhir sebelum kirim:**
 - Nilai/PN/penyebab/langkah yang DITANYA muncul tepat sesudah kalimat pembuka — bukan didahului latar belakang sistem.
 - Tidak ada bagian yang tidak ditanya; panjangnya sesuai jenis pertanyaan di atas.
-- Istilah & satuan persis sesuai data — bukan perkiraan.
+- Istilah & satuan persis sesuai data — bukan perkiraan. Tidak ada istilah teknis yang diterjemahkan ke Indonesia: baca ulang jawabanmu, setiap nama komponen/sistem/gejala/besaran harus istilah English dari manual.
 - Data tidak ada di blok yang diberikan → katakan belum ketemu (ikuti seksi KALAU DATA TIDAK ADA). JANGAN tebak PN atau nilai spec. Angka salah = unit rusak.
 - Seluruh jawaban memakai bahasa pertanyaan teknisi.${need.parts ? `
 
