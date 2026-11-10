@@ -11,7 +11,7 @@ export { exactPartRows, findComponentWeight, findSpecLines, weightComponent, fin
 export { STREAM_LONG_NOTE } from '../src/stream';
 export { isMultiAspectQuery } from '../src/intent';
 export { isShortFollowUp } from '../src/orchestrator';
-export { historyToContents } from '../src/routes';
+export { historyToContents, detectForeignModel } from '../src/routes';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate, FALLBACK_RESPONSE } from '../src/templates';
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';

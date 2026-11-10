@@ -1,4 +1,4 @@
-const { detectFaultCodeInQuery, extractPartNumber, extractSearchTerms, isPartsQuery, suite } = require('./helpers.cjs');
+const { detectFaultCodeInQuery, extractPartNumber, extractSearchTerms, isPartsQuery, detectForeignModel, suite } = require('./helpers.cjs');
 
 module.exports = async function () {
   const { t, done } = suite('router: fault-code detection & part-number extraction');
@@ -51,5 +51,7 @@ module.exports = async function () {
   { const terms = extractSearchTerms('ENG:0001D-02');
     t(terms.includes('0001D-2') && terms.includes('ENG: 0001D-02'), `hex Yanmar code gets search variants (${terms.join(' | ')})`); }
 
+  t(['Part number filter udara Zaxis 200', 'part number filter udara zaxis 200 strip 5g', 'harga filter zx 200', 'cek ZX200'].every(q => detectForeignModel(q, 'ZX200-5G') === null), 'ucapan "Zaxis 200" (dikte suara, 9 Nov) = unit aktif, bukan unit asing');
+  t(detectForeignModel('Filter hidrolik suction Zaxis 48 U', 'ZX200-5G') !== null && detectForeignModel('Berapa harga unit ZX210F-5G', 'ZX200-5G') !== null, 'unit lain tetap ditolak');
   return done();
 };

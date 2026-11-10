@@ -180,6 +180,9 @@ test('the assistant speaks first: one greeting turn with the first name once Liv
   assert.equal(baru[0].clientContent.turnComplete, true, 'greeting turn makes the model answer right away');
   const sapa = baru[0].clientContent.turns.at(-1).parts[0].text;
   assert.match(sapa, /^\[MULAI SESI\]/); assert.match(sapa, /"Nurjayadi"/); assert.doesNotMatch(sapa, /Saputra|topik terakhir/);
+  assert.match(sapa, /pukul \d\d[.:]\d\d WIB/); assert.match(sapa, /salam waktu/);
+  const umum = (await run([], 'Hexindo'))[0].clientContent.turns.at(-1).parts[0].text;
+  assert.match(umum, /tanpa menyebut nama/); assert.doesNotMatch(umum, /"Hexindo"/);
   const lanjut = await run([{ role: 'user', content: 'cek swing' }, { role: 'assistant', content: 'Cek pilot.' }], '<x>');
   assert.equal(lanjut[0].clientContent.turns.length, 3, 'history first, greeting last, one message');
   assert.match(lanjut[0].clientContent.turns[2].parts[0].text, /topik terakhir/);

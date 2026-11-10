@@ -129,7 +129,7 @@ const isRerankError = (msg?: string): boolean => !!msg && msg.toLowerCase().incl
 const OTHER_MODEL_RE = /\b(?:ZX|ZW|EX|PC|SK|CAT|WA|D|ZAXIS[\s-]?)\s?\d{2,4}\s?[A-Z]{0,4}(?:-\d[A-Z]?)?\b/i;
 
 export function detectForeignModel(query: string, activeModel: string): string | null {
-  const norm = (s: string) => s.toUpperCase().replace(/[\s-]/g, '');
+  const norm = (s: string) => s.toUpperCase().replace(/[\s-]/g, '').replace(/^ZAXIS/, 'ZX');
   const active = norm(activeModel);
   for (const m of query.matchAll(new RegExp(OTHER_MODEL_RE.source, 'gi'))) {
     const hit = m[0].trim();
