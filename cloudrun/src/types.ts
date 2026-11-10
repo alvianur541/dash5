@@ -4,64 +4,12 @@ export const UNIT_MODELS = [
 
 export type UnitModel = typeof UNIT_MODELS[number];
 
-export interface PresentationSource {
-  documentId: string;
-  title: string;
-  category: string;
-  section?: string;
-  revision?: string;
-}
-
-export interface SpecRow {
-  label: string;
-  value: string;
-  unit: string;
-  alternateValues?: Array<{ value: string; unit: string }>;
-}
-
-export interface SpecValueBlock extends SpecRow {
-  type: 'spec_value';
-  facts?: Array<{ label: string; value: string }>;
-  unitModel: UnitModel;
-  sources: PresentationSource[];
-}
-
-export interface SpecTableBlock {
-  type: 'spec_table';
-  title: string;
-  rows: SpecRow[];
-  unitModel: UnitModel;
-  sources: PresentationSource[];
-}
-
-export interface TechnicalNewsBlock {
-  type: 'technical_news';
-  bulletinId?: string;
-  date?: string;
-  title: string;
-  affectedModels: UnitModel[];
-  sources: PresentationSource[];
-}
-
-export interface MarkdownBlock {
-  type: 'markdown';
-  content: string;
-}
-
-export type AnswerPresentationBlockV1 = SpecValueBlock | SpecTableBlock | TechnicalNewsBlock | MarkdownBlock;
-
-export interface AnswerPresentationV1 {
-  version: 1;
-  blocks: AnswerPresentationBlockV1[];
-}
-
 export interface Message {
   id: string;
   role: 'user' | 'assistant';
   content: string;
   timestamp: number;
   attachments?: string[];
-  presentation?: AnswerPresentationV1;
 }
 
 export interface InlineImage { mimeType: string; data: string }

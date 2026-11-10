@@ -74,27 +74,3 @@ test('final server text replaces streamed draft only on completed success', asyn
   assert.equal((await send(client)).text, 'Corrected answer');
 });
 
-test('returns a validated presentation only after the completed final answer', async () => {
-  const full = 'Battery voltage adalah 12 V.';
-  const presentation = {
-    version: 1,
-    blocks: [
-      { type: 'spec_value', label: 'Battery voltage', value: '12', unit: 'V', unitModel: 'ZX200-5G', sources: [{ documentId: '42', title: 'Electrical Manual', category: 'MANUAL' }] },
-      { type: 'markdown', content: full },
-    ],
-  };
-  const { client } = await loadClient([
-    { ev: 'text', text: full }, { ev: 'meta', full }, { ev: 'presentation', presentation }, { ev: 'done' },
-  ]);
-  assert.equal(JSON.stringify((await send(client)).presentation), JSON.stringify(presentation));
-});
-
-test('ignores malformed or answer-mismatched presentation payloads', async () => {
-  const full = 'Battery voltage adalah 12 V.';
-  const { client } = await loadClient([
-    { ev: 'text', text: full }, { ev: 'meta', full },
-    { ev: 'presentation', presentation: { version: 1, blocks: [{ type: 'markdown', content: 'different' }] } },
-    { ev: 'done' },
-  ]);
-  assert.equal((await send(client)).presentation, undefined);
-});

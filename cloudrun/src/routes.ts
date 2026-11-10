@@ -1,5 +1,4 @@
 import { UnitModel, Message, AgentEvent, UNIT_MODELS } from './types';
-import { OH_RE } from './rag/parts';
 import type { RAGResult } from './rag/retrieve';
 import { searchTechnicalManualMulti, searchEngineManual, extractSearchTerms, extractPartNumber, searchPartsCatalog, searchServiceIntervalParts, stripModelFromQuery, MODELS_WITHOUT_PARTS_CATALOG, findPerformanceStandard, findComponentWeight, findSpecLines, findSymptomSections, extractCatalogCode, isFaultCode, hargaWeb, blokHargaWeb, pilihPnHarga, pnChunkTeratas, MINTA_HARGA_RE, KATA_HARGA_RE, adaHarga } from './rag';
 import type { HasilWeb } from './rag';
@@ -8,8 +7,6 @@ import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
 import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
 import type { Lang } from './templates';
-import { jawabanHargaCepat, BUKAN_HARGA_SAJA_RE } from './harga';
-import { promoAktif } from './promo';
 import { deps, type RerankSource } from './deps';
 import { evidenceBlocks, assembleEvidence, type EvidenceDocument, type Confidence, weakestConfidence } from './evidence';
 import { questionFor } from './question';
@@ -268,7 +265,6 @@ export async function resolvePartsQuery(
   model: UnitModel,
   emit: AgentEventEmit = () => {},
   precomputedOpt?: string,
-  izinkanCepat = true,
 ): Promise<RagRouteResult> {
   const hasLiteralPN = !!extractPartNumber(trimmed);
   const isLongQuery  = trimmed.split(/\s+/).length >= 4;
@@ -311,13 +307,11 @@ export async function resolvePartsQuery(
   const percakapanHarga = userLalu.some(u => MINTA_HARGA_RE.test(u) || kodeSaja(u));
   const mintaHarga = MINTA_HARGA_RE.test(trimmed) || (kodeQuery.length > 0 && kodeSaja(trimmed))
     || (percakapanHarga && trimmed.split(/\s+/).length <= 8 && !/\b(?:part\s*number|pn|nomor\s*part)\b/i.test(trimmed));
-  let pnsHarga: string[] = [...kodeQuery];
   if (!intervalHours && (mintaHarga || literalPN)) {
     const jawabanLalu = [...history].reverse().find(m => m.role !== 'user')?.content ?? '';
     let pns = pilihPnHarga(ragResult.hasResults ? ragResult.content : '', [trimmed, searchQuery], jawabanLalu)
       .filter(pn => !kodeQuery.includes(pn));
     if (!pns.length && !kodeQuery.length && ragResult.hasResults) pns = pnChunkTeratas(ragResult.content);
-    pnsHarga = [...pnsHarga, ...pns];
     if (pns.length) {
       emit({ type: 'thinking', message: 'Mengecek harga di hexindoparts.com…' });
       for (const [pn, v] of await hargaWeb(pns)) webHasil.set(pn, v);
@@ -325,18 +319,6 @@ export async function resolvePartsQuery(
   }
   const webLiteral = blokHargaWeb(webHasil);
   const adaHargaWeb = adaHarga(webHasil);
-
-  const butuhSn = /Kategori:\s*TECHNICAL NEWS/i.test(ragResult.content ?? '')
-    || (/^Section: OH PACKAGE/m.test(ragResult.content ?? '') && OH_RE.test(trimmed))
-    || [trimmed, ...userLalu].some(u => /\b(?:s\/?n|sn|serial|nomor\s*seri|no\.?\s*seri)\w*\b[^\n]{0,12}\d{4,}/i.test(u));
-  if (izinkanCepat && !butuhSn && !intervalHours && adaHargaWeb && (mintaHarga || literalPN) && !BUKAN_HARGA_SAJA_RE.test(trimmed) && !promoAktif()) {
-    const cepat = await jawabanHargaCepat(trimmed, history, pnsHarga, webHasil,
-      ragResult.hasResults ? ragResult.content : '', sessionLang(trimmed, history, deps().langHint));
-    if (cepat) {
-      try { deps().meta.route = 'harga_cepat'; } catch {}
-      return { type: 'rag_canned', text: cepat };
-    }
-  }
 
   if (!ragResult.hasResults && adaHargaWeb) {
     const note = literalPN
@@ -446,7 +428,6 @@ export async function resolveNaturalLanguageQuery(
   history: Message[],
   model: UnitModel,
   emit: AgentEventEmit = () => {},
-  izinkanCepat = true,
 ): Promise<RagRouteResult> {
   if (CASUAL_EXACT.has(normalizeCasual(trimmed))) {
     console.info('[intent] sapaan terdeteksi deterministik — analyzeIntent dilewati');
@@ -459,7 +440,7 @@ export async function resolveNaturalLanguageQuery(
   if (!intent.shouldSearch) return { type: 'google_search', mode: 'casual' };
 
   if (intent.searchType === 'parts') {
-    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery, izinkanCepat);
+    return resolvePartsQuery(trimmed, history, model, emit, intent.optimizedQuery);
   }
 
   const rawOpt = intent.optimizedQuery?.trim() ?? '';

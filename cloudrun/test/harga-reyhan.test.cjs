@@ -16,9 +16,7 @@ const jalan = async (q, history = []) => {
   const { d } = mockDeps([[]], {
     supabase: fakeSupabase([ROW]), embed: async () => [0.1],
     rerank: async (_q, docs) => ({ results: docs.map((_, i) => ({ index: i, score: 0.9 })), source: 'google' }),
-    generate: async body => {
-      const text = body.contents[0].parts[0].text;
-      if (text.includes('Kandidat part')) return { candidates: [{ content: { parts: [{ text: '{"pilih":[1],"pembuka":"Ini harganya:"}' }] } }] };
+    generate: async () => {
       return { candidates: [{ content: { parts: [{ text: JSON.stringify({ shouldSearch: true, searchType: 'parts', optimizedQuery: q }) }] } }] };
     },
     webPrice: async pn => { dicek.push(pn); return WEB[pn] ?? []; },
@@ -37,11 +35,11 @@ module.exports = async () => {
   t(!['berapa tekanan standarnya', 'brp nilai ini', 'berapa tekanan dan berat swing motor'].some(s => KATA_HARGA_RE.test(s)), 'caption "berapa tekanan standarnya" bukan minta harga');
   {
     const { r, dicek } = await jalan('Cek hrga 4S00509HPA');
-    t(dicek.includes('4S00509HPA') && r.text?.includes('Rp 9.876.543'), `"Cek hrga 4S00509HPA" → dicek ke web & harga tampil (${dicek.join(',')})`);
+    t(dicek.includes('4S00509HPA') && r.content?.includes('Rp 9.876.543'), `"Cek hrga 4S00509HPA" → dicek ke web & harga tampil (${dicek.join(',')})`);
   }
   {
     const { r, dicek } = await jalan('Cek hrga roller lower');
-    t(dicek.includes('4S00509HPA') && r.text?.includes('Rp 9.876.543'), '"Cek hrga roller lower" → PN dari katalog dicek ke web');
+    t(dicek.includes('4S00509HPA') && r.content?.includes('Rp 9.876.543'), '"Cek hrga roller lower" → PN dari katalog dicek ke web');
   }
   {
     const { dicek } = await jalan('Ad koq cek yg betul hrgany', H('Cek hrga roller lower', 'Part number `4S00509HPA` ROLLER;LOWER harga belum tersedia'));

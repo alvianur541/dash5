@@ -13,6 +13,5 @@ export { UNIT_MODELS } from './types';
 export { fetchHexParts } from './rag';
 export { FALLBACK_MODELS } from './vertex';
 export type {
-  UnitModel, Message, InlineImage, AgentEvent, AnswerPresentationV1, AnswerPresentationBlockV1,
-  PresentationSource, SpecValueBlock, TechnicalNewsBlock, MarkdownBlock,
+  UnitModel, Message, InlineImage, AgentEvent,
 } from './types';

@@ -1,6 +1,5 @@
-import { UnitModel, Message, AgentEvent, AnswerPresentationV1 } from '../types';
+import { UnitModel, Message, AgentEvent } from '../types';
 import { getAuthToken } from './supabase';
-import { validateAnswerPresentation } from '../lib/presentation';
 
 const ASK_IDLE_TIMEOUT_MS = 130_000;
 const RETRY_DELAY_MS = 700;
@@ -44,7 +43,6 @@ interface AskOptions {
 
 interface AIResponse {
   text: string;
-  presentation?: AnswerPresentationV1;
 }
 
 async function ask(
@@ -64,7 +62,6 @@ async function ask(
   let text = '';
   let completed = false;
   let receivedFinal = false;
-  let rawPresentation: unknown;
   let serverError: string | null = null;
   try {
     const send = async () => fetch(`${PROXY_URL}/v1/ask`, {
@@ -125,9 +122,6 @@ async function ask(
               receivedFinal = true;
             }
             break;
-          case 'presentation':
-            rawPresentation = frame.presentation;
-            break;
           case 'done':
             completed = true;
             break;
@@ -145,8 +139,7 @@ async function ask(
   if (serverError) throw new Error(serverError);
   if (ctrl.signal.aborted) throw abortReason();
   if (!completed || !receivedFinal || !text.trim()) throw new Error('Stream terputus sebelum jawaban selesai.');
-  const presentation = validateAnswerPresentation(rawPresentation, text);
-  return { text, ...(presentation ? { presentation } : {}) };
+  return { text };
 }
 
 export async function generateResponseStream(

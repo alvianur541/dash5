@@ -115,7 +115,7 @@ export async function engineSectionRows(text: string, model: string): Promise<Hy
   return out;
 }
 
-export const OH_RE = /\b(?:overhaul\w*|over\s*haul|o\/h|oh|reseal\w*|re-?seal|turun\s*mesin|rekondisi|bom)\b|\bpaket\s+(?:oh|overhaul|reseal|perbaikan|repair)\b/i;
+const OH_RE = /\b(?:overhaul\w*|over\s*haul|o\/h|oh|reseal\w*|re-?seal|turun\s*mesin|rekondisi|bom)\b|\bpaket\s+(?:oh|overhaul|reseal|perbaikan|repair)\b/i;
 
 async function ohIndeks(model: string): Promise<HybridResult[]> {
   const { data } = await sb().from('documents').select('id, content, metadata')

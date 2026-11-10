@@ -2,7 +2,6 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ThinkingLevel } from './vertex';
 import type { ResolvedQuestion } from './question';
 import type { StageEvent } from './telemetry';
-import type { AnswerPresentationV1 } from './types';
 
 export type RerankSource = 'google' | 'cohere';
 
@@ -22,9 +21,7 @@ export interface Deps {
     stages?: StageEvent[];
     modelUsed?: string; cacheable?: boolean; route?: string; confidence?: string; degraded?: boolean;
     groundingUnknown?: number; msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
-    presentation?: AnswerPresentationV1;
   };
-  richAnswersEnabled?: boolean;
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
   aborted?: () => boolean;

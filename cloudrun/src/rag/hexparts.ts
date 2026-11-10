@@ -129,12 +129,12 @@ export const MINTA_HARGA_RE = /\b(?:harga\w*|harg\w*|hrga\w*|hrg\w*|hraga\w*|pri
 const OH_BARIS_RE = /^\s*(\d{1,3})\s{2,}([A-Z0-9][A-Z0-9-]{4,21})\s{2,}(\S.*?)\s{2,}(?:\d+|-)(?:\s{2,}\S.*)?\s*$/;
 const KCM_BARIS_RE = /^\s*(\d{1,3}[A-Z]?)\s+(\d{5}-\d{5}(?:-\d+)?)\s{2,}(\S.*?)\s{2,}\d/;
 const KCM_JUDUL_RE = /^\s{6,}([A-Z][A-Z ,&/.()-]{3,40}?)\s*$/;
-export function judulKcm(line: string): string | null {
+function judulKcm(line: string): string | null {
   const m = line.match(KCM_JUDUL_RE);
   return m && !/\d/.test(m[1]) && !/^(?:PART|SYM|BOL|REMARKS|UNIT|SERIAL)/.test(m[1].trim()) ? m[1].trim() : null;
 }
 
-export function selBaris(line: string): string[] {
+function selBaris(line: string): string[] {
   if (line.includes('|')) return line.split('|').map(x => x.trim());
   const m = line.match(KCM_BARIS_RE);
   return m ? [m[1], m[2], m[3].trim()] : [];
@@ -163,7 +163,7 @@ const kataCocok = (k: string, w: string): boolean =>
 const kataDari = (t: string): string[] => t.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
 const KOMPONEN_UTAMA_RE = /\b(?:KIT|ASSY|ASM|ASS'Y)\b/i;
 
-export function komponenBaris(line: string): string | null {
+function komponenBaris(line: string): string | null {
   return line.match(/\[([A-Za-z][A-Za-z0-9 ;&/.-]{2,40})\]\s*$/)?.[1].trim() ?? null;
 }
 

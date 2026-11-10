@@ -152,7 +152,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     langHint: ['id', 'en'].includes(b.lang) ? b.lang : undefined,
     usage: orch.newUsage(),
     meta: {},
-    richAnswersEnabled: process.env.RICH_ANSWERS_ENABLED !== 'false' && b.source !== 'live' && images.length === 0,
     deadlineAt,
     aborted: () => ctrl.signal.aborted,
     embed: (text) => embedQuery(text, 'RETRIEVAL_QUERY'),
@@ -240,7 +239,6 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       cacheable: deps.meta.cacheable === true,
       full: answer,
     });
-    if (deps.meta.presentation) sseWrite(res, 'presentation', { presentation: deps.meta.presentation });
   } catch (err) {
     if (ctrl.signal.aborted && !deadlineHit) {
       console.info('[ask] rid=%s dibatalkan klien setelah %dms', requestId, Date.now() - tMulai);

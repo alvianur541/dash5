@@ -9,21 +9,17 @@ function fakeSupabase() {
 }
 
 module.exports = async () => {
-  const { t, done } = suite('technical news ikut di jalur parts + jalur cepat dilewati bila S/N');
+  const { t, done } = suite('technical news ikut di jalur parts');
   resetHargaWebCache();
-  let pemilih = 0;
   const { d } = mockDeps([[]], {
     supabase: fakeSupabase(), embed: async () => [0.1],
     rerank: async (_q, docs) => ({ results: docs.map((_, i) => ({ index: i, score: 0.9 })), source: 'google' }),
-    generate: async body => {
-      const text = body.contents[0].parts[0].text;
-      if (text.includes('Kandidat part')) { pemilih++; return { candidates: [{ content: { parts: [{ text: '{"pilih":[1],"pembuka":"Ini:"}' }] } }] }; }
+    generate: async () => {
       return { candidates: [{ content: { parts: [{ text: JSON.stringify({ shouldSearch: true, searchType: 'parts', optimizedQuery: 'wire harness floor main' }) }] } }] };
     },
     webPrice: async pn => (pn === 'YD00000472' ? [{ pn, nama: 'HARNESS;WIRE', harga: 'Rp 22.066.412' }] : pn === 'YD00008339' ? [{ pn, nama: 'HARNESS;WIRE', harga: 'Rp 20.000.000' }] : []),
   });
   const r = await runWithDeps(d, () => resolvePartsQuery('harga harness floor sama main', [{ role: 'user', content: 'sn ny 35002 carikan harness' }, { role: 'assistant', content: '...' }], 'ZX48U-5A'));
   t(r.type === 'rag_found' && /TECHNICAL NEWS/.test(r.content) && r.content.includes('YD00008339'), 'bulletin harness per S/N masuk data jawaban');
-  t(pemilih === 0, 'jalur harga cepat dilewati (butuh S/N / ada bulletin)');
   return done();
 };

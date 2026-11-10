@@ -7,7 +7,6 @@ import { resolveQuestion } from './question';
 import { auditMeasurements } from './grounding';
 import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
-import { attachAnswerPresentation } from './presentation';
 import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
@@ -240,7 +239,6 @@ export async function generateResponseStream(
     deps().meta.groundingUnknown = audit.unknown;
     if (audit.unknown) deps().meta.cacheable = false;
     console.info('[grounding] checked=%d supported=%d unknown=%d', audit.checked, audit.supported, audit.unknown);
-    attachAnswerPresentation({ question: resolved.text, answer: fullText, model, evidence, complete });
   }
 
   return fullText || FALLBACK_RESPONSE;
@@ -358,18 +356,18 @@ export async function generateResponse(
       let route: RagRouteResult | null = listMode ? await searchPhotoCodes(codes, model, emit) : null;
       if (imagePN) {
         emit({ type: 'thinking', message: `Terbaca part number ${imagePN} — mencari di katalog…` });
-        route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit, undefined, false);
+        route = await resolvePartsQuery(`${q} ${imagePN}`.trim(), history, model, emit);
       }
       if (route?.type !== 'rag_found' && scan.component && partsAsk) {
         emit({ type: 'thinking', message: `Terlihat ${scan.component} — mencari di katalog…` });
         const byComponent = hargaFoto ? `harga ${q.replace(MINTA_HARGA_RE, ' ').replace(/\s+/g, ' ').trim()} ${scan.component}`.replace(/\s+/g, ' ') : `${scan.component} part number`;
-        route = await resolvePartsQuery(byComponent, [], model, emit, byComponent, false);
+        route = await resolvePartsQuery(byComponent, [], model, emit, byComponent);
       }
       if (!route && (scan.component || (q.split(/\s+/).length >= 3 && !isCasualExact(q)))) {
         const searchQ = scan.component ? `${q} ${scan.component}`.trim() : q;
         route = isPartsQuery(q) || hargaFoto
-          ? await resolvePartsQuery(searchQ, history, model, emit, undefined, false)
-          : await resolveNaturalLanguageQuery(searchQ, history, model, emit, false);
+          ? await resolvePartsQuery(searchQ, history, model, emit)
+          : await resolveNaturalLanguageQuery(searchQ, history, model, emit);
       }
       if (route?.type === 'rag_found' && partsAsk && (route.dataLabel === RAG_LABEL.parts || listMode)) thinkFoto = 'low';
       if (route?.type === 'rag_found') {

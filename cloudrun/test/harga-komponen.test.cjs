@@ -1,4 +1,4 @@
-const { pilihPnHarga, detectFaultCodeInQuery, BUKAN_HARGA_SAJA_RE, suite } = require('./helpers.cjs');
+const { pilihPnHarga, detectFaultCodeInQuery, suite } = require('./helpers.cjs');
 
 const PROMO = `Section: PROMO Q3 FY2026 - INNERPART HYDRAULIC (Main Pump, Swing Motor, Travel Motor, Control Valve) (Part 1/2)
   4451039                | Kit; Seal                                    |      Rp 3.163.459 |   25% |      Rp 2.372.594  [Main Pump]
@@ -25,6 +25,5 @@ module.exports = async () => {
   t(alt.includes('8983413970') && alt.includes('8983413971'), 'tanpa komponen tambahan di pertanyaan → semua section tetap ikut (alternator di 2 section)');
   t(!detectFaultCodeInQuery('SN 70015').isFaultCode && !detectFaultCodeInQuery('SERIAL NUMBERNY 70015').isFaultCode, '"SN 70015" = nomor seri, bukan fault code');
   t(detectFaultCodeInQuery('11006-2').isFaultCode, 'fault code biasa tetap terdeteksi');
-  t(BUKAN_HARGA_SAJA_RE.test('yang mna yang betul ini') && BUKAN_HARGA_SAJA_RE.test('yg mana yg cocok'), '"yang mana yang betul" → model utama menjelaskan, bukan tabel yang sama diulang');
   return done();
 };

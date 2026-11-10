@@ -47,25 +47,6 @@ test('visible completed answer preserves the same persisted message ID', async (
   assert.equal(visible.content, persisted.content);
 });
 
-test('completed rich presentation survives in the visible and persisted assistant message', async () => {
-  const h = await harness();
-  const presentation = {
-    version: 1,
-    blocks: [
-      { type: 'spec_value', label: 'Battery voltage', value: '12', unit: 'V', unitModel: 'ZX200-5G', sources: [{ documentId: '42', title: 'Electrical Manual', category: 'MANUAL' }] },
-      { type: 'markdown', content: 'fixture' },
-    ],
-  };
-  h.fixture.response = { text: 'fixture', presentation };
-  assert.equal(h.render().handleSendMessage('Cek voltage'), true);
-  for (let i = 0; i < 100 && !h.saved.length; i++) await new Promise(r => setTimeout(r, 5));
-  await new Promise(r => setTimeout(r, 5));
-  const visible = h.render().messages.find(m => m.role === 'assistant');
-  const persisted = h.saved[0]?.find(m => m.role === 'assistant');
-  assert.equal(JSON.stringify(visible?.presentation), JSON.stringify(presentation));
-  assert.equal(JSON.stringify(persisted?.presentation), JSON.stringify(presentation));
-});
-
 test('recorded STT source survives in the visible and persisted user message', async () => {
   const h = await harness();
   assert.equal(h.render().handleSendMessage('Cek pilot pressure', undefined, 'voice'), true);
