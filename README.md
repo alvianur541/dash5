@@ -18,7 +18,7 @@ Supported units: ZX48U-5A · ZX65USB-5A · ZX138MF-5G · ZX200-5G · ZW140 · KC
 - **Photos** — reads fault codes, part labels and part lists from an image.
 - **Voice input**, bookmarks, and export of any answer table as a PNG.
 
-Answers are grounded in retrieved manual text: hybrid keyword + vector search, Cohere rerank,
+Answers are grounded in retrieved manual text: hybrid keyword + vector search, Google semantic reranking (Cohere as fallback),
 and a confidence tier that decides whether the model may answer, must add a caveat, or must say
 the data was not found.
 
@@ -27,9 +27,9 @@ the data was not found.
 | Layer | Stack |
 | --- | --- |
 | Frontend | React 19, TypeScript, Vite, Tailwind CSS 4, PWA — hosted on Cloudflare |
-| Backend | Node 20 + Express on Google Cloud Run; one SSE endpoint, `/v1/ask`, runs the whole pipeline |
+| Backend | Node 24 + Express on Google Cloud Run; one SSE endpoint, `/v1/ask`, runs the whole pipeline |
 | Models | Gemini on Vertex AI (answers, intent, OCR, transcription) |
-| Retrieval | Supabase Postgres + pgvector (`gemini-embedding-001`, 3072 dims), Cohere Rerank |
+| Retrieval | Supabase Postgres + pgvector (`gemini-embedding-001`, 3072 dims), Google Ranking API with Cohere fallback |
 | Auth & storage | Supabase (auth, chat history, bookmarks) |
 
 ## Repository layout
