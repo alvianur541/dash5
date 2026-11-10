@@ -28,7 +28,7 @@ export interface Deps {
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
   aborted?: () => boolean;
-  langHint?: 'id' | 'en' | 'ja';
+  langHint?: 'id' | 'en';
 }
 
 interface StreamChunk {

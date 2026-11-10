@@ -1,15 +1,13 @@
 import { UNIT_MODELS } from './types';
 
-export type Lang = 'id' | 'en' | 'ja';
+export type Lang = 'id' | 'en';
 
-const JP_RE = /[぀-ヿ一-鿿]/;
 const EN_RE = /\b(what|who|whose|how|why|when|where|which|could|would|should|do|does|did|is|are|was|were|please|tell|explain|show|about|the|and|for|i|i[’']m|i[’']ve|i[’']ll|i[’']d|am|it|it[’']s|its|my|this|that|these|have|has|had|been|not|still|so|you|your|we|they|with|to|of|but|if|there|already|using|checked|need|want|will|english)\b/gi;
 const ID_RE = /\b(apa|siapa|kenapa|mengapa|gimana|bagaimana|kapan|dimana|yang|itu|ini|nggak|ngga|tidak|bisa|tolong|kamu|aku|saya|untuk|dari|dengan|kalau|sudah|belum|saat|pakai|pake|ganti|masih|udah|gak|enggak|aja|dong|nih|sih|kok|ada|mau|coba|cek|harus|lagi|juga|atau|kalo|klo|dan|berapa|brp|pada|di|ke|semua|hasil|jika|jadi|terus|tapi|karena|nilai|apakah|mana|nya|kadang|terkadang|sering|selalu|ketika|setelah|sesudah|sebelum|sedang|kabel|mesin|nyala|mati|hidup|putus|bocor|lambat|lemah|tekanan|unitnya|kenapa|gimana|seperti|sama)\b/gi;
 
 const hitung = (re: RegExp, t: string) => t.match(re)?.length ?? 0;
 
 export function detectLang(text: string): Lang | null {
-  if (JP_RE.test(text)) return 'ja';
   const t = text.replace(/\bthanks?\s*(?:you|u)\b/gi, ' ').replace(/\bCAN\b/g, ' ');
   const id = hitung(ID_RE, t);
   const en = hitung(EN_RE, t);
@@ -31,7 +29,7 @@ export function sessionLang(current: string, history: { role: string; content: s
   return 'id';
 }
 
-function pick<T>(lang: Lang, opts: { id: T; en: T; ja: T }): T {
+function pick<T>(lang: Lang, opts: { id: T; en: T }): T {
   return opts[lang];
 }
 
@@ -39,7 +37,6 @@ export function langDirective(lang: Lang): string {
   return pick(lang, {
     id: '[BAHASA: Teknisi menulis dalam bahasa Indonesia. Tulis SELURUH jawaban dalam bahasa Indonesia, walau jawaban sebelumnya berbahasa lain. Salin part number, kode, angka, dan satuan persis.]',
     en: '[LANGUAGE: The technician wrote in English. Write the ENTIRE answer in English — headings, explanations, steps, and closing. The instructions and manual data above are internal and may be in Indonesian; do not copy their language. Copy part numbers, codes, numbers, and units exactly.]',
-    ja: '[言語: 技術者は日本語で書いています。回答はすべて日本語で書いてください（見出し・説明・手順・締めくくりまで）。上の指示とマニュアルデータは内部用でインドネシア語の場合がありますが、その言語をまねしないでください。部品番号・コード・数値・単位はそのまま写してください。]',
   });
 }
 
@@ -49,7 +46,6 @@ export function imageCodesNotFoundTemplate(codes: string[], model: string, lang:
   return pick(lang, {
     id: `Fault code terdeteksi dari gambar: **${list}**\n\n${lines(c => `- Kode \`${c}\` tidak ada di manual **${model}** yang saya akses.`)}\n\nPastikan pembacaan kode benar dan model unit sesuai (saat ini di-set ke ${model}).`,
     en: `Fault codes read from the photo: **${list}**\n\n${lines(c => `- Code \`${c}\` is not in the **${model}** manual I can access.`)}\n\nCheck that the codes were read correctly and that the unit model is right (this chat is set to ${model}).`,
-    ja: `写真から読み取ったフォルトコード: **${list}**\n\n${lines(c => `- コード \`${c}\` は **${model}** のマニュアルにありません。`)}\n\nコードの読み取りが正しいか、機種設定が合っているか確認してください（現在の設定: ${model}）。`,
   });
 }
 
@@ -58,7 +54,6 @@ export function ragErrorTemplate(errorMsg: string, lang: Lang = 'id'): string {
   return pick(lang, {
     id: `Sistem pencarian data sedang mengalami gangguan sementara. Jawaban ditahan dulu untuk menghindari informasi yang keliru.\n\nCoba kirim ulang pertanyaanmu dalam beberapa saat.`,
     en: `The data search system is temporarily unavailable. I'm holding the answer back to avoid giving you incorrect information.\n\nPlease send your question again in a moment.`,
-    ja: `データ検索システムが一時的に不調です。誤った情報をお伝えしないよう、回答を保留します。\n\n少し時間をおいて、もう一度質問を送ってください。`,
   });
 }
 
@@ -80,15 +75,6 @@ Two things usually cause this:
 
 If both are correct and the code still isn't there, it's likely outside the available manual coverage — escalate to the Technical Support Department with the code and the unit serial number.`;
   }
-  if (lang === 'ja') {
-    return `コード \`${faultQuery}\` は **${model}** のマニュアルに見つかりませんでした。
-
-主な原因は次の2つです。
-1. **コードの読み取り** — モニタ表示の数字とサフィックスが一致しているか確認してください（有効な形式: \`11006-2\`、\`ENG:00436-04\`）。不明な場合はモニタ画面の写真を送ってください。こちらで直接読み取ります。
-2. **機種の設定** — このチャットは **${model}** に設定されています。他機種のコードはここでは見つかりません。
-
-両方とも正しいのにコードが見つからない場合は、対応マニュアルの範囲外の可能性があります。コードと機体番号を添えて Technical Support Department にエスカレーションしてください。`;
-  }
   return `Kode \`${faultQuery}\` tidak ditemukan di manual **${model}**.
 
 Dua hal yang paling sering jadi penyebabnya:
@@ -108,16 +94,6 @@ To make the search hit:
 3. Mention the component area (engine / hydraulic / undercarriage / attachment) to narrow the section.
 
 Alternative: check the unit's physical Parts Catalog, or confirm with the Parts Counter giving the model and component name.`;
-  }
-  if (lang === 'ja') {
-    return `アクセスできる **${model}** のカタログに **${query}** の部品が見つかりませんでした。
-
-検索を確実にヒットさせるには:
-1. カタログ表記（英語）の部品名を使ってください。例: \`seal kit; swing motor\`、\`bucket tooth\`。
-2. 部品番号がわかる場合は PN を直接送ってください。PN 検索が最も正確です。
-3. 部位（engine / hydraulic / undercarriage / attachment）を指定すると section を絞り込めます。
-
-代替手段: 機体備え付けの Parts Catalog を確認するか、機種名と部品名を伝えて Parts Counter に確認してください。`;
   }
   return `Parts untuk **${query}** tidak ketemu di katalog **${model}** yang saya akses.
 
@@ -145,11 +121,6 @@ export function foreignModelTemplate(foreign: string, activeModel: string, lang:
       ? `Your question is about **${foreign}**, but this chat is set to **${activeModel}**.\n\nSwitch the unit to ${foreign} first, then I can answer from that unit's manual.\n\nAnything you'd like to check on ${activeModel}?`
       : `I don't have the **${foreign}** manual in my system yet. I only hold data for: ${UNIT_MODELS.join(', ')}.\n\nI can't help diagnose that unit — my answers have to come from the official manual, not guesswork.\n\nAnything you'd like to check on **${activeModel}**?`;
   }
-  if (lang === 'ja') {
-    return supported
-      ? `ご質問は **${foreign}** についてですが、このチャットは **${activeModel}** に設定されています。\n\n機種を ${foreign} に切り替えてください。そうすればその機種のマニュアルからお答えできます。\n\n**${activeModel}** で確認したいことはありますか？`
-      : `**${foreign}** のマニュアルはまだシステムにありません。手元にあるのは次の機種のデータのみです: ${UNIT_MODELS.join(', ')}。\n\nその機種の診断はお手伝いできません。回答は必ず正規マニュアルに基づく必要があり、推測ではお答えできません。\n\n**${activeModel}** で確認したいことはありますか？`;
-  }
   return supported
     ? `Pertanyaan kamu soal **${foreign}**, tapi chat ini di-set ke **${activeModel}**.\n\nGanti dulu unitnya ke ${foreign}, baru aku bisa jawab dari manual unit itu.\n\nAda yang mau dicek di ${activeModel}?`
     : `Manual **${foreign}** belum ada di sistemku. Aku cuma pegang data unit: ${UNIT_MODELS.join(', ')}.\n\nAku ngga bisa bantu diagnosa unit itu — jawabanku harus dari manual resmi, bukan kira-kira.\n\nAda yang mau dicek di **${activeModel}**?`;
@@ -157,12 +128,6 @@ export function foreignModelTemplate(foreign: string, activeModel: string, lang:
 
 export function offTopicTemplate(query = '', history: { role: string; content: string }[] = [], hint?: Lang | null): string {
   const lang = sessionLang(query, history, hint);
-  if (lang === 'ja') {
-    return `すみません、その質問は対応範囲外です。
-ユニットに関すること（フォルトコード、トラブルシューティング、スペック、パーツ）ならお答えできます。
-
-何かユニットで確認したいことはありますか？`;
-  }
   if (lang === 'en') {
     return `Sorry, that one's outside what I cover.
 I can help with anything about your unit — fault codes, troubleshooting, specs, or parts.

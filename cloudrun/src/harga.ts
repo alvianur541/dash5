@@ -25,7 +25,6 @@ interface Kandidat { pn: string; nama: string; section: string; harga: string }
 const LABEL: Record<Lang, { pn: string; nama: string; harga: string; ket: string; kosong: string; gagal: string; sumber: string }> = {
   id: { pn: 'Part Number', nama: 'Nama Part', harga: 'Harga', ket: 'Keterangan', kosong: 'Belum tersedia', gagal: 'Gagal dicek, kirim ulang', sumber: 'Sumber harga: Hexindoparts.com' },
   en: { pn: 'Part Number', nama: 'Part Name', harga: 'Price', ket: 'Note', kosong: 'Not listed', gagal: 'Check failed, resend', sumber: 'Price source: Hexindoparts.com' },
-  ja: { pn: '部品番号', nama: '部品名', harga: '価格', ket: '備考', kosong: '掲載なし', gagal: '確認失敗・再送してください', sumber: '価格の出典: Hexindoparts.com' },
 };
 
 function katalogPn(content: string): Map<string, { nama: string; section: string }> {
@@ -70,7 +69,7 @@ function kandidatDari(pnsUrut: string[], web: HasilWeb, content: string, lang: L
 async function pilihBaris(q: string, history: Message[], kandidat: Kandidat[], lang: Lang): Promise<{ pilih: number[]; pembuka: string } | null> {
   const lalu = [...history].reverse().find(m => m.role === 'user')?.content ?? '';
   const daftar = kandidat.map((k, i) => `${i + 1} | ${k.pn} | ${k.nama} | ${k.section ? labelKomponen(k.section) : '-'}`).join('\n');
-  const bahasa = lang === 'en' ? 'English' : lang === 'ja' ? 'Japanese' : 'Bahasa Indonesia santai';
+  const bahasa = lang === 'en' ? 'English' : 'Bahasa Indonesia santai';
   const prompt = `Pertanyaan teknisi: "${q}"${lalu ? `\nPertanyaan sebelumnya: "${lalu.slice(0, 200)}"` : ''}
 
 Kandidat part (no | PN | nama | section katalog):
@@ -119,6 +118,6 @@ export async function jawabanHargaCepat(q: string, history: Message[], pnsUrut: 
     return `| ${sel.join(' | ')} |`;
   });
   console.info('[harga-cepat] %d dari %d kandidat dipilih (%dms)', baris.length, kandidat.length, Date.now() - t0);
-  const pembuka = lang === 'en' ? 'Matching part prices:' : lang === 'ja' ? '該当部品の価格:' : 'Harga part yang cocok:';
+  const pembuka = lang === 'en' ? 'Matching part prices:' : 'Harga part yang cocok:';
   return `${pembuka}\n\n${kepala}\n${isi.join('\n')}\n\n*${L.sumber}*`;
 }

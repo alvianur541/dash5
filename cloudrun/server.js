@@ -149,7 +149,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     requestId,
     supabase,
     thinkOverride: think,
-    langHint: ['id', 'en', 'ja'].includes(b.lang) ? b.lang : undefined,
+    langHint: ['id', 'en'].includes(b.lang) ? b.lang : undefined,
     usage: orch.newUsage(),
     meta: {},
     richAnswersEnabled: process.env.RICH_ANSWERS_ENABLED !== 'false' && b.source !== 'live' && images.length === 0,

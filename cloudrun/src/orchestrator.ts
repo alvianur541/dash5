@@ -222,7 +222,6 @@ export async function generateResponseStream(
       fault: isFaultCode || FAULT_DATA_RE.test(ragContent),
       web: gsTechnical || ragContent.includes('[SUMBER EKSTERNAL]'),
       image: false,
-      ja: lang === 'ja',
     }),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
   }, onChunk, gsTechnical)), ragContent, history);

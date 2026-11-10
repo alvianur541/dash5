@@ -15,7 +15,7 @@ test('voice prompt: natural tone, mirrors language, filler before tool, self-con
   assert.doesNotMatch(p, /lalu bilang "rincian lengkapnya ada di layar"/);
   for (const re of [/sudah aku tampilkan/, /kalau ada yang kurang jelas/i, /penutup/i, /tidak harus selalu/i]) assert.match(p, re);
   for (const re of [/"Zaxis"/, /tetap tulis ZX/i]) assert.match(p, re);
-  for (const re of [/Indonesia/, /Inggris/, /Jepang/, /bahasa lain/i, /JANGAN pernah menyebut[^.]*bahasa apa saja/]) assert.match(p, re);
+  for (const re of [/Indonesia/, /Inggris/, /bahasa lain/i, /JANGAN pernah menyebut[^.]*bahasa apa saja/]) assert.match(p, re);
   assert.doesNotMatch(p, /HANYA tiga bahasa|sampaikan singkat bahwa Live hanya mendukung/);
   assert.match(p, /"Saya asisten yang siap bantu cek data unit ini\."/);
   assert.doesNotMatch(p, /asisten teknis Hexindo yang siap bantu/);

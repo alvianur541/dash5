@@ -297,17 +297,16 @@ const KLAIM_LAIN_RE = new RegExp([
   String.raw`\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b[^.?!\n]*\b(?:harga|promo|price)|\b(?:harga|promo)\w*[^.?!\n]*\b(?:tidak|belum)\s+(?:terdaftar|tercantum|tercatat|terdata)\b`,
   String.raw`\bparts?\s*counter\b`,
   String.raw`\bprices?\b[^.?!\n]*\b(?:not\s+(?:registered|listed|found|included|in\s+(?:the|our)\s+(?:price\s*list|promo|data)))|\bnot\s+(?:registered|listed|found)\b[^.?!\n]*\b(?:price|promo)`,
-  String.raw`(?:価格|値段|プロモ)[^。！？\n]*(?:登録されていません|掲載されていません|見つかりません|ありません)|パーツカウンター`,
 ].join('|'), 'i');
 const klaim = (k: string) => KLAIM_TANPA_HARGA_RE.test(k) || KLAIM_LAIN_RE.test(k) || /\bprice\b[^.?!]*\b(?:not (?:yet )?available|unavailable|not (?:checked|retrieved))\b/i.test(k);
-const KALIMAT_RE = /.+?(?:[.?!]+(?=\s|$)\s*|[。！？]+\s*|$)/g;
+const KALIMAT_RE = /.+?(?:[.?!]+(?=\s|$)\s*|$)/g;
 function buangKlaimTanpaHarga(text: string): string {
   return text.split('\n').map(l => {
     if (l.trim().startsWith('|')) return l;
     const kal = l.match(KALIMAT_RE)?.filter(Boolean) ?? [l];
     const sisa = kal.map(k => {
       if (!klaim(k) || /Belum tersedia\b/.test(k) && /\|/.test(k)) return k;
-      const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1').replace(/ですが、[^。]*。?(\s*)$/, 'です。$1');
+      const potong = k.replace(/,\s*(?:dan|tapi|namun|but|and)\b.*?[.?!]*(\s*)$/i, '.$1');
       return potong !== k && !klaim(potong) ? potong : '';
     }).filter(Boolean);
     return sisa.join('') === kal.join('') ? l : sisa.join('').trim();

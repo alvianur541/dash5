@@ -17,19 +17,6 @@ module.exports = async () => {
   const run = text => runWithDeps(d, () => lengkapiHarga(text));
 
   {
-    const ja = 'バケットシリンダーのピストンロッドについて確認しました。\n\nパーツカタログ（CYL.;BUCKET）上の部品番号（Part Number）の候補は `ZD00003084` および `1102302` ですが、現在のプロモデータおよび価格リストに当該部品の価格は登録されていません。\n\n| Part Number | 品名 | 価格 |\n| --- | --- | --- |\n| `ZD00003084` | ROD;PISTON | Belum tersedia |\n| `1102302` | ROD;PISTON | Rp 40.600.640 |\n\n最新の販売価格については、機番（S/N）でどちらの部品番号が適合するか確認の上、パーツカウンターへお問い合わせください。';
-    const o = await run(ja);
-    t(!/登録されていません/.test(o), 'JA: "価格は登録されていません" dibuang');
-    t(o.includes('候補は `ZD00003084` および `1102302` です。'), 'JA: separuh kalimat yang benar (kandidat PN) tetap ada');
-    t(!/パーツカウンター/.test(o), 'JA: suruhan ke Parts Counter dibuang');
-    t(o.includes('| `1102302` | ROD;PISTON | Rp 40.600.640 |') && o.includes('| `ZD00003084` | ROD;PISTON | Belum tersedia |'), 'JA: tabel tidak berubah');
-  }
-  {
-    const ja2 = 'バケットシリンダーのシールキットについて確認しました。\n\nパーツカタログおよびOHパッケージに記載されているシールキットの部品番号候補は以下の通りですが、現在適用中のプロモデータおよび価格リストに当該部品の価格は登録されていません。\n\n| Part Number | 品名 | Qty | 価格 |\n| --- | --- | --- | --- |\n| `YA00001392` | KIT;SEAL | 1 | Rp 4.315.605 |\n| `ZD00003202` | KIT;SEAL | 1 | Belum tersedia |\n| `XP00000080PS` | Kit seal lengkap | 1 | Rp 5.583.303 |';
-    const o = await run(ja2);
-    t(!/登録されていません/.test(o) && o.includes('Rp 4.315.605') && o.includes('Rp 5.583.303'), 'JA seal kit: klaim dibuang, harga tetap');
-  }
-  {
     const id = 'Di katalog cylinder bucket ZX200-5G, part number untuk rod cylinder tercatat `1102302` dan `ZD00003084`.\n\nSebagai catatan pembanding, harga rod yang muncul pada data di atas (`0998902` seharga Rp 37.120.000) adalah milik **boom cylinder**, bukan bucket cylinder.\n\n| Part Number | Nama Part | Harga |\n| :--- | :--- | :--- |\n| `1102302` | ROD;PISTON (Bucket) | Rp 40.600.640 |\n| `ZD00003084` | ROD;PISTON (Bucket) | Belum tersedia |\n\nSumber harga: Hexindoparts.com';
     const o = await run(id);
     t(!/Gagal dicek/.test(o.split('\n').filter(l => !l.startsWith('|')).join('\n')), 'harga tak terverifikasi di kalimat → tidak jadi "seharga Gagal dicek"');

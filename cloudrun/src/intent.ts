@@ -74,7 +74,7 @@ Output ONLY valid JSON — no markdown, no preamble, no explanation.
              NOT off_topic; the assistant answers them itself. Return shouldSearch=false.
              ALSO current time/date questions ("sekarang jam berapa", "hari ini tanggal berapa") — the
              assistant HAS the current timestamp and answers directly. NOT off_topic.
-             ALSO language/translation requests about the conversation ("in japanese", "in english",
+             ALSO language/translation requests about the conversation ("in english",
              "translate to english", "pakai bahasa indo") — the assistant switches/translates itself.
              NOT off_topic.
 "off_topic" → Questions clearly about an UNRELATED domain: recipes, sports, politics, news, weather, cooking, entertainment, general internet trivia. ALSO company/organization matters (management names, direksi, stock, corporate news/rumor, "siapa presiden direktur X") and news/rumor about brands — the assistant has NO reliable data for these and must NOT answer. NOT for questions about the assistant/user/app/current time. Return shouldSearch=false.
@@ -166,7 +166,6 @@ General:
 "cara pakai app ini"→ general, ""
 "sekarang jam berapa"      → general, ""
 "hari ini tanggal berapa"  → general, ""
-"in japanese"              → general, ""
 "translate to english"     → general, ""
 "pakai bahasa indo lagi"   → general, ""
 

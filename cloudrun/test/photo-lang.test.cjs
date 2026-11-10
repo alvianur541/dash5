@@ -22,7 +22,7 @@ const ocrFails = async () => { throw new Error('ocr down'); };
 
 module.exports = async function () {
   const { t, done } = suite('photo: answer follows the caption language');
-  const EN = langDirective('en'), JA = langDirective('ja');
+  const EN = langDirective('en');
 
   { const { texts } = await photo('Explain please', [], reads('NONE'));
     t(texts.at(-1) === EN, 'EN caption, no codes: English directive is the last part'); }
@@ -32,9 +32,6 @@ module.exports = async function () {
 
   { const { texts } = await photo('cek tolong', HIST_EN, reads('NONE'));
     t(!texts.some(x => x.startsWith('[LANGUAGE')), 'ID caption switches back: no English directive'); }
-
-  { const { texts } = await photo('この写真は？', [], reads('NONE'));
-    t(texts.at(-1) === JA, 'JA caption: Japanese directive'); }
 
   { const { texts } = await photo('Explain please', [], ocrFails);
     t(texts.at(-1) === EN, 'OCR failure branch: English directive still added'); }

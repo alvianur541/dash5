@@ -167,11 +167,11 @@ type HNode = { type: string; value?: string; children?: HNode[] };
 const nodeText = (n?: HNode): string => (n ? (n.type === 'text' ? n.value ?? '' : (n.children ?? []).map(nodeText).join('')) : '');
 const NUM_CELL_RE = /^(rp\s?)?[\d.,±~–-]+\s?(%|[a-zµ°·/³²⁻¹]{1,8})?$/i;
 const SOURCE_RE = /^\([^()]*(manual|catalog|katalog|bulletin|news|brosur|promo|diagram|principle)[^()]*\)\.?$/i;
-const PRICE_SRC_RE = /^\s*(sumber harga|price source|価格の出典)\s*[:：]\s*hexindoparts\.com\.?\s*$/i;
+const PRICE_SRC_RE = /^\s*(sumber harga|price source)\s*:\s*hexindoparts\.com\.?\s*$/i;
 
 const RP_CELL_RE = /^rp\.?\s?[\d.,]+$/i;
 const PRICE_STATUS_RE = /^(belum tersedia|gagal dicek(, kirim ulang)?|ketik pn untuk cek|not available)\.?$/i;
-const PRICE_HEAD_RE = /^(harga(?:\s+satuan|\s+total)?|sub-?total|total|(?:unit\s+)?price|価格)(?:\s*\(?(?:rp|idr)\)?)?$/i;
+const PRICE_HEAD_RE = /^(harga(?:\s+satuan|\s+total)?|sub-?total|total|(?:unit\s+)?price)(?:\s*\(?(?:rp|idr)\)?)?$/i;
 const tanpaRp = (c: React.ReactNode): React.ReactNode =>
   typeof c === 'string' ? c.replace(/^\s*rp\.?\s?/i, '')
     : Array.isArray(c) ? c.map((x, i) => (i === 0 ? tanpaRp(x) : x))
