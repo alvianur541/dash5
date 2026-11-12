@@ -53,7 +53,7 @@ module.exports = async function () {
 
   const lanjut = await jalan(H('Bunyi kasar ketika swing, oli sudah panas', 'Cek drain motor swing.'), 'Oli drain normal, relief valve sudah ditukar masih sama',
     'Area valve gugur *(Operational Principle — Swing Device)*.\n\n---\n\n### 1. Lanjut\nCek pilot.');
-  t(/\[Ini laporan hasil cek\/ukur[^\]]*8 kalimat[^\]]*SATU pemeriksaan/.test(lanjut.kirim), 'laporan hasil cek di tengah kasus → catatan jawab ringkas ikut ke model');
+  t(/\[Ini laporan hasil cek\/ukur[^\]]*JANGAN menjawab dalam paragraf[^\]]*daftar BERNOMOR[^\]]*Hasil & artinya[^\]]*SATU pemeriksaan/.test(lanjut.kirim), 'laporan hasil cek di tengah kasus → catatan bentuk butir + langkah bernomor ikut ke model');
   t(lanjut.hasil.includes('gugur (Operational Principle — Swing Device).') && !lanjut.hasil.includes('---') && lanjut.hasil.includes('### Lanjut'), 'jawaban akhir sudah dirapikan sebelum dikirim ke layar');
 
   const awal = await jalan([], 'Bunyi kasar ketika swing, oli drain normal', 'Oke.');
