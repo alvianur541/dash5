@@ -28,6 +28,19 @@ const LATEX_SYMBOL: Record<string, string> = {
   times: '×', pm: '±', approx: '≈', neq: '≠', circ: '°', deg: '°', Omega: 'Ω', Delta: 'Δ', mu: 'μ',
 };
 
+const SITASI_MIRING_RE = /([*_])(\([^()\n]{0,160}\b(?:Manual|Catalog|Katalog|Bulletin|News|Brosur|Diagram|Principle)\b[^()\n]{0,160}\))\1/g;
+
+export function rapikanFormat(text: string): string {
+  let dalamKode = false;
+  const baris = text.split('\n').map(l => {
+    if (/^\s*```/.test(l)) { dalamKode = !dalamKode; return l; }
+    if (dalamKode) return l;
+    if (/^\s*(?:-{3,}|\*{3,}|_{3,})\s*$/.test(l)) return null;
+    return l.replace(/^(\s*#{1,6}\s+)\d{1,2}[.)]\s+/, '$1').replace(SITASI_MIRING_RE, '$2');
+  }).filter((l): l is string => l !== null);
+  return baris.join('\n').replace(/\n{3,}/g, '\n\n');
+}
+
 export function scrubLeaks(text: string): string {
   text = text.replace(/\$\s*\\([A-Za-z]+)\s*\$/g, (m, k: string) => LATEX_SYMBOL[k] ?? m);
   if (!/\[(?:DATA|CONFIDENCE|KODE TIDAK|ENGINE MANUAL|SUMBER EKS|PETUNJUK|ASPEK|SIMTOM|CATATAN KASUS|Fault Code:)/.test(text)) return text;
@@ -195,7 +208,10 @@ export async function generateResponseStream(
   const thinkingLevel: ThinkingLevel = answersDiagnosis ? DIAGNOSIS_THINKING : 'low';
   const thinkHeadroom    = answersDiagnosis ? 4096 : 0;
   const maxOutputTokens  = (ragContent ? (WANTS_LIST_RE.test(trimmed) ? 8192 : 4096) : gsTechnical ? 2048 : 1536) + thinkHeadroom;
-  const followUpNote = isFollowUp && ragContent
+  const laporanLanjutan = !!ragContent && dataLabel === RAG_LABEL.manual && adalahLaporan(trimmed) && history.some(m => m.role === 'assistant');
+  const followUpNote = laporanLanjutan
+    ? '\n[Ini laporan hasil cek/ukur dari teknisi untuk kasus yang sedang berjalan. Jawab paling banyak 8 kalimat, tanpa heading dan tanpa daftar panjang: (1) arti hasil ini — penyebab mana yang gugur atau menguat, dengan standar dari data kalau ada; (2) SATU pemeriksaan berikutnya beserta arti tiap kemungkinan hasilnya. Jangan mengulang langkah atau penjelasan yang sudah diberikan.]'
+    : isFollowUp && ragContent
     ? '\n[Ini pertanyaan lanjutan pendek. Jawab intinya dalam ≤ 8 kalimat atau 1 tabel kecil; boleh diawali satu kalimat pengantar singkat yang natural. Tanpa salam pembuka, tanpa mengulang penjelasan/karakteristik yang sudah ada di jawaban sebelumnya, tanpa heading kalau isinya cuma satu topik.]'
     : '';
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
@@ -216,7 +232,7 @@ export async function generateResponseStream(
   const bahasa = langDirective(lang);
   contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}${bahasa ? `\n\n${bahasa}` : ''}` }] });
 
-  const fullText = await lengkapiHargaAman(scrubLeaks(await callProxyStream({
+  const fullText = await lengkapiHargaAman(rapikanFormat(scrubLeaks(await callProxyStream({
     contents,
     ...systemFor(model, isCasual, {
       parts: dataLabel === RAG_LABEL.parts || hasServiceInterval || KATA_HARGA_RE.test(q) || PARTS_DATA_RE.test(ragContent),
@@ -225,7 +241,7 @@ export async function generateResponseStream(
       image: false,
     }),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical)), ragContent, history);
+  }, onChunk, gsTechnical))), ragContent, history);
   if (routeResult.type === 'rag_found' && TABEL_HARGA_RE.test(fullText)) deps().meta.confidence = undefined;
 
   const complete = routeResult.type === 'rag_found' && !!fullText && looksComplete(fullText)
@@ -408,7 +424,7 @@ export async function generateResponse(
     },
   };
 
-  const streamed = await lengkapiHargaAman(scrubLeaks(await callProxyStream(body, onChunk)), dataFoto, history);
+  const streamed = await lengkapiHargaAman(rapikanFormat(scrubLeaks(await callProxyStream(body, onChunk))), dataFoto, history);
   if (TABEL_HARGA_RE.test(streamed)) deps().meta.confidence = undefined;
   return streamed || FALLBACK_RESPONSE;
 }

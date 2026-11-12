@@ -13,6 +13,7 @@ export { isMultiAspectQuery } from '../src/intent';
 export { isShortFollowUp } from '../src/orchestrator';
 export { historyToContents, detectForeignModel } from '../src/routes';
 export { catatKasus, blokKasus, adalahLaporan } from '../src/kasus';
+export { rapikanFormat } from '../src/orchestrator';
 export { detectLang, sessionLang, offTopicTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, foreignModelTemplate, ragErrorTemplate, langDirective, imageCodesNotFoundTemplate, FALLBACK_RESPONSE } from '../src/templates';
 export { searchPhotoCodes, AC_CODE_RE, acRowRe } from '../src/orchestrator';
 export { findSymptomSections, isSymptomQuery, resetSymptomIndex } from '../src/rag';
