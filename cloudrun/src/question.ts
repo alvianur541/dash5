@@ -1,5 +1,6 @@
 import type { Message } from './types';
 import { deps } from './deps';
+import { SYMPTOM_RE, isPartsQuery } from './rag/terms';
 
 export interface ResolvedQuestion {
   readonly raw: string;
@@ -24,7 +25,8 @@ export function resolveQuestion(raw: string, history: Message[], model: string, 
   const priorComponent = COMPONENT_RE.exec(prior.at(-1) ?? '')?.[0] ?? null;
   const sameCircuit = /^(?:fuse|terminal)/i.test(explicit ?? '') && /^(?:fuse|terminal)/i.test(priorComponent ?? '');
   const newComponent = !!explicit && (!priorComponent || (explicit.toLowerCase() !== priorComponent.toLowerCase() && !sameCircuit));
-  const userContext = !newComponent && (refers || short || acceptedOffer) ? prior : [];
+  const keluhanBaru = SYMPTOM_RE.test(raw) && !isPartsQuery(raw);
+  const userContext = !newComponent && (refers || short || acceptedOffer) ? prior.filter(p => !keluhanBaru || !isPartsQuery(p)) : [];
   const text = [...userContext, acceptedOffer ? `Permintaan diterima: ${acceptedOffer}` : '', raw].filter(Boolean).join('\nLanjutan teknisi: ');
   const measurements = [...text.matchAll(/\d+(?:[.,]\d+)?\s*(?:MPa|kPa|bar|psi|V|mA|A|Ω|ohm|mm|L|rpm|kg|°C)\b|\d+(?:[.,]\d+)?\s*Ω/g)].map(m => m[0]);
   return Object.freeze({ raw, text, model, component: explicit ?? COMPONENT_RE.exec(userContext.join(' '))?.[0] ?? null,
