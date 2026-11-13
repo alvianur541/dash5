@@ -81,13 +81,14 @@ export function mmrSelect(docs: RerankedDoc[], finalN: number, lambda = 0.7): Re
   const candidates = positive.length >= finalN ? positive : docs;
   const pool = candidates.map(d => ({ d, tok: mmrTokens(d.content) }));
   pool.sort((a, b) => b.d.score - a.d.score);
+  const puncak = pool[0].d.score > 0 ? pool[0].d.score : 1;
   const selected = [pool.shift()!];
   while (selected.length < finalN && pool.length > 0) {
     let bestIdx = 0, best = -Infinity;
     for (let i = 0; i < pool.length; i++) {
       let maxSim = 0;
       for (const s of selected) maxSim = Math.max(maxSim, mmrJaccard(pool[i].tok, s.tok));
-      const mmr = lambda * pool[i].d.score - (1 - lambda) * maxSim;
+      const mmr = lambda * (pool[i].d.score / puncak) - (1 - lambda) * maxSim;
       if (mmr > best) { best = mmr; bestIdx = i; }
     }
     selected.push(pool.splice(bestIdx, 1)[0]);

@@ -29,6 +29,7 @@ module.exports = async function () {
     { title: 'hitachicm.com', uri: 'https://y' }, { title: 'Judul halaman bebas', uri: 'https://vertexaisearch.cloud.google.com/z' }];
   const jawab = (sources) => [{ text: 'Regulator mengatur flow pump (Operational Principle — Pump Device).', usageMetadata: USAGE, live: true, finishReason: 'STOP', sources }];
 
+  process.env.WEB_PELENGKAP = 'medium';
   const sedang = await jalan(0.15, jawab(SUMBER));
   t(sedang.web === true && sedang.kirim.includes('[DATA MANUAL TERSEDIA]') && sedang.kirim.includes('The regulator controls pump delivery flow')
     && sedang.kirim.includes('[SUMBER EKSTERNAL — PELENGKAP]'), 'keyakinan sedang → data manual + izin web dikirim bersama');
@@ -54,12 +55,13 @@ module.exports = async function () {
   const laporan = await jalan(0.15, jawab(SUMBER), 'Drain motor normal, control valve sudah ditukar masih sama', H);
   t(laporan.web === false && !laporan.kirim.includes('PELENGKAP'), 'laporan hasil cek di tengah kasus → tanpa web (jaga kecepatan)');
 
-  process.env.WEB_PELENGKAP = 'low';
+  delete process.env.WEB_PELENGKAP;
   const hemat = await jalan(0.15, jawab(SUMBER));
+  const bawaanLemah = await jalan(0.05, jawab(SUMBER));
   process.env.WEB_PELENGKAP = 'off';
   const mati = await jalan(0.05, jawab(SUMBER));
   delete process.env.WEB_PELENGKAP;
-  t(hemat.web === false && hemat.meta.route === 'rag_found', 'WEB_PELENGKAP=low → sedang tidak memakai web');
+  t(hemat.web === false && hemat.meta.route === 'rag_found' && bawaanLemah.web === true && bawaanLemah.meta.route === 'rag_web', 'bawaan (low) → sedang tanpa web, rendah tetap manual + web');
   t(mati.web === true && mati.meta.route === 'google_technical' && !mati.kirim.includes('[DATA MANUAL TERSEDIA]') && /Cara mencari: kata kunci English/.test(mati.kirim),
     'WEB_PELENGKAP=off → perilaku lama (web saja) dengan panduan mencari');
   return done();

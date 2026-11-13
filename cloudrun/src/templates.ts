@@ -166,8 +166,8 @@ export const HYBRID_DIRECTIVE = (model: string, lemah: boolean): string =>
 - Tidak menemukan yang andal di web → jangan mengarang; cukup jawab dari manual.`;
 
 export const webPelengkap = (): 'off' | 'low' | 'medium' => {
-  const v = (process.env.WEB_PELENGKAP ?? 'medium').toLowerCase();
-  return v === 'off' || v === 'low' ? v : 'medium';
+  const v = (process.env.WEB_PELENGKAP ?? 'low').toLowerCase();
+  return v === 'off' || v === 'medium' ? v : 'low';
 };
 
 export function barisSumberWeb(sumber: Array<{ title?: string; uri?: string }> | undefined, lang: 'id' | 'en'): string {

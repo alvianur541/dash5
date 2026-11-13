@@ -50,6 +50,21 @@ module.exports = async function () {
   }
 
   {
+    const langkah = 'travel motor drain measurement procedure disconnect hose measure amount oil standard evaluation cause remedy';
+    const docs = [
+      { content: `Section: Travel slow A ${langkah} step one two three`, score: 0.25 },
+      { content: `Section: Travel slow B ${langkah} step four five six`, score: 0.18 },
+      { content: 'Section: Cab radio antenna speaker wiring unrelated topic', score: 0.07 },
+    ];
+    const google = mmrSelect(docs, 2, 0.7);
+    const cohere = mmrSelect(docs.map(d => ({ ...d, score: d.score * 3.2 })), 2, 0.7);
+    t(google[1].content.includes('Travel slow B'), 'MMR skala skor Google: lanjutan prosedur tidak kalah oleh chunk tak berhubungan');
+    t(cohere[1].content === google[1].content, 'MMR memilih sama di skala skor Cohere dan Google');
+    const kembar = mmrSelect([{ content: langkah, score: 0.3 }, { content: langkah, score: 0.29 }, { content: 'swing motor relief valve pressure setting check', score: 0.2 }], 2, 0.7);
+    t(kembar[1].content.includes('swing motor'), 'MMR tetap membuang chunk kembar');
+  }
+
+  {
     const { GoogleAuth } = require('google-auth-library');
     const asliClient = GoogleAuth.prototype.getClient;
     GoogleAuth.prototype.getClient = async () => ({ getAccessToken: async () => ({ token: 'tok' }) });
