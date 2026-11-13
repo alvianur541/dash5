@@ -14,6 +14,10 @@ const THINK_OVERRIDE: ThinkLevel | null = (() => {
   } catch { return null; }
 })();
 
+const UJI_MODEL: boolean = (() => {
+  try { return new URLSearchParams(window.location.search).get('uji') === '1'; } catch { return false; }
+})();
+
 export async function authHeaders(): Promise<Record<string, string>> {
   const token = await getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -31,6 +35,7 @@ interface AskBody {
   history: Message[];
   userInput: string;
   think?: ThinkLevel;
+  uji?: boolean;
   attachments?: Array<{ mimeType: string; data: string }>;
   sessionId?: string;
 }
@@ -152,7 +157,7 @@ export async function generateResponseStream(
   { sessionId, signal }: AskOptions = {},
 ): Promise<AIResponse> {
   return ask(
-    { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, sessionId },
+    { model, userName, history, userInput, think: THINK_OVERRIDE ?? undefined, uji: UJI_MODEL || undefined, sessionId },
     onChunk, onAgentEvent, signal,
   );
 }
@@ -189,7 +194,7 @@ export async function generateResponse(
   if (images.length === 0) return { text: 'Maaf, gagal membaca file gambar.' };
 
   return ask(
-    { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined, sessionId },
+    { model, userName, history, userInput, attachments: images, think: THINK_OVERRIDE ?? undefined, uji: UJI_MODEL || undefined, sessionId },
     onChunk, onAgentEvent, signal,
   );
 }

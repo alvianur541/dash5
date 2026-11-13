@@ -16,6 +16,7 @@ export interface Deps {
   stream(body: any, model: string, onChunk: (c: StreamChunk) => void, opts?: StreamOpts): Promise<void>;
   webPrice?(pn: string): Promise<Array<{ pn: string; nama: string; harga: string }>>;
   thinkOverride?: Exclude<ThinkingLevel, 'minimal'> | null;
+  modelUji?: string | null;
   usage: Usage;
   meta: {
     stages?: StageEvent[];

@@ -22,6 +22,9 @@ const WEB_EXCLUDE_DOMAINS = (process.env.WEB_EXCLUDE_DOMAINS
   .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
 let webExcludeDitolak = false;
 
+const UJI_MODEL = /^[a-z0-9.-]{3,60}$/.test(process.env.UJI_MODEL || '') ? process.env.UJI_MODEL : '';
+const UJI_MODEL_USERS = new Set((process.env.UJI_MODEL_USERS || '').split(',').map(s => s.trim().toLowerCase()).filter(Boolean));
+
 const app = express();
 let requestCount = 0;
 
@@ -120,6 +123,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     .filter(m => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
     .map(m => ({ role: m.role, content: m.content.slice(0, HISTORY_MAX_CHARS) }));
   const think    = ['low', 'medium'].includes(b.think) ? b.think : null;
+  const modelUji = b.uji === true && UJI_MODEL && UJI_MODEL_USERS.has(akun.toLowerCase()) ? UJI_MODEL : null;
   const rawImages = Array.isArray(b.attachments) ? b.attachments.slice(0, 1) : [];
   const images = [];
   for (const a of rawImages) {
@@ -160,6 +164,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     requestId,
     supabase,
     thinkOverride: think,
+    modelUji,
     langHint: ['id', 'en'].includes(b.lang) ? b.lang : undefined,
     usage: orch.newUsage(),
     meta: {},
@@ -183,7 +188,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       }
     },
     generate: async (body, model, enableGoogleSearch) => {
-      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL) throw new Error(`Model tidak diizinkan: ${model}`);
+      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL && model !== modelUji) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       if (enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
       const callCtrl = new AbortController();
@@ -197,7 +202,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
       } finally { clearTimeout(timer); }
     },
     stream: async (body, model, onChunk, opts = {}) => {
-      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL) throw new Error(`Model tidak diizinkan: ${model}`);
+      if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL && model !== modelUji) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
       const saring = opts.enableGoogleSearch && !webExcludeDitolak && WEB_EXCLUDE_DOMAINS.length > 0;
       if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: saring ? { exclude_domains: WEB_EXCLUDE_DOMAINS } : {} }];
@@ -234,6 +239,7 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     }, { process_first_request: processFirstRequest }));
     const totalMs = Date.now() - tMulai;
     const m = deps.meta;
+    const jawabanAkhir = modelUji && answer ? `${answer.trimEnd()}\n\nModel uji: ${m.modelUsed || '-'} · huruf pertama ${(ttft / 1000).toFixed(1)} dtk · selesai ${(totalMs / 1000).toFixed(1)} dtk` : answer;
     const biaya = deps.usage.cost || 0;
     console.info(
       '[ask] rid=%s user=%s unit=%s q="%s" route=%s conf=%s model=%s ' +
@@ -257,8 +263,8 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     sseWrite(res, 'meta', {
       usage: deps.usage,
       model: deps.meta.modelUsed || orch.MODEL,
-      cacheable: deps.meta.cacheable === true,
-      full: answer,
+      cacheable: deps.meta.cacheable === true && !modelUji,
+      full: jawabanAkhir,
     });
   } catch (err) {
     if (ctrl.signal.aborted && !deadlineHit) {

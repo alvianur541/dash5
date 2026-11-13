@@ -72,7 +72,8 @@ export async function callProxyStream(
   let fullText = '';
   let modelUsed = MODEL;
   let usage: UsageMeta | null = null;
-  const chain = urutanModel();
+  const uji = deps().modelUji;
+  const chain = uji ? [uji, ...urutanModel().filter(m => m !== uji)] : urutanModel();
   const modelAt = (n: number) => chain[Math.min(n - 1, chain.length - 1)];
 
   while (true) {

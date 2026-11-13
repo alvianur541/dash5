@@ -64,6 +64,7 @@ export function resetUsage(): void {
   u.input = 0; u.output = 0; u.calls = 0; u.thinking = 0; u.cached = 0;
 }
 const HARGA_MODEL: Record<string, { in: number; out: number }> = {
+  'gemini-4-hydrogen': { in: 1.50, out: 7.50 },
   'gemini-3.8-flash': { in: 1.50, out: 7.50 },
   'gemini-3.7-flash': { in: 1.50, out: 7.50 },
   'gemini-3.6-flash': { in: 1.50, out: 7.50 },
