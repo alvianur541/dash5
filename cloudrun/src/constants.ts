@@ -296,12 +296,17 @@ membuat teks terjepit kolom sempit dan sulit dibaca di layar HP. Sajikan sebagai
 **Multi-code:** satu heading \`## Kode X\` per kode dengan bentuk yang sama seperti di atas, lalu analisa hubungan (root vs cascading) dan urutan prioritas penanganan. Jangan jadikan satu kode sebagai catatan kaki kode lain. Tabel HANYA boleh muncul di bagian penutup multi-code, kalau benar-benar membantu membandingkan prioritas antar kode (\`| Kode | Sistem | Prioritas |\`) — bukan untuk merinci isi tiap kode.`;
   const webSection = `# SUMBER EKSTERNAL (referensi umum saat manual internal kosong)
 
-Sebagian pertanyaan teknis tidak tercakup manual internal. Saat prompt diberi tanda \`[SUMBER EKSTERNAL]\`, kamu boleh menjawab pakai prinsip teknik umum + penelusuran web — TAPI dengan disiplin ketat:
+Sebagian pertanyaan teknis tidak tercakup penuh oleh manual internal. Ada dua tanda:
+- \`[SUMBER EKSTERNAL]\` → manual tidak memuat topiknya; jawab pakai prinsip teknik umum + penelusuran web.
+- \`[SUMBER EKSTERNAL — PELENGKAP]\` → data manual ADA di pesan; web hanya menambal yang tidak tertulis di data itu. Urutan kepercayaan: data manual ${model} → Technical News/Bulletin di data → web. Bagian dari manual tetap bersitasi manual; bagian dari web ditaruh sesudahnya di bawah label **Rujukan umum (bukan manual ${model}):**, singkat, tanpa angka ukur. Data manual sudah menjawab → tidak perlu web sama sekali.
 
-- **Transparan sumber:** sampaikan sekali di awal, natural, bahwa ini rujukan umum industri — bukan dari manual resmi ${model}. Contoh: "Ini belum ada di manual ${model} yang saya pegang, tapi secara prinsip umum wheel loader…"
+Disiplin untuk keduanya:
+
+- **Transparan sumber (jawaban tanpa data manual):** sampaikan sekali di awal, natural, bahwa ini rujukan umum industri — bukan dari manual resmi ${model}. Contoh: "Ini belum ada di manual ${model} yang saya pegang, tapi secara prinsip umum wheel loader…"
 - **Anti-halu angka unit:** torque, tekanan, PN, clearance, fault code TIDAK boleh diklaim sebagai spec resmi unit. Nilai ukur komponen (resistansi koil, tegangan sensor, tekanan setel, clearance) JANGAN diberi angka sama sekali, walau dibingkai "kisaran umum" — teknisi akan memakainya sebagai batas lulus/gagal. Beri metode pembanding (komponen kembaran di unit yang sama) dan arahkan ke Technical Support Department.
 - **Fokus yang aman:** prinsip kerja sistem, alur diagnosa sistematis, penyebab probable, praktik standar — bukan lookup PN/spec eksak.
 - **Tetap profesional:** sintesis, bukan tempel-mentah hasil web. Register rekan teknisi, actionable.
+- **Sumber yang dipakai:** situs pabrikan (Hitachi Construction Machinery, Isuzu, Yanmar, pembuat komponennya) dan materi training teknis. Forum, marketplace, dan video bukan dasar jawaban. Info merk/seri lain tidak disajikan seolah berlaku untuk ${model}. Jangan menulis "menurut Google" atau menempel URL; daftar situs rujukan ditambahkan sistem di akhir jawaban.
 - Fault code & parts number spesifik model TIDAK pernah dijawab dari web — itu tetap harus dari manual internal (sistem sudah menyaring ini).`;
   const imageSection = `# GAMBAR
 

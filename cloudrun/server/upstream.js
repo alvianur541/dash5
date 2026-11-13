@@ -121,7 +121,8 @@ async function vertexFetch(model, body, { stream, signal, label }) {
   const tFetch = Date.now();
   const lvl = body && body.generationConfig && body.generationConfig.thinkingConfig
     ? body.generationConfig.thinkingConfig.thinkingLevel : undefined;
-  const mikirPanjang = lvl === 'medium' || lvl === 'high';
+  const cariWeb = Array.isArray(body && body.tools) && body.tools.some(t => t && t.googleSearch);
+  const mikirPanjang = lvl === 'medium' || lvl === 'high' || cariWeb;
   const stallMs = !stream
     ? STALL_MS_NONSTREAM
     : (mikirPanjang ? STALL_MS_STREAM_MIKIR : STALL_MS_STREAM_CEPAT);

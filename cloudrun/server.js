@@ -89,7 +89,13 @@ async function vertexStreamParsed(model, body, onChunk, signal, requestId) {
         }
         const parts = (cand && cand.content && cand.content.parts) || [];
         const text = parts.filter(p => p.text && !p.thought).map(p => p.text).join('');
-        onChunk({ text, usageMetadata: json.usageMetadata, live: true, finishReason: cand && cand.finishReason });
+        const gm = cand && cand.groundingMetadata;
+        const sources = gm && Array.isArray(gm.groundingChunks)
+          ? gm.groundingChunks.filter(g => g && g.web).map(g => ({ title: g.web.title, uri: g.web.uri })) : undefined;
+        if (gm && Array.isArray(gm.webSearchQueries) && gm.webSearchQueries.length) {
+          console.info('[web] rid=%s cari=%s', requestId, JSON.stringify(gm.webSearchQueries).slice(0, 300));
+        }
+        onChunk({ text, usageMetadata: json.usageMetadata, live: true, finishReason: cand && cand.finishReason, sources });
       }
     }
   } finally {

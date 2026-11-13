@@ -12,7 +12,7 @@ import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
 import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
-import { RERANK_DEGRADED_NOTE, RAG_LABEL, EXTERNAL_DIRECTIVE, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
+import { RERANK_DEGRADED_NOTE, RAG_LABEL, EXTERNAL_DIRECTIVE, HYBRID_DIRECTIVE, barisSumberWeb, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
 import { AgentEventEmit, historyToContents, extractFaultCodes, extractRelatedPCodes, detectForeignModel, detectFaultCodeInQuery, SERVICE_INTERVAL_RE, streamCanned, resolveFaultCodeQuery, resolvePartsQuery, resolveNaturalLanguageQuery, resolveMultiAspectQuery, isCasualExact, extractImageFacts, REDO_RE, type RagRouteResult } from './routes';
 
 const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya sebagian cocok dengan pertanyaan. Jawab dari bagian yang relevan saja; kalau inti pertanyaan (angka/nilai/prosedur yang ditanya) TIDAK ada di data, katakan terus terang di kalimat PERTAMA bahwa bagian itu belum ketemu di data ini (jangan simpulkan manualnya tidak memuat), jangan menjawab hal lain seolah itu jawabannya. Jangan ngarang detail.]`;
@@ -20,7 +20,7 @@ const MEDIUM_CAVEAT = `\n\n[CONFIDENCE: MEDIUM — data yang tertarik hanya seba
 const TABEL_HARGA_RE = /^\s*\|[^\n]*\b(?:Rp|IDR)\.?\s*\d/m;
 const ADA_HARGA_WEB_RE = /\[HARGA HEXINDOPARTS\.COM[^\]\n]*\]\n\s+Part Number/;
 
-const LEAK_RE =/^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|CATATAN KASUS[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
+const LEAK_RE =/^\s*\[(?:DATA MANUAL TERSEDIA|DATA PARTS CATALOG TERSEDIA|CONFIDENCE:[^\]]*|KODE TIDAK DITEMUKAN|ENGINE MANUAL|SUMBER EKSTERNAL[^\]]*|PETUNJUK KIT|ASPEK[^\]]*|SIMTOM[^\]]*|CATATAN KASUS[^\]]*|Fault Code:[^\]]*)\]\s*\n?/gim;
 const LEAK_META_RE = /^\s*(?:Document|Section|Model|Kategori):\s.*\n?/gim;
 
 const LATEX_SYMBOL: Record<string, string> = {
@@ -196,7 +196,11 @@ export async function generateResponseStream(
   const ragContent       = promoOn ? ragRaw : tanpaHargaDb(ragRaw);
   const dataLabel        = routeResult.type === 'rag_found' ? routeResult.dataLabel : '';
   const ragConfidence    = routeResult.type === 'rag_found' ? routeResult.confidence : undefined;
-  deps().meta.route      = routeResult.type === 'google_search' ? `google_${routeResult.mode}` : routeResult.type;
+  const lemah            = ragConfidence === 'low';
+  const webHibrida       = routeResult.type === 'rag_found' && routeResult.web === true && !!ragContent
+    && (lemah || !(adalahLaporan(trimmed) && history.some(m => m.role === 'assistant')));
+  const pakaiWeb         = gsTechnical || webHibrida;
+  deps().meta.route      = routeResult.type === 'google_search' ? `google_${routeResult.mode}` : webHibrida ? 'rag_web' : routeResult.type;
   deps().meta.confidence = ragConfidence;
   deps().meta.degraded   = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const isCasual = routeResult.type === 'google_search' && routeResult.mode === 'casual';
@@ -217,14 +221,14 @@ export async function generateResponseStream(
   const rerankDegraded = routeResult.type === 'rag_found' && routeResult.rerankDegraded === true;
   const caveat = rerankDegraded
     ? RERANK_DEGRADED_NOTE
-    : ragConfidence !== 'high' && !ADA_HARGA_WEB_RE.test(ragContent)
+    : ragConfidence !== 'high' && !(webHibrida && lemah) && !ADA_HARGA_WEB_RE.test(ragContent)
       ? MEDIUM_CAVEAT
       : '';
   if (rerankDegraded) console.warn('[rerank] gagal — jawaban ditandai degraded ke teknisi');
   const shownQuery = offer ? `${trimmed}\n[User menerima tawaranmu di jawaban sebelumnya → yang diminta: ${offer}. Jawab langsung permintaan itu, jangan minta klarifikasi.]` : trimmed;
   const kasus = dataLabel === RAG_LABEL.manual && (diagnostic || adalahLaporan(trimmed)) ? blokKasus(history, trimmed) : '';
   const userText         = ragContent
-    ? `${shownQuery || 'Halo'}${followUpNote}${caveat}${kasus}\n\n[${dataLabel}]\n${ragContent}`
+    ? `${shownQuery || 'Halo'}${followUpNote}${caveat}${kasus}\n\n[${dataLabel}]\n${ragContent}${webHibrida ? `\n\n${HYBRID_DIRECTIVE(model, lemah)}` : ''}`
     : gsTechnical
       ? `${shownQuery}\n\n${EXTERNAL_DIRECTIVE(model)}`
       : (shownQuery || 'Halo');
@@ -232,19 +236,23 @@ export async function generateResponseStream(
   const bahasa = langDirective(lang);
   contents.push({ role: 'user', parts: [{ text: `${userTag(userName, history)}\n${userText}${bahasa ? `\n\n${bahasa}` : ''}` }] });
 
-  const fullText = await lengkapiHargaAman(rapikanFormat(scrubLeaks(await callProxyStream({
+  const jawaban = await lengkapiHargaAman(rapikanFormat(scrubLeaks(await callProxyStream({
     contents,
     ...systemFor(model, isCasual, {
       parts: dataLabel === RAG_LABEL.parts || hasServiceInterval || KATA_HARGA_RE.test(q) || PARTS_DATA_RE.test(ragContent),
       fault: isFaultCode || FAULT_DATA_RE.test(ragContent),
-      web: gsTechnical || ragContent.includes('[SUMBER EKSTERNAL]'),
+      web: pakaiWeb || ragContent.includes('[SUMBER EKSTERNAL]'),
       image: false,
     }),
     generationConfig:  { maxOutputTokens, temperature: 0.3, thinkingConfig: { thinkingLevel } },
-  }, onChunk, gsTechnical))), ragContent, history);
+  }, onChunk, pakaiWeb))), ragContent, history);
+  const sumberWeb = pakaiWeb && jawaban ? barisSumberWeb(deps().meta.webSources, lang) : '';
+  if (sumberWeb) onChunk(`\n\n${sumberWeb}`);
+  const fullText = sumberWeb ? `${jawaban.trimEnd()}\n\n${sumberWeb}` : jawaban;
+  if (pakaiWeb) console.info('[web] route=%s sumber=%d %s', deps().meta.route, deps().meta.webSources?.length ?? 0, sumberWeb);
   if (routeResult.type === 'rag_found' && TABEL_HARGA_RE.test(fullText)) deps().meta.confidence = undefined;
 
-  const complete = routeResult.type === 'rag_found' && !!fullText && looksComplete(fullText)
+  const complete = routeResult.type === 'rag_found' && !sumberWeb && !!fullText && looksComplete(fullText)
     && ![STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE].some(note => fullText.includes(note.trim()));
   if (complete) deps().meta.cacheable = true;
   else if (routeResult.type === 'rag_found' && fullText) {

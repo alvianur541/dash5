@@ -20,7 +20,7 @@ export interface Deps {
   meta: {
     stages?: StageEvent[];
     modelUsed?: string; cacheable?: boolean; route?: string; confidence?: string; degraded?: boolean;
-    groundingUnknown?: number; msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
+    groundingUnknown?: number; webSources?: Array<{ title?: string; uri?: string }>; msRag?: number; msRerank?: number; fallbackTo?: string; fallbackSebab?: string;
   };
   resolvedQuestion?: ResolvedQuestion;
   deadlineAt?: number;
@@ -30,6 +30,7 @@ export interface Deps {
 
 interface StreamChunk {
   text?: string; usageMetadata?: any; error?: string; code?: number; live?: boolean; finishReason?: string;
+  sources?: Array<{ title?: string; uri?: string }>;
 }
 interface StreamOpts { enableGoogleSearch?: boolean; signal?: AbortSignal }
 

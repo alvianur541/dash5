@@ -5,7 +5,7 @@ import type { HasilWeb } from './rag';
 import { modelHasSource } from './constants';
 import { Part, VContent, InlineDataPart, callProxy, getText, INTENT_MODEL } from './vertex';
 import { analyzeIntent, decomposeAspects, classifyAspect } from './intent';
-import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL } from './templates';
+import { ragErrorTemplate, faultCodeNotFoundTemplate, partsNotFoundTemplate, offTopicTemplate, sessionLang, KIT_HINT, KIT_QUERY_RE, RAG_LABEL, webPelengkap } from './templates';
 import type { Lang } from './templates';
 import { deps, type RerankSource } from './deps';
 import { evidenceBlocks, assembleEvidence, type EvidenceDocument, type Confidence, weakestConfidence } from './evidence';
@@ -142,7 +142,7 @@ export function detectForeignModel(query: string, activeModel: string): string |
 }
 
 export type RagRouteResult =
-  | { type: 'rag_found';  content: string; dataLabel: string; confidence?: Confidence; aspectConfidence?: Array<{ aspect: string; status: 'found' | 'missing'; confidence: Confidence; sources: Array<RerankSource | undefined> }>; rerankDegraded?: boolean; evidence?: EvidenceDocument[]; rerankSource?: RerankSource }
+  | { type: 'rag_found';  content: string; dataLabel: string; web?: boolean; confidence?: Confidence; aspectConfidence?: Array<{ aspect: string; status: 'found' | 'missing'; confidence: Confidence; sources: Array<RerankSource | undefined> }>; rerankDegraded?: boolean; evidence?: EvidenceDocument[]; rerankSource?: RerankSource }
   | { type: 'rag_canned'; text: string }
   | { type: 'google_search'; mode: 'casual' | 'technical' };
 
@@ -498,11 +498,13 @@ export async function resolveNaturalLanguageQuery(
   }
 
   if (!ragResult.hasResults) return { type: 'google_search', mode: 'technical' };
-  if (ragResult.confidence === 'low' && !extra && !nilai) return { type: 'google_search', mode: 'technical' };
+  const pelengkap = webPelengkap();
+  if (ragResult.confidence === 'low' && !extra && !nilai && pelengkap === 'off') return { type: 'google_search', mode: 'technical' };
+  const web = ragResult.confidence === 'low' ? pelengkap !== 'off' : ragResult.confidence === 'medium' && pelengkap === 'medium';
   const evidence = ragResult.evidence ?? evidenceBlocks(ragResult.content);
   return {
     type: 'rag_found', content: notes + assembleEvidence(evidence), evidence,
-    dataLabel: RAG_LABEL.manual, confidence: ragResult.confidence,
+    dataLabel: RAG_LABEL.manual, confidence: ragResult.confidence, web,
     rerankDegraded: isRerankError(ragResult.ragError), rerankSource: ragResult.rerankSource,
   };
 }

@@ -152,4 +152,33 @@ export const EXTERNAL_DIRECTIVE = (model: string): string =>
 - Sampaikan sekali di awal, natural: jawaban ini rujukan umum industri, bukan dari manual resmi ${model}.
 - Angka eksekusi-kritis (torque, tekanan, PN, clearance, fault code) DILARANG diklaim sebagai spec resmi unit. Nilai ukur komponen (resistansi, tegangan, arus, tekanan setel, clearance) JANGAN ditulis angkanya sama sekali — beri metode pembanding dengan komponen kembaran di unit yang sama + arahkan ke Technical Support Department.
 - Fokus: prinsip kerja, alur diagnosa sistematis, penyebab probable, praktik standar industri.
+- Cara mencari: kata kunci English dengan nama komponen persis seperti di manual, ditambah tipe unit atau engine-nya. Utamakan situs pabrikan (Hitachi Construction Machinery, Isuzu, Yanmar, pembuat komponennya) dan materi training teknis. Forum, marketplace, dan video TIDAK dijadikan dasar. Info untuk merk atau seri lain tidak boleh disajikan seolah berlaku untuk ${model}.
 - Ringkas, actionable, register rekan teknisi. Jangan menyalin mentah hasil web — sintesiskan.`;
+
+export const HYBRID_DIRECTIVE = (model: string, lemah: boolean): string =>
+  `[SUMBER EKSTERNAL — PELENGKAP] Kamu boleh menelusuri web untuk MELENGKAPI data manual di atas. ${lemah
+    ? 'Data manual di atas hanya yang PALING DEKAT dan relevansinya rendah: pakai bagian yang benar-benar menyangkut pertanyaan, abaikan sisanya, dan katakan terus terang apa yang belum ketemu di manual.'
+    : 'Kalau data manual di atas sudah menjawab pertanyaannya, JANGAN menelusuri web dan jangan menambah apa pun dari luar.'} ATURAN WAJIB:
+- Manual ${model} selalu menang. Angka, standar ukur, PN, torque, tekanan, fault code, dan urutan prosedur HANYA dari data manual di atas; web tidak boleh mengisi, mengganti, atau melengkapi angka yang tidak ada.
+- Web hanya untuk yang tidak tertulis di data: cara kerja sistem atau komponen, arti istilah, kenapa gejala itu bisa terjadi, praktik pemeriksaan umum yang aman.
+- Cara mencari: kata kunci English dengan nama komponen persis seperti di manual, ditambah tipe unit atau engine-nya. Utamakan situs pabrikan (Hitachi Construction Machinery, Isuzu, Yanmar, pembuat komponennya) dan materi training teknis. Forum, marketplace, dan video TIDAK dijadikan dasar. Info untuk merk atau seri lain tidak boleh disajikan seolah berlaku untuk ${model}.
+- Di jawaban, pisahkan sumbernya: isi dari manual tetap bersitasi manual seperti biasa; isi dari web ditaruh sesudahnya di bawah label **Rujukan umum (bukan manual ${model}):** dan singkat. Web bertentangan dengan manual → ikuti manual.
+- Tidak menemukan yang andal di web → jangan mengarang; cukup jawab dari manual.`;
+
+export const webPelengkap = (): 'off' | 'low' | 'medium' => {
+  const v = (process.env.WEB_PELENGKAP ?? 'medium').toLowerCase();
+  return v === 'off' || v === 'low' ? v : 'medium';
+};
+
+export function barisSumberWeb(sumber: Array<{ title?: string; uri?: string }> | undefined, lang: 'id' | 'en'): string {
+  const nama = (sumber ?? []).map(s => {
+    const t = (s.title ?? '').trim().toLowerCase().replace(/^www\./, '');
+    if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(t)) return t;
+    try {
+      const h = new URL(s.uri ?? '').hostname.toLowerCase().replace(/^www\./, '');
+      return /vertexaisearch|googleusercontent|google\.com$/.test(h) ? '' : h;
+    } catch { return ''; }
+  }).filter(Boolean);
+  const unik = [...new Set(nama)].slice(0, 4);
+  return unik.length ? `${lang === 'en' ? 'Web references' : 'Rujukan web'}: ${unik.join(' · ')}` : '';
+}

@@ -78,6 +78,7 @@ export async function callProxyStream(
   while (true) {
     attempt++;
     fullText = '';
+    deps().meta.webSources = undefined;
     usage = null;
     modelUsed = modelAt(attempt);
     if (attempt === 1 && modelUsed !== MODEL) {
@@ -139,6 +140,7 @@ export async function callProxyStream(
         }
         if (c.live && !streamHidup) { streamHidup = true; clearTimeout(watchdog); }
         if (c.usageMetadata) usage = c.usageMetadata;
+        if (c.sources?.length) deps().meta.webSources = c.sources;
         if (c.finishReason) finishReason = c.finishReason;
         if (c.text) {
           firstTokenSeen = true;
