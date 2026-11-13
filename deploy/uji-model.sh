@@ -4,6 +4,8 @@ set -uo pipefail
 RUNS="${1:-5}"
 PROJECT="${PROJECT:-$(gcloud config get-value project 2>/dev/null)}"
 BASELINE="${BASELINE:-gemini-3.7-flash}"
+THINK="${THINK:-low}"
+case "$THINK" in low|medium|high) ;; *) echo "THINK harus low, medium, atau high"; exit 1;; esac
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 SYS="$ROOT/cloudrun/src/constants.ts"
 
@@ -19,6 +21,7 @@ cat > "$TMP/uji.py" <<'PY'
 import json, os, re, statistics, sys, time, urllib.error, urllib.request
 
 project, runs, baseline, extra, sysfile = sys.argv[1], int(sys.argv[2]), sys.argv[3], sys.argv[4], sys.argv[5]
+think = os.environ.get("THINK", "low")
 H = {"Authorization": "Bearer " + os.environ["TOKEN"], "Content-Type": "application/json"}
 BASE = f"https://aiplatform.googleapis.com/v1beta1/projects/{project}/locations/global/publishers/google/models"
 
@@ -101,7 +104,7 @@ question = (
 def one(m):
     body = {"systemInstruction": {"parts": [{"text": sys_text}]},
             "contents": [{"role": "user", "parts": [{"text": question}]}],
-            "generationConfig": {"maxOutputTokens": 4096, "temperature": 0.3, "thinkingConfig": {"thinkingLevel": "low"}}}
+            "generationConfig": {"maxOutputTokens": 4096 if think == "low" else 8192, "temperature": 0.3, "thinkingConfig": {"thinkingLevel": think}}}
     t0 = time.time()
     first, usage, chars, finish = None, {}, 0, None
     try:
@@ -131,7 +134,7 @@ def one(m):
     except Exception as e:
         return {"ok": False, "err": str(e)[:90]}
 
-print(f"\n[3] Latensi streaming — 1 pemanasan + {runs} run per model, bergiliran ...")
+print(f"\n[3] Latensi streaming (thinking {think}) — 1 pemanasan + {runs} run per model, bergiliran ...")
 res = {m: [] for m in avail}
 for r in range(runs + 1):
     for m in avail:
@@ -165,4 +168,4 @@ print("\n  Catatan: di produksi, waktu ke huruf pertama bertambah ~2-4 dtk (anal
 PY
 
 echo "Project: $PROJECT | pembanding: $BASELINE | run: $RUNS"
-TOKEN="$TOKEN" python3 "$TMP/uji.py" "$PROJECT" "$RUNS" "$BASELINE" "${MODELS:-}" "$SYS"
+TOKEN="$TOKEN" THINK="$THINK" python3 "$TMP/uji.py" "$PROJECT" "$RUNS" "$BASELINE" "${MODELS:-}" "$SYS"
