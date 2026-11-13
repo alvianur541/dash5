@@ -9,7 +9,7 @@ import { evidenceBlocks } from './evidence';
 import { stage } from './telemetry';
 import { blokKasus, adalahLaporan } from './kasus';
 import { hargaPromo, promoAktif, tanpaHargaDb } from './promo';
-import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, resetUsage, toInlineData } from './vertex';
+import { Part, VContent, VRequest, ThinkingLevel, DIAGNOSIS_THINKING, MODEL, namaModel, resetUsage, toInlineData } from './vertex';
 import { callProxyStream, STREAM_CUT_NOTE, STREAM_HALT_NOTE, STREAM_LONG_NOTE, looksComplete } from './stream';
 import { resolveAffirmative, isMultiAspectQuery } from './intent';
 import { RERANK_DEGRADED_NOTE, RAG_LABEL, EXTERNAL_DIRECTIVE, HYBRID_DIRECTIVE, barisSumberWeb, FALLBACK_RESPONSE, foreignModelTemplate, sessionLang, langDirective, imageCodesNotFoundTemplate } from './templates';
@@ -54,7 +54,7 @@ export function scrubLeaks(text: string): string {
 }
 
 const userTag = (userName: string, history: Message[]) =>
-  `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${MODEL}${
+  `[Teknisi: ${userName} | ${jakartaTime()} WIB | Model AI: ${namaModel(MODEL)}${
     history.some(m => m.role === 'assistant') ? ' | Jawaban lanjutan: JANGAN buka dengan salam waktu atau nama' : ''}]`;
 
 async function lengkapiHargaAman(text: string, data = '', history: Message[] = []): Promise<string> {

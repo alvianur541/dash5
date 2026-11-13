@@ -28,12 +28,19 @@ function operator(req) {
   return token.length >= 16 && kirim.length > 0 && timingSafeEqual(sidik(kirim), sidik(token));
 }
 
+const namaModel = id => /^gemini-[a-z0-9.-]+$/.test(id)
+  ? id.replace('flash-lite', 'flash_lite').split('-').map(k => k === 'flash_lite' ? 'Flash-Lite' : k.charAt(0).toUpperCase() + k.slice(1)).join(' ')
+  : id;
+const namaDaftar = v => String(v || '-').split(',').map(s => namaModel(s.trim())).join(', ');
+
 function registerMetrics(app) {
   app.get('/metrics', (req, res) => {
     const config = {
-      model: process.env.VERTEX_MODEL || '-',
-      fallback: process.env.FALLBACK_MODELS || '-',
-      intent: process.env.INTENT_MODEL || 'gemini-3.5-flash-lite',
+      model: namaDaftar(process.env.VERTEX_MODEL),
+      fallback: namaDaftar(process.env.FALLBACK_MODELS),
+      intent: namaDaftar(process.env.INTENT_MODEL || 'gemini-3.5-flash-lite'),
+      model_id: process.env.VERTEX_MODEL || '-',
+      fallback_id: process.env.FALLBACK_MODELS || '-',
       reranker: RERANKER === 'google' ? `google ${GOOGLE_RANK_MODEL} (cadangan cohere)` : 'cohere',
       usage_log: USAGE_LOG_ON ? 'on' : 'off',
       uji_model: /^[a-z0-9.-]{3,60}$/.test(process.env.UJI_MODEL || '') ? process.env.UJI_MODEL : '-',
