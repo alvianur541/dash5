@@ -16,6 +16,12 @@ class RendererTest(unittest.TestCase):
         self.assertIn('External fixture',page)
         self.assertNotIn('Internal fixture',page)
         self.assertIn('1,234',page)
+    def test_model_ids_shown_as_formal_names(self):
+        self.assertEqual(render_base.nama_model('gemini-4-hydrogen'), 'Gemini 4 Hydrogen')
+        self.assertEqual(render_base.nama_model('gemini-3.7-flash'), 'Gemini 3.7 Flash')
+        self.assertEqual(render_base.nama_model('gemini-3.5-flash-lite'), 'Gemini 3.5 Flash-Lite')
+        self.assertEqual(render_base.nama_model(None), '–')
+
     def test_toggle_is_explicit_and_default_off(self):
         import render
         st,now=self.fixture()

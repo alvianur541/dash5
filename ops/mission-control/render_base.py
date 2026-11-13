@@ -27,6 +27,14 @@ ICON = {  # 1.6px stroke line icons, 20x20
 }
 
 
+def nama_model(mid):
+    mid = str(mid or '').strip()
+    if not re.fullmatch(r'gemini-[a-z0-9.-]+', mid):
+        return mid or '–'
+    kata = mid.replace('flash-lite', 'flash_lite').split('-')
+    return ' '.join('Flash-Lite' if k == 'flash_lite' else k.capitalize() for k in kata)
+
+
 def ic(name, size=18):
     return f'<svg class="i" width="{size}" height="{size}" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{ICON[name]}</svg>'
 
@@ -461,8 +469,8 @@ function p(x){return(x<10?'0':'')+x}function t(){var age=Date.now()/1000-at;if(a
     <dt>Technician queries</dt><dd>{n(K.get('h24', 0))}</dd>""" + (f"<dt>Load-test queries (excluded)</dt><dd>{n(K.get('loadtest24'))}</dd>" if K.get('loadtest24') else "") + f"""<dt>Voice messages</dt><dd>{n(kd.get('suara', 0))}</dd><dt>App warm-up pings</dt><dd>{n(kd.get('ping', 0))}</dd>
     <dt>Rejected (auth)</dt><dd>{n(rejected)}</dd><dt>Server errors (5xx)</dt><dd>{n(codes.get('5xx', 0))}</dd><dt>Error log entries</dt><dd>{n(cl.get('errors24', 0))}</dd></dl></div>
    <div class="card" id="ai-cost"><h2 class="ct">Estimated AI cost & models</h2><dl class="facts">
-    <dt>Cost (7 days)</dt><dd>{rp(K.get('cost7'))}</dd><dt>Cost ({MONTH_LBL})</dt><dd>{rp(K.get('cost_mtd'))}</dd><dt>Queries ({MONTH_LBL})</dt><dd>{n(K.get('q_mtd'))}</dd><dt>Primary model</dt><dd>{E(cfg.get('model', '–'))}</dd>
-    <dt>Fallback model</dt><dd>{E(cfg.get('fallback', '–'))}</dd><dt>Fallbacks (7 days)</dt><dd>{n(K.get('fb7'))}</dd><dt>Knowledge base</dt><dd>{n(ct.get('docs', {}).get('total'))} chunks</dd></dl></div>
+    <dt>Cost (7 days)</dt><dd>{rp(K.get('cost7'))}</dd><dt>Cost ({MONTH_LBL})</dt><dd>{rp(K.get('cost_mtd'))}</dd><dt>Queries ({MONTH_LBL})</dt><dd>{n(K.get('q_mtd'))}</dd><dt>Primary model</dt><dd>{E(nama_model(cfg.get('model', '–')))}</dd>
+    <dt>Fallback model</dt><dd>{E(nama_model(cfg.get('fallback', '–')))}</dd><dt>Fallbacks (7 days)</dt><dd>{n(K.get('fb7'))}</dd><dt>Knowledge base</dt><dd>{n(ct.get('docs', {}).get('total'))} chunks</dd></dl></div>
   </div>
 
   <div class="card" id="riwayat"><h2 class="ct">Change log</h2><ul class="plain">{log}</ul></div>
