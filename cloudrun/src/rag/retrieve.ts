@@ -214,8 +214,7 @@ export async function rankAndSelect(
       .filter(c => c && !top.some(t => t.content === c));
     if (kandidat.length > 0) {
       hasUnscoredNumericPin = kandidat.some(c => !reranked.some(r => r.content === c));
-      top = [top[0], ...kandidat.map(c => ({ content: c, score: reranked.find(r => r.content === c)?.score ?? 0 })), ...top.slice(1)]
-        .slice(0, topN);
+      top = [top[0], ...kandidat.map(c => ({ content: c, score: reranked.find(r => r.content === c)?.score ?? 0 })), ...top.slice(1)];
       console.info('[jaminan-keyword] %d chunk disisipkan', kandidat.length);
     }
   }

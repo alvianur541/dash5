@@ -173,7 +173,7 @@ export const webPelengkap = (): 'off' | 'low' | 'medium' => {
 export function barisSumberWeb(sumber: Array<{ title?: string; uri?: string }> | undefined, lang: 'id' | 'en'): string {
   const nama = (sumber ?? []).map(s => {
     const t = (s.title ?? '').trim().toLowerCase().replace(/^www\./, '');
-    if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(t)) return t;
+    if (/^[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(t)) return /(?:^|\.)google\.com$|vertexaisearch/.test(t) ? '' : t;
     try {
       const h = new URL(s.uri ?? '').hostname.toLowerCase().replace(/^www\./, '');
       return /vertexaisearch|googleusercontent|google\.com$/.test(h) ? '' : h;

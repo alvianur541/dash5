@@ -17,6 +17,11 @@ const registerTranscribe = require('./server/transcribe');
 
 const ASK_MODELS = new Set(orch.UNIT_MODELS);
 
+const WEB_EXCLUDE_DOMAINS = (process.env.WEB_EXCLUDE_DOMAINS
+  ?? 'scribd.com,slideshare.net,studocu.com,manualslib.com,heavyequipmentforums.com,reddit.com,quora.com,youtube.com,facebook.com,instagram.com,tiktok.com,pinterest.com,alibaba.com,aliexpress.com,ebay.com,amazon.com,tokopedia.com,shopee.co.id,bukalapak.com')
+  .split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+let webExcludeDitolak = false;
+
 const app = express();
 let requestCount = 0;
 
@@ -194,9 +199,19 @@ app.post('/v1/ask', verifyToken, rateLimit, bigJson, async (req, res) => {
     stream: async (body, model, onChunk, opts = {}) => {
       if (!ALLOWED_MODELS.has(model) && model !== orch.INTENT_MODEL) throw new Error(`Model tidak diizinkan: ${model}`);
       const payload = { ...body };
-      if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: {} }];
+      const saring = opts.enableGoogleSearch && !webExcludeDitolak && WEB_EXCLUDE_DOMAINS.length > 0;
+      if (opts.enableGoogleSearch) payload.tools = [...(payload.tools || []), { googleSearch: saring ? { exclude_domains: WEB_EXCLUDE_DOMAINS } : {} }];
       const signal = opts.signal ? AbortSignal.any([opts.signal, ctrl.signal]) : ctrl.signal;
-      await vertexStreamParsed(model, payload, onChunk, signal, requestId);
+      let ditolak = false;
+      await vertexStreamParsed(model, payload, c => {
+        if (saring && c.code === 400) { ditolak = true; return; }
+        onChunk(c);
+      }, signal, requestId);
+      if (ditolak) {
+        webExcludeDitolak = true;
+        console.warn('[web] exclude_domains ditolak model %s — pencarian diulang tanpa saringan situs', model);
+        await vertexStreamParsed(model, { ...body, tools: [...(body.tools || []), { googleSearch: {} }] }, onChunk, signal, requestId);
+      }
     },
   };
 

@@ -26,7 +26,7 @@ module.exports = async function () {
     return { kirim, web, sistem, hasil, meta: d.meta, layar: layar.join('') };
   };
   const SUMBER = [{ title: 'hitachicm.com', uri: 'https://vertexaisearch.cloud.google.com/grounding-api-redirect/abc' }, { title: 'www.Isuzu.co.jp', uri: 'https://x' },
-    { title: 'hitachicm.com', uri: 'https://y' }, { title: 'Judul halaman bebas', uri: 'https://vertexaisearch.cloud.google.com/z' }];
+    { title: 'hitachicm.com', uri: 'https://y' }, { title: 'Judul halaman bebas', uri: 'https://vertexaisearch.cloud.google.com/z' }, { title: 'google.com', uri: 'https://q' }];
   const jawab = (sources) => [{ text: 'Regulator mengatur flow pump (Operational Principle — Pump Device).', usageMetadata: USAGE, live: true, finishReason: 'STOP', sources }];
 
   process.env.WEB_PELENGKAP = 'medium';
