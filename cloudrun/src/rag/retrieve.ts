@@ -87,7 +87,7 @@ export async function gatherCandidates(
 
     const { data, error } = await stage('db_search', async () => sb().rpc('match_documents_keyword_ranked', {
       p_terms: terms, p_filter: strictFilter, p_numeric: wantsNumericAnswer, p_match_count: 10,
-    }));
+    }), { op: 'keyword' });
     if (error) throw new Error(error.message);
     return (Array.isArray(data) ? data : [])
       .map((d: { content?: string }) => { registerEvidence([d]); return d?.content; })
@@ -119,7 +119,7 @@ export async function gatherCandidates(
     : getEmbedding(embeddingQuery).then(async emb => {
     const { data: vecData, error: vecError } = await stage('db_search', async () => sb().rpc('match_documents', {
       query_embedding: emb, match_count: VECTOR_MATCH_COUNT, filter: strictFilter,
-    }));
+    }), { op: 'vector' });
     if (vecError) throw new Error(vecError.message);
     const hasil = (Array.isArray(vecData) ? (vecData as SearchResult[]) : [])
       .filter(d => typeof d?.similarity === 'number' && d.similarity >= VECTOR_SIMILARITY_THRESHOLD);
@@ -246,7 +246,7 @@ export async function rankAndSelect(
       const model = missingIds[0].model;
       let lookup = sb().from('documents').select('id, content, metadata').in('content', missingIds.map(d => d.content));
       if (model) lookup = lookup.contains('metadata', { Model: model });
-      const { data } = await stage('db_search', () => lookup) as { data: Array<{ id?: number; content?: string; metadata?: any }> | null };
+      const { data } = await stage('db_search', () => lookup, { op: 'evidence' }) as { data: Array<{ id?: number; content?: string; metadata?: any }> | null };
       registerEvidence((data ?? []).filter(d => missingIds.some(m => m.content === d.content)));
     } catch {}
   }
@@ -263,5 +263,5 @@ export function hybrid(
   return stage('db_search', () => sb().rpc('match_documents_hybrid', {
     query_text: queryText, query_embedding: embedding, match_count: matchCount,
     filter, similarity_threshold: threshold,
-  }).then((r: { data: HybridResult[] | null }) => { registerEvidence(r.data ?? []); return r; })) as unknown as Promise<{ data: HybridResult[] | null }>;
+  }).then((r: { data: HybridResult[] | null }) => { registerEvidence(r.data ?? []); return r; }), { op: 'hybrid' }) as unknown as Promise<{ data: HybridResult[] | null }>;
 }

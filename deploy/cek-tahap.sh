@@ -11,7 +11,7 @@ const med = a => { a = a.slice().sort((x, y) => x - y); return a.length ? (a[Mat
 const p90 = a => { a = a.slice().sort((x, y) => x - y); return a.length ? (a[Math.floor((a.length - 1) * 0.9)] / 1000).toFixed(2) : "-"; };
 const byStage = {};
 for (const e of ev) {
-  const key = e.stage + (e.stage === "stream" || e.stage === "generate" ? ` ${e.model || ""} ${e.thinking || ""}` : "");
+  const key = e.stage + (e.stage === "stream" || e.stage === "generate" ? ` ${e.model || ""} ${e.thinking || ""}` : "") + (e.op ? ` ${e.op}` : "");
   (byStage[key] ??= []).push(e.wall_ms);
 }
 console.log("tahap".padEnd(40), "n".padStart(5), "median dtk".padStart(11), "p90 dtk".padStart(9));

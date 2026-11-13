@@ -36,6 +36,8 @@ function registerMetrics(app) {
       intent: process.env.INTENT_MODEL || 'gemini-3.5-flash-lite',
       reranker: RERANKER === 'google' ? `google ${GOOGLE_RANK_MODEL} (cadangan cohere)` : 'cohere',
       usage_log: USAGE_LOG_ON ? 'on' : 'off',
+      thinking_diagnosa: process.env.THINKING_DIAGNOSA === 'medium' ? 'medium' : 'low',
+      web_pelengkap: ['off', 'medium'].includes((process.env.WEB_PELENGKAP || '').toLowerCase()) ? process.env.WEB_PELENGKAP.toLowerCase() : 'low',
     };
     const uptime = Math.round((Date.now() - _stat.mulai) / 1000);
     if (!operator(req)) return res.json({ status: 'ok', uptime_detik: uptime, config });
