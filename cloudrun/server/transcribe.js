@@ -45,7 +45,7 @@ module.exports = function registerTranscribe(app, { verifyToken, rateLimit, bigJ
           }],
           generationConfig: {
             maxOutputTokens: 1024,
-            ...(TRANSCRIBE_MODEL.startsWith('gemini-3') ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
+            ...(/^gemini-(?:[3-9]|[1-9][0-9])(?:[.-]|$)/.test(TRANSCRIBE_MODEL) ? { thinkingConfig: { thinkingLevel: 'low' } } : {}),
           },
         }),
       }));

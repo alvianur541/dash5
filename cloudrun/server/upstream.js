@@ -12,11 +12,13 @@ async function getAccessToken() {
   return token;
 }
 
+const GLOBAL_MODEL_RE = /^gemini-(?:[3-9]|[1-9][0-9])(?:[.-]|$)/;
+
 async function resolveUpstream(model, { stream }) {
   const action = stream ? 'streamGenerateContent' : 'generateContent';
   const query  = stream ? '?alt=sse' : '';
 
-  if (model.startsWith('gemini-3')) {
+  if (GLOBAL_MODEL_RE.test(model)) {
     if (!PROJECT_ID) throw new Error('GOOGLE_CLOUD_PROJECT env var not set');
     const base = `https://aiplatform.googleapis.com/v1beta1/projects/${PROJECT_ID}`
                + `/locations/global/publishers/google/models/${model}:${action}${query}`;

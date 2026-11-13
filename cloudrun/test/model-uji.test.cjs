@@ -20,5 +20,8 @@ module.exports = async function () {
   const gagal = await jalan('gemini-4-hydrogen', [[{ error: 'Upstream 404 NOT_FOUND', code: 404 }], OK]);
   t(gagal.dipakai[0] === 'gemini-4-hydrogen' && gagal.dipakai.at(-1) === biasa.dipakai[0] && gagal.hasil.includes('Halo')
     && gagal.meta.modelUsed === biasa.dipakai[0], 'model uji gagal → jatuh ke model produksi, teknisi tetap dapat jawaban');
+  const { execFileSync } = require('node:child_process');
+  const url = execFileSync(process.execPath, ['-e', "process.env.VERTEX_API_KEY='k';process.env.GOOGLE_CLOUD_PROJECT='p';require('./server/upstream').resolveUpstream('gemini-4-hydrogen',{stream:true}).then(r=>console.log(r.url))"], { cwd: require('node:path').join(__dirname, '..'), encoding: 'utf8' });
+  t(url.includes('//aiplatform.googleapis.com/v1beta1/') && url.includes('/locations/global/') && url.includes('gemini-4-hydrogen:streamGenerateContent'), 'Gemini 4 dikirim ke endpoint global, bukan regional');
   return done();
 };
